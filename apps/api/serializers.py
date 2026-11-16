@@ -2,9 +2,12 @@
 
 ``UserSerializer`` is the one user object every endpoint returns. It never carries
 ``password_hash``, ``failed_attempts`` or ``locked_until``; a test asserts the exact
-key set so a field cannot leak in later.
+key set so a field cannot leak in later. The one exception is ``UserListEntrySerializer``,
+which adds a ``lock`` object to ``GET /api/users``, and to the unlock route's 200, for a
+holder of ``release_account_locks`` only (FR-03, D-130).
 """
 
+import unicodedata
 from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
@@ -18,22 +21,37 @@ from django.utils import timezone
 
 from apps.accounts.models import Role
 from apps.core.constants import (
+    CLASSIFICATION_DIMENSIONS,
     DEFAULT_DOCUMENT_SORT,
     DOCUMENT_SORT_VALUES,
     DOCUMENT_STATUS_VALUES,
+    DOCUMENT_TYPES,
+    KNOWLEDGE_GAP_STATUS_VALUES,
+    LOGIN_ATTEMPT_LOCKOUT,
+    MAXIMUM_PROPOSED_TAG_LENGTH,
     NO_ANSWER_MESSAGE,
     PROVENANCE_REMOVED_MESSAGE,
+    REPOSITORY_TAG_DIMENSIONS,
     ROLE_NAMES,
+    TOPIC_DIMENSION,
 )
 from apps.core.models import NAME_MAX_LENGTH
-from apps.documents.models import Document, normalise_tag_name
-from apps.meetings.models import Meeting
-from apps.retrieval.models import Conversation
+from apps.documents.classification import tag_options
+from apps.documents.models import (
+    ContentTag,
+    Document,
+    normalise_department_name,
+    normalise_tag_name,
+)
+from apps.meetings.models import ActionItem, Meeting, MeetingSummary
+from apps.meetings.owners import can_read_meeting
+from apps.meetings.summaries import action_items_of, current_summary, latest_run, reported_state
+from apps.retrieval.models import Conversation, KnowledgeGap, KnowledgeGapCycle
 from apps.retrieval.query_log import FIRST_POSITION
 from apps.retrieval.scoping import permission_scope, scoped_chunks
 
 from .answers import resolve_sources
-from .repository import extracted_text_of, tags_of
+from .repository import classification_of, extracted_text_of, tag_details_of, tags_of
 
 User = get_user_model()
 
@@ -47,6 +65,47 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = USER_FIELDS
         read_only_fields = USER_FIELDS
+
+
+class UserListEntrySerializer(UserSerializer):
+    """A ``GET /api/users`` entry for a requester holding ``release_account_locks``, and the
+    unlock route's 200 body: the user object plus ``lock`` (FR-03, D-130).
+
+    ``lock`` is null unless ``locked_until`` is after ``now``, which the view passes in the
+    context so a whole list is judged at one instant. Otherwise it is
+    ``{"locked_until", "locked_at", "source_ip"}``. The last two come from the lockout row whose
+    ``locked_until`` equals the account's, which is the row that set this lock and not an earlier
+    one (security finding L5). Both are null when there is no such row, for a lock older than the
+    table. ``GET /api/users`` prefetches the lockout rows, so the list reads them without a query
+    per user.
+
+    Every other route's user object is UserSerializer's, which this leaves unchanged.
+    """
+
+    lock = serializers.SerializerMethodField()
+
+    class Meta(UserSerializer.Meta):
+        fields = (*USER_FIELDS, "lock")
+        read_only_fields = fields
+
+    def get_lock(self, user):
+        now = self.context.get("now") or timezone.now()
+        if user.locked_until is None or user.locked_until <= now:
+            return None
+        lockout = next(
+            (
+                row
+                for row in user.login_attempts.all()
+                if row.event == LOGIN_ATTEMPT_LOCKOUT and row.locked_until == user.locked_until
+            ),
+            None,
+        )
+        timestamp = serializers.DateTimeField()
+        return {
+            "locked_until": timestamp.to_representation(user.locked_until),
+            "locked_at": timestamp.to_representation(lockout.attempted_at) if lockout else None,
+            "source_ip": lockout.source_ip if lockout else None,
+        }
 
 
 class DirectoryEntrySerializer(serializers.ModelSerializer):
@@ -192,6 +251,17 @@ class DocumentDetailSerializer(DocumentSerializer):
       screen did (invariant 4). Read from the context with no default, so a caller that forgets
       to decide it raises rather than rendering a guess.
 
+    **FR-10 adds two more (D-105):** ``classification``, the ``ClassificationSerializer`` object
+    or ``None`` for a document never classified, and ``tag_details``, one entry per tag link,
+    provisional included and a link a person removed excluded, with its provenance. ``tags``
+    keeps its shape and lists applied links only. The effective department is the
+    ``department`` field already in the object (D-72).
+
+    **And ``tag_options``** (D-105's dated note of 10 November 2026, night): the tags a person may
+    apply to this document, ``{dimension: [{"tag_id", "tag_name"}]}``, which is the document's own
+    classification scheme. ``apps/documents/classification.py::tag_options`` says why every value
+    in it is readable by everyone who may read the document.
+
     The list routes keep ``DocumentSerializer``: a list of fifty documents should not carry
     fifty documents' whole text, as ``MeetingListSerializer`` leaves out the transcript.
     """
@@ -199,9 +269,14 @@ class DocumentDetailSerializer(DocumentSerializer):
     extracted_text = serializers.SerializerMethodField()
     tags = serializers.SerializerMethodField()
     can_delete = serializers.SerializerMethodField()
+    classification = serializers.SerializerMethodField()
+    tag_details = serializers.SerializerMethodField()
+    tag_options = serializers.SerializerMethodField()
 
     class Meta(DocumentSerializer.Meta):
-        fields = DocumentSerializer.Meta.fields + ("extracted_text", "tags", "can_delete")
+        fields = DocumentSerializer.Meta.fields + (
+            "extracted_text", "tags", "can_delete", "classification", "tag_details", "tag_options",
+        )
         read_only_fields = fields
 
     def get_extracted_text(self, document):
@@ -212,6 +287,15 @@ class DocumentDetailSerializer(DocumentSerializer):
 
     def get_can_delete(self, document):
         return self.context["can_delete"]
+
+    def get_classification(self, document):
+        return classification_payload(classification_of(document))
+
+    def get_tag_details(self, document):
+        return tag_details_payload(document)
+
+    def get_tag_options(self, document):
+        return tag_options(document)
 
 
 class DocumentUploadSerializer(serializers.Serializer):
@@ -246,6 +330,269 @@ class DocumentUploadSerializer(serializers.Serializer):
         # same roles differently produce the same row and the FR-11 predicate has
         # one shape to match.
         return [name for name in ROLE_NAMES if name in set(value)]
+
+
+# --- FR-10 classification (D-104, D-105) ------------------------------------------------
+
+
+class ClassificationSerializer(serializers.Serializer):
+    """The ``classification`` object: a ``DocumentAnalysis`` as the detail, the classify route and
+    the upload's 201 carry it (docs/api-contract.md, NIT3004 — FR-10).
+
+    Confidences are numbers, not DRF's default string rendering of a Decimal, because the client
+    compares them with a threshold rather than displaying them verbatim. The effective department
+    is NOT here: it is the document object's ``department`` (D-72), and ``department_outcome``
+    says how the machine's suggestion was disposed of. ``department_applied_by`` says whose value
+    that department is, "user", "ai" or null (D-119 finding 10): an outcome of "applied" with
+    "user" is a department a person gave that the machine's suggestion matched, which the
+    interface must not label as the machine's. ``discarded_suggestions`` is not exposed: it is a
+    record for the Objective 05 measurement (D-106), not for the interface. Neither is
+    ``rejected_tags``, the proposals a person rejected (the requirements audit of D-128, finding
+    A5): it keeps the machine's assignment beside that decision for later runs to respect.
+
+    ``proposed_tags`` (``proposed_topics`` until D-128) lists the Topic values outside the scheme
+    the classifier held, at any confidence (D-129), each ``{"dimension", "value", "confidence"}``,
+    for a person to confirm or reject through the proposed-tags routes. A Project or Process value
+    outside the scheme is discarded and never shown. A Project or Process entry here is one a run
+    made while D-128 was in force, and the routes take it as they take a Topic.
+    """
+
+    doc_type = serializers.CharField(read_only=True, allow_null=True)
+    doc_type_outcome = serializers.CharField(read_only=True, allow_null=True)
+    department_outcome = serializers.CharField(read_only=True, allow_null=True)
+    department_applied_by = serializers.CharField(read_only=True, allow_null=True)
+    machine_doc_type = serializers.CharField(read_only=True, allow_null=True)
+    machine_doc_type_confidence = serializers.FloatField(read_only=True, allow_null=True)
+    machine_department = serializers.CharField(read_only=True, allow_blank=True)
+    machine_department_confidence = serializers.FloatField(read_only=True, allow_null=True)
+    user_edited = serializers.BooleanField(read_only=True)
+    proposed_tags = serializers.JSONField(read_only=True)
+    classified_at = serializers.DateTimeField(read_only=True)
+    model = serializers.CharField(read_only=True, allow_blank=True)
+    input_truncated = serializers.BooleanField(read_only=True)
+
+
+class TagDetailSerializer(serializers.ModelSerializer):
+    """One ``tag_details`` entry: a ``ContentTag`` link with its tag's dimension and name, its
+    provenance (``applied_by``, ``confirmed``) and FR-10's ``provisional`` and ``confidence``."""
+
+    content_tag_id = serializers.UUIDField(source="id", read_only=True)
+    dimension = serializers.CharField(source="tag.dimension", read_only=True)
+    name = serializers.CharField(source="tag.tag_name", read_only=True)
+    confidence = serializers.FloatField(read_only=True, allow_null=True)
+
+    class Meta:
+        model = ContentTag
+        fields = ("content_tag_id", "dimension", "name", "applied_by", "confirmed", "provisional",
+                  "confidence")
+        read_only_fields = fields
+
+
+def classification_payload(analysis) -> dict | None:
+    """The ``classification`` object for ``analysis``, or ``None`` where there is none."""
+    return None if analysis is None else ClassificationSerializer(analysis).data
+
+
+def tag_details_payload(document) -> list[dict]:
+    """The document's ``tag_details``, through ``tag_details_of`` (provisional included, removed
+    excluded)."""
+    return TagDetailSerializer(tag_details_of(document), many=True).data
+
+
+class TagEntrySerializer(serializers.Serializer):
+    """One entry of ``GET /api/tags``, the ``DELETE /api/tags/{id}`` 200 (D-119 finding 5), and the
+    ``POST /api/tags`` 201 (D-128): a Tag with ``item_count``, which ``apps/documents/taxonomy.py``
+    sets on it, the number of sources carrying it through a link that is neither provisional nor
+    removed. Administrator-only (``manage_tags``), so neither the names nor the counts are scoped:
+    an Administrator reads every source (D-66)."""
+
+    tag_id = serializers.UUIDField(source="id", read_only=True)
+    dimension = serializers.CharField(read_only=True)
+    tag_name = serializers.CharField(read_only=True)
+    active = serializers.BooleanField(read_only=True)
+    item_count = serializers.IntegerField(read_only=True)
+
+
+class ClassificationConfirmSerializer(serializers.Serializer):
+    """``POST /api/documents/{id}/classification``: a person confirms as it stands (both omitted)
+    or edits. ``doc_type`` is one of DOCUMENT_TYPES, read through a ChoiceField so the 400 is keyed
+    on it (FR-10: "the type must be selected from a fixed list"); ``department`` may be blank, which
+    clears it. Null means omitted, for either."""
+
+    doc_type = serializers.ChoiceField(choices=DOCUMENT_TYPES, required=False, allow_null=True)
+    department = serializers.CharField(
+        max_length=NAME_MAX_LENGTH, required=False, allow_null=True, allow_blank=True,
+        trim_whitespace=True,
+    )
+
+
+class ProposedTagSerializer(serializers.Serializer):
+    """The body of the proposed-tags confirm route (D-128): ``{"dimension", "value"}``, both
+    required. The reject route reads the same body through ``ProposedTagRejectSerializer``.
+
+    ``dimension`` is one of REPOSITORY_TAG_DIMENSIONS, read through a ChoiceField, so a missing one,
+    or any other (Department included: a department is never proposed), is 400 keyed on
+    ``dimension``. ``value`` is the value as proposed or as typed; it is normalised before it is
+    matched, so case and spacing do not matter; blank, or over the column, is 400 keyed on
+    ``value``. Confirming creates a Tag, so the column's length binds here. A NUL byte in it is
+    refused by ``CharField``'s own validator (D-65). Whether the pair is proposed on the document is
+    the route's question, after validation: the 404."""
+
+    dimension = serializers.ChoiceField(choices=REPOSITORY_TAG_DIMENSIONS)
+    value = serializers.CharField(max_length=NAME_MAX_LENGTH, allow_blank=False, trim_whitespace=True)
+
+
+class ProposedTagRejectSerializer(ProposedTagSerializer):
+    """The body of the proposed-tags reject route (D-133): ``ProposedTagSerializer``'s, except that
+    ``value`` may be up to MAXIMUM_PROPOSED_TAG_LENGTH characters rather than the column's 255.
+
+    From D-129 until D-134 a run proposed a Topic whatever its length, and a rejection writes only
+    JSON (``reject_proposed_tag``'s ``rejected_tags`` entry, matched by normalised value), so no
+    column limits it. Until D-133 this route read the confirm serializer, and a Topic over 255
+    characters could be neither confirmed nor rejected: the requirements re-audit of ``d909537``,
+    finding C15. Since D-134 a run discards a Topic over 255 characters instead of proposing it, so
+    the longer bound serves proposals stored before D-134. Blank, or over
+    MAXIMUM_PROPOSED_TAG_LENGTH, is 400 keyed on ``value``. A value within the bound that is not
+    proposed on the document is the route's 404, as before."""
+
+    value = serializers.CharField(
+        max_length=MAXIMUM_PROPOSED_TAG_LENGTH, allow_blank=False, trim_whitespace=True
+    )
+
+
+# The 400 of POST /api/tags for a name that normalises to more than the column holds.
+TAG_NAME_TOO_LONG_MESSAGE = f"Ensure this field has no more than {NAME_MAX_LENGTH} characters."
+
+
+class TagCreateSerializer(serializers.Serializer):
+    """``POST /api/tags``: an Administrator adds a value to the scheme (D-128; FR-10's CRUD line
+    gives Tags "Create").
+
+    ``dimension`` is one of REPOSITORY_TAG_DIMENSIONS through a ChoiceField: any other, Department
+    included (a department is ``Documents.department``, D-72), is 400 keyed on ``dimension``.
+    ``tag_name`` is trimmed, refused blank or over the column, and returned normalised as ``Tags``
+    normalises it (``normalise_tag_name``); a name the normalising lengthens past the column is
+    refused too. A NUL byte is refused by ``CharField``'s own validator (D-65). Whether the name
+    already exists in the dimension is ``create_tag``'s question, after validation: the 409.
+    """
+
+    dimension = serializers.ChoiceField(choices=REPOSITORY_TAG_DIMENSIONS)
+    tag_name = serializers.CharField(
+        max_length=NAME_MAX_LENGTH, allow_blank=False, trim_whitespace=True
+    )
+
+    def validate_tag_name(self, value):
+        name = normalise_tag_name(value)
+        if not name:
+            raise serializers.ValidationError("This field may not be blank.")
+        if len(name) > NAME_MAX_LENGTH:
+            raise serializers.ValidationError(TAG_NAME_TOO_LONG_MESSAGE)
+        return name
+
+
+class DepartmentEntrySerializer(serializers.Serializer):
+    """One entry of ``GET /api/departments``, the ``POST`` 201 and 200, and the ``DELETE`` 200 (D-129):
+    a Department with ``item_count``, which ``apps/documents/taxonomy.py`` sets on it, the number of
+    documents whose ``department`` equals the name. Administrator-only (``manage_tags``), so neither
+    the names nor the counts are scoped: an Administrator reads every document (D-66)."""
+
+    department_id = serializers.UUIDField(source="id", read_only=True)
+    name = serializers.CharField(read_only=True)
+    active = serializers.BooleanField(read_only=True)
+    item_count = serializers.IntegerField(read_only=True)
+
+
+# POST /api/departments: what the classification prompt joins a scheme's department names with
+# ("; ", apps/ai/classification.py), refused in a name with the Cc and Cf characters (D-129, F4).
+DEPARTMENT_NAME_SEPARATOR = ";"
+DEPARTMENT_NAME_CHARACTERS_MESSAGE = (
+    "A department name may not contain a semicolon, or a control or invisible formatting character."
+)
+
+
+class DepartmentCreateSerializer(serializers.Serializer):
+    """``POST /api/departments``: an Administrator adds a department to FR-10's department scheme, or
+    brings a retired one back (D-129).
+
+    ``name`` is trimmed, refused blank or over the column (400 keyed on ``name``), and returned
+    normalised as ``Departments`` normalises it (``normalise_department_name``): internal whitespace
+    collapsed to one space, **the case kept**. Collapsing only shortens a name, so nothing that
+    passes the length check overruns the column afterwards. A NUL byte or a lone surrogate is
+    refused by ``CharField``'s own validators (D-65). Whether the name is already listed is
+    ``create_department``'s question, after validation: the 409, or the 200 for a retired one.
+
+    **Refused characters** (the security review of D-129, finding F4), one 400 for all of them:
+
+    - a control or format character (Unicode Cc or Cf: ESC, BEL, DEL, a right-to-left override, a
+      zero-width space, a byte order mark). No reader sees it as written, and two names could look
+      the same. It is checked on the name as sent, trimmed and before its inner whitespace is
+      collapsed, so a tab or line break inside a name is refused rather than turned into a space;
+    - ";", which the classification prompt joins a scheme's department names with, so that one name
+      could read as two.
+    """
+
+    name = serializers.CharField(max_length=NAME_MAX_LENGTH, allow_blank=False, trim_whitespace=True)
+
+    def validate_name(self, value):
+        if any(unicodedata.category(character) == "Cc" for character in value):
+            raise serializers.ValidationError(DEPARTMENT_NAME_CHARACTERS_MESSAGE)
+        if any(unicodedata.category(character) == "Cf" for character in value):
+            raise serializers.ValidationError(DEPARTMENT_NAME_CHARACTERS_MESSAGE)
+        name = normalise_department_name(value)
+        if not name:
+            raise serializers.ValidationError("This field may not be blank.")
+        if DEPARTMENT_NAME_SEPARATOR in name:
+            raise serializers.ValidationError(DEPARTMENT_NAME_CHARACTERS_MESSAGE)
+        return name
+
+
+# The 400s of POST /api/documents/{id}/tags that are about the body's shape. None says anything
+# about which tags exist: that is decided after validation, by apply_tag against the scheme.
+EXACTLY_ONE_TAG_FORM_MESSAGE = 'Send either "tag_id", or "dimension" with "tag_name", and not both.'
+ONLY_A_TOPIC_GROWS_MESSAGE = (
+    "Only a new Topic can be created. Choose a Project or Process tag from the document's tag "
+    "options."
+)
+
+
+class TagApplySerializer(serializers.Serializer):
+    """``POST /api/documents/{id}/tags``: a person applies a tag (FR-10; D-105's dated note of 10
+    November 2026, night). Exactly one form:
+
+    - ``{"tag_id": "<uuid>"}``: an existing tag. Only its shape is checked here; whether it is
+      offered for this document is ``apply_tag``'s, so that an unknown, an inactive and a withheld
+      tag share one answer.
+    - ``{"dimension": "Topic", "tag_name": "..."}``: a new Topic. A person's name form is
+      Topic-only: FR-10's "controlled taxonomy growth" lets only Topic grow, and the classifier
+      creates no value (D-129). An Administrator adds one in any of the three dimensions
+      (``POST /api/tags``, D-128). So any other dimension is a 400 keyed on ``dimension``.
+      ``tag_name`` is trimmed, refused blank or over the column, and returned normalised as
+      ``Tags`` normalises it (``normalise_tag_name``).
+
+    Neither, or both, is a 400 under ``non_field_errors``. A NUL byte in ``tag_name`` is refused by
+    ``CharField``'s own validator (D-65).
+    """
+
+    tag_id = serializers.UUIDField(required=False)
+    dimension = serializers.ChoiceField(choices=CLASSIFICATION_DIMENSIONS, required=False)
+    tag_name = serializers.CharField(
+        max_length=NAME_MAX_LENGTH, required=False, allow_blank=False, trim_whitespace=True
+    )
+
+    def validate(self, attrs):
+        by_id = "tag_id" in attrs
+        by_name = "dimension" in attrs or "tag_name" in attrs
+        if by_id == by_name:
+            raise serializers.ValidationError(EXACTLY_ONE_TAG_FORM_MESSAGE)
+        if by_name:
+            if "dimension" not in attrs:
+                raise serializers.ValidationError({"dimension": ["This field is required."]})
+            if attrs["dimension"] != TOPIC_DIMENSION:
+                raise serializers.ValidationError({"dimension": [ONLY_A_TOPIC_GROWS_MESSAGE]})
+            if "tag_name" not in attrs:
+                raise serializers.ValidationError({"tag_name": ["This field is required."]})
+            attrs["tag_name"] = normalise_tag_name(attrs["tag_name"])
+        return attrs
 
 
 # --- FR-09 meeting transcript ingestion ------------------------------------------------
@@ -368,6 +715,127 @@ class MeetingIngestSerializer(serializers.Serializer):
         return attrs
 
 
+# --- FR-16 meeting summary and action items (D-125) ---------------------------------------
+
+# The longest description a person may type. The model's own are held to 600 characters by
+# SUMMARY_SCHEMA; a person gets a little more room, and a bound at all so one row cannot hold a
+# document.
+ACTION_ITEM_DESCRIPTION_MAX_LENGTH = 1000
+UNKNOWN_OWNER_MESSAGE = "No user has this id."
+OWNER_CANNOT_SEE_MEETING_MESSAGE = "This person cannot see this meeting, so its action items cannot be theirs."
+NOTHING_TO_CHANGE_MESSAGE = "Send at least one of description, owner_id and due_date."
+
+
+class MeetingSummarySerializer(serializers.ModelSerializer):
+    """A Ready summary, as FR-16's Summary panel shows it (UC-04's elements and provenance).
+
+    ``narrative``, ``decisions`` and ``highlights`` are lists of ``{text, passages}``, the
+    passages being numbers into ``passages``, which holds the text of every transcript passage an
+    element names: "every element of the summary carries a reference to the passage of the
+    transcript it was drawn from". ``model`` and ``generated_at`` are UC-04's "record of the model
+    that produced it and the date". Only ever built from a Ready row: a failed summary "is never
+    presented to a user" (``meeting_summary_payload``).
+    """
+
+    summary_id = serializers.UUIDField(source="id", read_only=True)
+
+    class Meta:
+        model = MeetingSummary
+        fields = ("summary_id", "summary_text", "narrative", "decisions", "highlights", "passages",
+                  "model", "generated_at", "input_truncated", "passages_sent", "passages_total",
+                  "action_items_extracted")
+        read_only_fields = fields
+
+
+class ActionItemSerializer(serializers.ModelSerializer):
+    """One action item: FR-16's "description, suggested owner and due date".
+
+    ``owner`` is ``{id, name}`` for the user it is assigned to, or null: unassigned. ``owner_name``
+    and ``due_text`` are the transcript's own words for each, kept beside them, and blank on an
+    item a person added. ``origin`` ("ai" or "user") and ``edited`` are what NFR-15's badge reads.
+    """
+
+    action_item_id = serializers.UUIDField(source="id", read_only=True)
+    owner = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ActionItem
+        fields = ("action_item_id", "description", "owner", "owner_name", "due_date", "due_text",
+                  "passages", "origin", "edited", "created_at", "updated_at")
+        read_only_fields = fields
+
+    def get_owner(self, item):
+        if item.owner is None:
+            return None
+        return {"id": str(item.owner.pk), "name": item.owner.name}
+
+
+class ActionItemWriteSerializer(serializers.Serializer):
+    """The body of an add (POST, ``description`` required) or an edit (PATCH, any subset).
+
+    ``owner_id`` is a user's id or null for unassigned; an id that names no user is a 400 keyed
+    on it, and so is a user whose role cannot read the meeting (``context["meeting"]``). The
+    second is the security review of 12 November (D-125's third note): an owner is given the
+    item, its passages and the meeting's title, and the automatic match already refuses anyone
+    outside the meeting's scope (apps/meetings/owners.py). The refusal discloses nothing the
+    caller lacks: an Employee can reach only meetings every role can read (D-66), so only an
+    Administrator, who reads every user's role through FR-05, is ever refused.
+
+    ``due_date`` is a date or null. A PATCH that sends none of the three is a 400: there would be
+    nothing to change, and the item would still be marked edited. The validated data carries
+    ``owner`` (the User or None) in place of ``owner_id``.
+    """
+
+    description = serializers.CharField(
+        max_length=ACTION_ITEM_DESCRIPTION_MAX_LENGTH, allow_blank=False, trim_whitespace=True
+    )
+    owner_id = serializers.UUIDField(required=False, allow_null=True)
+    due_date = serializers.DateField(required=False, allow_null=True)
+
+    def validate(self, attrs):
+        if self.partial and not attrs:
+            raise serializers.ValidationError(NOTHING_TO_CHANGE_MESSAGE)
+        if "owner_id" in attrs:
+            owner_id = attrs.pop("owner_id")
+            owner = None if owner_id is None else User.objects.select_related("role").filter(pk=owner_id).first()
+            if owner_id is not None and owner is None:
+                raise serializers.ValidationError({"owner_id": [UNKNOWN_OWNER_MESSAGE]})
+            if owner is not None and not can_read_meeting(owner, self.context["meeting"]):
+                raise serializers.ValidationError({"owner_id": [OWNER_CANNOT_SEE_MEETING_MESSAGE]})
+            attrs["owner"] = owner
+        return attrs
+
+
+_LATEST = object()
+
+
+def meeting_summary_payload(meeting, *, can_edit: bool, latest=_LATEST) -> dict:
+    """What both summary routes return, whatever the state (D-125).
+
+    - ``status``: the latest run's ("Processing", "Ready", "Unavailable"), or null where no
+      summary was ever requested. ``queued_for_retry`` is NFR-20's flag on that run. Both are
+      ``reported_state``'s, so a run a stopped server left Processing reads as Unavailable and
+      queued. ``latest`` is that run, when the caller has already read it.
+    - ``summary``: the latest Ready summary, or null. While a Regenerate runs, and after one
+      fails, this is still the previous Ready summary; a failed one is never here (UC-04).
+    - ``action_items``: the meeting's items in panel order. An empty list beside a Ready summary
+      whose ``action_items_extracted`` is 0 is UC-04 A1's meeting that raised none.
+    - ``can_edit``: whether the caller's role holds ``contribute_content``. A hint for showing
+      the controls; every write checks the permission itself (invariant 4).
+    """
+    if latest is _LATEST:
+        latest = latest_run(meeting)
+    status, queued = reported_state(latest)
+    current = current_summary(meeting)
+    return {
+        "status": status,
+        "queued_for_retry": queued,
+        "summary": MeetingSummarySerializer(current).data if current is not None else None,
+        "action_items": ActionItemSerializer(action_items_of(meeting), many=True).data,
+        "can_edit": can_edit,
+    }
+
+
 # --- FR-12 keyword search ---------------------------------------------------------------
 
 # ``SearchResult.date`` is the source's own date and so is not one type: a datetime for a
@@ -417,6 +885,9 @@ class SearchResultSerializer(serializers.Serializer):
     source_id = serializers.CharField(read_only=True)
     title = serializers.CharField(read_only=True)
     snippet = serializers.CharField(read_only=True, allow_blank=True)
+    # True where the snippet is from the meeting's AI-generated summary, not its transcript
+    # (FR-16, D-125): NFR-15's mark for the one search surface that can show AI content.
+    snippet_ai_generated = serializers.BooleanField(read_only=True)
     department = serializers.CharField(read_only=True, allow_blank=True)
     date = serializers.SerializerMethodField()
 
@@ -503,6 +974,8 @@ class ConsultedPassageSerializer(serializers.Serializer):
 
     chunk_id = serializers.CharField(read_only=True)
     text = serializers.CharField(read_only=True)
+    # True for a passage of a meeting's AI-generated summary (FR-16, D-125): NFR-15's mark.
+    ai_generated = serializers.BooleanField(read_only=True)
 
 
 class ConsultedSourceSerializer(serializers.Serializer):
@@ -672,7 +1145,7 @@ def readable_thread_chunks(turns, *, role_name) -> dict:
     through the consulted list, and the store answers for it as it answers for any chunk that
     no longer exists: with nothing.
 
-    Only the four columns a passage needs are fetched. The embedding is the largest column on
+    Only the five columns a passage needs are fetched. The embedding is the largest column on
     the row and has no use here.
     """
     wanted = {
@@ -688,7 +1161,7 @@ def readable_thread_chunks(turns, *, role_name) -> dict:
     rows = (
         scoped_chunks(role_name=role_name)
         .filter(id__in=wanted)
-        .only("id", "source_type", "source_id", "chunk_text")
+        .only("id", "source_type", "source_id", "chunk_text", "ai_generated")
     )
     return {row.id: row for row in rows}
 
@@ -697,10 +1170,11 @@ def readable_thread_chunks(turns, *, role_name) -> dict:
 class ReopenedPassage:
     """A consulted chunk read back for a reopened turn, in the shape ``resolve_sources`` reads.
 
-    ``resolve_sources`` is the live reply's own code (D-78 item 3) and reads four attributes of
-    each passage: ``source_type``, ``source_id``, ``chunk_id`` and ``chunk_text``. On the live
-    path a ``RankedPassage`` carries them; here a ``ContentChunk`` row does, under one different
-    name, so this adapter gives the row that shape rather than the function a second input.
+    ``resolve_sources`` is the live reply's own code (D-78 item 3) and reads five attributes of
+    each passage: ``source_type``, ``source_id``, ``chunk_id``, ``chunk_text`` and, since D-125,
+    ``ai_generated``. On the live path a ``RankedPassage`` carries them; here a ``ContentChunk``
+    row does, under one different name, so this adapter gives the row that shape rather than the
+    function a second input.
 
     ``chunk_id`` is ``str(chunk.id)``, the expression ``apps.retrieval.ranking.rank`` uses, so
     a passage identifier renders as the same string on a reopened turn as on the live reply.
@@ -711,6 +1185,9 @@ class ReopenedPassage:
     chunk_text: str
     source_type: str
     source_id: UUID
+    # The row's own flag, read back as it stands now: a passage of a meeting's AI-generated
+    # summary is marked on a reopened turn exactly as on the live one (NFR-15, D-125).
+    ai_generated: bool = False
 
     @classmethod
     def of(cls, chunk) -> "ReopenedPassage":
@@ -719,6 +1196,7 @@ class ReopenedPassage:
             chunk_text=chunk.chunk_text,
             source_type=chunk.source_type,
             source_id=chunk.source_id,
+            ai_generated=chunk.ai_generated,
         )
 
 
@@ -1210,3 +1688,57 @@ class DocumentBrowseQuerySerializer(serializers.Serializer):
 
     def validate_sort(self, value):
         return value or DEFAULT_DOCUMENT_SORT
+
+
+# --- FR-19 knowledge-gap log (docs/decisions.md D-107 to D-109) ----------------------------
+
+
+class KnowledgeGapSerializer(serializers.ModelSerializer):
+    """One entry of the gap log, in ``GET /api/knowledge-gaps``, ``PATCH``'s reply and the
+    dashboard's ``knowledge_gaps.top`` (D-107).
+
+    **Exactly six fields, and a test asserts the key set.** No asker, no role, no department and no
+    reason appears, because none is stored (D-107, D-108), and the entry's vector and model name
+    are internal to the grouping. ``subject`` is the first member's wording, verbatim.
+    """
+
+    gap_id = serializers.UUIDField(source="id", read_only=True)
+
+    class Meta:
+        model = KnowledgeGap
+        fields = ("gap_id", "subject", "occurrence_count", "status", "first_seen_at", "last_seen_at")
+        read_only_fields = fields
+
+
+class KnowledgeGapStatusSerializer(serializers.Serializer):
+    """``PATCH /api/knowledge-gaps/{id}``'s body: ``{"status": "Addressed"}`` or ``"Open"``.
+
+    FR-19's "the ability to mark an entry as addressed", and back. Any other value, or none, is
+    DRF's 400 keyed on ``status``.
+    """
+
+    status = serializers.ChoiceField(choices=KNOWLEDGE_GAP_STATUS_VALUES)
+
+
+class KnowledgeGapCycleSerializer(serializers.ModelSerializer):
+    """``POST /api/knowledge-gaps/cycles``'s 201: the cycle row (D-107).
+
+    The four counts are of rows that entered the log and entries created or updated, never of
+    rows left out (``KnowledgeGapCycle``'s docstring). ``triggered_by`` is not returned: the caller
+    is the one who triggered it.
+    """
+
+    cycle_id = serializers.UUIDField(source="id", read_only=True)
+
+    class Meta:
+        model = KnowledgeGapCycle
+        fields = (
+            "cycle_id",
+            "started_at",
+            "finished_at",
+            "queries_considered",
+            "searches_considered",
+            "entries_created",
+            "entries_updated",
+        )
+        read_only_fields = fields

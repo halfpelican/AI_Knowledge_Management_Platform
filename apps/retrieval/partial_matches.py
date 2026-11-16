@@ -94,7 +94,7 @@ than left unused, and with it one HTTP request and one ``SearchLog`` row per no-
 from dataclasses import dataclass
 from uuid import UUID
 
-from apps.core.constants import PARTIAL_MATCH_FLOOR
+from apps.core.constants import PARTIAL_MATCH_FLOOR, PARTIAL_MATCH_FLOOR_BY_MODEL
 from apps.retrieval.ranking import RankedPassage
 
 # How many partially related items are offered. Five.
@@ -135,8 +135,21 @@ class PartialMatch:
     source_id: UUID
 
 
-def partial_matches(ranked: list[RankedPassage]) -> tuple[PartialMatch, ...]:
-    """The best MAXIMUM_PARTIAL_MATCHES sources of ``ranked`` reaching PARTIAL_MATCH_FLOOR.
+def partial_match_floor(embedding_model: str) -> float:
+    """The partial-match floor for ``embedding_model``'s scores (D-120).
+
+    A model PARTIAL_MATCH_FLOOR_BY_MODEL lists gets its own floor, chosen on that model's
+    scores. Any other, EmbeddingGemma included, gets PARTIAL_MATCH_FLOOR, which is 0.0: no
+    floor, and D-56 open. Both names are read at call time.
+    """
+    return PARTIAL_MATCH_FLOOR_BY_MODEL.get(embedding_model, PARTIAL_MATCH_FLOOR)
+
+
+def partial_matches(ranked: list[RankedPassage], *, embedding_model: str) -> tuple[PartialMatch, ...]:
+    """The best MAXIMUM_PARTIAL_MATCHES sources of ``ranked`` reaching the model's floor.
+
+    ``embedding_model`` is the model the question was embedded with. Its floor is
+    ``partial_match_floor``'s. It is required for the reason ``ranking.admit``'s is (D-120).
 
     One entry each, in rank order. ``ranked`` is ``ranking.rank``'s output and must be
     passed BEFORE ``ranking.admit``: RELEVANCE_THRESHOLD is irrelevant to this list, which
@@ -151,10 +164,11 @@ def partial_matches(ranked: list[RankedPassage]) -> tuple[PartialMatch, ...]:
     case the floor exists for. Nothing here draws a conclusion from emptiness; the no-answer
     message is the pipeline's, and it is the same message either way.
     """
+    floor = partial_match_floor(embedding_model)
     offered: list[PartialMatch] = []
     seen: set[tuple[str, UUID]] = set()
     for passage in ranked:  # already ordered best first
-        if passage.score < PARTIAL_MATCH_FLOOR:
+        if passage.score < floor:
             # Everything after this scores no higher, so nothing further can reach the
             # floor. A source whose best passage is below it is not partially related to
             # the question in any sense the clause means (D-56, D-93).

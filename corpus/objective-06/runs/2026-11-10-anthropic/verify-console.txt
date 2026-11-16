@@ -1,0 +1,14 @@
+database: kmp_obj0506_anthropic_20261110
+**Clause 1:** 11 of 12 expected queries are in the log after one cycle. Missing: ['U01']; of those, answered by FR-12: none; unexplained: ['U01']. As worded: NOT MET; for every query that reached a no-answer or zero result: NOT MET.
+**Clause 2:** {"christmas shutdown": {"queries": 3, "in_log": 3, "distinct_gaps": 1, "one_entry": true, "count_matches_items": true, "gap_count": 3}, "corporate card": {"queries": 3, "in_log": 3, "distinct_gaps": 1, "one_entry": true, "count_matches_items": true, "gap_count": 3}, "jury duty": {"queries": 3, "in_log": 3, "distinct_gaps": 1, "one_entry": true, "count_matches_items": true, "gap_count": 3}, "salary review": {"queries": 3, "in_log": 2, "distinct_gaps": 1, "one_entry": true, "count_matches_items": true, "gap_count": 2}}. MET.
+**Clause 3:** permission-only queries in the log: none; pre-existing Employee zero-result searches in the log: none. MET.
+Controls: answerable queries in the log: none.
+
+## The gap log after the cycle
+
+| Subject | Count | Items | Status |
+|---|---|---|---|
+| Does everything stop over Christmas? | 3 | 3 | Open |
+| Is jury duty paid? | 3 | 3 | Open |
+| Is there a corporate credit card I can be issued with? | 3 | 3 | Open |
+| Are salaries indexed to inflation? | 2 | 2 | Open |

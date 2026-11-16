@@ -1,0 +1,39 @@
+DEV-SET-V2, END TO END (40 runs)
+                                                           Sonnet 5.5      Haiku 5.5
+  answered, where an answer is expected                         32/32          32/32
+  declined, where none is expected                                8/8            8/8
+  expected-answer match, from an expected source                32/32          32/32
+  schema violations                                                 0              0
+  503s                                                              0              0
+  out-of-scope citations                                            0              0
+  median seconds per ask                                          2.6            2.4
+  fabricated identifiers (statements removed)                       0              0
+  Sonnet 5.5: 36 attempts, 125432 in / 7781 out, $0.3287
+  Haiku 5.5: 36 attempts, 125432 in / 9116 out, $0.0171
+  runs whose outcome differs: none
+
+THE FROZEN THIRTY (34 runs)
+                                                           Sonnet 5.5      Haiku 5.5
+  ordinary answered correctly                                   22/22          22/22
+  scoped, answered for the role that can see it                   4/4            4/4
+  scoped, declined for the role that cannot                       4/4            4/4
+  no-answer questions declined                                    4/4            4/4
+  first-attempt conformance                                     31/31          31/31
+  fabricated identifiers (of statements)                         0/30           0/28
+  runs right, all kinds                                         34/34          34/34
+  leaks                                                             0              0
+  answered question, median / p90 seconds                 2.53 / 4.48    1.69 / 2.41
+  Claude calls, estimated cost                            31, $0.2829    31, $0.0146
+  runs right on one model and not the other: none
+
+THE NINE THREADS (44 runs)
+  expected-answer match                                    Sonnet 5.5      Haiku 5.5
+  first-turn                                                    11/11          11/11
+  with-history                                                    9/9            9/9
+  cold                                                            1/9            1/9
+  spelled-out                                                     9/9            9/9
+  fabricated identifiers, all ways                                  0              0
+  out of scope, all ways                                            0              0
+  Claude calls, estimated cost                            37, $0.4251    37, $0.0233
+  differs: t02@Employee/cold ('How often does that get reviewed?'): Sonnet path-B-declined, Haiku answered; correct False / False
+  readings per follow-up identical on both models: True

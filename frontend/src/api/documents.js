@@ -1,9 +1,10 @@
 /**
- * Document endpoints (FR-08 upload and retry, FR-15 browse, detail, download and
- * delete), per docs/api-contract.md. Thin wrappers over the one API client; no
+ * Document endpoints (FR-08 upload and retry, FR-10 classification and tags, FR-15
+ * browse, detail, download and delete), per docs/api-contract.md. Thin wrappers over
+ * the one API client; no
  * fetch and no XMLHttpRequest here.
  */
-import { apiUrl, del, get, post, upload } from './client.js'
+import { apiUrl, del, get, post, requestWithStatus, upload } from './client.js'
 
 /*
  * There is no wrapper for `GET /api/documents`, the bare list. The repository
@@ -186,4 +187,222 @@ export function uploadDocument({ file, title, department, visibleToRoles }, opti
  */
 export function reprocessDocument(docId, options = {}) {
   return post(`/documents/${encodeURIComponent(docId)}/reprocess`, {}, options)
+}
+
+/* ---- FR-10 classification (D-104, D-105, D-128) -------------------------- */
+
+/*
+ * The detail object (`fetchDocument`) carries two more fields since FR-10, read
+ * by src/components/Classification.jsx:
+ *
+ * - `classification` — `null` while the document has never been classified, else
+ *   `{doc_type, doc_type_outcome, department_outcome, department_applied_by,
+ *   machine_doc_type, machine_doc_type_confidence, machine_department,
+ *   machine_department_confidence, user_edited, proposed_tags: [{dimension, value,
+ *   confidence}], classified_at, model, input_truncated}`. `proposed_tags` are the
+ *   values the AI suggested below the confidence threshold that are not in this
+ *   document's scheme, in Project, Process or Topic (D-128): held until a person
+ *   confirms or rejects one, `dimension` "Project", "Process" or "Topic" and `value`
+ *   the name as the server stores it. A value at or above the threshold is not
+ *   proposed: it is applied, and is an AI link in `tag_details` like any other.
+ *   `department_applied_by` is
+ *   whose value the department is, "user", "ai" or null (D-119 finding 10; null for
+ *   no department, or a classification recorded before the field). An outcome is
+ *   `applied` (at or above the confidence
+ *   threshold and written), `provisional` (below it: held, not the document's type,
+ *   and `doc_type` is null; for the department also a suggestion that differs from
+ *   a department already on the document, which since 10 November stays until a
+ *   person accepts the suggestion, D-105's note), `discarded` (the department
+ *   only: outside the known departments, nothing written) or `confirmed` (a person
+ *   confirmed or edited it). `doc_type` is the effective type; the effective
+ *   department is the document's own `department` field (D-72).
+ * - `tag_details` — every tag link, `[{content_tag_id, dimension, name,
+ *   applied_by, confirmed, provisional, confidence}]`, `applied_by` "ai" or
+ *   "user". A link with `provisional: true` is a held suggestion and is not among
+ *   `tags`. A link a person removed is in no read. Nothing in a link, or in a
+ *   proposal, says whether its value was new to the database, retired, or carried
+ *   by other material that some reader of this document cannot see: a reply that
+ *   told them apart would disclose the last two (CLAUDE.md §6, invariant 1). The
+ *   screen shows every AI link alike. Since D-129 the classifier creates no value
+ *   of its own; a person's confirmation of a proposed Topic does.
+ * - `tag_options` — `{Project: [{tag_id, tag_name}], Process: [...], Topic: [...]}`,
+ *   the tags a person may apply to this document, which are its own
+ *   classification scheme: always all three keys, each sorted by name, tags
+ *   already on the document included. It discloses nothing to anyone who may read
+ *   the document (CLAUDE.md §6, invariant 1).
+ *
+ * Every action below needs a session and `contribute_content`, which both roles
+ * hold (D-30, D-105). 404 for an unknown id or a document outside the caller's
+ * scope, checked before the permission, so a refusal never says whether the id
+ * names something (CLAUDE.md §6, invariant 1); 403 for a role without the
+ * permission. The screen hides its controls on a 403 and the server checks on
+ * every call whatever the screen showed (invariant 4).
+ */
+
+/**
+ * `POST /api/documents/{id}/classify` — runs FR-10's classification over the
+ * document's extracted text, which takes the AI service ten to sixty seconds.
+ *
+ * 200 `{classification, tag_details, department}`: the first two as the detail
+ * carries them, and `department` the document's `department` column after the
+ * run, which can fill a blank one (D-105), shown as it is; 422 no
+ * text was extracted, so there is nothing to classify (FR-10's own code); 503
+ * NFR-19's notice, after `MAXIMUM_CLASSIFY_ATTEMPTS`; 429 past the ingestion
+ * rate it shares with upload, meeting ingestion and reprocess (D-79), with a
+ * `Retry-After` in seconds.
+ */
+export function classifyDocument(docId, options = {}) {
+  return post(`/documents/${encodeURIComponent(docId)}/classify`, {}, options)
+}
+
+/**
+ * `POST /api/documents/{id}/classification` — a person confirms or edits the
+ * type and the department, in one request.
+ *
+ * With neither value given the body is empty, `{}`, and the suggestions are
+ * confirmed as they stand: a provisional type becomes the document's type and a
+ * provisional department is written. With values, those are written instead and
+ * marked confirmed; the machine's values are kept beside them (FR-10: "the
+ * machine assignment is retained alongside it"). Either way the outcomes read
+ * `confirmed` and later reprocessing leaves them alone.
+ *
+ * 200 `{classification, department}`, where `department` is the document's
+ * `department` column after the confirm or edit (D-105's note of 10 November),
+ * which the screen shows as it is rather than working it out from the outcome;
+ * 400 `{"doc_type": ["..."]}` for a type outside Policy, Procedure, Report and
+ * Meeting Paper, or `{"department": ["..."]}`; 404 also for a document that has
+ * no classification yet (D-105's build notes: the type of a never-classified
+ * document is edited after `classifyDocument`, not instead of it).
+ *
+ * @param {string} docId
+ * @param {{docType?: string, department?: string}} [values] Omitted fields are
+ *   not sent, so an empty object confirms.
+ */
+export function confirmClassification(docId, { docType, department } = {}, options = {}) {
+  const body = {}
+  if (docType !== undefined) body.doc_type = docType
+  if (department !== undefined) body.department = department
+  return post(`/documents/${encodeURIComponent(docId)}/classification`, body, options)
+}
+
+/**
+ * `POST /api/documents/{id}/tags/{content_tag_id}/confirm` — a person confirms
+ * one tag link the AI applied or held. 200 with the `tag_details` entry as it now
+ * is: `confirmed` true, `provisional` false. A confirmed tag is not altered by
+ * later reprocessing (FR-10).
+ */
+export function confirmTag(docId, contentTagId, options = {}) {
+  return post(
+    `/documents/${encodeURIComponent(docId)}/tags/${encodeURIComponent(contentTagId)}/confirm`,
+    {},
+    options,
+  )
+}
+
+/**
+ * `DELETE /api/documents/{id}/tags/{content_tag_id}` — removes one tag link:
+ * rejecting a held suggestion and removing an applied tag are the same action
+ * (FR-10: "either may be accepted or removed in a single action"). 204, no body.
+ */
+export function removeTag(docId, contentTagId, options = {}) {
+  return del(`/documents/${encodeURIComponent(docId)}/tags/${encodeURIComponent(contentTagId)}`, options)
+}
+
+/**
+ * The three dimensions a person applies a tag in, as the detail's `tag_options`
+ * keys them, in the order the screen offers them. The contract sends all three
+ * keys, each list sorted by name (docs/api-contract.md, NIT3004 FR-10). Department
+ * is the document's own field, not a tag applied here (D-72).
+ */
+export const TAG_OPTION_DIMENSIONS = ['Project', 'Process', 'Topic']
+
+/**
+ * The one dimension a person may name a new value in, through `applyTag`'s name form,
+ * and the one dimension the classifier proposes new values in (`confirmProposedTag`;
+ * Objective 05's clause 3, D-129).
+ */
+export const NEW_TAG_DIMENSION = 'Topic'
+
+/**
+ * `POST /api/documents/{id}/tags` — a person applies a tag (FR-10's provenance
+ * clause; UC-09 A3; D-105's dated note of 10 November 2026, night).
+ *
+ * `choice` is exactly one of `{tagId}`, a tag from the detail's `tag_options`, sent
+ * as `{"tag_id": ...}`; or `{tagName}`, a new Topic, sent as `{"dimension": "Topic",
+ * "tag_name": ...}`, which the server matches after trimming, single-spacing and
+ * lower-casing.
+ *
+ * 201 `{tag_details}` when a new link was made; 200, the same shape, when the tag
+ * was already on the document: a held AI link confirmed, a removed one restored, or
+ * nothing to change. `tag_details` is the document's whole current list. The reply
+ * does not carry `tag_options`, which a new Topic joins: read the detail again.
+ *
+ * 409 `{detail, tag_id}`: the name is a Topic already in `tag_options`, whose id
+ * `error.details.tag_id` is, so the screen can choose it rather than make a
+ * duplicate. 400 keyed on `tag_id` (one body for an unknown, inactive or withheld
+ * tag, so a refusal never says which), `dimension`, `tag_name` (missing, blank or
+ * over 255 characters) or `non_field_errors` (neither form, or both). 404 scoped
+ * first; 403 without `contribute_content`; 401.
+ *
+ * @param {string} docId
+ * @param {{tagId: string} | {tagName: string}} choice
+ * @param {object} [options]
+ * @param {AbortSignal} [options.signal]
+ * @returns {Promise<{created: boolean, body: object|null}>} `created` is the 201.
+ */
+export async function applyTag(docId, choice, options = {}) {
+  const body =
+    'tagId' in choice ? { tag_id: choice.tagId } : { dimension: NEW_TAG_DIMENSION, tag_name: choice.tagName }
+  const { status, data } = await requestWithStatus(`/documents/${encodeURIComponent(docId)}/tags`, {
+    ...options,
+    method: 'POST',
+    body,
+  })
+  return { created: status === 201, body: data }
+}
+
+/*
+ * A value the AI proposed, in `classification.proposed_tags`, is confirmed or
+ * rejected by its dimension and its value together (D-128): the same value can be
+ * proposed under two dimensions, and each is its own proposal.
+ *
+ * Both routes are ordered as every action above: session, the scoped 404, then
+ * `contribute_content`'s 403, then the body. 400 `{"dimension": [...]}` for a missing
+ * dimension or one other than Project, Process and Topic, Department included; 400
+ * `{"value": [...]}` for a blank or over-long value, over-long being each route's
+ * own bound: a tag name's 255 characters to confirm, and MAXIMUM_PROPOSED_TAG_LENGTH
+ * (apps/core/constants.py) to reject, so a proposal too long to become a tag can
+ * still be rejected (D-133). The value is sent whole, as `proposed_tags` carries it.
+ * 404, the document's own 404 body, also when that value is not proposed under that
+ * dimension on this document, as after another session decided it, so the reply
+ * never says which.
+ */
+
+/**
+ * `POST /api/documents/{id}/proposed-tags/confirm`, body `{dimension, value}` — a
+ * person confirms a value the AI proposed below the threshold (D-128). The server
+ * creates the tag, or brings back one of that name, and links it as the AI's,
+ * confirmed. 200 `{classification, tag_details}`: the entry leaves `proposed_tags`
+ * and a link appears in `tag_details`.
+ *
+ * @param {string} docId
+ * @param {'Project'|'Process'|'Topic'} dimension The proposal's own dimension.
+ * @param {string} value The proposal's value, as `proposed_tags` carries it.
+ */
+export function confirmProposedTag(docId, dimension, value, options = {}) {
+  return post(`/documents/${encodeURIComponent(docId)}/proposed-tags/confirm`, { dimension, value }, options)
+}
+
+/**
+ * `POST /api/documents/{id}/proposed-tags/reject`, body `{dimension, value}` — drops
+ * a proposed value without creating anything (D-128). 200 `{classification,
+ * tag_details}`, the entry gone from `proposed_tags`. A value longer than a tag name,
+ * which confirm refuses, is rejected here (D-133).
+ *
+ * @param {string} docId
+ * @param {'Project'|'Process'|'Topic'} dimension The proposal's own dimension.
+ * @param {string} value The proposal's value, as `proposed_tags` carries it.
+ */
+export function rejectProposedTag(docId, dimension, value, options = {}) {
+  return post(`/documents/${encodeURIComponent(docId)}/proposed-tags/reject`, { dimension, value }, options)
 }

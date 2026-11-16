@@ -8,7 +8,8 @@
     "Twelve threads: eight ordinary, two scoped asked by both roles, one topic change, one previous-answer follow-up (expected to fail with history, D-86 decision 2).",
     "Thread ids start at t20 so no run id can be mistaken for the frozen set's t01-t09.",
     "The previous-answer follow-up refers to a fact the first ANSWER introduces (inactivity), not the first question; under D-42 the reference should not resolve.",
-    "http_check entries exist because validation requires them; this set is run in-process only and the HTTP check stays on the frozen set."
+    "http_check entries exist because validation requires them; this set is run in-process only and the HTTP check stays on the frozen set.",
+    "Extended 9 November 2026 for step 7 phase 4 (D-103's 'before any further attempt'): t32-t38 are CROSS-SOURCE threads - each follow-up's expected source is a DIFFERENT manifest item from turn 1's, the composition the 8 November set lacked (8 of its 10 answerable follow-ups kept their source inside turn 1's item, so it could not detect a fix to the frozen failure mode). Six ordinary and one scoped, ids continuing from t31. Drafted from the corpus files only; the frozen sets' files were again not read, and the identifier-only overlap check (phase 2a's thresholds) was re-run over the whole extended set."
   ],
   "scoring_rule": {
     "version": 2,
@@ -296,6 +297,167 @@
           "expected_answer": ["forty-five", "45 days"],
           "accepted": [],
           "sources": ["T04"]
+        }
+      ]
+    },
+    {
+      "id": "t32",
+      "kind": "ordinary",
+      "role": "Employee",
+      "turns": [
+        {
+          "question": "Who shows a new starter how things really work around here?",
+          "expected": "answer",
+          "expected_answer": ["buddy"],
+          "accepted": ["Saffron Trail"],
+          "sources": ["D08"]
+        },
+        {
+          "question": "And is there a session this quarter that would lift their report writing?",
+          "spelled_out": "Which Q4 training session would help a new starter improve their report writing?",
+          "depends_on": "'their' is the new starter the first turn introduced; cold there is nobody whose writing needs lifting. The answer is in the training schedule, not in the onboarding checklist turn 1 draws on.",
+          "expected": "answer",
+          "expected_answer": ["clear reports"],
+          "accepted": [],
+          "sources": ["D13"]
+        }
+      ]
+    },
+    {
+      "id": "t33",
+      "kind": "ordinary",
+      "role": "Employee",
+      "turns": [
+        {
+          "question": "What's been the biggest chunk of the support tickets lately?",
+          "expected": "answer",
+          "expected_answer": ["password resets"],
+          "accepted": [],
+          "sources": ["T01"]
+        },
+        {
+          "question": "And what hours does the self-service option for those actually work?",
+          "spelled_out": "During which hours is the self-service password reset page available?",
+          "depends_on": "'those' are the password resets turn 1 named; cold there is nothing for a self-service option to be for. The window is in the helpdesk FAQ, not in the standup transcript turn 1 draws on.",
+          "expected": "answer",
+          "expected_answer": ["eight in the evening"],
+          "accepted": ["Nickel Bay"],
+          "sources": ["D18"]
+        }
+      ]
+    },
+    {
+      "id": "t34",
+      "kind": "ordinary",
+      "role": "Employee",
+      "turns": [
+        {
+          "question": "What do I have to jot down every time I take a pool car out?",
+          "expected": "answer",
+          "expected_answer": ["odometer"],
+          "accepted": ["logbook"],
+          "sources": ["D19"]
+        },
+        {
+          "question": "And if I top up the tank out of my own pocket, how long have I got to claim it back?",
+          "spelled_out": "Within how many days must an expense claim for fuel paid personally be submitted?",
+          "depends_on": "'the tank' belongs to the fleet car of the first turn; cold there is no vehicle being refuelled. The claim window is in the expenses guide, not in the fleet notes turn 1 draws on.",
+          "expected": "answer",
+          "expected_answer": ["thirty days"],
+          "accepted": ["30 days"],
+          "sources": ["D10"]
+        }
+      ]
+    },
+    {
+      "id": "t35",
+      "kind": "ordinary",
+      "role": "Employee",
+      "turns": [
+        {
+          "question": "What's engineering signed up to deliver in the next release?",
+          "expected": "answer",
+          "expected_answer": ["search improvements"],
+          "accepted": ["dashboard"],
+          "sources": ["T03"]
+        },
+        {
+          "question": "And if we get everyone in to see it before then, how far ahead does the room need sign-off?",
+          "spelled_out": "How far in advance must the facilities team approve a meeting-room booking for more than twenty people?",
+          "depends_on": "'it' is the release work turn 1 names; cold there is nothing to show and no reason a room is involved. The booking rule is in the meeting-room rules, not in the workshop transcript turn 1 draws on.",
+          "expected": "answer",
+          "expected_answer": ["one week"],
+          "accepted": ["facilities team"],
+          "sources": ["D17"]
+        }
+      ]
+    },
+    {
+      "id": "t36",
+      "kind": "ordinary",
+      "role": "Employee",
+      "turns": [
+        {
+          "question": "What happens at the ninety-day mark for someone who's just joined?",
+          "expected": "answer",
+          "expected_answer": ["review"],
+          "accepted": ["ninety days"],
+          "sources": ["D08"]
+        },
+        {
+          "question": "And is the gear actually sorted for the one starting this Monday?",
+          "spelled_out": "Are the laptop and account ready for the new starter who joins on Monday?",
+          "depends_on": "'the one starting this Monday' only reads as a new starter through the first turn, and 'the gear' is their kit; cold it could be any delivery. The answer is in the standup transcript, not in the onboarding checklist turn 1 draws on.",
+          "expected": "answer",
+          "expected_answer": ["Sunday night"],
+          "accepted": ["imaged"],
+          "sources": ["T01"]
+        }
+      ]
+    },
+    {
+      "id": "t37",
+      "kind": "scoped",
+      "role": "both",
+      "turns": [
+        {
+          "question": "Who can sign off a fifteen thousand dollar purchase?",
+          "expected": "answer",
+          "expected_answer": ["department head"],
+          "accepted": ["twenty thousand"],
+          "sources": ["D05"]
+        },
+        {
+          "question": "And who've we got rated top for running that kind of project?",
+          "spelled_out": "Who in the team skills matrix holds the top rating for project management?",
+          "depends_on": "'that kind of project' is the purchase the first turn is about, and 'rated top' is the matrix's scale; cold there is no project and no rating in view. The matrix is Administrator-only and a different item from the procurement guidelines turn 1 draws on.",
+          "expected_by_role": {"Administrator": "answer", "Employee": "no-answer"},
+          "expected_answer": ["Ben Carter", "Grace Tan"],
+          "accepted": [],
+          "sources": ["D16"]
+        }
+      ]
+    },
+    {
+      "id": "t38",
+      "kind": "ordinary",
+      "role": "Employee",
+      "turns": [
+        {
+          "question": "How long do we hang on to someone's personal details?",
+          "expected": "answer",
+          "expected_answer": ["as long as needed"],
+          "accepted": ["retention"],
+          "sources": ["D11"]
+        },
+        {
+          "question": "And who has to hear about it if any of that information goes astray?",
+          "spelled_out": "Who must be told about an incident involving records, and within how many days?",
+          "depends_on": "'that information' is the personal information of the first turn; cold there is nothing to go astray. The reporting rule is in the records handbook, not in the privacy notice turn 1 draws on.",
+          "expected": "answer",
+          "expected_answer": ["records officer"],
+          "accepted": ["two working days"],
+          "sources": ["D04"]
         }
       ]
     }

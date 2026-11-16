@@ -345,3 +345,14 @@ FR-02's lockout, walked live, as the 2 November note above said it would be.
   `Documents\KMP-alpha-deployments.txt`.
 - **The user accepted it as partial.** The platform was demonstrated live in class, so a
   demonstration submission is not required (D-98).
+
+### 12 November 2026: FR-13 since the walk (D-91, D-112)
+
+- **"The measured reason is step 5's"** (the note of 2 November). Step 5 ran on 3 November on the
+  alpha's code. With history, 1 of 9 frozen follow-ups matched, and spelled out 3 of 9 (D-91's
+  note). D-112 accepts the clause as partial for NIT3003 on the FLM build.
+- **The walk and its qualification stay true of the alpha,** which runs FLM at `8598d19`.
+- **On the default build, `anthropic` (D-122),** 9 of 9 matched on each of three draws (D-112's
+  note of 12 November). The auditor reads that with Stage 5 item 10.
+- **The re-scoping tests have moved.** The note of 2 November cites `test_fr11_scoping.py:608` and
+  `:633`. On `main` at `a668a08` they begin at `:610` and `:635`.

@@ -103,7 +103,7 @@ class ControlledService:
         self.embed_calls: list[list[str]] = []
         self.generate_calls: list[tuple] = []
 
-    def embed(self, texts: list[str]) -> EmbeddingResult:
+    def embed(self, texts: list[str], *, input_type=None) -> EmbeddingResult:
         self.embed_calls.append(list(texts))
         return EmbeddingResult(
             vectors=[list(QUERY)],

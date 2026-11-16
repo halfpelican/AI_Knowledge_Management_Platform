@@ -3,16 +3,20 @@
 D-85 decision 4: "Recorded beside every result: the server, its version and the thread
 count." The measured run is served by
 
-    waitress-serve --listen=127.0.0.1:8000 --threads=24 config.wsgi:application
+    waitress-serve --listen=127.0.0.1:8000 --threads=24 --max-request-body-size=54525952 config.wsgi:application
 
-under ``DEBUG=False``. Waitress answers no request with its thread count, so a client cannot
-ask it. The operating system can say which process is listening on the port, with what
-command line and since when, and that command line carries ``--threads``. So the record is
-OBSERVED, not stated:
+under ``DEBUG=False``. ``--max-request-body-size`` is D-124's ceiling on any request body: it does
+not change what a measurement measures, and nothing here checks it. Waitress answers no request
+with its thread count, so a client cannot ask it. The operating system can say which process is
+listening on the port, with what command line and since when, and that command line carries
+``--threads``. So the record is OBSERVED, not stated:
 
 - the listening process, its command line and its start time, from ``Get-NetTCPConnection``
   and ``Win32_Process`` (Windows, where the laptop runs; elsewhere the record says it was not
-  looked up);
+  looked up). Windows can report a serving socket's state wrongly, so ``listening_process``
+  reads ``netstat`` and the port's own socket rows as well as the Listen row. It takes a
+  process only when that process alone holds the port, and tries again before it gives up
+  (D-87's notes of 11 and 12 November 2026). The record says which lookup found the process;
 - the server and the thread count, parsed from that command line. A Waitress started without
   ``--threads`` runs Waitress's default of 4, and the record says so;
 - the version: the Waitress installed in the venv the command line runs from (the venv's
@@ -58,6 +62,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
@@ -67,9 +72,24 @@ from urllib.parse import urlsplit
 D85_SERVER = "waitress"
 D85_THREADS = 24
 D85_LISTEN = "127.0.0.1:8000"
-D85_COMMAND = f"waitress-serve --listen={D85_LISTEN} --threads={D85_THREADS} config.wsgi:application"
+# D-124: Waitress's ceiling on a request body, a copy of apps.core.constants.MAX_REQUEST_BODY_BYTES
+# (this script imports nothing from the project). apps/api/tests/test_request_body_bound.py ties
+# the two.
+D85_MAX_REQUEST_BODY_BYTES = 54525952
+D85_COMMAND = (
+    f"waitress-serve --listen={D85_LISTEN} --threads={D85_THREADS} "
+    f"--max-request-body-size={D85_MAX_REQUEST_BODY_BYTES} config.wsgi:application"
+)
 WAITRESS_DEFAULT_THREADS = 4  # waitress.adjustments.Adjustments.threads
 LOOKUP_TIMEOUT_SECONDS = 30
+# listening_process tries again this often, for about this long, before it gives up (D-87's notes
+# of 11 and 12 November 2026). The values are the ones NFR-08's run 6 ran with.
+LOOKUP_RETRY_SECONDS = 60
+LOOKUP_RETRY_INTERVAL_SECONDS = 10
+# Which lookup found the listening process: listening_process's ``found_by``.
+FOUND_BY_LISTEN_ROW = "Get-NetTCPConnection -State Listen"
+FOUND_BY_NETSTAT = "netstat -ano, a LISTENING line"
+FOUND_BY_PORT_ROW = "the port's own socket row (remote port 0), whatever state is reported"
 
 THREADS_PATTERN = re.compile(r"--threads(?:=|\s+)(\d+)")
 LISTEN_PATTERN = re.compile(r"--listen(?:=|\s+)(\S+)")
@@ -213,11 +233,12 @@ def venv_package_version(venv: Path, name: str) -> str | None:
     return None
 
 
-def listening_process(port: int) -> dict:
-    """The process listening on ``port`` on this machine.
+def _listen_row_process(port: int) -> dict:
+    """The owner of ``port``'s Listen row, from ``Get-NetTCPConnection -State Listen``.
 
-    ``pid``, ``command`` (its command line) and ``started_at`` (its start, UTC, ISO 8601), each
-    None when unknown, and ``note`` saying why when the lookup itself failed.
+    ``listening_process``'s first lookup, and until 11 November 2026 its only one. ``pid``,
+    ``command`` (its command line) and ``started_at`` (its start, UTC, ISO 8601), each None when
+    unknown, and ``note`` saying why when the lookup itself failed.
     """
     found: dict = {"pid": None, "command": None, "started_at": None, "note": None}
     if sys.platform != "win32":
@@ -252,9 +273,251 @@ def listening_process(port: int) -> dict:
     except ValueError:
         found["note"] = "the process lookup printed something that is not JSON"
         return found
+    if reply.get("pid") == 0:
+        # Process 0 is Windows' System Idle Process. It listens on nothing, and its start is the
+        # machine's boot. The HTTP check of 10 November 2026 recorded it as the server, with that
+        # start (D-112's note of 11 November 2026, section (c), defect 1). It is not an observation.
+        found["note"] = (f"the Listen row for port {port} names process 0, the System Idle Process, "
+                         "which is not a server: the listening process is unknown")
+        return found
     found.update(pid=reply.get("pid"), command=reply.get("command") or None,
                  started_at=reply.get("started") or None)
     return found
+
+
+def parse_netstat_listening(text: str, port: int) -> set[int]:
+    """The PIDs ``netstat -ano`` lists as LISTENING on TCP ``port``, IPv4 or IPv6."""
+    pids: set[int] = set()
+    for line in text.splitlines():
+        parts = line.split()
+        # TCP    127.0.0.1:8000    0.0.0.0:0    LISTENING    46608
+        if (len(parts) >= 5 and parts[0].upper() == "TCP" and parts[3].upper() == "LISTENING"
+                and parts[1].rsplit(":", 1)[-1] == str(int(port)) and parts[4].isdigit()):
+            pids.add(int(parts[4]))
+    return pids
+
+
+def _netstat_listening_pids(port: int) -> tuple[set[int], str | None]:
+    """The PIDs netstat lists as LISTENING on ``port``, and why not when netstat could not be run."""
+    try:
+        completed = subprocess.run(["netstat", "-ano"], capture_output=True, text=True,
+                                   timeout=LOOKUP_TIMEOUT_SECONDS, check=False)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return set(), f"netstat could not be run ({type(exc).__name__})"
+    if completed.returncode != 0:
+        return set(), f"netstat -ano exited {completed.returncode}"
+    return parse_netstat_listening(completed.stdout or "", port), None
+
+
+def _port_row_owners(port: int) -> tuple[list[dict], str | None]:
+    """Every live process that owns a remote-port-0 row on ``port``, whatever state is reported.
+
+    Returns ([{pid, command, started_at, states}, ...], None), or ([], why) when the rows could
+    not be read. ``command`` is None for a process whose command line cannot be read: it is still
+    an owner, and still counts (D-87's note of 12 November 2026). Two kinds of row are left out,
+    because neither names a process: one owned by PID 0, and one whose owner no longer exists.
+
+    A query that fails inside PowerShell exits 3, and the rows are then unread, as they are when
+    the command prints nothing or prints something that is not JSON. A query that succeeds and
+    finds no row prints ``[]``. Until 13 November 2026 a failure inside PowerShell printed ``[]``
+    too, and read as "no rows" (the re-audit on ``bbbda8c``).
+    """
+    script = (
+        "try {"
+        f" $rows = @(Get-CimInstance -Namespace root/StandardCimv2 -ClassName MSFT_NetTCPConnection"
+        f" -Filter 'LocalPort={int(port)} AND RemotePort=0' -ErrorAction Stop); $found = @();"
+        " foreach ($o in ($rows | ForEach-Object { [int]$_.OwningProcess } | Sort-Object -Unique)) {"
+        " if ($o -eq 0) { continue }; $p = Get-CimInstance Win32_Process -Filter ('ProcessId=' + $o) -ErrorAction Stop;"
+        " if (-not $p) { continue }; $s = ''; if ($p.CreationDate) {"
+        " $s = $p.CreationDate.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffZ',"
+        " [Globalization.CultureInfo]::InvariantCulture) };"
+        " $states = (($rows | Where-Object { [int]$_.OwningProcess -eq $o } | ForEach-Object { [int]$_.State }) -join ',');"
+        " $found += [pscustomobject]@{ pid = $o; command = [string]$p.CommandLine; started = $s; states = $states } };"
+        " ConvertTo-Json -InputObject @($found) -Compress; exit 0"
+        " } catch { exit 3 }"
+    )
+    try:
+        completed = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
+                                   capture_output=True, text=True, timeout=LOOKUP_TIMEOUT_SECONDS, check=False)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return [], f"the port's socket rows could not be read ({type(exc).__name__})"
+    if completed.returncode != 0:
+        return [], f"the port's socket rows could not be read (the query exited {completed.returncode})"
+    output = (completed.stdout or "").strip()
+    if not output:
+        return [], "the port's socket rows could not be read (the query printed nothing)"
+    try:
+        reply = json.loads(output)
+    except ValueError:
+        return [], "the port's socket rows could not be read (the query printed something that is not JSON)"
+    owners = []
+    for owner in (reply if isinstance(reply, list) else [reply]):
+        if isinstance(owner, dict) and isinstance(owner.get("pid"), int) and owner["pid"] != 0:
+            owners.append({"pid": owner["pid"], "command": owner.get("command") or None,
+                           "started_at": owner.get("started") or None, "states": owner.get("states")})
+    return owners, None
+
+
+def sole_owner(port: int, netstat_pids: set[int], netstat_error: str | None,
+               owners: list[dict], rows_error: str | None) -> tuple[dict | None, str, bool]:
+    """The one process the fallback lookups may take for the listener on ``port``, or None.
+
+    Returns (owner, what was seen in words, whether any candidate was seen). A candidate is a
+    live owner of a remote-port-0 row on the port, or a PID other than 0 that netstat lists as
+    LISTENING on it. The owner is taken only when all of these hold:
+
+    - netstat could be run, and the port's rows could be read (the user's decision of 13
+      November 2026: an unread source could have shown a second process);
+    - there is exactly one candidate;
+    - it owns a row;
+    - its command line can be read.
+
+    So a second process holding the port is never passed over, readable or not: with two
+    candidates nothing is taken, and the caller refuses as it did before the fallbacks existed.
+    PID 0 is never a candidate: it is not a process.
+    """
+    # The PIDs netstat lists LISTENING, other than 0. netstat cannot say whether a PID is live.
+    netstat_live = sorted(pid for pid in netstat_pids if pid != 0)
+    if netstat_error:
+        netstat_says = netstat_error
+    elif netstat_live:
+        netstat_says = f"netstat -ano lists {_pids(netstat_live)} LISTENING"
+    elif netstat_pids:
+        netstat_says = "netstat -ano lists only PID 0 LISTENING, which is not a process"
+    else:
+        netstat_says = f"netstat -ano lists no LISTENING line for port {port}"
+    if rows_error:
+        return None, f"{netstat_says}; {rows_error}", bool(netstat_live)
+    candidates = sorted({owner["pid"] for owner in owners} | set(netstat_live))
+    if netstat_error:
+        rows_say = (f"the port's rows show {_pids(candidates)}" if candidates
+                    else f"no live process owns a remote-port-0 row on port {port}")
+        return None, f"{netstat_says}; {rows_say}; without netstat a second listener cannot be ruled out", bool(candidates)
+    if not candidates:
+        return None, f"{netstat_says}; no live process owns a remote-port-0 row on port {port}", False
+    if len(candidates) > 1:
+        return None, f"{netstat_says}; more than one process holds port {port}: {_pids(candidates)}", True
+    owner = next((owner for owner in owners if owner["pid"] == candidates[0]), None)
+    if owner is None:
+        return None, f"{netstat_says}, but it owns no remote-port-0 row on port {port}", True
+    if not owner["command"]:
+        return None, (f"{netstat_says}; the port's own row (remote port 0) is owned by pid {owner['pid']} "
+                      "alone, whose command line cannot be read"), True
+    return owner, (f"{netstat_says}; the port's own row (remote port 0) is owned by pid {owner['pid']} "
+                   f"alone, reported state {owner['states']} (2 is Listen), read through Win32_Process"), True
+
+
+def _pids(pids: list[int]) -> str:
+    return "pid " + str(pids[0]) if len(pids) == 1 else "pids " + ", ".join(str(pid) for pid in pids)
+
+
+def listening_process(port: int) -> dict:
+    """The process listening on ``port`` on this machine.
+
+    ``pid``, ``command`` (its command line) and ``started_at`` (its start, UTC, ISO 8601), each
+    None when unknown, and ``note`` saying why when the lookup itself failed. ``found_by`` names
+    the lookup that found a process whose command line could be read (a FOUND_BY_* value, None
+    when none did), and ``lookup`` lists what each try saw.
+
+    Windows can report a serving socket's state wrongly (D-87's note of 11 November 2026). The
+    listening row of a Waitress that was answering requests has read as state 0 or 1, where 2 is
+    Listen, and netstat has shown no line for it, or CLOSED. A Listen row and a netstat line
+    naming PID 0 have also been seen, beside the real listener's own row and after a listener
+    had gone. So the Listen row is not the only lookup, and no lookup takes a process while
+    another holds the port (D-87's note of 12 November 2026):
+
+    1. The Listen row (``_listen_row_process``), taken when its process's command line can be
+       read, both ``netstat -ano`` and the port's own socket rows could be read, and neither shows
+       another process on the port: netstat by a PID other than 0 listed LISTENING, the rows by
+       another live owner. Two servers can listen on one address and port on Windows, and then
+       the Listen row names one of them, while the port's CIM rows, which share one key, show only
+       one; netstat lists both. A second listener on another address has a row of its own, which
+       netstat may miss when the state is misreported. When either source cannot be read, nothing
+       is taken (the user's decision of 13 November 2026).
+    2. Otherwise one process is taken only when two more lookups, read on the same try, agree on
+       it (``sole_owner``):
+
+       - ``netstat -ano``: the PIDs with a LISTENING line on the port;
+       - the port's own socket rows, local port ``port`` and remote port 0, whatever state is
+         reported: every live process that owns one, whether or not its command line can be read.
+
+       The process is taken when it is the only candidate, owns a row and has a readable command
+       line. ``found_by`` is netstat's when netstat lists it LISTENING, and the port's row
+       otherwise. A second candidate, readable or not, means nothing is taken.
+
+    When no process is taken, the lookups are tried again every LOOKUP_RETRY_INTERVAL_SECONDS. The
+    last try starts within LOOKUP_RETRY_SECONDS of the first, so the whole wait is about a minute
+    (51 to 62 seconds in the trials of 12 and 13 November 2026), and longer if a lookup times out. Then
+    the Listen row's own result is returned, as it
+    always was: nothing listening, or a PID with no command line. It is never process 0:
+    ``_listen_row_process`` reports a row that names it as unknown, with a note (D-112's note of
+    12 November 2026). Two things differ from the Listen row's own answer, and in neither does
+    ``note`` say that nothing is listening: when netstat or the port's rows could not be read,
+    ``note`` says that whether anything holds the port is not known, whatever else was seen; and
+    otherwise, when a candidate was seen and none could be taken, ``note`` says so. A failure
+    inside the Listen-row query itself reads as no Listen row, as it always has; netstat and the
+    port's rows then decide.
+
+    Each try is printed to stderr as it happens, so a wait shows its reason. Only how the
+    process is found changes here. What a caller requires of it does not: the pre-flight still
+    reads the server and its threads from this process's command line, and the closing check
+    still requires the same PID as before the run.
+    """
+    if sys.platform != "win32":
+        return {**_listen_row_process(port), "found_by": None, "lookup": []}
+    trace: list[str] = []
+
+    def say(line: str) -> None:
+        trace.append(line)
+        print(f"listener lookup, {line}", file=sys.stderr)
+
+    deadline = time.monotonic() + LOOKUP_RETRY_SECONDS
+    tries = 0
+    while True:
+        tries += 1
+        found = _listen_row_process(port)
+        netstat_pids, netstat_error = _netstat_listening_pids(port)
+        owners, rows_error = _port_row_owners(port)
+        if found["pid"] is not None and found["command"]:
+            others = sorted((set(netstat_pids) | {owner["pid"] for owner in owners}) - {0, found["pid"]})
+            unread = [error for error in (netstat_error, rows_error) if error]
+            if not others and not unread:
+                say(f"try {tries}: the Listen row names pid {found['pid']}")
+                return {**found, "found_by": FOUND_BY_LISTEN_ROW, "lookup": trace}
+            if others:
+                listen_row = (f"the Listen row names pid {found['pid']}, and netstat -ano or the port's own rows "
+                              f"show {_pids(others)} on port {port} as well")
+            else:
+                listen_row = (f"the Listen row names pid {found['pid']}, but a second process on port {port} "
+                              f"cannot be ruled out: {'; '.join(unread)}")
+            # Not taken, and not returned at the end either: a run must not be READY on one of two.
+            found = {"pid": None, "command": None, "started_at": None, "note": None}
+        else:
+            listen_row = found["note"] or f"the Listen row names pid {found['pid']}, whose command line could not be read"
+        owner, why, candidate_seen = sole_owner(port, netstat_pids, netstat_error, owners, rows_error)
+        if owner is not None:
+            say(f"try {tries}: {listen_row}; {why}")
+            return {"pid": owner["pid"], "command": owner["command"], "started_at": owner["started_at"],
+                    "note": None, "lookup": trace,
+                    "found_by": FOUND_BY_NETSTAT if owner["pid"] in netstat_pids else FOUND_BY_PORT_ROW}
+        seen = f"try {tries}: {listen_row}; {why}"
+        if time.monotonic() + LOOKUP_RETRY_INTERVAL_SECONDS > deadline:
+            say(f"{seen}. Giving up")
+            result = {**found, "found_by": None, "lookup": trace}
+            if netstat_error or rows_error:
+                # A lookup that could not be read cannot show that nothing, or that only one process,
+                # holds the port: the misreported state hides a listener from the Listen row and
+                # netstat, and only the port's rows show it (D-87's note of 12 November 2026).
+                result["note"] = (f"whether anything holds port {port} is not known, because a lookup could not "
+                                  f"be read: {why}")
+            elif candidate_seen:
+                # Something holds the port and could not be taken for the listener. Saying that
+                # nothing is listening would be wrong, and wrong in the unsafe direction for
+                # anyone checking that the port is free.
+                result["note"] = f"no single process with a readable command line holds port {port}: {why}"
+            return result
+        say(f"{seen}. Trying again in {LOOKUP_RETRY_INTERVAL_SECONDS} s")
+        time.sleep(LOOKUP_RETRY_INTERVAL_SECONDS)
 
 
 def debug_probe(base_url: str) -> dict:
@@ -362,6 +625,8 @@ def observe(base_url: str, server_header: str | None = None, *, probe_debug: boo
         "listen": described["listen"],
         "pid": process["pid"],
         "process_started_at": process["started_at"],
+        "process_found_by": process.get("found_by"),
+        "process_lookup": process.get("lookup") or [],
         "command_line": command,
         "server_header": server_header,
         "d85_command": D85_COMMAND,
@@ -718,6 +983,7 @@ def preflight_main(argv: list[str]) -> int:
     print(f"server         : {summary(server)}")
     print(f"command line   : {server.get('command_line') or 'not observed'}")
     print(f"process start  : {server.get('process_started_at') or 'not observed'}")
+    print(f"found by       : {server.get('process_found_by') or 'no lookup found it'}")
     print(f"version from   : {server.get('version_source') or 'not read'}")
     print(f"Server header  : {server.get('server_header') or 'none'} (GET /api/), "
           f"{debug.get('server_header') or 'none'} (the DEBUG probe)")
@@ -792,7 +1058,8 @@ def finalise(*, preflight_record: dict, summary_path: Path, window_start: dateti
     at_end = listening_process(port) if port else {"pid": None, "note": "no port"}
     server_at_end = {"pid": at_end["pid"], "pid_before_the_run": expected_pid,
                      "same_process": at_end["pid"] is not None and at_end["pid"] == expected_pid,
-                     "note": at_end.get("note")}
+                     "note": at_end.get("note"), "found_by": at_end.get("found_by"),
+                     "lookup": at_end.get("lookup") or []}
 
     reasons: list[str] = []
     if restarts:

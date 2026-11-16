@@ -297,7 +297,10 @@ def test_a_null_citation_beside_a_live_one_shows_only_the_live_statement_numbere
     # The panel lists the live document alone: the deleted chunk has no passage to return,
     # and nothing stands in for it (D-78 item 4).
     assert [(source["source_id"], source["passages"]) for source in rendered["sources"]] == [
-        (str(live_document.id), [{"chunk_id": str(live_chunk.id), "text": LIVE_PASSAGE}])
+        (
+            str(live_document.id),
+            [{"chunk_id": str(live_chunk.id), "text": LIVE_PASSAGE, "ai_generated": False}],
+        )
     ]
     raw = response.content.decode()
     assert DELETED_STATEMENT not in raw

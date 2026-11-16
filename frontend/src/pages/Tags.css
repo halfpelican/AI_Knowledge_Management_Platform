@@ -1,0 +1,79 @@
+/* FR-10 tag administration (NIT3004, D-119 finding 5; D-128): the page frame, the
+   form that adds a value, and the tags table. Tokens only, and no colour pair that
+   tokens.css does not already document with its contrast ratio: body and muted text
+   on the surface and the alt surface, a field error on the alt surface, and the two
+   button variants. */
+
+.tags-page {
+  max-width: var(--content-max-width);
+}
+
+.tags-page__intro {
+  max-width: var(--measure-text);
+  color: var(--color-text-muted);
+}
+
+.tags-page__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+/* FR-10: an Administrator adds a value (D-128). One panel, its fields stacked as every
+   form's are, no wider than a field, so it reads as one step at any width. Text on
+   the alt surface keeps the documented ratios (body 13.41:1, muted 6.87:1, a field
+   error 5.97:1), and the panel's border is a separator, not the boundary of a
+   control: the fields and the button draw their own. */
+.tags-create {
+  margin-bottom: var(--space-5);
+}
+
+.tags-create__form {
+  max-width: var(--layout-field-max-width);
+  padding: var(--space-4);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface-alt);
+}
+
+/* At a narrow width the table scrolls sideways inside its own labelled, focusable
+   region (base.css, .table-scroll) instead of widening the page. The headings may
+   wrap, so the long count heading does not force the scroll on its own. */
+.tags-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.tags-table th,
+.tags-table td {
+  padding: var(--space-2);
+  border-bottom: var(--border-width) solid var(--color-border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.tags-table thead th {
+  font-weight: var(--weight-semibold);
+}
+
+/* A tag name as a person typed it or the AI suggested it, up to 255 characters:
+   it wraps rather than widening the table. */
+.tags-table__name {
+  min-width: var(--layout-card-min-width);
+  font-weight: var(--weight-medium);
+  word-break: break-word;
+}
+
+.tags-table__count {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Retired reads as the word first; muted text on the surface is 7.56:1. */
+.tags-table__retired {
+  color: var(--color-text-muted);
+}
+
+.tags-table__action {
+  white-space: nowrap;
+}

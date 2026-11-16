@@ -1,0 +1,282 @@
+Question set: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\corpus\objective-06\pre-measurement-asks.json, 14 question(s) valid, 0 asked by both roles, so 14 run(s)
+FLM gate: scripts/check_flm.py's checks, before any question is asked (D-83)
+
+[GET /models]
+  33 model(s) advertised by /models:
+    - deepseek-r1:8b
+    - deepseek-r1-0528:8b
+    - gemma3:1b
+    - gemma3:4b
+    - gemma4-it:e2b
+    - gpt-oss:20b
+    - gpt-oss-sg:20b
+    - lfm2:1.2b
+    - lfm2:2.6b
+    - lfm2-trans:2.6b
+    - lfm2.5-it:1.2b
+    - lfm2.5-tk:1.2b
+    - llama3.1:8b
+    - llama3.2:1b
+    - llama3.2:3b
+    - medgemma:4b
+    - medgemma1.5:4b
+    - nanbeige4.1:3b
+    - phi4-mini-it:4b
+    - qwen2.5-it:3b
+    - qwen2.5vl-it:3b
+    - qwen3:0.6b
+    - qwen3:1.7b
+    - qwen3:4b
+    - qwen3:8b
+    - qwen3-it:4b
+    - qwen3-tk:4b
+    - qwen3.5:0.8b
+    - qwen3.5:2b
+    - qwen3.5:4b
+    - qwen3.5:9b
+    - qwen3vl-it:4b
+    - translategemma:4b
+  note: this list is the model catalogue rather than the resident set,
+        and it does not include the embedding model. The two calls below are the proof.
+  chat model 'gemma3:4b': advertised
+  PASS
+
+[POST /chat/completions]
+  model  : gemma3:4b
+  prompt : 'Reply with the single word: pong'
+  reply  : 'pong'  (24.5s)
+  PASS
+
+[POST /embeddings]
+  model      : embed-gemma
+  inputs     : 3, vectors returned: 3  (2.1s)
+  dimensions : [768, 768, 768]  (expected 768)
+  determinism : same input twice in one batch -> cosine 1.0000
+  determinism : same input in a second call  -> cosine 1.0000
+  discrimination: two unrelated inputs      -> cosine 0.1288
+  sanity      : vectors are deterministic and discriminate between inputs
+  PASS
+
+FLM gate: PASS
+
+Citation reliability harness — Stage 4 item 0
+  RECORD          : recorded
+  commit          : 711fcda5d4db4639daa198784d018f79b324c777 (tracked files have UNCOMMITTED changes)
+  FLM version     : v0.9.39 (flm version), server v0.9.39
+  dump sha256     : 3bf98403354dbabceb54052b99b45a25f5f39d4fd685cca1e07233aa1e166f59
+  database        : kmp_obj0506_20261101
+  provider        : flm (FLMService)
+  endpoint        : http://127.0.0.1:8625/v1
+  chat model      : gemma3:4b
+  embed model     : embed-gemma, dimension 768
+  health          : True — FLM at http://127.0.0.1:8625/v1 advertises 33 model(s)
+  server          : none, in-process (D-85: the pipeline's functions are called here)
+  question set    : C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\corpus\objective-06\pre-measurement-asks.json  (14 question(s), 14 run(s)), sha256 db8b1d73bd4aa4f4
+  set status      : DEVELOPMENT MATERIAL, 8 November 2026. The 8 unanswerable and 6 permission-only asks of the draft thirty (objective-06 queries.json), in scripts/citation_harness.py's question-set shape so the shipped pipeline measures them with nothing written. Run three times before the thirty are frozen, as the lead decided on 8 November. Not a frozen set; not tuned against.
+  indexed chunks  : 43, recorded embedding model(s): ['embed-gemma']
+  constants       : TOP_K=25, RELEVANCE_THRESHOLD=0.3, MAXIMUM_CONTEXT_TOKENS=4000, MAXIMUM_GENERATION_ATTEMPTS=3
+  prompt          : apps/ai/prompting.py SYSTEM_PROMPT, 2484 characters
+  schema          : apps/ai/schema.py, required key(s) ['statements'], per statement ['chunk_id', 'text']
+  corpus          : exactly the 25 items of corpus/objective-02/manifest.json
+[1/14] U01 (no-answer, Employee) ...
+[2/14] U02 (no-answer, Employee) ...
+[3/14] U04 (no-answer, Employee) ...
+[4/14] U05 (no-answer, Administrator) ...
+[5/14] U07 (no-answer, Employee) ...
+[6/14] U08 (no-answer, Administrator) ...
+[7/14] U10 (no-answer, Employee) ...
+[8/14] U11 (no-answer, Administrator) ...
+[9/14] P01 (scoped, Employee) ...
+[10/14] P02 (scoped, Employee) ...
+[11/14] P04 (scoped, Employee) ...
+[12/14] P06 (scoped, Employee) ...
+[13/14] P07 (scoped, Employee) ...
+[14/14] P08 (scoped, Employee) ...
+
+====================================================================================================
+PER-QUESTION DETAIL
+====================================================================================================
+
+[U01] no-answer / as Employee (expects no answer)
+  question    : When are salaries reviewed each year?
+  top score   : 0.3457   retrieved: 7  [D04:5b84ad25, D01:25a78c27, D04:886a7e4a, D12:db6d9ae4, D04:af45c907, D04:bfa0d3d8, D08:9fe4800b]
+  partial     : D04 0.346, D01 0.345, D12 0.307, D08 0.301, D07 0.298
+  attempts    : 1:parsed
+  parsed      : True
+    - [D08:9fe4800b] The owner of onboarding checklist for new starters reviews it at least once a year and records any change, together with the date and the reason for the change.
+  seconds     : 70.94
+
+[U02] no-answer / as Employee (expects no answer)
+  question    : How do I ask for a pay rise?
+  top score   : 0.3284   retrieved: 1  [D01:25a78c27]
+  partial     : D01 0.328, D06 0.299, D10 0.298, D03 0.270, D05 0.259
+  attempts    : 1:parsed
+  parsed      : True
+    (empty statement list)
+  seconds     : 30.86
+
+[U04] no-answer / as Employee (expects no answer)
+  question    : Can I get a corporate credit card for work purchases?
+  top score   : 0.3273   retrieved: 2  [D10:e149a71c, D05:693da2bc]
+  partial     : D10 0.327, D05 0.325, D01 0.295, D07 0.283, D02 0.260
+  attempts    : 1:parsed
+  parsed      : True
+    - [D10:e149a71c] Exceptions to expense claims guide require written approval and are kept on file so that they can be checked during an audit.
+  seconds     : 38.22
+
+[U05] no-answer / as Administrator (expects no answer)
+  question    : Who is allowed to hold a company credit card?
+  top score   : 0.3191   retrieved: 1  [D02:aaf92567]
+  partial     : D02 0.319, D19 0.286, D01 0.262, D10 0.261, D06 0.250
+  attempts    : 1:parsed
+  parsed      : True
+    - [D02:aaf92567] IT Acceptable Use Policy covers every computer, phone, tablet and network service provided by the organisation, and any personal device that is used to reach organisational systems.
+    - [D02:aaf92567] All company laptops must conform to the Copper Finch device standard, which requires full-disk encryption, an up-to-date operating system and the endpoint protection agent installed by the IT team.
+    - [D02:aaf92567] Passwords must be at least twelve characters and may not be reused across systems.
+    - [D02:aaf92567] Multi-factor authentication is mandatory for email, the document repository and any system holding personal information.
+    - [D02:aaf92567] Lost or stolen devices, suspected phishing messages and any unexpected access to files must be reported to the service desk immediately.
+  seconds     : 53.66
+
+[U07] no-answer / as Employee (expects no answer)
+  question    : Is the office closed between Christmas and New Year?
+  top score   : 0.4146   retrieved: 2  [D20:f75351f0, D01:25a78c27]
+  partial     : D20 0.415, D01 0.336, D10 0.281, D18 0.273, D07 0.271
+  attempts    : 1:parsed
+  parsed      : True
+    - [D20:f75351f0] The Melbourne office will relocate to a new building on the other side of the river.
+    - [D20:f75351f0] The Driftwood Lane move weekend is scheduled for the second weekend of November, and the office will reopen on the following Monday.
+  seconds     : 38.70
+
+[U08] no-answer / as Administrator (expects no answer)
+  question    : Do we have a shutdown period over the Christmas holidays?
+  top score   : 0.3324   retrieved: 1  [D01:25a78c27]
+  partial     : D01 0.332, D10 0.266, D04 0.248, D20 0.239, D07 0.239
+  attempts    : 1:parsed
+  parsed      : True
+    - [D01:25a78c27] Employee Leave Policy 2026 applies to every department and every site.
+  seconds     : 30.99
+
+[U10] no-answer / as Employee (expects no answer)
+  question    : Do I still get paid if I'm called up for jury duty?
+  top score   : 0.2498   retrieved: 0  [(none above threshold)]
+  partial     : D10 0.250, D01 0.219, D03 0.204, D19 0.177, D11 0.173
+  generation  : NOT CALLED (no-answer path A: nothing above threshold)
+  seconds     : 12.44
+
+[U11] no-answer / as Administrator (expects no answer)
+  question    : How much notice does someone need to give before taking jury service leave?
+  top score   : 0.4079   retrieved: 1  [D01:25a78c27]
+  partial     : D01 0.408, D11 0.291, D03 0.286, D17 0.285, D07 0.278
+  attempts    : 1:parsed
+  parsed      : True
+    - [D01:25a78c27] Leave requests are submitted through the human resources portal at least two weeks before the intended start date, except in emergencies.
+    - [D01:25a78c27] The line manager approves or declines leave requests within three working days.
+    - [D01:25a78c27] Periods of high operational demand, such as the end of the financial year, may limit the number of people who can be away at once.
+  seconds     : 26.69
+
+[P01] scoped / as Employee (expects no answer)
+  question    : Who is the project manager for Project Atlas?
+  top score   : 0.2862   retrieved: 0  [(none above threshold)]
+  source      : D09, not a candidate for this role
+  partial     : D04 0.286, T03 0.259, T01 0.237, D05 0.203, D14 0.196
+  generation  : NOT CALLED (no-answer path A: nothing above threshold)
+  expected    : 'head of digital services' -> not found
+  seconds     : 4.61
+
+[P02] scoped / as Employee (expects no answer)
+  question    : What gets decided at the Quartz Harbour milestone gate?
+  top score   : 0.2751   retrieved: 0  [(none above threshold)]
+  source      : D09, not a candidate for this role
+  partial     : D17 0.275, D05 0.254, D13 0.238, D08 0.234, D04 0.229
+  generation  : NOT CALLED (no-answer path A: nothing above threshold)
+  expected    : 'steering group' -> not found
+  seconds     : 1.23
+
+[P04] scoped / as Employee (expects no answer)
+  question    : Who on the team is rated four in project management?
+  top score   : 0.3873   retrieved: 4  [D13:a839910b, T03:dcb441b1, T01:c0aa1caf, D04:7f675205]
+  source      : D16, not a candidate for this role
+  partial     : D13 0.387, T03 0.378, T01 0.327, D04 0.326, D05 0.287
+  attempts    : 1:parsed
+  parsed      : True
+    - [D04:7f675205] Chapter 18: Project records
+    - [D04:7f675205] Each business unit must document how project records is handled and name a responsible owner who reviews the arrangement at least once every twelve months.
+  expected    : 'Ben Carter' -> not found
+  seconds     : 39.81
+
+[P06] scoped / as Employee (expects no answer)
+  question    : How much is in the Fernwood contingency reserve?
+  top score   : 0.2587   retrieved: 0  [(none above threshold)]
+  source      : T02, not a candidate for this role
+  partial     : D14 0.259, D05 0.240, D12 0.203, D04 0.193, D11 0.191
+  generation  : NOT CALLED (no-answer path A: nothing above threshold)
+  expected    : 'two million' -> not found
+  seconds     : 11.79
+
+[P07] scoped / as Employee (expects no answer)
+  question    : What did the risk committee decide to do about supplier concentration?
+  top score   : 0.3590   retrieved: 1  [D05:693da2bc]
+  source      : T02, not a candidate for this role
+  partial     : D05 0.359, D12 0.290, T03 0.239, D04 0.221, T04 0.198
+  attempts    : 1:parsed
+  parsed      : True
+    - [D05:693da2bc] Purchasing decisions must deliver value for money, be transparent and be free of conflicts of interest.
+    - [D05:693da2bc] Every purchase above a minimal value must be supported by a written record of why the supplier was chosen.
+    - [D05:693da2bc] Purchases up to five thousand dollars need one written quote. Purchases between five thousand and fifty thousand dollars need three quotes.
+    - [D05:693da2bc] The Slate Meridian tender threshold of fifty thousand dollars marks the point at which a formal open tender must be issued and evaluated by a panel of at least three staff.
+    - [D05:693da2bc] Team leaders may approve purchases up to two thousand dollars, department heads up to twenty thousand, and the executive committee anything above that.
+    - [D05:693da2bc] Every contract is assigned a manager who tracks deliverables, invoices and renewal dates.
+  expected    : 'alternatives' -> not found
+  seconds     : 57.83
+
+[P08] scoped / as Employee (expects no answer)
+  question    : How many people reported the Cobalt Reef phishing email to the service desk?
+  top score   : 0.2631   retrieved: 0  [(none above threshold)]
+  source      : T05, not a candidate for this role
+  partial     : D18 0.263, D02 0.248, T01 0.227, T04 0.207, D14 0.199
+  generation  : NOT CALLED (no-answer path A: nothing above threshold)
+  expected    : 'ninety' -> not found
+  seconds     : 1.22
+
+====================================================================================================
+SUMMARY
+====================================================================================================
+questions              : 14  (ordinary 0, scoped 6, no-answer 8)
+generation calls made  : 9  over 9 question(s); 5 question(s) took no-answer path A
+transport failures     : 0  (not counted as schema failures)
+
+schema conformance rate            : 100.0%  (9/9)   [responses that parsed into STATEMENT_LIST_SCHEMA]
+  first-attempt conformance        : 100.0%  (9/9)
+  questions answered within 3 tries : 100.0%  (9/9)
+
+fabricated-identifier rate         : 0.0%  (0/21)   [identifiers not supplied in that prompt, per statement]
+  questions with any fabrication   : 0.0%  (0/14)
+  statements proposed / verified   : 21 / 21   [verify_citations() removed the difference]
+
+empty-answer rate where an answer was available (ordinary only) : n/a (0 samples)
+  reported separately, because an empty answer is the CORRECT outcome here:
+    scoped questions empty (correct)    : 66.7%  (4/6)
+    no-answer questions empty (correct) : 25.0%  (2/8)
+
+expected-answer match (ordinary)   : n/a (0 samples)   [diagnostic, not one of the three rates]
+out-of-scope chunks in any prompt or answer : 0  (must be 0; the harness checks every question)
+
+timing, seconds, this one sequential process (nearest-rank percentiles):
+  per generation attempt  : n=9  min 5.90  median 19.00  mean 23.94  p90 56.60  max 56.60   [the 8.90 s baseline's measure]
+  per question, all       : n=14  min 1.22  median 30.86  mean 29.93  p90 57.83  max 70.94   [embed, rank, generate, verify]
+  per question, answered  : n=8  min 26.69  median 38.70  mean 44.60  p90 70.94  max 70.94
+
+misses (8): where the expected source stood, and where each run ended
+  U01                answered, where no answer was expected   no expected source
+  U04                answered, where no answer was expected   no expected source
+  U05                answered, where no answer was expected   no expected source
+  U07                answered, where no answer was expected   no expected source
+  U08                answered, where no answer was expected   no expected source
+  U11                answered, where no answer was expected   no expected source
+  P04                answered, where no answer was expected   D16 not a candidate for this role
+  P07                answered, where no answer was expected   T02 not a candidate for this role
+
+elapsed: 7.0 minutes
+full record written to C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\corpus\objective-06\runs\2026-11-08\pre-measurement\run1.json
+
+RESULT: schema conformance meets the 95% bar.

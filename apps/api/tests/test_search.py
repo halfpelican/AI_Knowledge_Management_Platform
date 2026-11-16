@@ -26,6 +26,7 @@ from apps.ai.testing import STUB_EMBEDDING_MODEL
 from apps.core.constants import (
     ADMINISTRATOR_ROLE_NAME,
     EMPLOYEE_ROLE_NAME,
+    MAXIMUM_SEARCH_LENGTH,
     MINIMUM_SEARCH_LENGTH,
     SOURCE_TYPES,
 )
@@ -153,7 +154,12 @@ def test_each_result_carries_exactly_what_the_clause_says_it_shows(
     employee_client, shared_corpus
 ):
     """"its title, the matching passage as a snippet, its department, and its date", plus
-    the type and identifier the front end links with, and nothing else."""
+    the type and identifier the front end links with, and nothing else.
+
+    ``snippet_ai_generated`` since D-125 (FR-16): whether the snippet is from a meeting's
+    AI-generated summary rather than its transcript, which NFR-15 requires the interface to mark.
+    It describes the snippet shown and nothing about the source. False here, where both snippets
+    are the sources' own words; apps/api/tests/test_summary_in_retrieval.py covers True."""
     body = employee_client.get(SEARCH_URL, {"q": TERM}).json()
 
     [document_result] = body["documents"]["results"]
@@ -164,11 +170,13 @@ def test_each_result_carries_exactly_what_the_clause_says_it_shows(
             "source_id",
             "title",
             "snippet",
+            "snippet_ai_generated",
             "department",
             "date",
         }
         # The snippet is the matching passage, so the term is in it.
         assert TERM in result["snippet"].lower()
+        assert result["snippet_ai_generated"] is False
     assert document_result["source_type"] == DOCUMENT_SOURCE_TYPE
     assert document_result["department"] == DOCUMENT_DEPARTMENT
     assert meeting_result["source_type"] == MEETING_SOURCE_TYPE
@@ -296,6 +304,32 @@ def test_a_term_below_the_minimum_is_400_and_records_no_search(
     assert set(response.json()) == {"q"}
     assert str(MINIMUM_SEARCH_LENGTH) in response.json()["q"][0]
     assert not SearchLog.objects.exists()
+
+
+def test_a_term_over_the_maximum_is_400_and_records_no_search(session_client, shared_corpus):
+    """The upper bound (D-79's note of 10 November 2026): keyword search bounded a term from
+    below only, so one request could log a term of any length for FR-19's cycle to embed and
+    show. The view maps ``SearchQueryTooLong`` as it maps the other two refusals, from both
+    roles, and no row is written."""
+    term = "a" * (MAXIMUM_SEARCH_LENGTH + 1)
+
+    response = session_client.client.get(SEARCH_URL, {"q": term})
+
+    assert response.status_code == 400
+    assert set(response.json()) == {"q"}
+    assert str(MAXIMUM_SEARCH_LENGTH) in response.json()["q"][0]
+    assert not SearchLog.objects.exists()
+
+
+def test_a_term_at_the_maximum_is_searched_and_logged(employee_client, shared_corpus):
+    """The bound is inclusive, as the question's is."""
+    term = "a" * MAXIMUM_SEARCH_LENGTH
+
+    response = employee_client.get(SEARCH_URL, {"q": term})
+
+    assert response.status_code == 200
+    [log] = SearchLog.objects.all()
+    assert log.query_text == term
 
 
 # --- 401 ----------------------------------------------------------------------------------

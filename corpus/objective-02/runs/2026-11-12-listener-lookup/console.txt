@@ -1,0 +1,30 @@
+port 8768, platform win32, python 3.12.13
+started child pid 37084: still running. (A venv's python.exe is a launcher, so the process that listens can be its child.)
+--- one listener ---
+  1. Listen row : {"pid": 48404, "command": "\"C:\\Users\\mozza\\AppData\\Roaming\\uv\\python\\cpython-3.12-windows-x86_64-none\\python.exe\"  -m http.server 8768 --bind 127.0.0.1", "started_at": "2026-11-12T09:27:48.887Z", "note": null}
+  2. netstat    : LISTENING pids [48404]
+  3. port's row : pid 48404, states 2, command '"C:\\Users\\mozza\\AppData\\Roaming\\uv\\python\\cpython-3.12-windows-x86_64-none\\python.exe"  -m http.server 8768 --'
+  sole_owner    : pid 48404; candidate seen True; netstat -ano lists pid 48404 LISTENING; the port's own row (remote port 0) is owned by pid 48404 alone, reported state 2 (2 is Listen), read through Win32_Process
+listener lookup, try 1: the Listen row names pid 48404
+  listening_process: pid 48404, found_by 'Get-NetTCPConnection -State Listen', note None, 1 tries, in 1.2 s
+started child pid 46272: still running. (A venv's python.exe is a launcher, so the process that listens can be its child.)
+--- a second listener started on the same port ---
+  1. Listen row : {"pid": 42280, "command": "\"C:\\Users\\mozza\\AppData\\Roaming\\uv\\python\\cpython-3.12-windows-x86_64-none\\python.exe\"  -m http.server 8768 --bind 127.0.0.1", "started_at": "2026-11-12T09:27:54.853Z", "note": null}
+  2. netstat    : LISTENING pids [42280, 48404]
+  3. port's row : pid 48404, states 2, command '"C:\\Users\\mozza\\AppData\\Roaming\\uv\\python\\cpython-3.12-windows-x86_64-none\\python.exe"  -m http.server 8768 --'
+  sole_owner    : nothing taken; candidate seen True; netstat -ano lists pids 42280, 48404 LISTENING; more than one process holds port 8768: pids 42280, 48404
+listener lookup, try 1: the Listen row names pid 48404
+  listening_process: pid 48404, found_by 'Get-NetTCPConnection -State Listen', note None, 1 tries, in 1.2 s
+listeners stopped
+--- both stopped (this waits for the retries) ---
+  1. Listen row : {"pid": null, "command": null, "started_at": null, "note": "nothing is listening on port 8768"}
+  2. netstat    : LISTENING pids []
+  3. port's row : no live owner
+  sole_owner    : nothing taken; candidate seen False; netstat -ano lists no LISTENING line for port 8768; no live process owns a remote-port-0 row on port 8768
+listener lookup, try 1: nothing is listening on port 8768; netstat -ano lists no LISTENING line for port 8768; no live process owns a remote-port-0 row on port 8768. Trying again in 10 s
+listener lookup, try 2: nothing is listening on port 8768; netstat -ano lists no LISTENING line for port 8768; no live process owns a remote-port-0 row on port 8768. Trying again in 10 s
+listener lookup, try 3: nothing is listening on port 8768; netstat -ano lists no LISTENING line for port 8768; no live process owns a remote-port-0 row on port 8768. Trying again in 10 s
+listener lookup, try 4: nothing is listening on port 8768; netstat -ano lists no LISTENING line for port 8768; no live process owns a remote-port-0 row on port 8768. Trying again in 10 s
+listener lookup, try 5: nothing is listening on port 8768; netstat -ano lists no LISTENING line for port 8768; no live process owns a remote-port-0 row on port 8768. Trying again in 10 s
+listener lookup, try 6: nothing is listening on port 8768; netstat -ano lists no LISTENING line for port 8768; no live process owns a remote-port-0 row on port 8768. Giving up
+  listening_process: pid None, found_by None, note 'nothing is listening on port 8768', 6 tries, in 59.6 s

@@ -61,6 +61,27 @@
   font-size: var(--text-sm);
 }
 
+/* A snippet from a meeting's AI-generated summary (`snippet_ai_generated`, FR-16):
+   the snippet and its mark in one block, whose dashed boundary is `ai-content`'s
+   (NFR-15, AiMark.css), so this rule sets no border of its own. */
+.search-result__ai {
+  max-width: var(--measure-text);
+  margin: 0 0 var(--space-2);
+  padding: var(--space-2) var(--space-3);
+}
+
+.search-result__ai > .search-result__snippet {
+  margin-bottom: 0;
+}
+
+/* The mark and the sentence saying where the snippet is from: muted, at the
+   mark's own size (muted on surface 7.56:1). */
+.search-result__provenance {
+  margin: 0 0 var(--space-1);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
 .search-result__meta {
   display: flex;
   flex-wrap: wrap;

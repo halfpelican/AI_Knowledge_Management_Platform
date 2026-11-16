@@ -1,0 +1,36 @@
+{
+  "name": "Objective 06 screening pool, round 2",
+  "status": "DEVELOPMENT MATERIAL (D-110). Round 1 (screening-pool.json, runs/2026-11-09/screening/) gave only four wordings at or under the lead's 0.25 floor: S1f, S2c, S4c, S4d. This round adds wordings for the three subjects still short (salary review needs one, corporate card one, christmas shutdown two), screened by the same rule, scores only, no generation. It also carries the draft thirty's seven answerable asks, as ordinary questions, so their top scores show whether any would take path A and wrongly enter the gap log; those seven are a check, not a selection.",
+  "corpus": "corpus/objective-02, the 1 November snapshot",
+  "manifest": "corpus/objective-02/manifest.json",
+  "notes": [
+    "Round 1's lesson: 'pay', 'paid', 'leave', 'office', 'closed', 'shut down' and 'company' pull D01, D10 or D20 over 0.25. These wordings avoid them where the subject allows.",
+    "Kept: for each subject, the two lowest-scoring wordings across both rounds at or under 0.25, one per role where the scores allow."
+  ],
+  "questions": [
+    {"id": "S1g", "kind": "no-answer", "role": "Administrator", "source": null, "question": "How are salary bands benchmarked against the market?", "expected_answer": null, "note": "subject 1, salary review"},
+    {"id": "S1h", "kind": "no-answer", "role": "Administrator", "source": null, "question": "When is the next remuneration review?", "expected_answer": null, "note": "subject 1"},
+    {"id": "S1i", "kind": "no-answer", "role": "Employee", "source": null, "question": "What's the timetable for remuneration reviews?", "expected_answer": null, "note": "subject 1"},
+    {"id": "S1j", "kind": "no-answer", "role": "Administrator", "source": null, "question": "Is there a yearly salary increment cycle?", "expected_answer": null, "note": "subject 1"},
+    {"id": "S1k", "kind": "no-answer", "role": "Employee", "source": null, "question": "Do salaries go up automatically every year?", "expected_answer": null, "note": "subject 1"},
+    {"id": "S2g", "kind": "no-answer", "role": "Administrator", "source": null, "question": "Which roles are entitled to a corporate Amex?", "expected_answer": null, "note": "subject 2, corporate card"},
+    {"id": "S2h", "kind": "no-answer", "role": "Administrator", "source": null, "question": "Is there a corporate credit card program?", "expected_answer": null, "note": "subject 2"},
+    {"id": "S2i", "kind": "no-answer", "role": "Administrator", "source": null, "question": "How are corporate credit card statements reconciled?", "expected_answer": null, "note": "subject 2"},
+    {"id": "S2j", "kind": "no-answer", "role": "Employee", "source": null, "question": "Could I be issued a corporate Visa?", "expected_answer": null, "note": "subject 2"},
+    {"id": "S3g", "kind": "no-answer", "role": "Employee", "source": null, "question": "Does everything stop over Christmas?", "expected_answer": null, "note": "subject 3, christmas shutdown"},
+    {"id": "S3h", "kind": "no-answer", "role": "Administrator", "source": null, "question": "Is there an end-of-year Christmas shutdown?", "expected_answer": null, "note": "subject 3"},
+    {"id": "S3i", "kind": "no-answer", "role": "Employee", "source": null, "question": "Are we expected to work between Christmas and New Year?", "expected_answer": null, "note": "subject 3"},
+    {"id": "S3j", "kind": "no-answer", "role": "Administrator", "source": null, "question": "What are the dates of the Christmas break?", "expected_answer": null, "note": "subject 3"},
+    {"id": "S3k", "kind": "no-answer", "role": "Employee", "source": null, "question": "Do we get the days between Christmas and New Year off?", "expected_answer": null, "note": "subject 3"},
+    {"id": "S3l", "kind": "no-answer", "role": "Administrator", "source": null, "question": "Is there a compulsory closure in late December?", "expected_answer": null, "note": "subject 3"},
+    {"id": "S3m", "kind": "no-answer", "role": "Employee", "source": null, "question": "When does the Christmas break begin?", "expected_answer": null, "note": "subject 3"},
+    {"id": "S3n", "kind": "no-answer", "role": "Administrator", "source": null, "question": "Do we close for the festive season?", "expected_answer": null, "note": "subject 3"},
+    {"id": "A01", "kind": "ordinary", "role": "Employee", "source": "D01", "question": "What happens to annual leave I haven't used by the end of the year?", "expected_answer": "thirty days", "accepted": ["30 days"], "note": "answerable check"},
+    {"id": "A02", "kind": "ordinary", "role": "Employee", "source": "D02", "question": "Is multi-factor authentication required for my work email?", "expected_answer": "mandatory", "note": "answerable check"},
+    {"id": "A03", "kind": "ordinary", "role": "Employee", "source": "D05", "question": "Who has to approve a purchase of eighteen thousand dollars?", "expected_answer": "department head", "accepted": ["department heads"], "note": "answerable check"},
+    {"id": "A04", "kind": "ordinary", "role": "Employee", "source": "D10", "question": "How many days do I have to submit an expense claim after paying for something?", "expected_answer": "thirty days", "accepted": ["30 days"], "note": "answerable check"},
+    {"id": "A05", "kind": "ordinary", "role": "Administrator", "source": "D12", "question": "What rating does Bluewater IT have in the vendor register?", "expected_answer": "A", "note": "answerable check"},
+    {"id": "A06", "kind": "ordinary", "role": "Administrator", "source": "D13", "question": "Who is facilitating the \"Writing clear reports\" session?", "expected_answer": "Fischer", "note": "answerable check"},
+    {"id": "A07", "kind": "ordinary", "role": "Employee", "source": "D03", "question": "Where is the assembly point if we have to evacuate the building?", "expected_answer": "courtyard", "note": "answerable check"}
+  ]
+}

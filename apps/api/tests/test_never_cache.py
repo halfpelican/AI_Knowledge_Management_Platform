@@ -31,8 +31,10 @@ pytestmark = pytest.mark.django_db
 # What add_never_cache_headers sets on a response: Cache-Control with these directives, and Expires.
 NEVER_CACHE_DIRECTIVES = {"max-age=0", "no-cache", "no-store", "must-revalidate", "private"}
 
-# The two routes D-21 leaves open (test_rbac.py's OPEN_ROUTES).
-OPEN_ROUTES = {"auth-register", "auth-login"}
+# The routes left open, as test_rbac.py has them: the two D-21 leaves open, and FR-03's lockout
+# policy (D-130 decision 7), each with what it answers an anonymous empty request.
+OPEN_ROUTE_STATUS = {"auth-register": 400, "auth-login": 400, "auth-lockout-policy": 200}
+OPEN_ROUTES = set(OPEN_ROUTE_STATUS)
 
 # Routes guarded by a role permission, checked before anything else on the request: with the
 # role's permissions revoked, each must answer 403. document-detail's DELETE checks its permission
@@ -44,6 +46,15 @@ PERMISSION_GUARDED = {
     ("api/documents", "POST"),  # contribute_content
     ("api/documents/<uuid:pk>/reprocess", "POST"),  # contribute_content
     ("api/meetings", "POST"),  # contribute_content
+    ("api/knowledge-gaps", "GET"),  # review_knowledge_gaps (D-107)
+    ("api/knowledge-gaps/cycles", "POST"),  # review_knowledge_gaps
+    ("api/knowledge-gaps/<uuid:pk>", "PATCH"),  # review_knowledge_gaps
+    ("api/tags", "GET"),  # manage_tags (D-119 finding 5)
+    ("api/tags/<uuid:pk>", "DELETE"),  # manage_tags
+    ("api/users/<uuid:pk>/unlock", "POST"),  # release_account_locks (FR-03, D-130)
+    ("api/departments", "GET"),  # manage_tags (D-129)
+    ("api/departments", "POST"),  # manage_tags
+    ("api/departments/<uuid:pk>", "DELETE"),  # manage_tags
 }
 
 
@@ -93,7 +104,9 @@ def test_every_api_route_is_never_cached_when_it_answers_401():
     statuses = walk(APIClient)
 
     for endpoint in enumerate_endpoints():
-        expected = 400 if endpoint.name in OPEN_ROUTES else 401
+        # The opt-outs answer for themselves (test_rbac.py's OPEN_ROUTE_STATUS): 400 where they
+        # validate the empty body, 200 for FR-03's lockout policy (D-130 decision 7).
+        expected = OPEN_ROUTE_STATUS.get(endpoint.name, 401)
         assert statuses[endpoint.key] == expected, endpoint
 
 
@@ -104,10 +117,25 @@ def test_every_api_route_is_never_cached_from_both_roles_and_its_unknown_ids_are
     # checked above like every other response. The role route validates its body first, so the
     # empty one is a 400 for the Administrator and a 403 for the Employee; its 404 is below.
     role_route = ("api/users/<uuid:pk>/role", "PATCH")
-    for key in routes_naming_an_id() - {role_route}:
+    # FR-19's entry route checks review_knowledge_gaps before the lookup (D-107), so the Employee
+    # meets its 403 and the Administrator its 404.
+    gap_route = ("api/knowledge-gaps/<uuid:pk>", "PATCH")
+    # FR-10's tag delete checks manage_tags before the lookup too (D-119 finding 5), and so does its
+    # department delete (D-129).
+    tag_route = ("api/tags/<uuid:pk>", "DELETE")
+    # FR-03's release checks release_account_locks before the lookup too (D-130).
+    unlock_route = ("api/users/<uuid:pk>/unlock", "POST")
+    department_route = ("api/departments/<uuid:pk>", "DELETE")
+    for key in routes_naming_an_id() - {role_route, gap_route, tag_route, unlock_route, department_route}:
         assert statuses[key] == 404, key
     expected_role_status = 400 if session_client.role_name == ADMINISTRATOR_ROLE_NAME else 403
     assert statuses[role_route] == expected_role_status
+    assert statuses[gap_route] == (404 if session_client.role_name == ADMINISTRATOR_ROLE_NAME else 403)
+    assert statuses[tag_route] == (404 if session_client.role_name == ADMINISTRATOR_ROLE_NAME else 403)
+    assert statuses[unlock_route] == (404 if session_client.role_name == ADMINISTRATOR_ROLE_NAME else 403)
+    assert statuses[department_route] == (
+        404 if session_client.role_name == ADMINISTRATOR_ROLE_NAME else 403
+    )
 
 
 def test_every_permission_guarded_route_is_never_cached_when_it_answers_403(session_client):

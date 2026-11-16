@@ -1,0 +1,16 @@
+The settings a process started from start_server.ps1's shell resolves, read at 2026-11-11T19:23:04+11:00, just before Waitress was started from that shell:
+
+database            : kmp_voyage_20261110
+AI_PROVIDER         : anthropic
+ANTHROPIC_MODEL     : claude-haiku-5-5
+VOYAGE_MODEL        : voyage-4
+EMBEDDING_DIMENSION : 1024
+threshold           : 0.2687
+partial-match floor : 0.2468
+DEBUG               : False
+MEDIA_ROOT          : C:\kmp-measurement\2026-11-10-voyage\media
+keys present        : Anthropic True, Voyage True
+logs                : C:\kmp-measurement\2026-11-11-haiku-draws\logs\http-check
+command             : waitress-serve --listen=127.0.0.1:8000 --threads=24 --max-request-body-size=54525952 config.wsgi:application
+
+Every value is the one under test.

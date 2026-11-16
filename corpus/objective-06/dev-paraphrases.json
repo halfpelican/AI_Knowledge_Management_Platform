@@ -1,0 +1,64 @@
+{
+  "name": "Objective 06 development paraphrase set",
+  "status": "DEVELOPMENT MATERIAL (D-108). GAP_GROUPING_THRESHOLD is chosen on this set and on nothing else. It shares no subject with the thirty seeded queries (salary review, corporate card, christmas shutdown, jury duty, and the Administrator-only subjects), so the thirty stay a test set (D-93).",
+  "written": "8 November 2026. Twelve subjects the corpus can answer, each in three wordings: two questions phrased differently and one search-style term. Every cross-subject pair is a negative; the pairs listed under hard_negatives share a document or a vocabulary and are reported separately.",
+  "rule": "Embed every item with the query prefix. Within-subject similarities are the positives, every cross-subject pair is a negative. If the lowest positive exceeds the highest negative, the threshold is the midpoint between them; otherwise the value with the best pairwise F1. D-40's drift margin (0.006) is reported against the gap either way.",
+  "subjects": [
+    {"id": "g01", "subject": "annual leave accrual", "source": "D01", "items": [
+      {"text": "How quickly does annual leave build up for someone working full time?", "via": "ask"},
+      {"text": "What is the monthly accrual rate for annual leave?", "via": "ask"},
+      {"text": "annual leave accrual", "via": "search"}]},
+    {"id": "g02", "subject": "medical certificate for sick leave", "source": "D01", "items": [
+      {"text": "After how many days off sick do I have to produce a doctor's certificate?", "via": "ask"},
+      {"text": "Is a medical certificate required for a single day of personal leave?", "via": "ask"},
+      {"text": "medical certificate", "via": "search"}]},
+    {"id": "g03", "subject": "password length rule", "source": "D02", "items": [
+      {"text": "What is the minimum number of characters for a password?", "via": "ask"},
+      {"text": "Is there a rule about how long passwords have to be?", "via": "ask"},
+      {"text": "password length", "via": "search"}]},
+    {"id": "g04", "subject": "password reset hours", "source": "D18", "items": [
+      {"text": "During which hours can I reset my password on the self-service page?", "via": "ask"},
+      {"text": "Is the password reset page available at night?", "via": "ask"},
+      {"text": "password reset window", "via": "search"}]},
+    {"id": "g05", "subject": "complaint escalation path", "source": "D06", "items": [
+      {"text": "Who does an unresolved customer complaint go to next?", "via": "ask"},
+      {"text": "What are the steps for escalating a complaint I cannot resolve?", "via": "ask"},
+      {"text": "complaint escalation", "via": "search"}]},
+    {"id": "g06", "subject": "travel meal limit", "source": "D10", "items": [
+      {"text": "How much can I claim for meals per day on a work trip?", "via": "ask"},
+      {"text": "Is there a cap on what I spend on food while travelling for work?", "via": "ask"},
+      {"text": "meal allowance", "via": "search"}]},
+    {"id": "g07", "subject": "connecting to a printer", "source": "D18", "items": [
+      {"text": "How do I set up printing from my laptop?", "via": "ask"},
+      {"text": "What do I do at the printer to release my print job?", "via": "ask"},
+      {"text": "printer setup", "via": "search"}]},
+    {"id": "g08", "subject": "approval for large room bookings", "source": "D17", "items": [
+      {"text": "Who has to approve a meeting room booking for a large group?", "via": "ask"},
+      {"text": "Can I book a room for an evening event with thirty guests without asking anyone?", "via": "ask"},
+      {"text": "large event room booking", "via": "search"}]},
+    {"id": "g09", "subject": "fleet vehicle logbook", "source": "D19", "items": [
+      {"text": "What has to be written in the logbook when I use a pool car?", "via": "ask"},
+      {"text": "Which details does the fleet logbook record for every trip?", "via": "ask"},
+      {"text": "vehicle logbook", "via": "search"}]},
+    {"id": "g10", "subject": "new starter buddy", "source": "D08", "items": [
+      {"text": "Is every new employee given a buddy?", "via": "ask"},
+      {"text": "What does the buddy program do for someone in their first week?", "via": "ask"},
+      {"text": "buddy program", "via": "search"}]},
+    {"id": "g11", "subject": "financial records retention", "source": "D04", "items": [
+      {"text": "For how many years must finance records be retained?", "via": "ask"},
+      {"text": "When can old accounting paperwork be destroyed?", "via": "ask"},
+      {"text": "financial records retention", "via": "search"}]},
+    {"id": "g12", "subject": "vital records backup location", "source": "D04", "items": [
+      {"text": "How far from the main office must copies of vital records be stored?", "via": "ask"},
+      {"text": "Where are the backups of our most important records kept?", "via": "ask"},
+      {"text": "vital records backup", "via": "search"}]}
+  ],
+  "hard_negatives": [
+    {"a": "g01", "b": "g02", "why": "the same document, D01, two subjects"},
+    {"a": "g03", "b": "g04", "why": "both about passwords, different documents and subjects"},
+    {"a": "g04", "b": "g07", "why": "the same document, D18, two subjects"},
+    {"a": "g11", "b": "g12", "why": "the same document, D04, two subjects"},
+    {"a": "g06", "b": "g11", "why": "finance vocabulary, different subjects"},
+    {"a": "g08", "b": "g09", "why": "both about using shared facilities, different subjects"}
+  ]
+}

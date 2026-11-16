@@ -107,6 +107,12 @@ switch is coming; and a snapshot would put deleted text back on screen through i
 4b. The snapshot came from D-61's suggested fix and was copied here without being
 checked against FR-15's deletion clause.
 
+**Dated note, 10 November 2026.** "No switch is coming" no longer holds. The `anthropic`
+provider is funded (D-113), and a switch is a re-index. The conclusion stands: no passage-text
+snapshot. The consequence is now live, though. `reindex` recreates every chunk, so re-indexing a
+database with history nulls every citation's chunk (D-67). D-113 therefore re-indexes a fresh
+copy restored from the snapshot.
+
 ### 2.4 An unused "New conversation" can outlive its session
 
 **Gap 12 · minor · D-58.** Orphaned empty `Conversations` rows accumulate. **Owner:
@@ -143,6 +149,16 @@ because an assessor reads the clause, not the reasoning.
 - **FR-13 "passes prior turns"** (gap 8, D-42). Only prior questions are passed, never
   prior answers (`apps/retrieval/conversation.py:123-179`). A follow-up referring to
   something in the previous answer does not resolve. A deliberate narrowing.
+
+**Dated note, 12 November 2026.** Two parts of the FR-13 item above have moved, and it is left as
+written.
+
+- **"A follow-up referring to something in the previous answer does not resolve"** describes the
+  design, not a guarantee. Such a referent reaches the prompt only if retrieval supplies a passage
+  that names it. t09, the frozen previous-answer thread, matched that way on every `anthropic`
+  draw, and never on FLM (D-42's note of 12 November).
+- **The line reference has drifted.** The prior questions are read by `prior_questions` and joined
+  by `compose`, in `apps/retrieval/conversation.py`.
 
 ---
 

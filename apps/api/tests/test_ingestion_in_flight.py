@@ -123,11 +123,11 @@ class HoldingProbe(StubAIService):
         super().__init__()
         self.while_held = while_held
 
-    def embed(self, texts):
+    def embed(self, texts, *, input_type=None):
         if self.while_held is not None:
             hook, self.while_held = self.while_held, None  # once, for the outer ingestion only
             hook()
-        return super().embed(texts)
+        return super().embed(texts, input_type=input_type)
 
 
 def install(monkeypatch, double):

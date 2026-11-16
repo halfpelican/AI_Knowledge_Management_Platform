@@ -1,0 +1,113 @@
+Question set: corpus\objective-02\questions.json, 30 question(s) valid, 4 asked by both roles, so 34 run(s)
+Provider gate: anthropic (Voyage voyage-4 at 1024, Claude), the Voyage copy, D-120's values
+Provider gate: PASS
+
+Citation reliability harness — Stage 4 item 0
+  RECORD          : recorded
+  commit          : 54f15ccdc2e2d6fe3bedfdffac99cffccee825fb
+  FLM version     : none, FLM takes no part (D-113)
+  dump sha256     : 80ff46d482d7d36029060e4afa2646ee9f07683331d35dbdb17b97fb6fc0d1e4
+  database        : kmp_voyage_20261110
+  provider        : anthropic (AnthropicService)
+  endpoint        : the Anthropic API (Claude) and https://api.voyageai.com/v1 (Voyage)
+  chat model      : claude-sonnet-5-5
+  embed model     : voyage-4, dimension 1024
+  D-120 values    : threshold 0.2687, partial-match floor 0.2468
+  health          : True — Anthropic API reachable
+  server          : none, in-process (D-85: the pipeline's functions are called here)
+  question set    : corpus\objective-02\questions.json  (30 question(s), 34 run(s)), sha256 9a059d1a273c992e
+  set status      : FROZEN on 1 November 2026. Approved as written by Benjamin Morovan and Sagarika Dey on 1 November 2026 (D-84 section 2, D-86 decision 7). Accepted alternatives for number words, dates and times were added before the freeze, at the user's request, and are frozen with the set. Any later change is recorded with its reason.
+  indexed chunks  : 43, recorded embedding model(s): ['voyage-4']
+  constants       : TOP_K=25, RELEVANCE_THRESHOLD=0.3, MAXIMUM_CONTEXT_TOKENS=4000, MAXIMUM_GENERATION_ATTEMPTS=3
+  prompt          : apps/ai/prompting.py SYSTEM_PROMPT, 2484 characters
+  schema          : apps/ai/schema.py, required key(s) ['statements'], per statement ['chunk_id', 'text']
+  corpus          : exactly the 25 items of corpus/objective-02/manifest.json
+[1/34] q01 ...
+[2/34] q02 ...
+[3/34] q03 ...
+[4/34] q04 ...
+[5/34] q05 ...
+[6/34] q06 ...
+[7/34] q07 ...
+[8/34] q08 ...
+[9/34] q09 ...
+[10/34] q10 ...
+[11/34] q11 ...
+[12/34] q12 ...
+[13/34] q13 ...
+[14/34] q14 ...
+[15/34] q15 ...
+[16/34] q16 ...
+[17/34] q17 ...
+[18/34] q18 ...
+[19/34] q19 ...
+[20/34] q20 ...
+[21/34] q21 ...
+[22/34] q22 ...
+[23/34] s01@Administrator ...
+[24/34] s01@Employee ...
+[25/34] s02@Administrator ...
+[26/34] s02@Employee ...
+[27/34] s03@Administrator ...
+[28/34] s03@Employee ...
+[29/34] s04@Administrator ...
+[30/34] s04@Employee ...
+[31/34] n01 ...
+[32/34] n02 ...
+[33/34] n03 ...
+[34/34] n04 ...
+
+====================================================================================================
+TOP-SCORE DISTRIBUTION BY QUESTION KIND
+====================================================================================================
+
+ordinary  (n=22)
+  min 0.3433   median 0.5085   max 0.5877
+  all: 0.343 0.354 0.369 0.407 0.408 0.419 0.420 0.437 0.439 0.466 0.494 0.509 0.512 0.513 0.536 0.546 0.548 0.551 0.559 0.577 0.586 0.588
+
+scoped  (n=4)
+  min 0.1517   median 0.2286   max 0.3235
+  all: 0.152 0.206 0.229 0.323
+
+scoped, asked by a role that can see it  (n=4)
+  min 0.3909   median 0.4693   max 0.5018
+  all: 0.391 0.427 0.469 0.502
+
+no-answer  (n=4)
+  min 0.3677   median 0.4148   max 0.5084
+  all: 0.368 0.412 0.415 0.508
+
+expected source's best chunk, answerable runs (n=26):
+  ranked first 26/26; not a candidate 0
+  score min 0.3433   median 0.4939   max 0.5877
+
+----------------------------------------------------------------------------------------------------
+SEPARATION — a threshold should admit the answerable and reject the rest
+----------------------------------------------------------------------------------------------------
+  answerable (expects an answer)   : min 0.3433, median 0.4939
+  unanswerable (expects none)      : max 0.5084, median 0.3677
+
+  candidate thresholds:
+    0.20  admits 26/26 answerable,  7/8 unanswerable
+    0.22  admits 26/26 answerable,  6/8 unanswerable
+    0.24  admits 26/26 answerable,  5/8 unanswerable
+    0.26  admits 26/26 answerable,  5/8 unanswerable
+    0.28  admits 26/26 answerable,  5/8 unanswerable
+    0.30  admits 26/26 answerable,  5/8 unanswerable
+    0.32  admits 26/26 answerable,  5/8 unanswerable
+    0.34  admits 26/26 answerable,  4/8 unanswerable
+    0.36  admits 24/26 answerable,  4/8 unanswerable
+    0.38  admits 23/26 answerable,  3/8 unanswerable
+    0.40  admits 22/26 answerable,  3/8 unanswerable
+    0.42  admits 19/26 answerable,  1/8 unanswerable
+    0.44  admits 15/26 answerable,  1/8 unanswerable
+    0.46  admits 15/26 answerable,  1/8 unanswerable
+    0.48  admits 13/26 answerable,  1/8 unanswerable
+    0.50  admits 12/26 answerable,  1/8 unanswerable
+    0.52  admits  8/26 answerable,  0/8 unanswerable
+    0.54  admits  7/26 answerable,  0/8 unanswerable
+    0.56  admits  3/26 answerable,  0/8 unanswerable
+    0.58  admits  2/26 answerable,  0/8 unanswerable
+    0.60  admits  0/26 answerable,  0/8 unanswerable
+
+full record written to corpus\objective-02\runs\2026-11-10\voyage-frozen\scores.json

@@ -1,0 +1,91 @@
+--- scripts/grouping_dev_sweep.py
++++ corpus/objective-06/runs/2026-11-10/grouping-sweep-voyage/grouping_dev_sweep_voyage.py
+@@ -1,4 +1,20 @@
+-"""Choose GAP_GROUPING_THRESHOLD on the development paraphrase set (D-109).
++"""D-109's sweep on Voyage (10 November 2026): GAP_GROUPING_THRESHOLD for voyage-4.
++
++A copy of scripts/grouping_dev_sweep.py at 652bffd, changed only where FLM was named, so that the rule
++D-109 fixed runs on the anthropic provider's embeddings before that provider becomes the default
++(CLAUDE.md section 4: every tuned value is re-derived on the new vectors first):
++
++- AI_PROVIDER is anthropic and EMBEDDING_DIMENSION 1024, set before Django starts, so every item is
++  embedded by Voyage voyage-4 with input_type "query" (D-116), as FR-19's cycle embeds it on that
++  provider.
++- The check_flm.py gate and the FLM version are replaced by a provider gate (the provider, voyage-4,
++  1024, the Voyage key present and never printed).
++- The record carries no FLM version; its configuration names the provider and models, as before.
++
++D-109's rule, the pairs, the hard pairs, the simulation and the outputs are the original's. The
++original docstring follows.
++
++Choose GAP_GROUPING_THRESHOLD on the development paraphrase set (D-109).
+ 
+ Embeds every item of corpus/objective-06/dev-paraphrases.json the way FR-19's cycle embeds a
+ question or a search term (``apps.retrieval.query_embedding.embed_question``: embed-gemma with the
+@@ -32,12 +48,11 @@
+ from datetime import datetime, timezone
+ from pathlib import Path
+ 
+-REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
++REPOSITORY_ROOT = Path(__file__).resolve().parents[5]  # corpus/objective-06/runs/<date>/<this folder>
+ for entry in (str(REPOSITORY_ROOT / "scripts"), str(REPOSITORY_ROOT)):
+     if entry not in sys.path:
+         sys.path.insert(0, entry)
+ 
+-import check_flm  # noqa: E402
+ import measurement_record  # noqa: E402
+ 
+ DEV_SET = REPOSITORY_ROOT / "corpus" / "objective-06" / "dev-paraphrases.json"
+@@ -102,6 +117,8 @@
+     arguments = parser.parse_args()
+ 
+     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
++    os.environ["AI_PROVIDER"] = "anthropic"  # this copy: Voyage embeddings (D-113)
++    os.environ["EMBEDDING_DIMENSION"] = "1024"
+     import django
+ 
+     django.setup()
+@@ -113,15 +130,17 @@
+     if arguments.out_dir.exists() and any(arguments.out_dir.iterdir()):
+         print(f"REFUSED: {arguments.out_dir} already holds files; a run never overwrites a record")
+         return 2
+-    print("FLM gate: scripts/check_flm.py's checks (D-83)")
+-    checks = check_flm.run_checks(settings.FLM_BASE_URL, settings.FLM_API_KEY, settings.FLM_CHAT_MODEL, settings.FLM_EMBED_MODEL)
+-    if not check_flm.checks_passed(checks):
+-        print("REFUSED: FLM checks failed")
+-        return 2
+-    version = check_flm.flm_version(settings.FLM_BASE_URL, settings.FLM_API_KEY)
+-    if version.problems():
+-        print("REFUSED: " + "; ".join(version.problems()))
++    # This copy: the provider gate in place of check_flm.py's (FLM takes no part).
++    problems = [f"settings.{name} is {getattr(settings, name)!r}, not {expected!r}"
++                for name, expected in (("AI_PROVIDER", "anthropic"), ("VOYAGE_MODEL", "voyage-4"),
++                                       ("EMBEDDING_DIMENSION", 1024))
++                if getattr(settings, name) != expected]
++    if not settings.VOYAGE_API_KEY:
++        problems.append("settings.VOYAGE_API_KEY is empty")  # its value is never printed
++    if problems:
++        print("REFUSED: " + "; ".join(problems))
+         return 2
++    print("Provider gate: PASS (anthropic, Voyage voyage-4 at 1024)")
+ 
+     dev = json.loads(DEV_SET.read_text(encoding="utf-8"))
+     items = []
+@@ -171,7 +190,7 @@
+     split = sorted({m["subject"] for g in gaps for m in g["members"]} - {g["subjects"][0] for g in simulation if len(g["subjects"]) == 1 and g["count"] == 3})
+ 
+     record = measurement_record.run_record(dump_sha256=None, database="none: nothing is read from or written to a database",
+-                                           flm=version.as_record())
++                                           flm=None)
+     record["configuration"] = provider_record(settings)
+     record.update({"kind": "Objective 06 development sweep for GAP_GROUPING_THRESHOLD (D-109)",
+                    "dev_set": str(DEV_SET.relative_to(REPOSITORY_ROOT)), "dev_set_sha256": measurement_record.file_sha256(DEV_SET),
+@@ -188,7 +207,7 @@
+ 
+     lines = ["# Development sweep for GAP_GROUPING_THRESHOLD (D-109)", "",
+              f"Commit {record['commit_sha'][:7]}" + (" (uncommitted tracked changes)" if record["uncommitted_tracked_changes"] else "")
+-             + f", FLM {version.summary()}, embedding model {model}, {len(items)} items, {len(positives)} positive and {len(negatives)} negative pairs.", "",
++             + f", the anthropic provider (FLM takes no part), embedding model {model}, {len(items)} items, {len(positives)} positive and {len(negatives)} negative pairs.", "",
+              f"- Lowest within-subject similarity: {lowest_positive:.4f}",
+              f"- Highest cross-subject similarity: {highest_negative:.4f}",
+              f"- Separates: {separates}; gap {gap:+.4f} against D-40's drift of {DRIFT}",

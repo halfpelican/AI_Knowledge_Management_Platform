@@ -1,0 +1,151 @@
+Question set: corpus\objective-06\screening-pool-2.json, 24 question(s) valid, 0 asked by both roles, so 24 run(s)
+FLM gate: scripts/check_flm.py's checks, before any question is asked (D-83)
+
+[GET /models]
+  33 model(s) advertised by /models:
+    - deepseek-r1:8b
+    - deepseek-r1-0528:8b
+    - gemma3:1b
+    - gemma3:4b
+    - gemma4-it:e2b
+    - gpt-oss:20b
+    - gpt-oss-sg:20b
+    - lfm2:1.2b
+    - lfm2:2.6b
+    - lfm2-trans:2.6b
+    - lfm2.5-it:1.2b
+    - lfm2.5-tk:1.2b
+    - llama3.1:8b
+    - llama3.2:1b
+    - llama3.2:3b
+    - medgemma:4b
+    - medgemma1.5:4b
+    - nanbeige4.1:3b
+    - phi4-mini-it:4b
+    - qwen2.5-it:3b
+    - qwen2.5vl-it:3b
+    - qwen3:0.6b
+    - qwen3:1.7b
+    - qwen3:4b
+    - qwen3:8b
+    - qwen3-it:4b
+    - qwen3-tk:4b
+    - qwen3.5:0.8b
+    - qwen3.5:2b
+    - qwen3.5:4b
+    - qwen3.5:9b
+    - qwen3vl-it:4b
+    - translategemma:4b
+  note: this list is the model catalogue rather than the resident set,
+        and it does not include the embedding model. The two calls below are the proof.
+  chat model 'gemma3:4b': advertised
+  PASS
+
+[POST /chat/completions]
+  model  : gemma3:4b
+  prompt : 'Reply with the single word: pong'
+  reply  : 'pong'  (2.1s)
+  PASS
+
+[POST /embeddings]
+  model      : embed-gemma
+  inputs     : 3, vectors returned: 3  (1.0s)
+  dimensions : [768, 768, 768]  (expected 768)
+  determinism : same input twice in one batch -> cosine 1.0000
+  determinism : same input in a second call  -> cosine 1.0000
+  discrimination: two unrelated inputs      -> cosine 0.1294
+  sanity      : vectors are deterministic and discriminate between inputs
+  PASS
+
+FLM gate: PASS
+
+Citation reliability harness — Stage 4 item 0
+  RECORD          : recorded
+  commit          : fb9e18ad3c70eb89b1469fd18904cff7b91b5ce2 (tracked files have UNCOMMITTED changes)
+  FLM version     : v0.9.39 (flm version), server v0.9.39
+  dump sha256     : 3bf98403354dbabceb54052b99b45a25f5f39d4fd685cca1e07233aa1e166f59
+  database        : kmp_obj0506_20261101
+  provider        : flm (FLMService)
+  endpoint        : http://127.0.0.1:8625/v1
+  chat model      : gemma3:4b
+  embed model     : embed-gemma, dimension 768
+  health          : True — FLM at http://127.0.0.1:8625/v1 advertises 33 model(s)
+  server          : none, in-process (D-85: the pipeline's functions are called here)
+  question set    : corpus\objective-06\screening-pool-2.json  (24 question(s), 24 run(s)), sha256 17bde2dce1dd42b6
+  set status      : DEVELOPMENT MATERIAL (D-110). Round 1 (screening-pool.json, runs/2026-11-09/screening/) gave only four wordings at or under the lead's 0.25 floor: S1f, S2c, S4c, S4d. This round adds wordings for the three subjects still short (salary review needs one, corporate card one, christmas shutdown two), screened by the same rule, scores only, no generation. It also carries the draft thirty's seven answerable asks, as ordinary questions, so their top scores show whether any would take path A and wrongly enter the gap log; those seven are a check, not a selection.
+  indexed chunks  : 43, recorded embedding model(s): ['embed-gemma']
+  constants       : TOP_K=25, RELEVANCE_THRESHOLD=0.3, MAXIMUM_CONTEXT_TOKENS=4000, MAXIMUM_GENERATION_ATTEMPTS=3
+  prompt          : apps/ai/prompting.py SYSTEM_PROMPT, 2484 characters
+  schema          : apps/ai/schema.py, required key(s) ['statements'], per statement ['chunk_id', 'text']
+  corpus          : exactly the 25 items of corpus/objective-02/manifest.json
+[1/24] S1g ...
+[2/24] S1h ...
+[3/24] S1i ...
+[4/24] S1j ...
+[5/24] S1k ...
+[6/24] S2g ...
+[7/24] S2h ...
+[8/24] S2i ...
+[9/24] S2j ...
+[10/24] S3g ...
+[11/24] S3h ...
+[12/24] S3i ...
+[13/24] S3j ...
+[14/24] S3k ...
+[15/24] S3l ...
+[16/24] S3m ...
+[17/24] S3n ...
+[18/24] A01 ...
+[19/24] A02 ...
+[20/24] A03 ...
+[21/24] A04 ...
+[22/24] A05 ...
+[23/24] A06 ...
+[24/24] A07 ...
+
+====================================================================================================
+TOP-SCORE DISTRIBUTION BY QUESTION KIND
+====================================================================================================
+
+ordinary  (n=7)
+  min 0.3689   median 0.4487   max 0.6127
+  all: 0.369 0.424 0.442 0.449 0.454 0.501 0.613
+
+no-answer  (n=17)
+  min 0.1913   median 0.3073   max 0.3950
+  all: 0.191 0.245 0.252 0.260 0.274 0.288 0.301 0.303 0.307 0.317 0.326 0.332 0.359 0.361 0.373 0.380 0.395
+
+expected source's best chunk, answerable runs (n=7):
+  ranked first 7/7; not a candidate 0
+  score min 0.3689   median 0.4487   max 0.6127
+
+----------------------------------------------------------------------------------------------------
+SEPARATION — a threshold should admit the answerable and reject the rest
+----------------------------------------------------------------------------------------------------
+  answerable (expects an answer)   : min 0.3689, median 0.4487
+  unanswerable (expects none)      : max 0.3950, median 0.3073
+
+  candidate thresholds:
+    0.20  admits  7/7 answerable, 16/17 unanswerable
+    0.22  admits  7/7 answerable, 16/17 unanswerable
+    0.24  admits  7/7 answerable, 16/17 unanswerable
+    0.26  admits  7/7 answerable, 13/17 unanswerable
+    0.28  admits  7/7 answerable, 12/17 unanswerable
+    0.30  admits  7/7 answerable, 11/17 unanswerable
+    0.32  admits  7/7 answerable,  7/17 unanswerable
+    0.34  admits  7/7 answerable,  5/17 unanswerable
+    0.36  admits  7/7 answerable,  4/17 unanswerable
+    0.38  admits  6/7 answerable,  1/17 unanswerable
+    0.40  admits  6/7 answerable,  0/17 unanswerable
+    0.42  admits  6/7 answerable,  0/17 unanswerable
+    0.44  admits  5/7 answerable,  0/17 unanswerable
+    0.46  admits  2/7 answerable,  0/17 unanswerable
+    0.48  admits  2/7 answerable,  0/17 unanswerable
+    0.50  admits  2/7 answerable,  0/17 unanswerable
+    0.52  admits  1/7 answerable,  0/17 unanswerable
+    0.54  admits  1/7 answerable,  0/17 unanswerable
+    0.56  admits  1/7 answerable,  0/17 unanswerable
+    0.58  admits  1/7 answerable,  0/17 unanswerable
+    0.60  admits  1/7 answerable,  0/17 unanswerable
+
+full record written to corpus\objective-06\runs\2026-11-09\screening-2\scores.json

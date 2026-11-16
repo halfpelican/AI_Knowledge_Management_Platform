@@ -1,0 +1,1407 @@
+{
+  "draws": [
+    {
+      "draw": "draw-1",
+      "file": "corpus/objective-06/runs/2026-11-11-anthropic-draws/pre-measurement-asks/draw-1/harness.json",
+      "commit_sha": "3cd0726883eac7af7d9703586d2b3d9cb5565bcf",
+      "uncommitted_tracked_changes": false,
+      "recorded_at": "2026-11-11T14:03:49+11:00",
+      "database": "kmp_fr12_declines_20261111",
+      "dump_sha256": "8e79cb377965075dd322d2fb098780cc0d45bc4fdfb5eb5f05d6c59628765a70",
+      "question_set_sha256": "db8b1d73bd4aa4f4f8bf422ee9b6edfd326bd481853c10bb5ec9b0ee9b969202",
+      "corpus_problems": [],
+      "configuration": {
+        "provider": "anthropic",
+        "chat_model": "claude-haiku-5-5",
+        "embed_model": "voyage-4",
+        "embedding_dimension": 1024,
+        "voyage_base_url": "https://api.voyageai.com/v1",
+        "threshold": 0.2687,
+        "partial_match_floor": 0.2468
+      },
+      "claude_usage": {
+        "calls": 9,
+        "input_tokens": 33268,
+        "output_tokens": 158,
+        "calls_without_counts": 0,
+        "estimated_usd": 0.0034,
+        "prices_per_million_usd": {
+          "input": 0.1,
+          "output": 0.5
+        }
+      },
+      "runs": [
+        {
+          "id": "U01",
+          "kind": "unanswerable",
+          "role": "Employee",
+          "top_score": 0.4052152940135611,
+          "admitted": 9,
+          "outcome": "B, none proposed",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "U02",
+          "kind": "unanswerable",
+          "role": "Employee",
+          "top_score": 0.3139201594825992,
+          "admitted": 3,
+          "outcome": "B, none proposed",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "U04",
+          "kind": "unanswerable",
+          "role": "Employee",
+          "top_score": 0.3625501989681722,
+          "admitted": 6,
+          "outcome": "B, none proposed",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "U05",
+          "kind": "unanswerable",
+          "role": "Administrator",
+          "top_score": 0.38943777394911966,
+          "admitted": 8,
+          "outcome": "B, none proposed",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "U07",
+          "kind": "unanswerable",
+          "role": "Employee",
+          "top_score": 0.3833546280409086,
+          "admitted": 5,
+          "outcome": "B, none proposed",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "U08",
+          "kind": "unanswerable",
+          "role": "Administrator",
+          "top_score": 0.33818475092420375,
+          "admitted": 2,
+          "outcome": "B, none proposed",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "U10",
+          "kind": "unanswerable",
+          "role": "Employee",
+          "top_score": 0.21719145309962318,
+          "admitted": 0,
+          "outcome": "A",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "U11",
+          "kind": "unanswerable",
+          "role": "Administrator",
+          "top_score": 0.3871702341939374,
+          "admitted": 1,
+          "outcome": "B, none proposed",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "P01",
+          "kind": "permission-only",
+          "role": "Employee",
+          "top_score": 0.24536112468642848,
+          "admitted": 0,
+          "outcome": "A",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "P02",
+          "kind": "permission-only",
+          "role": "Employee",
+          "top_score": 0.23638345465356053,
+          "admitted": 0,
+          "outcome": "A",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "P04",
+          "kind": "permission-only",
+          "role": "Employee",
+          "top_score": 0.245590760677698,
+          "admitted": 0,
+          "outcome": "A",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "P06",
+          "kind": "permission-only",
+          "role": "Employee",
+          "top_score": 0.21162762934450408,
+          "admitted": 0,
+          "outcome": "A",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "P07",
+          "kind": "permission-only",
+          "role": "Employee",
+          "top_score": 0.3066862768481547,
+          "admitted": 2,
+          "outcome": "B, none proposed",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "P08",
+          "kind": "permission-only",
+          "role": "Employee",
+          "top_score": 0.3021937628503964,
+          "admitted": 1,
+          "outcome": "B, none proposed",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        }
+      ],
+      "summary": {
+        "unanswerable": {
+          "runs": 8,
+          "no_answer": 8,
+          "path_a": 1,
+          "path_b_none_proposed": 7,
+          "path_b_all_rejected": 0,
+          "answered": 0,
+          "errors": 0
+        },
+        "permission-only": {
+          "runs": 6,
+          "no_answer": 6,
+          "path_a": 4,
+          "path_b_none_proposed": 2,
+          "path_b_all_rejected": 0,
+          "answered": 0,
+          "errors": 0
+        }
+      },
+      "leaks": []
+    },
+    {
+      "draw": "draw-2",
+      "file": "corpus/objective-06/runs/2026-11-11-anthropic-draws/pre-measurement-asks/draw-2/harness.json",
+      "commit_sha": "3cd0726883eac7af7d9703586d2b3d9cb5565bcf",
+      "uncommitted_tracked_changes": false,
+      "recorded_at": "2026-11-11T14:05:00+11:00",
+      "database": "kmp_fr12_declines_20261111",
+      "dump_sha256": "8e79cb377965075dd322d2fb098780cc0d45bc4fdfb5eb5f05d6c59628765a70",
+      "question_set_sha256": "db8b1d73bd4aa4f4f8bf422ee9b6edfd326bd481853c10bb5ec9b0ee9b969202",
+      "corpus_problems": [],
+      "configuration": {
+        "provider": "anthropic",
+        "chat_model": "claude-haiku-5-5",
+        "embed_model": "voyage-4",
+        "embedding_dimension": 1024,
+        "voyage_base_url": "https://api.voyageai.com/v1",
+        "threshold": 0.2687,
+        "partial_match_floor": 0.2468
+      },
+      "claude_usage": {
+        "calls": 9,
+        "input_tokens": 33268,
+        "output_tokens": 169,
+        "calls_without_counts": 0,
+        "estimated_usd": 0.0034,
+        "prices_per_million_usd": {
+          "input": 0.1,
+          "output": 0.5
+        }
+      },
+      "runs": [
+        {
+          "id": "U01",
+          "kind": "unanswerable",
+          "role": "Employee",
+          "top_score": 0.4052152940135611,
+          "admitted": 9,
+          "outcome": "B, none proposed",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "U02",
+          "kind": "unanswerable",
+          "role": "Employee",
+          "top_score": 0.3139201594825992,
+          "admitted": 3,
+          "outcome": "B, none proposed",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "U04",
+          "kind": "unanswerable",
+          "role": "Employee",
+          "top_score": 0.3625501989681722,
+          "admitted": 6,
+          "outcome": "B, none proposed",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "U05",
+          "kind": "unanswerable",
+          "role": "Administrator",
+          "top_score": 0.38943777394911966,
+          "admitted": 8,
+          "outcome": "B, none proposed",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "U07",
+          "kind": "unanswerable",
+          "role": "Employee",
+          "top_score": 0.38335462796195585,
+          "admitted": 5,
+          "outcome": "B, none proposed",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "U08",
+          "kind": "unanswerable",
+          "role": "Administrator",
+          "top_score": 0.33803246455479946,
+          "admitted": 2,
+          "outcome": "B, none proposed",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "U10",
+          "kind": "unanswerable",
+          "role": "Employee",
+          "top_score": 0.21768069760560438,
+          "admitted": 0,
+          "outcome": "A",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "U11",
+          "kind": "unanswerable",
+          "role": "Administrator",
+          "top_score": 0.3871702341939374,
+          "admitted": 1,
+          "outcome": "B, none proposed",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "P01",
+          "kind": "permission-only",
+          "role": "Employee",
+          "top_score": 0.24536112468642848,
+          "admitted": 0,
+          "outcome": "A",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "P02",
+          "kind": "permission-only",
+          "role": "Employee",
+          "top_score": 0.23638345465356053,
+          "admitted": 0,
+          "outcome": "A",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "P04",
+          "kind": "permission-only",
+          "role": "Employee",
+          "top_score": 0.245590760677698,
+          "admitted": 0,
+          "outcome": "A",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "P06",
+          "kind": "permission-only",
+          "role": "Employee",
+          "top_score": 0.21162762934450408,
+          "admitted": 0,
+          "outcome": "A",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "P07",
+          "kind": "permission-only",
+          "role": "Employee",
+          "top_score": 0.3066862768481547,
+          "admitted": 2,
+          "outcome": "B, none proposed",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "P08",
+          "kind": "permission-only",
+          "role": "Employee",
+          "top_score": 0.3021937628503964,
+          "admitted": 1,
+          "outcome": "B, none proposed",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        }
+      ],
+      "summary": {
+        "unanswerable": {
+          "runs": 8,
+          "no_answer": 8,
+          "path_a": 1,
+          "path_b_none_proposed": 7,
+          "path_b_all_rejected": 0,
+          "answered": 0,
+          "errors": 0
+        },
+        "permission-only": {
+          "runs": 6,
+          "no_answer": 6,
+          "path_a": 4,
+          "path_b_none_proposed": 2,
+          "path_b_all_rejected": 0,
+          "answered": 0,
+          "errors": 0
+        }
+      },
+      "leaks": []
+    },
+    {
+      "draw": "draw-3",
+      "file": "corpus/objective-06/runs/2026-11-11-anthropic-draws/pre-measurement-asks/draw-3/harness.json",
+      "commit_sha": "3cd0726883eac7af7d9703586d2b3d9cb5565bcf",
+      "uncommitted_tracked_changes": false,
+      "recorded_at": "2026-11-11T14:05:30+11:00",
+      "database": "kmp_fr12_declines_20261111",
+      "dump_sha256": "8e79cb377965075dd322d2fb098780cc0d45bc4fdfb5eb5f05d6c59628765a70",
+      "question_set_sha256": "db8b1d73bd4aa4f4f8bf422ee9b6edfd326bd481853c10bb5ec9b0ee9b969202",
+      "corpus_problems": [],
+      "configuration": {
+        "provider": "anthropic",
+        "chat_model": "claude-haiku-5-5",
+        "embed_model": "voyage-4",
+        "embedding_dimension": 1024,
+        "voyage_base_url": "https://api.voyageai.com/v1",
+        "threshold": 0.2687,
+        "partial_match_floor": 0.2468
+      },
+      "claude_usage": {
+        "calls": 9,
+        "input_tokens": 33268,
+        "output_tokens": 147,
+        "calls_without_counts": 0,
+        "estimated_usd": 0.0034,
+        "prices_per_million_usd": {
+          "input": 0.1,
+          "output": 0.5
+        }
+      },
+      "runs": [
+        {
+          "id": "U01",
+          "kind": "unanswerable",
+          "role": "Employee",
+          "top_score": 0.4052152940135611,
+          "admitted": 9,
+          "outcome": "B, none proposed",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "U02",
+          "kind": "unanswerable",
+          "role": "Employee",
+          "top_score": 0.3139201594825992,
+          "admitted": 3,
+          "outcome": "B, none proposed",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "U04",
+          "kind": "unanswerable",
+          "role": "Employee",
+          "top_score": 0.3625501989681722,
+          "admitted": 6,
+          "outcome": "B, none proposed",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "U05",
+          "kind": "unanswerable",
+          "role": "Administrator",
+          "top_score": 0.38943777394911966,
+          "admitted": 8,
+          "outcome": "B, none proposed",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "U07",
+          "kind": "unanswerable",
+          "role": "Employee",
+          "top_score": 0.3833546280409086,
+          "admitted": 5,
+          "outcome": "B, none proposed",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "U08",
+          "kind": "unanswerable",
+          "role": "Administrator",
+          "top_score": 0.33818475092420375,
+          "admitted": 2,
+          "outcome": "B, none proposed",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "U10",
+          "kind": "unanswerable",
+          "role": "Employee",
+          "top_score": 0.21719145309962318,
+          "admitted": 0,
+          "outcome": "A",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "U11",
+          "kind": "unanswerable",
+          "role": "Administrator",
+          "top_score": 0.3871702341939374,
+          "admitted": 1,
+          "outcome": "B, none proposed",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "P01",
+          "kind": "permission-only",
+          "role": "Employee",
+          "top_score": 0.24536112468642848,
+          "admitted": 0,
+          "outcome": "A",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "P02",
+          "kind": "permission-only",
+          "role": "Employee",
+          "top_score": 0.2363834547597514,
+          "admitted": 0,
+          "outcome": "A",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "P04",
+          "kind": "permission-only",
+          "role": "Employee",
+          "top_score": 0.24559076098730803,
+          "admitted": 0,
+          "outcome": "A",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "P06",
+          "kind": "permission-only",
+          "role": "Employee",
+          "top_score": 0.21222718583272898,
+          "admitted": 0,
+          "outcome": "A",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "P07",
+          "kind": "permission-only",
+          "role": "Employee",
+          "top_score": 0.3066862768481547,
+          "admitted": 2,
+          "outcome": "B, none proposed",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "P08",
+          "kind": "permission-only",
+          "role": "Employee",
+          "top_score": 0.3021937628503964,
+          "admitted": 1,
+          "outcome": "B, none proposed",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        }
+      ],
+      "summary": {
+        "unanswerable": {
+          "runs": 8,
+          "no_answer": 8,
+          "path_a": 1,
+          "path_b_none_proposed": 7,
+          "path_b_all_rejected": 0,
+          "answered": 0,
+          "errors": 0
+        },
+        "permission-only": {
+          "runs": 6,
+          "no_answer": 6,
+          "path_a": 4,
+          "path_b_none_proposed": 2,
+          "path_b_all_rejected": 0,
+          "answered": 0,
+          "errors": 0
+        }
+      },
+      "leaks": []
+    },
+    {
+      "draw": "draw-4",
+      "file": "corpus/objective-06/runs/2026-11-11-anthropic-draws/pre-measurement-asks/draw-4/harness.json",
+      "commit_sha": "3cd0726883eac7af7d9703586d2b3d9cb5565bcf",
+      "uncommitted_tracked_changes": false,
+      "recorded_at": "2026-11-11T14:05:56+11:00",
+      "database": "kmp_fr12_declines_20261111",
+      "dump_sha256": "8e79cb377965075dd322d2fb098780cc0d45bc4fdfb5eb5f05d6c59628765a70",
+      "question_set_sha256": "db8b1d73bd4aa4f4f8bf422ee9b6edfd326bd481853c10bb5ec9b0ee9b969202",
+      "corpus_problems": [],
+      "configuration": {
+        "provider": "anthropic",
+        "chat_model": "claude-haiku-5-5",
+        "embed_model": "voyage-4",
+        "embedding_dimension": 1024,
+        "voyage_base_url": "https://api.voyageai.com/v1",
+        "threshold": 0.2687,
+        "partial_match_floor": 0.2468
+      },
+      "claude_usage": {
+        "calls": 9,
+        "input_tokens": 33268,
+        "output_tokens": 81,
+        "calls_without_counts": 0,
+        "estimated_usd": 0.0034,
+        "prices_per_million_usd": {
+          "input": 0.1,
+          "output": 0.5
+        }
+      },
+      "runs": [
+        {
+          "id": "U01",
+          "kind": "unanswerable",
+          "role": "Employee",
+          "top_score": 0.4052152940135611,
+          "admitted": 9,
+          "outcome": "B, none proposed",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "U02",
+          "kind": "unanswerable",
+          "role": "Employee",
+          "top_score": 0.3139201594825992,
+          "admitted": 3,
+          "outcome": "B, none proposed",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "U04",
+          "kind": "unanswerable",
+          "role": "Employee",
+          "top_score": 0.3625501989681722,
+          "admitted": 6,
+          "outcome": "B, none proposed",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "U05",
+          "kind": "unanswerable",
+          "role": "Administrator",
+          "top_score": 0.38943777394911966,
+          "admitted": 8,
+          "outcome": "B, none proposed",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "U07",
+          "kind": "unanswerable",
+          "role": "Employee",
+          "top_score": 0.3833546280409086,
+          "admitted": 5,
+          "outcome": "B, none proposed",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "U08",
+          "kind": "unanswerable",
+          "role": "Administrator",
+          "top_score": 0.33818475092420375,
+          "admitted": 2,
+          "outcome": "B, none proposed",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "U10",
+          "kind": "unanswerable",
+          "role": "Employee",
+          "top_score": 0.21719145309962318,
+          "admitted": 0,
+          "outcome": "A",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "U11",
+          "kind": "unanswerable",
+          "role": "Administrator",
+          "top_score": 0.3871702341939374,
+          "admitted": 1,
+          "outcome": "B, none proposed",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "P01",
+          "kind": "permission-only",
+          "role": "Employee",
+          "top_score": 0.24536112468642848,
+          "admitted": 0,
+          "outcome": "A",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "P02",
+          "kind": "permission-only",
+          "role": "Employee",
+          "top_score": 0.23638345465356053,
+          "admitted": 0,
+          "outcome": "A",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "P04",
+          "kind": "permission-only",
+          "role": "Employee",
+          "top_score": 0.245590760677698,
+          "admitted": 0,
+          "outcome": "A",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "P06",
+          "kind": "permission-only",
+          "role": "Employee",
+          "top_score": 0.21162762934450408,
+          "admitted": 0,
+          "outcome": "A",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "P07",
+          "kind": "permission-only",
+          "role": "Employee",
+          "top_score": 0.3066862768481547,
+          "admitted": 2,
+          "outcome": "B, none proposed",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "P08",
+          "kind": "permission-only",
+          "role": "Employee",
+          "top_score": 0.3021937628503964,
+          "admitted": 1,
+          "outcome": "B, none proposed",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        }
+      ],
+      "summary": {
+        "unanswerable": {
+          "runs": 8,
+          "no_answer": 8,
+          "path_a": 1,
+          "path_b_none_proposed": 7,
+          "path_b_all_rejected": 0,
+          "answered": 0,
+          "errors": 0
+        },
+        "permission-only": {
+          "runs": 6,
+          "no_answer": 6,
+          "path_a": 4,
+          "path_b_none_proposed": 2,
+          "path_b_all_rejected": 0,
+          "answered": 0,
+          "errors": 0
+        }
+      },
+      "leaks": []
+    },
+    {
+      "draw": "draw-5",
+      "file": "corpus/objective-06/runs/2026-11-11-anthropic-draws/pre-measurement-asks/draw-5/harness.json",
+      "commit_sha": "3cd0726883eac7af7d9703586d2b3d9cb5565bcf",
+      "uncommitted_tracked_changes": false,
+      "recorded_at": "2026-11-11T14:06:25+11:00",
+      "database": "kmp_fr12_declines_20261111",
+      "dump_sha256": "8e79cb377965075dd322d2fb098780cc0d45bc4fdfb5eb5f05d6c59628765a70",
+      "question_set_sha256": "db8b1d73bd4aa4f4f8bf422ee9b6edfd326bd481853c10bb5ec9b0ee9b969202",
+      "corpus_problems": [],
+      "configuration": {
+        "provider": "anthropic",
+        "chat_model": "claude-haiku-5-5",
+        "embed_model": "voyage-4",
+        "embedding_dimension": 1024,
+        "voyage_base_url": "https://api.voyageai.com/v1",
+        "threshold": 0.2687,
+        "partial_match_floor": 0.2468
+      },
+      "claude_usage": {
+        "calls": 9,
+        "input_tokens": 33268,
+        "output_tokens": 81,
+        "calls_without_counts": 0,
+        "estimated_usd": 0.0034,
+        "prices_per_million_usd": {
+          "input": 0.1,
+          "output": 0.5
+        }
+      },
+      "runs": [
+        {
+          "id": "U01",
+          "kind": "unanswerable",
+          "role": "Employee",
+          "top_score": 0.4052152940135611,
+          "admitted": 9,
+          "outcome": "B, none proposed",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "U02",
+          "kind": "unanswerable",
+          "role": "Employee",
+          "top_score": 0.3139201594825992,
+          "admitted": 3,
+          "outcome": "B, none proposed",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "U04",
+          "kind": "unanswerable",
+          "role": "Employee",
+          "top_score": 0.3625501989681722,
+          "admitted": 6,
+          "outcome": "B, none proposed",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "U05",
+          "kind": "unanswerable",
+          "role": "Administrator",
+          "top_score": 0.38943777394911966,
+          "admitted": 8,
+          "outcome": "B, none proposed",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "U07",
+          "kind": "unanswerable",
+          "role": "Employee",
+          "top_score": 0.3833546280409086,
+          "admitted": 5,
+          "outcome": "B, none proposed",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "U08",
+          "kind": "unanswerable",
+          "role": "Administrator",
+          "top_score": 0.33818475092420375,
+          "admitted": 2,
+          "outcome": "B, none proposed",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "U10",
+          "kind": "unanswerable",
+          "role": "Employee",
+          "top_score": 0.21719145309962318,
+          "admitted": 0,
+          "outcome": "A",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "U11",
+          "kind": "unanswerable",
+          "role": "Administrator",
+          "top_score": 0.3871702341939374,
+          "admitted": 1,
+          "outcome": "B, none proposed",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "P01",
+          "kind": "permission-only",
+          "role": "Employee",
+          "top_score": 0.24536112468642848,
+          "admitted": 0,
+          "outcome": "A",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "P02",
+          "kind": "permission-only",
+          "role": "Employee",
+          "top_score": 0.23638345465356053,
+          "admitted": 0,
+          "outcome": "A",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "P04",
+          "kind": "permission-only",
+          "role": "Employee",
+          "top_score": 0.245590760677698,
+          "admitted": 0,
+          "outcome": "A",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "P06",
+          "kind": "permission-only",
+          "role": "Employee",
+          "top_score": 0.21162762934450408,
+          "admitted": 0,
+          "outcome": "A",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "P07",
+          "kind": "permission-only",
+          "role": "Employee",
+          "top_score": 0.3066862768481547,
+          "admitted": 2,
+          "outcome": "B, none proposed",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        },
+        {
+          "id": "P08",
+          "kind": "permission-only",
+          "role": "Employee",
+          "top_score": 0.3021937628503964,
+          "admitted": 1,
+          "outcome": "B, none proposed",
+          "statements_proposed": 0,
+          "statements_verified": 0,
+          "fabricated_ids": 0,
+          "cited_items": [],
+          "leaks": []
+        }
+      ],
+      "summary": {
+        "unanswerable": {
+          "runs": 8,
+          "no_answer": 8,
+          "path_a": 1,
+          "path_b_none_proposed": 7,
+          "path_b_all_rejected": 0,
+          "answered": 0,
+          "errors": 0
+        },
+        "permission-only": {
+          "runs": 6,
+          "no_answer": 6,
+          "path_a": 4,
+          "path_b_none_proposed": 2,
+          "path_b_all_rejected": 0,
+          "answered": 0,
+          "errors": 0
+        }
+      },
+      "leaks": []
+    }
+  ],
+  "flm_pre_measurement": [
+    {
+      "file": "corpus/objective-06/runs/2026-11-08/pre-measurement/run1.json",
+      "configuration": {
+        "provider": "flm",
+        "chat_model": "gemma3:4b",
+        "embed_model": "embed-gemma",
+        "threshold": 0.3
+      },
+      "runs": {
+        "U01": {
+          "top_score": 0.3456556961121911,
+          "outcome": "answered",
+          "cited_items": [
+            "D08"
+          ]
+        },
+        "U02": {
+          "top_score": 0.3284192205166426,
+          "outcome": "B, none proposed",
+          "cited_items": []
+        },
+        "U04": {
+          "top_score": 0.3272879372522202,
+          "outcome": "answered",
+          "cited_items": [
+            "D10"
+          ]
+        },
+        "U05": {
+          "top_score": 0.31909352788653256,
+          "outcome": "answered",
+          "cited_items": [
+            "D02"
+          ]
+        },
+        "U07": {
+          "top_score": 0.41456424231673966,
+          "outcome": "answered",
+          "cited_items": [
+            "D20"
+          ]
+        },
+        "U08": {
+          "top_score": 0.33237628709956785,
+          "outcome": "answered",
+          "cited_items": [
+            "D01"
+          ]
+        },
+        "U10": {
+          "top_score": 0.24984525289836515,
+          "outcome": "A",
+          "cited_items": []
+        },
+        "U11": {
+          "top_score": 0.4078674340230789,
+          "outcome": "answered",
+          "cited_items": [
+            "D01"
+          ]
+        },
+        "P01": {
+          "top_score": 0.2861510779632198,
+          "outcome": "A",
+          "cited_items": []
+        },
+        "P02": {
+          "top_score": 0.2750845937545096,
+          "outcome": "A",
+          "cited_items": []
+        },
+        "P04": {
+          "top_score": 0.38732482583328853,
+          "outcome": "answered",
+          "cited_items": [
+            "D04"
+          ]
+        },
+        "P06": {
+          "top_score": 0.25867033960127095,
+          "outcome": "A",
+          "cited_items": []
+        },
+        "P07": {
+          "top_score": 0.35899873394161796,
+          "outcome": "answered",
+          "cited_items": [
+            "D05"
+          ]
+        },
+        "P08": {
+          "top_score": 0.26309698284228356,
+          "outcome": "A",
+          "cited_items": []
+        }
+      }
+    },
+    {
+      "file": "corpus/objective-06/runs/2026-11-08/pre-measurement/run2.json",
+      "configuration": {
+        "provider": "flm",
+        "chat_model": "gemma3:4b",
+        "embed_model": "embed-gemma",
+        "threshold": 0.3
+      },
+      "runs": {
+        "U01": {
+          "top_score": 0.34712423207326853,
+          "outcome": "answered",
+          "cited_items": [
+            "D08"
+          ]
+        },
+        "U02": {
+          "top_score": 0.32770746102392295,
+          "outcome": "B, none proposed",
+          "cited_items": []
+        },
+        "U04": {
+          "top_score": 0.3278554967414218,
+          "outcome": "answered",
+          "cited_items": [
+            "D10"
+          ]
+        },
+        "U05": {
+          "top_score": 0.31772517346046886,
+          "outcome": "answered",
+          "cited_items": [
+            "D02"
+          ]
+        },
+        "U07": {
+          "top_score": 0.41273187936416134,
+          "outcome": "answered",
+          "cited_items": [
+            "D20"
+          ]
+        },
+        "U08": {
+          "top_score": 0.3310863424064901,
+          "outcome": "answered",
+          "cited_items": [
+            "D01"
+          ]
+        },
+        "U10": {
+          "top_score": 0.24910892430470438,
+          "outcome": "A",
+          "cited_items": []
+        },
+        "U11": {
+          "top_score": 0.4067875182653196,
+          "outcome": "answered",
+          "cited_items": [
+            "D01"
+          ]
+        },
+        "P01": {
+          "top_score": 0.28476532299386553,
+          "outcome": "A",
+          "cited_items": []
+        },
+        "P02": {
+          "top_score": 0.27516380239295796,
+          "outcome": "A",
+          "cited_items": []
+        },
+        "P04": {
+          "top_score": 0.38754968049155814,
+          "outcome": "answered",
+          "cited_items": [
+            "D04"
+          ]
+        },
+        "P06": {
+          "top_score": 0.25922661037723166,
+          "outcome": "A",
+          "cited_items": []
+        },
+        "P07": {
+          "top_score": 0.3607177443345233,
+          "outcome": "answered",
+          "cited_items": [
+            "D05"
+          ]
+        },
+        "P08": {
+          "top_score": 0.26114331832941273,
+          "outcome": "A",
+          "cited_items": []
+        }
+      }
+    }
+  ],
+  "totals": {
+    "unanswerable": {
+      "runs": 40,
+      "no_answer": 40,
+      "path_a": 5,
+      "path_b_none_proposed": 35,
+      "path_b_all_rejected": 0,
+      "answered": 0,
+      "errors": 0
+    },
+    "permission-only": {
+      "runs": 30,
+      "no_answer": 30,
+      "path_a": 20,
+      "path_b_none_proposed": 10,
+      "path_b_all_rejected": 0,
+      "answered": 0,
+      "errors": 0
+    }
+  },
+  "claude_usage_total": {
+    "calls": 45,
+    "input_tokens": 166340,
+    "output_tokens": 636,
+    "estimated_usd": 0.017
+  },
+  "all_leaks": []
+}

@@ -5,6 +5,8 @@ import { SOURCE_TYPE, TEXT } from '../constants.js'
 import { contrastRatio } from '../utils/contrast.js'
 import { CONTRAST_PAIRS } from './contrastPairs.js'
 import { FILE_INPUT_ACCEPT } from '../utils/uploads.js'
+import ActionItems from './ActionItems.jsx'
+import AiMark, { PersonMark } from './AiMark.jsx'
 import { AnswerBody, PartialMatches, SourcesPanel } from './Answer.jsx'
 import AttendeePicker from './AttendeePicker.jsx'
 import { ActiveFilterList, FacetGroup, SortHeader } from './Browse.jsx'
@@ -12,6 +14,7 @@ import Button from './Button.jsx'
 import DashboardPanel from './DashboardPanel.jsx'
 import Dialog from './Dialog.jsx'
 import FileDropZone from './FileDropZone.jsx'
+import { SummaryContent } from './MeetingSummary.jsx'
 import NotPermitted from './NotPermitted.jsx'
 import Notice from './Notice.jsx'
 import PasswordInput from './PasswordInput.jsx'
@@ -58,6 +61,9 @@ const FOCUS_TOKENS = ['--color-focus', '--focus-ring-width', '--focus-ring-offse
 
 const LAYER_TOKENS = ['--z-skip-link', '--z-dialog', '--duration-spinner']
 
+/* NFR-15: the one value every surface that bounds AI content reads. */
+const AI_TOKENS = ['--border-style-ai']
+
 
 /* Components for the M6 screens, in build order. Named here so the sheet stays the index of the design system. */
 const BUILT = [
@@ -73,6 +79,7 @@ const BUILT = [
     name: 'Document repository with filtered browsing, and the document detail view with its download link and deletion (FR-15; FR-08’s retry on its rows)',
     paths: ['/documents', '/documents/:docId'],
   },
+  { name: 'Meeting summary and action items, on the meeting page (FR-16)', paths: ['/meetings/:meetingId'] },
 ]
 
 /* Fixtures for the FR-15 section below: one dimension's values as the browse
@@ -155,6 +162,109 @@ const SAMPLE_STATEMENTS = [
   { position: 2, text: 'Leave is pro rata for part-time staff.', chunk_id: 'sample-chunk-missing' },
 ]
 
+/* Fixtures for the NFR-15 and FR-16 sections below, in the contract's shapes
+   (docs/api-contract.md, NIT3004 FR-16). Invented text. The summary is one cut
+   short, so the sentence saying how much of the transcript it covers is shown. */
+const SAMPLE_SUMMARY = {
+  summary_id: 'sample-summary',
+  summary_text:
+    'The team reviewed first-quarter spending. It agreed to freeze discretionary travel until the end of January.',
+  narrative: [
+    { text: 'The team reviewed first-quarter spending.', passages: [1] },
+    { text: 'It agreed to freeze discretionary travel until the end of January.', passages: [1, 2] },
+  ],
+  decisions: [{ text: 'Discretionary travel is frozen until 31 January.', passages: [2] }],
+  highlights: [{ text: 'Travel came in at twice its budget.', passages: [1] }],
+  passages: {
+    1: 'Ravi: Thanks, everyone. This is the first-quarter review, and travel came in at twice its budget.',
+    2: 'Ravi: So the decision is that discretionary travel is frozen until the thirty-first of January.',
+  },
+  model: 'claude-haiku-5-5',
+  generated_at: '2026-11-11T14:02:11+11:00',
+  input_truncated: true,
+  passages_sent: 2,
+  passages_total: 5,
+  action_items_extracted: 2,
+}
+
+/* One item of each kind NFR-15's mark tells apart: extracted, extracted and then
+   edited by a person, and added by a person. The second names nobody the server
+   could match and a phrase that fixes no date, and cites a passage this summary
+   does not quote, so its number is shown without a button. */
+const SAMPLE_ACTION_ITEMS = [
+  {
+    action_item_id: 'sample-item-extracted',
+    description: 'Reconcile the September card statements',
+    owner: { id: 'sheet-alex', name: 'Alex Morgan' },
+    owner_name: 'Alex',
+    due_date: '2026-10-23',
+    due_text: 'next Friday',
+    passages: [2],
+    origin: 'ai',
+    edited: false,
+  },
+  {
+    action_item_id: 'sample-item-edited',
+    description: 'Book the larger room for the planning day',
+    owner: null,
+    owner_name: 'the facilities team',
+    due_date: null,
+    due_text: 'before the move',
+    passages: [4],
+    origin: 'ai',
+    edited: true,
+  },
+  {
+    action_item_id: 'sample-item-by-hand',
+    description: 'Circulate the minutes',
+    owner: null,
+    owner_name: '',
+    due_date: null,
+    due_text: '',
+    passages: [],
+    origin: 'user',
+    edited: false,
+  },
+]
+
+/* A passage of that summary as FR-12 meets it: cited by an answer, and shown as a
+   search snippet. Each arrives flagged, and the flag alone is what marks it: the
+   text is the summary's own sentences with nothing added. */
+const SAMPLE_AI_STATEMENTS = [
+  { position: 1, text: 'Discretionary travel is frozen until 31 January.', chunk_id: 'sample-summary-chunk' },
+]
+
+const SAMPLE_AI_SOURCES = [
+  {
+    source_type: SOURCE_TYPE.meeting,
+    source_id: 'sample-meeting',
+    title: 'First-quarter review',
+    date: '2026-11-03',
+    passages: [
+      {
+        chunk_id: 'sample-summary-chunk',
+        text: `${SAMPLE_SUMMARY.summary_text}\n${SAMPLE_SUMMARY.decisions[0].text}\n${SAMPLE_SUMMARY.highlights[0].text}`,
+        ai_generated: true,
+      },
+    ],
+  },
+]
+
+const SAMPLE_AI_SEARCH_GROUP = {
+  count: 1,
+  results: [
+    {
+      source_type: SOURCE_TYPE.meeting,
+      source_id: 'sample-meeting',
+      title: 'First-quarter review',
+      snippet: '…It agreed to freeze discretionary travel until the end of January…',
+      snippet_ai_generated: true,
+      department: '',
+      date: '2026-11-03',
+    },
+  ],
+}
+
 const ALL_TOKENS = [
   ...new Set([
     ...COLOR_TOKENS,
@@ -164,6 +274,7 @@ const ALL_TOKENS = [
     ...RADIUS_TOKENS,
     ...FOCUS_TOKENS,
     ...LAYER_TOKENS,
+    ...AI_TOKENS,
   ]),
 ]
 
@@ -683,6 +794,83 @@ export default function ComponentSheet() {
           {TEXT.noAnswerFallback}
         </Notice>
         <PartialMatches idPrefix="sheet-no-answer" results={SAMPLE_PARTIAL_MATCHES} />
+      </section>
+
+      <section aria-labelledby="sheet-ai-mark">
+        <h2 id="sheet-ai-mark">AI-generated content (NFR-15)</h2>
+        <p>
+          One convention marks everything the AI wrote, on every screen: FR-10&rsquo;s type, department and tags,
+          FR-16&rsquo;s summary and extracted action items, and a passage of a meeting&rsquo;s summary wherever
+          FR-12 shows it. The mark is words beside the content, because a colour or a border is not a mark to a
+          screen reader. Once a person has changed an extracted item the mark says so, as a confirmed tag&rsquo;s
+          does, and what a person wrote carries no AI mark at all. The three forms:
+        </p>
+        <ul className="token-list">
+          <li className="token-row">
+            <AiMark />
+          </li>
+          <li className="token-row">
+            <AiMark edited />
+          </li>
+          <li className="token-row">
+            <PersonMark />
+          </li>
+        </ul>
+        <p>
+          The second cue is the boundary: dashed round what the AI wrote, solid round what a person wrote. It
+          is never the only cue. Its style is one token, read by every surface, so the convention cannot come
+          to differ between them.
+        </p>
+        <ul className="token-list">
+          {AI_TOKENS.map((name) => (
+            <li key={name} className="token-row">
+              <code>{name}</code>
+              <span className="token-row__value">{values[name]}</span>
+            </li>
+          ))}
+        </ul>
+        <p>
+          Which content is AI content is the server&rsquo;s to say, in a field of the reply: an action
+          item&rsquo;s <code>origin</code> and <code>edited</code>, a source passage&rsquo;s{' '}
+          <code>ai_generated</code>, a search result&rsquo;s <code>snippet_ai_generated</code>. Nothing is worked
+          out from the text. Below, an answer citing a passage of a meeting&rsquo;s summary (open the citation
+          to see the passage marked), and a search result whose snippet comes from one.
+        </p>
+        <AnswerBody idPrefix="sheet-ai-answer" statements={SAMPLE_AI_STATEMENTS} sources={SAMPLE_AI_SOURCES} />
+        <SearchResultGroup
+          heading={TEXT.searchMeetingsHeading}
+          headingId="sheet-ai-search-group"
+          group={SAMPLE_AI_SEARCH_GROUP}
+          emptyMessage={TEXT.searchGroupEmptyMeetings}
+        />
+      </section>
+
+      <section aria-labelledby="sheet-meeting-summary">
+        <h2 id="sheet-meeting-summary">Meeting summary and action items (FR-16)</h2>
+        <p>
+          The summary is one block inside the AI boundary: the mark, the model and the date it was generated,
+          then the narrative as one paragraph and the decisions and highlights as lists. Every sentence,
+          decision and highlight carries its passage references, and each reference is a button that opens the
+          transcript passage it names, as a citation opens its source passage. A summary of a transcript too
+          long for one request says how much of it the summary covers. A failed run has no state here: the
+          panel shows the latest Ready summary or none.
+        </p>
+        <SummaryContent summary={SAMPLE_SUMMARY} />
+        <p>
+          Each action item shows its description, its owner and its due date, with what the meeting itself
+          said of each beside them. An owner nobody could be matched to reads &ldquo;
+          {TEXT.actionItemUnassigned}&rdquo; and keeps the meeting&rsquo;s own name for them, and a phrase that
+          fixes no date is shown without one. A passage the current summary does not quote is a number without
+          a button. On the meeting page a role that may change action items also gets Edit and Delete on each
+          item and an Add control, built from the button, inputs, select and confirmation dialogue above;
+          deleting asks first. They are not shown here, because they write to the server.
+        </p>
+        <ActionItems
+          meetingId="sheet-meeting"
+          items={SAMPLE_ACTION_ITEMS}
+          passages={SAMPLE_SUMMARY.passages}
+          canEdit={false}
+        />
       </section>
 
       <section aria-labelledby="sheet-limits">

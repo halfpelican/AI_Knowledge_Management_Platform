@@ -1,0 +1,1163 @@
+{
+  "objective": "Objective 04",
+  "set": "development",
+  "mode": "regenerate",
+  "database": "kmp_fr16",
+  "ai_provider": "anthropic",
+  "chat_model": "claude-haiku-5-5",
+  "embedding_model": "voyage-4",
+  "commit": "6de28b680522e3f7c1cc8551dee050fe314467e2",
+  "uncommitted_tracked_files": [
+    " M apps/meetings/due_dates.py",
+    " M frontend/src/api/meetings.js",
+    " M frontend/src/components/Answer.css",
+    " M frontend/src/components/Answer.jsx",
+    " M frontend/src/components/Classification.css",
+    " M frontend/src/components/SearchResults.css",
+    " M frontend/src/components/SearchResults.jsx",
+    " M frontend/src/constants.js",
+    " M frontend/src/pages/MeetingDetail.jsx",
+    " M frontend/src/styles/tokens.css",
+    " M frontend/tests/fakeApi.js",
+    " M frontend/tests/meetingDelete.test.jsx",
+    " M frontend/tests/tabOrder.test.jsx"
+  ],
+  "started": "2026-11-11T08:28:16.646956+00:00",
+  "finished": "2026-11-11T08:29:06.742734+00:00",
+  "usage": {
+    "attempts": 8,
+    "attempts_without_reported_tokens": 0,
+    "prompt_tokens": 17921,
+    "completion_tokens": 7282,
+    "prices_per_million_tokens": {
+      "input": 0.1,
+      "output": 0.5
+    },
+    "cost_usd": 0.005433,
+    "not_counted": "embedding calls (billed by the embedding provider)"
+  },
+  "meetings": [
+    {
+      "set_id": "X01",
+      "transcript_sha256": "96e08bc2684a4dd39da8074f0d8e0df82266a105db843b21b63cd3f5c80cea54",
+      "meeting_status": "Indexed",
+      "id": "1234ac45-c009-4aa2-b526-e057dd16421d",
+      "title": "Procurement Review",
+      "meeting_date": "2026-10-05",
+      "attendees": [
+        "Hannah Lee",
+        "Owen Fletcher",
+        "Ravi Sharma"
+      ],
+      "summary_id": "0a138fd6-25fe-4402-9b27-7e508d5fe5a0",
+      "run_number": 3,
+      "status": "Ready",
+      "failure_reason": "",
+      "queued_for_retry": false,
+      "seconds": 12.641,
+      "model": "claude-haiku-5-5",
+      "summary_text": "The procurement review covered the stationery contract, the printer leases and the approval limits for purchases made without a second quote. The group agreed to renew the Paper Trail stationery contract for two years, since it is five percent cheaper and reliable, and Owen will confirm with Joanne today. Hannah had already extended the four printer leases until June at the same price, so that matter was settled. The approval limit for purchases without a second quote is to rise from two thousand to five thousand dollars from the first of December.",
+      "narrative": [
+        {
+          "text": "The procurement review covered the stationery contract, the printer leases and the approval limits for purchases made without a second quote.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "The group agreed to renew the Paper Trail stationery contract for two years, since it is five percent cheaper and reliable, and Owen will confirm with Joanne today.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "Hannah had already extended the four printer leases until June at the same price, so that matter was settled.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "The approval limit for purchases without a second quote is to rise from two thousand to five thousand dollars from the first of December.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "decisions": [
+        {
+          "text": "Renew the stationery contract with Paper Trail for another two years.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "Raise the approval limit for purchases without a second quote from two thousand to five thousand dollars from the first of December.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "highlights": [
+        {
+          "text": "Paper Trail is five percent cheaper than the other supplier, and its delivery has been reliable.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "Hannah's support for the higher limit depends on keeping the register of purchases up to date.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "A purchasing card for small items was raised but left for another year.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "input_truncated": false,
+      "passages_sent": 1,
+      "passages_total": 1,
+      "action_items_extracted": 4,
+      "action_items": [
+        {
+          "description": "Confirm the stationery contract renewal with Joanne",
+          "owner_name": "Owen",
+          "owner": "Owen Fletcher",
+          "due_text": "today",
+          "due_date": "2026-10-05",
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Check the renewal terms against the old contract before anyone signs",
+          "owner_name": "Hannah",
+          "owner": "Hannah Lee",
+          "due_text": "by Thursday",
+          "due_date": "2026-10-08",
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Update the procurement guidelines for the new approval limit",
+          "owner_name": "Hannah",
+          "owner": "Hannah Lee",
+          "due_text": "by the end of the month",
+          "due_date": "2026-10-31",
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Send the managers a note about the new approval limit",
+          "owner_name": "Ravi",
+          "owner": "Ravi Sharma",
+          "due_text": "next Monday",
+          "due_date": "2026-10-12",
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        }
+      ]
+    },
+    {
+      "set_id": "X02",
+      "transcript_sha256": "e0aa9a3fc88e98482d4b249d522724dd40fa31ac6bbd371c9d925469dcd43529",
+      "meeting_status": "Indexed",
+      "id": "9d9f8aa5-09ce-4225-be9e-6bba6c02e1df",
+      "title": "Change Advisory Board",
+      "meeting_date": "2026-10-07",
+      "attendees": [
+        "Alex Petrov",
+        "Lena Kowalski",
+        "Marcus Chen",
+        "Tomas Okafor"
+      ],
+      "summary_id": "f3adc245-64b1-4385-8e80-bf0439db57b5",
+      "run_number": 3,
+      "status": "Ready",
+      "failure_reason": "",
+      "queued_for_retry": false,
+      "seconds": 3.867,
+      "model": "claude-haiku-5-5",
+      "summary_text": "The Change Advisory Board reviewed four changes for the week and approved two of them, the firewall rule update for Saturday morning and the service desk tool upgrade for the evening of the twentieth. The backup server migration was deferred until a test restore succeeds, and the intranet certificate renewal was scheduled for next Wednesday with a check the morning after.",
+      "narrative": [
+        {
+          "text": "The Change Advisory Board reviewed four changes for the week and approved two of them, the firewall rule update for Saturday morning and the service desk tool upgrade for the evening of the twentieth.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "The backup server migration was deferred until a test restore succeeds, and the intranet certificate renewal was scheduled for next Wednesday with a check the morning after.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "decisions": [
+        {
+          "text": "The firewall rule update is approved for Saturday morning.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "The service desk tool upgrade is approved for the evening of the twentieth.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "The backup server migration does not go ahead this week and is deferred until a test restore succeeds.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "highlights": [
+        {
+          "text": "The test restore for the backup server migration failed last week.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "The service desk upgrade needs a two-hour outage.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "Sam from the hosting company renews the intranet certificate, which expires in three weeks.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "Reviewing the whole change process was raised and postponed until the new year.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "input_truncated": false,
+      "passages_sent": 1,
+      "passages_total": 1,
+      "action_items_extracted": 4,
+      "action_items": [
+        {
+          "description": "Attach the rollback steps to the firewall change record",
+          "owner_name": "Tomas",
+          "owner": "Tomas Okafor",
+          "due_text": "today",
+          "due_date": "2026-10-07",
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Tell the desk staff about the service desk outage",
+          "owner_name": "Lena",
+          "owner": "Lena Kowalski",
+          "due_text": "tomorrow",
+          "due_date": "2026-10-08",
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Rerun the backup server restore test",
+          "owner_name": "Alex",
+          "owner": "Alex Petrov",
+          "due_text": "by Friday",
+          "due_date": "2026-10-09",
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Check the intranet the morning after the certificate renewal",
+          "owner_name": "Tomas",
+          "owner": "Tomas Okafor",
+          "due_text": "",
+          "due_date": null,
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        }
+      ]
+    },
+    {
+      "set_id": "T01",
+      "transcript_sha256": "4eb3dedb5717ca4456c23dbd880f10eeb8f4c541282e69101b95027f0f99e90e",
+      "meeting_status": "Indexed",
+      "id": "21ce8ee2-7211-440e-8403-35b951bebedf",
+      "title": "Weekly Operations Standup",
+      "meeting_date": "2026-09-14",
+      "attendees": [
+        "Lena Kowalski",
+        "Marcus Chen",
+        "Priya Raman",
+        "Tomas Okafor"
+      ],
+      "summary_id": "9d84f9dc-ef5d-4464-a2c7-b18982b27f0e",
+      "run_number": 3,
+      "status": "Ready",
+      "failure_reason": "",
+      "queued_for_retry": false,
+      "seconds": 4.04,
+      "model": "claude-haiku-5-5",
+      "summary_text": "The weekly operations standup reviewed the database migration, the Opal Junction cutover, support tickets, monitoring alerts and access reviews. Weekend on-call cover for the Opal Junction cutover was split, with Lena taking Saturday and Tomas taking Sunday, and a Thursday-night dry run was agreed with Tomas leading. Tomas will tune the file server alert thresholds, and Priya approved the change on the condition that it is documented and shared.",
+      "narrative": [
+        {
+          "text": "The weekly operations standup reviewed the database migration, the Opal Junction cutover, support tickets, monitoring alerts and access reviews.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "Weekend on-call cover for the Opal Junction cutover was split, with Lena taking Saturday and Tomas taking Sunday, and a Thursday-night dry run was agreed with Tomas leading.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "Tomas will tune the file server alert thresholds, and Priya approved the change on the condition that it is documented and shared.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "decisions": [
+        {
+          "text": "Tomas will lead a Thursday-night dry run of the cutover, with Lena observing.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "Tomas's file server monitoring threshold changes were approved, subject to documenting and sharing them.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "highlights": [
+        {
+          "text": "The support backlog is falling, with 210 tickets closed and 190 opened last week, and password resets are the biggest category.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "The quarterly access review is due at the end of the month, and managers must confirm who still needs what.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "Tomas's staging environment log access request has been pending for three days.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "A new starter joins on Monday, with the laptop imaged and the account to be created on Sunday night.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "input_truncated": false,
+      "passages_sent": 1,
+      "passages_total": 1,
+      "action_items_extracted": 6,
+      "action_items": [
+        {
+          "description": "Circulate the full rollback plan to the change advisory board",
+          "owner_name": "Marcus",
+          "owner": "Marcus Chen",
+          "due_text": "by end of day tomorrow",
+          "due_date": "2026-09-15",
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Lead the Thursday-night dry run",
+          "owner_name": "Tomas",
+          "owner": "Tomas Okafor",
+          "due_text": "Thursday night",
+          "due_date": "2026-09-17",
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Observe the Thursday-night dry run",
+          "owner_name": "Lena",
+          "owner": "Lena Kowalski",
+          "due_text": "Thursday night",
+          "due_date": "2026-09-17",
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Draft a short intranet notice promoting the self-service page",
+          "owner_name": "Lena",
+          "owner": "Lena Kowalski",
+          "due_text": "tomorrow",
+          "due_date": "2026-09-15",
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Document the alert threshold changes and share them with the team",
+          "owner_name": "Tomas",
+          "owner": "Tomas Okafor",
+          "due_text": "",
+          "due_date": null,
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Chase the staging environment log access request and copy Tomas in",
+          "owner_name": "Priya",
+          "owner": "Priya Raman",
+          "due_text": "today",
+          "due_date": "2026-09-14",
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        }
+      ]
+    },
+    {
+      "set_id": "T02",
+      "transcript_sha256": "9d8eff23dd0fc655326a0bed25868bf5b3f09da1835c75c8f9abae29bd568437",
+      "meeting_status": "Indexed",
+      "id": "897c16af-1b5a-42a5-9d4e-f7534e1f7ec8",
+      "title": "Board Risk Committee Meeting",
+      "meeting_date": "2026-09-08",
+      "attendees": [],
+      "summary_id": "59aecabf-d621-4612-b323-01f37e34f2dd",
+      "run_number": 3,
+      "status": "Ready",
+      "failure_reason": "",
+      "queued_for_retry": false,
+      "seconds": 3.675,
+      "model": "claude-haiku-5-5",
+      "summary_text": "The risk committee reviewed the top risks register, cyber security, supplier concentration and the budget contingency. The committee added regulatory change as a fourth top risk, and the Fernwood contingency reserve of two million dollars stays ring-fenced until the November forecast is reviewed. Helen will bring a plan for alternatives to the two most critical services, with estimated costs and timelines, to the next meeting, and Ingrid and Omar will send their papers ahead of the audit committee.",
+      "narrative": [
+        {
+          "text": "The risk committee reviewed the top risks register, cyber security, supplier concentration and the budget contingency.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "The committee added regulatory change as a fourth top risk, and the Fernwood contingency reserve of two million dollars stays ring-fenced until the November forecast is reviewed.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "Helen will bring a plan for alternatives to the two most critical services, with estimated costs and timelines, to the next meeting, and Ingrid and Omar will send their papers ahead of the audit committee.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "decisions": [
+        {
+          "text": "Regulatory change is added as a fourth top risk.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "The Fernwood contingency reserve remains ring-fenced until the forecast is reviewed.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "highlights": [
+        {
+          "text": "The penetration test found two medium findings, both fixed and retested; the next test is scheduled for the first quarter.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "Phishing click rates have halved since the last drill, with another drill planned next quarter.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "Three suppliers account for almost half of total spend.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "There were no reportable incidents this quarter.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "The next audit committee is on the second Tuesday of next month.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "input_truncated": false,
+      "passages_sent": 1,
+      "passages_total": 1,
+      "action_items_extracted": 5,
+      "action_items": [
+        {
+          "description": "Take ownership of the regulatory change risk, passing it to the compliance manager once appointed",
+          "owner_name": "Ingrid",
+          "owner": null,
+          "due_text": "",
+          "due_date": null,
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Bring a plan for developing alternatives to the two most critical supplier services, with estimated costs and timelines",
+          "owner_name": "Helen",
+          "owner": null,
+          "due_text": "to the next meeting",
+          "due_date": null,
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Send the audit committee papers a week ahead, including the updated risk register",
+          "owner_name": "Ingrid",
+          "owner": null,
+          "due_text": "a week ahead",
+          "due_date": null,
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Attach the summary of the security test to the audit committee papers",
+          "owner_name": "Omar",
+          "owner": null,
+          "due_text": "",
+          "due_date": null,
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Circulate the minutes for comment",
+          "owner_name": "",
+          "owner": null,
+          "due_text": "within three days",
+          "due_date": "2026-09-11",
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        }
+      ]
+    },
+    {
+      "set_id": "T03",
+      "transcript_sha256": "5af96da7738474f8a14aa1df65c20e76c4e8e5a65bb399e540786145b51ae610",
+      "meeting_status": "Indexed",
+      "id": "9965fb40-5890-4f04-bcba-bc7e42bb298a",
+      "title": "Product Planning Workshop",
+      "meeting_date": "2026-09-16",
+      "attendees": [
+        "Aisha Rahman",
+        "Jamal Haddad",
+        "Sofia Marchetti",
+        "Wei Zhang"
+      ],
+      "summary_id": "155e8a05-03ff-4cdf-b55e-e7b2f6668e12",
+      "run_number": 3,
+      "status": "Ready",
+      "failure_reason": "",
+      "queued_for_retry": false,
+      "seconds": 6.26,
+      "model": "claude-haiku-5-5",
+      "summary_text": "The product planning workshop agreed what goes into the next release: search improvements and the new dashboard are committed, and the mobile redesign is deferred. The group also fixed the Tidewater feature freeze for the seventh of November, and assigned owners and follow-ups for requirements sign-off, budget confirmation, testing and pipeline speed-up.",
+      "narrative": [
+        {
+          "text": "The product planning workshop agreed what goes into the next release: search improvements and the new dashboard are committed, and the mobile redesign is deferred.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "The group also fixed the Tidewater feature freeze for the seventh of November, and assigned owners and follow-ups for requirements sign-off, budget confirmation, testing and pipeline speed-up.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "decisions": [
+        {
+          "text": "Engineering commits to the search improvements and the new dashboard for this cycle.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "The mobile redesign is deferred from this cycle, with the accessibility fixes still delivered.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "The Tidewater feature freeze is set for the seventh of November.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "highlights": [
+        {
+          "text": "The build pipeline takes around forty minutes, and caching dependencies might halve that time.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "Wei warned that without an extra tester for the last two weeks, regressions may be missed.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "input_truncated": false,
+      "passages_sent": 1,
+      "passages_total": 1,
+      "action_items_extracted": 6,
+      "action_items": [
+        {
+          "description": "Get sign-off on the requirements",
+          "owner_name": "Aisha",
+          "owner": "Aisha Rahman",
+          "due_text": "by the thirtieth",
+          "due_date": "2026-09-30",
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Confirm budget for an extra tester",
+          "owner_name": "Sofia",
+          "owner": "Sofia Marchetti",
+          "due_text": "by Friday",
+          "due_date": "2026-09-18",
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Look at caching dependencies to speed up the build pipeline",
+          "owner_name": "Wei",
+          "owner": "Wei Zhang",
+          "due_text": "",
+          "due_date": null,
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Write up the actions and send them",
+          "owner_name": "Sofia",
+          "owner": "Sofia Marchetti",
+          "due_text": "today",
+          "due_date": "2026-09-16",
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Deliver the search improvements and the new dashboard",
+          "owner_name": "Engineering",
+          "owner": null,
+          "due_text": "",
+          "due_date": null,
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Write the test plan and request the extra tester",
+          "owner_name": "Quality",
+          "owner": null,
+          "due_text": "",
+          "due_date": null,
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        }
+      ]
+    },
+    {
+      "set_id": "T04",
+      "transcript_sha256": "94adadb9811803feee20a8ed2e0b316b22c5af9cd208357e0eff470e75fb9a36",
+      "meeting_status": "Indexed",
+      "id": "b1b0d20e-fd98-493d-8aaf-c62d48fd20ea",
+      "title": "Customer Success Retrospective",
+      "meeting_date": "2026-09-21",
+      "attendees": [
+        "Nadia Haddad"
+      ],
+      "summary_id": "281dd183-955d-4bfb-8502-2ec5d679529d",
+      "run_number": 3,
+      "status": "Ready",
+      "failure_reason": "",
+      "queued_for_retry": false,
+      "seconds": 10.489,
+      "model": "claude-haiku-5-5",
+      "summary_text": "The customer success retrospective reviewed the last quarter, covering improved response times and satisfaction, the onboarding delays caused by a lost trainer, and churn patterns among cancelled accounts. The team agreed to reach out to customers at forty-five days of inactivity, before they reach the sixty days seen in cancelled accounts. Follow-up actions were assigned for an inactivity report, a call script, a handover template with the sales team, a follow-up retrospective, and a celebration of the improved satisfaction score.",
+      "narrative": [
+        {
+          "text": "The customer success retrospective reviewed the last quarter, covering improved response times and satisfaction, the onboarding delays caused by a lost trainer, and churn patterns among cancelled accounts.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "The team agreed to reach out to customers at forty-five days of inactivity, before they reach the sixty days seen in cancelled accounts.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "Follow-up actions were assigned for an inactivity report, a call script, a handover template with the sales team, a follow-up retrospective, and a celebration of the improved satisfaction score.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "decisions": [
+        {
+          "text": "Customers will be contacted at forty-five days of inactivity, before they reach sixty days.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "highlights": [
+        {
+          "text": "Satisfaction score rose to eighty-six percent and response times improved.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "Several new customers waited more than two weeks for their first training session after a trainer was lost and not quickly backfilled.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "The Marlin Point churn review showed most cancelled accounts had not logged in for sixty days before cancelling.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "Sales handover sometimes leaves the team unaware of what was promised to customers.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "input_truncated": false,
+      "passages_sent": 1,
+      "passages_total": 1,
+      "action_items_extracted": 6,
+      "action_items": [
+        {
+          "description": "Build the inactivity report and share it",
+          "owner_name": "Rania",
+          "owner": null,
+          "due_text": "on Wednesday",
+          "due_date": "2026-09-23",
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Write the call script for inactivity outreach",
+          "owner_name": "Ollie",
+          "owner": null,
+          "due_text": "",
+          "due_date": null,
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Write the draft handover template",
+          "owner_name": "Ollie",
+          "owner": null,
+          "due_text": "",
+          "due_date": null,
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Set up a meeting with the sales lead",
+          "owner_name": "Ollie",
+          "owner": null,
+          "due_text": "this week",
+          "due_date": null,
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Book the follow-up retrospective",
+          "owner_name": "Nadia",
+          "owner": "Nadia Haddad",
+          "due_text": "for the end of next quarter",
+          "due_date": null,
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Arrange a celebration of the improved satisfaction score with the team",
+          "owner_name": "Nadia",
+          "owner": "Nadia Haddad",
+          "due_text": "",
+          "due_date": null,
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        }
+      ]
+    },
+    {
+      "set_id": "T05",
+      "transcript_sha256": "50075338e62cba3eecf9afbead52f57d53f34b4c8b6789866bb7fb6a9eda0cf7",
+      "meeting_status": "Indexed",
+      "id": "53da710c-92c5-47d0-8cc8-b535e5e48376",
+      "title": "Security Incident Debrief",
+      "meeting_date": "2026-09-23",
+      "attendees": [],
+      "summary_id": "22518d12-c525-49c4-8fb1-7767f66ee8a7",
+      "run_number": 3,
+      "status": "Ready",
+      "failure_reason": "",
+      "queued_for_retry": false,
+      "seconds": 3.158,
+      "model": "claude-haiku-5-5",
+      "summary_text": "The debrief reviewed the Cobalt Reef phishing drill, in which 61 of 400 staff clicked the link and 23 entered credentials, an improvement on the previous drill but still too many. Staff who clicked were mostly on mobile devices, where the sender address is hard to see, so a mobile-visible banner on external emails was proposed. Participants agreed on next steps: Dmitri tests the banner, Beth drafts a reporting reminder for Karim's approval, Karim reports to the executive team, and the next drill is planned for the middle of next quarter.",
+      "narrative": [
+        {
+          "text": "The debrief reviewed the Cobalt Reef phishing drill, in which 61 of 400 staff clicked the link and 23 entered credentials, an improvement on the previous drill but still too many.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "Staff who clicked were mostly on mobile devices, where the sender address is hard to see, so a mobile-visible banner on external emails was proposed.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "Participants agreed on next steps: Dmitri tests the banner, Beth drafts a reporting reminder for Karim's approval, Karim reports to the executive team, and the next drill is planned for the middle of next quarter.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "decisions": [
+        {
+          "text": "The next phishing drill will be planned for the middle of next quarter.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "highlights": [
+        {
+          "text": "Ninety people reported the simulated message, and the fastest report came within four minutes.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "Nobody was disciplined, so that staff feel safe reporting.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "input_truncated": false,
+      "passages_sent": 1,
+      "passages_total": 1,
+      "action_items_extracted": 3,
+      "action_items": [
+        {
+          "description": "Test the external email banner on mobile",
+          "owner_name": "Dmitri",
+          "owner": null,
+          "due_text": "next week",
+          "due_date": null,
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Draft the reminder about reporting suspicious emails and send it to Karim for approval",
+          "owner_name": "Beth",
+          "owner": null,
+          "due_text": "",
+          "due_date": null,
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Report the results to the executive team",
+          "owner_name": "Karim",
+          "owner": null,
+          "due_text": "on Thursday",
+          "due_date": "2026-09-24",
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        }
+      ]
+    },
+    {
+      "set_id": "T06",
+      "transcript_sha256": "45122c9650528e8ba46d7d4fef381edaadc6ed4c4b7a48c354cd6d39782345aa",
+      "meeting_status": "Indexed",
+      "id": "7649197b-d3d1-4d9a-bf04-ed496a18f484",
+      "title": "Sustainability Working Group",
+      "meeting_date": "2026-10-26",
+      "attendees": [
+        "Aisha Rahman",
+        "Daniel Brooks",
+        "Grace Nguyen",
+        "Owen Fletcher"
+      ],
+      "summary_id": "bfc23c4d-ccc3-4761-8d3b-e8752764e04c",
+      "run_number": 3,
+      "status": "Ready",
+      "failure_reason": "",
+      "queued_for_retry": false,
+      "seconds": 5.738,
+      "model": "claude-haiku-5-5",
+      "summary_text": "The first sustainability working group meeting agreed on single-use cups, water refill stations and electronic waste. Single-use cups will be removed from all office kitchens on 1 March 2027, with reception keeping reusable cups for visitors. Owen will obtain quotes for refill stations on every floor and plan installation for the end of January, and a quarterly electronic waste collection day will start on 14 February. Daniel will run a four-week waste audit so the group can measure the difference later, and the group will meet again in four weeks.",
+      "narrative": [
+        {
+          "text": "The first sustainability working group meeting agreed on single-use cups, water refill stations and electronic waste.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "Single-use cups will be removed from all office kitchens on 1 March 2027, with reception keeping reusable cups for visitors.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "Owen will obtain quotes for refill stations on every floor and plan installation for the end of January, and a quarterly electronic waste collection day will start on 14 February.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "Daniel will run a four-week waste audit so the group can measure the difference later, and the group will meet again in four weeks.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "decisions": [
+        {
+          "text": "Single-use cups will be removed from all office kitchens from 1 March 2027, and reception will keep reusable cups for visitors.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "The first electronic waste collection day will be 14 February.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "highlights": [
+        {
+          "text": "The kitchens go through roughly two thousand single-use coffee cups a week, none of which can go in mixed recycling.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "The tap water on level four is slow to run cold.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "input_truncated": false,
+      "passages_sent": 1,
+      "passages_total": 1,
+      "action_items_extracted": 5,
+      "action_items": [
+        {
+          "description": "Draft and send the staff announcement about single-use cups, with a reminder in February",
+          "owner_name": "Daniel",
+          "owner": "Daniel Brooks",
+          "due_text": "first week of December",
+          "due_date": null,
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Run a four-week waste audit and report back at the next meeting",
+          "owner_name": "Daniel",
+          "owner": "Daniel Brooks",
+          "due_text": "starting next Monday",
+          "due_date": null,
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Get quotes for refill stations from suppliers",
+          "owner_name": "Owen",
+          "owner": "Owen Fletcher",
+          "due_text": "by the end of next week",
+          "due_date": "2026-11-06",
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Plan installation of refill stations on every floor",
+          "owner_name": "Owen",
+          "owner": "Owen Fletcher",
+          "due_text": "by the end of January",
+          "due_date": "2027-01-31",
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Book an accredited recycler for the 14 February collection day",
+          "owner_name": "Grace",
+          "owner": "Grace Nguyen",
+          "due_text": "",
+          "due_date": null,
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        }
+      ]
+    }
+  ]
+}

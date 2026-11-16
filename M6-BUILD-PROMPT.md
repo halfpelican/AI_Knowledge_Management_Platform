@@ -122,6 +122,9 @@ laptop: that laptop is the host. A provider switch is not an option, and nothing
 below should be planned around one. What remains open is how an assessor reaches the
 laptop — the same network, a tunnel, or the laptop itself — and that answer sets
 HTTPS, ALLOWED_HOSTS and CSRF_TRUSTED_ORIGINS for item 9. Record it as a decision.
+(Dated 10 November 2026: this paragraph's premise no longer holds for anything after M6. The
+anthropic provider is funded (D-113), and M8 can be hosted on any device with the platform in
+place (D-114). The M6 alpha's decision below is unchanged.)
 DECIDED 5 October, D-64: the laptop itself, over loopback, in production mode
 (DEBUG=False, the built SPA, Waitress), with ALLOWED_HOSTS, CSRF_TRUSTED_ORIGINS and
 the Secure cookie flags env-driven and defaulting to the loopback values. Scoped to
@@ -441,6 +444,19 @@ two items into one commit to save a round trip.
 §8 condition 4 for FR-11, FR-12 and FR-13.** Not before, and not on anyone's assurance that it
 is basically there.
 
+> **Amended 10 November 2026 (D-112).** It is now also apart from FR-13's follow-up clause
+> ("…so that pronouns and abbreviated references resolve correctly"). That clause is accepted as
+> partial for NIT3003, on the FLM build, after three measured attempts (D-103, D-111). It counts
+> toward COMPLETE only as a recorded deviation, with its reason and numbers. It is never a tick. A
+> provider change is measured again, not carried over.
+
+> **Amended 12 November 2026 (D-112's notes of 11 and 12 November).** The amendment above
+> describes the FLM build, and it stands for that build. Since D-122 the default build runs on
+> `anthropic`, and that acceptance does not carry over to it. There, the clause's resolving half
+> was measured as met on three draws. A measurement is not a verdict: it counts toward COMPLETE
+> only when the auditor reads it as met. On both builds, D-42 passes prior questions and never
+> prior answers. That stays a recorded deviation, with its reason, and is never a tick.
+
 ---
 
 ## Gate checklist — 1 November
@@ -486,6 +502,9 @@ The answers worth having ready before they are asked:
       sanitiser; the defence is parameterised SQL, React escaping and the delimiter)
       and D-42 (prior questions are passed, not prior answers). Present each as a
       deviation with its reason — never as a tick.
+
+> **Amended 12 November 2026.** This is the list as it stood for the 1 November gate. The
+> current list is `docs/demonstration-script.md`'s, which now includes D-112.
 
 ---
 

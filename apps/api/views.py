@@ -6,7 +6,9 @@ Routes that need more than a session add ``HasRolePermission`` (FR-06).
 """
 
 import logging
+import math
 
+from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth import login as django_login
 from django.contrib.auth import logout as django_logout
@@ -14,43 +16,77 @@ from django.core.exceptions import SuspiciousFileOperation
 from django.db import IntegrityError, transaction
 from django.db.models import Exists, OuterRef, Prefetch
 from django.http import FileResponse, Http404, JsonResponse
+from django.middleware.csrf import get_token
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from django.utils.decorators import method_decorator
 from django.utils.text import Truncator
-from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework import status
 from rest_framework.parsers import JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.throttling import ScopedRateThrottle
+from rest_framework.throttling import BaseThrottle, ScopedRateThrottle
 from rest_framework.views import APIView
 
+import apps.ai
 from apps.accounts.audit import log_role_change
-from apps.accounts.models import Permission, Role
+from apps.accounts.models import LoginAttempt, Permission, Role
 from apps.ai import attempt_log
-from apps.ai.base import ProviderUnavailable
+from apps.ai.base import ProviderUnavailable, TranscriptionDisabled
 from apps.core.constants import (
     ADMINISTRATOR_ROLE_NAME,
     CONTRIBUTE_CONTENT_PERMISSION,
+    DASHBOARD_GAP_ITEMS,
     DASHBOARD_RECENT_ITEMS,
     DOWNLOAD_CONTENT_TYPES,
-    LOCKOUT_DURATION,
-    LOCKOUT_NOTICE_CEILING,
-    LOCKOUT_THRESHOLD,
+    LOCKOUT_NOTICE_CEILING_FACTOR,
+    LOGIN_ATTEMPT_LOCKOUT,
+    LOGIN_ATTEMPT_RELEASE,
+    MAXIMUM_ACTION_ITEMS_PER_MEETING,
     DOCUMENT_INDEXED,
+    KNOWLEDGE_GAP_OPEN,
     MANAGE_DOCUMENTS_PERMISSION,
     MANAGE_MEETINGS_PERMISSION,
     MANAGE_ROLES_PERMISSION,
+    MANAGE_TAGS_PERMISSION,
     MAX_UPLOAD_BYTES,
+    MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS,
     MEETING_INDEXED,
     MINIMUM_CONTENT_LENGTH,
+    RELEASE_ACCOUNT_LOCKS_PERMISSION,
+    REVIEW_KNOWLEDGE_GAPS_PERMISSION,
     ROLE_NAMES,
+    TRANSCRIPTION_BUSY_RETRY_SECONDS,
+    TRANSCRIPTION_SEGMENT_SECONDS,
 )
 from apps.core.models import NAME_MAX_LENGTH
+from apps.documents.classification import (
+    InsufficientText,
+    InvalidClassification,
+    NotOnThisDocument,
+    TagNotOffered,
+    TopicAlreadyOffered,
+    apply_tag,
+    classify_document_now,
+    confirm_classification,
+    confirm_proposed_tag,
+    confirm_tag,
+    reject_proposed_tag,
+    reject_tag,
+)
 from apps.documents.deletion import delete_document
 from apps.documents.downloads import download_filename
-from apps.documents.models import Document
+from apps.documents.models import Department, Document, Tag
+from apps.documents.taxonomy import (
+    DepartmentAlreadyExists,
+    TagAlreadyExists,
+    create_department,
+    create_tag,
+    department_inventory,
+    retire_department,
+    retire_tag,
+    tag_inventory,
+)
+from apps.ingestion import audio
 from apps.ingestion.chunking import length_in_tokens
 from apps.ingestion.documents import ingest_and_index_document, reprocess_document
 from apps.ingestion.errors import (
@@ -62,7 +98,20 @@ from apps.ingestion.extraction import extract_plain_text
 from apps.ingestion.meetings import ingest_meeting_transcript
 from apps.ingestion.signatures import compute_content_hash, read_file_signature
 from apps.meetings.deletion import delete_meeting
-from apps.retrieval.models import Conversation, QueryLog
+from apps.meetings.models import Meeting
+from apps.meetings.summaries import (
+    TooManyActionItems,
+    TranscriptTooShort,
+    action_items_of,
+    add_action_item,
+    edit_action_item,
+    is_in_progress,
+    latest_run,
+    request_summary,
+    transcript_is_long_enough,
+)
+from apps.retrieval.gaps import ordered_gaps, run_cycle
+from apps.retrieval.models import Conversation, KnowledgeGap, QueryLog
 from apps.retrieval.pipeline import (
     QuestionLengthOutOfRange,
     answer_question,
@@ -71,6 +120,7 @@ from apps.retrieval.pipeline import (
 from apps.retrieval.scoping import permission_scope, scoped_documents, scoped_meetings
 from apps.retrieval.search import (
     SearchQueryContainsNullCharacter,
+    SearchQueryTooLong,
     SearchQueryTooShort,
     search,
 )
@@ -79,31 +129,55 @@ from .answers import reply_for
 from .ask_slot import release_ask_slot, take_ask_slot
 from .ingestion_slot import release_ingestion_slot, take_ingestion_slot
 from .negotiation import IgnoreClientContentNegotiation
-from .permissions import HasRolePermission
-from .repository import RepositoryFilters, browse, repository_documents
+from .transcription_slot import (
+    release_server_slot,
+    release_transcription_slot,
+    take_server_slot,
+    take_transcription_slot,
+)
+from .permissions import HasRolePermission, role_holds
+from .repository import RepositoryFilters, browse, classification_of, repository_documents
 from .serializers import (
     AnswerSerializer,
     AskSerializer,
+    ClassificationConfirmSerializer,
     ConversationCreateSerializer,
     ConversationDetailSerializer,
     ConversationSerializer,
     DashboardQuerySerializer,
+    DepartmentCreateSerializer,
+    DepartmentEntrySerializer,
     DirectoryEntrySerializer,
     DocumentBrowseQuerySerializer,
     DocumentDetailSerializer,
     DocumentSerializer,
     DocumentUploadSerializer,
+    KnowledgeGapCycleSerializer,
+    KnowledgeGapSerializer,
+    KnowledgeGapStatusSerializer,
     LoginSerializer,
     MeetingDetailSerializer,
     MeetingIngestSerializer,
     MeetingListSerializer,
+    ActionItemSerializer,
+    ActionItemWriteSerializer,
     MeetingSerializer,
+    ProposedTagRejectSerializer,
+    ProposedTagSerializer,
     RecentQuestionSerializer,
     RegisterSerializer,
     RoleChangeSerializer,
     RoleSerializer,
     SearchResultsSerializer,
+    TagApplySerializer,
+    TagCreateSerializer,
+    TagDetailSerializer,
+    TagEntrySerializer,
+    UserListEntrySerializer,
     UserSerializer,
+    classification_payload,
+    meeting_summary_payload,
+    tag_details_payload,
 )
 
 User = get_user_model()
@@ -117,16 +191,18 @@ logger = logging.getLogger(__name__)
 INVALID_CREDENTIALS_MESSAGE = "Invalid email or password."
 # FR-01 names the duplicate case explicitly, so this response may say so.
 EMAIL_ALREADY_REGISTERED_MESSAGE = "This email address is already registered."
-# FR-02 Responses: "403 forbidden if account is locked" (D-25). The wording is the
-# proposal's own, from its handleLoginAttempt pseudocode. ACCOUNT_LOCKED_CODE is the
+# FR-02 Responses: "403 forbidden if account is locked" (D-25). ACCOUNT_LOCKED_CODE is the
 # machine-readable flag for FR-02's front-end clause, "where the account is locked
 # and the submitted password was correct, a distinct message is shown": the client
 # branches on the code and never has to match on prose.
-# FR-03 defines an administrator release route; it is out of the M6 gate and
-# unbuilt, so the notice must not promise one (D-26). Waiting is the only remedy.
+# FR-03's Front-End clause: "The lockout message states that an administrator can unlock the
+# account, so a locked-out user has a route forward." The proposal's handleLoginAttempt
+# pseudocode said "An Administrator can release it." D-26 finding 4 took that out while no
+# release existed, because the notice then promised something false. POST
+# /api/users/{id}/unlock is that release, so the message names it again (D-130).
 ACCOUNT_LOCKED_MESSAGE = (
     "This account is temporarily locked after repeated failed sign-ins. "
-    "Please try again later."
+    "Try again later, or ask an administrator to unlock it."
 )
 ACCOUNT_LOCKED_CODE = "account_locked"
 # FR-04 Front-End: "a brief confirmation 'You've been logged out'".
@@ -142,6 +218,14 @@ LAST_ADMINISTRATOR_MESSAGE = (
 # FR-05 Responses: "404 Not Found if user/role doesn't exist". The user half is
 # get_object_or_404's own body; this is the role half.
 UNKNOWN_ROLE_MESSAGE = "No role with that role_id exists."
+# FR-03 Validation: "An Administrator cannot release a lock on their own account, since an
+# account locked by a brute-force attempt against it must not be releasable by whoever
+# currently holds that session." FR-03 Responses: 403 where the requester "is the account
+# holder", whether or not the account is locked (D-130).
+OWN_LOCK_RELEASE_MESSAGE = "You cannot release a lock on your own account."
+# FR-03 Responses: "409 Conflict where the account is not currently locked". A lock whose
+# window has passed is not current, and is left as it is (D-130).
+NOT_LOCKED_MESSAGE = "This account is not locked."
 
 # FR-08 Responses: "415 Unsupported Media Type for a disallowed format". The four
 # accepted formats are named so the message is actionable, and they are the same four
@@ -152,6 +236,10 @@ UNSUPPORTED_FORMAT_MESSAGE = (
 NO_FILE_SUBMITTED_MESSAGE = "No file was submitted."
 # FR-08 Responses: "413 Payload Too Large beyond the size limit".
 FILE_TOO_LARGE_MESSAGE = "File exceeds the maximum permitted size of 50 MB."
+# FR-09's transcript body, pasted or a file, held to the same ceiling as an upload and refused
+# the same way, by its declared length before it is parsed (D-124). FR-09 enumerates only 201 and
+# 400; the 413 is a *convention*, because a body refused unread has no field to put an error on.
+TRANSCRIPT_TOO_LARGE_MESSAGE = "Transcript exceeds the maximum permitted size of 50 MB."
 # Stage 4 item 12b: a DOCX or XLSX whose own table of contents declares more decompressed
 # content than the detector will let a parser inflate (signatures.MEMBER_MAXIMUM_BYTES).
 #
@@ -190,6 +278,24 @@ ALREADY_INDEXED_MESSAGE = "This document is already indexed."
 # Reprocess's 422 for a document whose file_path is blank, names a file missing from disk, or
 # names a path outside MEDIA_ROOT (D-75's note of 21 October). The cause is logged, not sent.
 NO_STORED_ORIGINAL_MESSAGE = "This document has no stored original to reprocess."
+# FR-10 Responses: "422 Unprocessable Entity where insufficient text was extracted" (D-105): the
+# classify route's answer for a document with no extracted text, given before any provider call.
+INSUFFICIENT_TEXT_MESSAGE = "No text was extracted from this document, so it cannot be classified."
+# NFR-19's notice for the classify route, as KNOWLEDGE_SERVICE_UNAVAILABLE_MESSAGE below is for
+# /api/ask: what happened, and that nothing was recorded, so the action is safe to repeat.
+CLASSIFICATION_UNAVAILABLE_MESSAGE = (
+    "The knowledge service is temporarily unavailable. The document was not classified; "
+    "please try again shortly."
+)
+# POST /api/documents/{id}/tags (D-105's dated note of 10 November 2026, night). One 400 for a
+# tag_id that is unknown, inactive or outside the document's scheme, keyed on the field, so the
+# answer never tells a tag that does not exist from one the caller may not see (invariant 1).
+TAG_NOT_OFFERED_MESSAGE = "Choose a tag from this document's tag options."
+# FR-10 Responses: "409 Conflict on a duplicate tag name within a dimension". Answered only for a
+# Topic already in the document's scheme, which the caller is offered anyway.
+TOPIC_ALREADY_OFFERED_MESSAGE = (
+    "A Topic with this name is already offered for this document. Choose it from the tag options."
+)
 # FR-15's download answers a document whose original is not stored, is gone from disk, or is
 # named by a path outside MEDIA_ROOT, with
 # exactly the 404 body its scoped lookup gives an unknown id or one outside the caller's scope
@@ -201,6 +307,33 @@ NO_STORED_ORIGINAL_MESSAGE = "This document has no stored original to reprocess.
 # a GET for bytes that are not there is "not found", while reprocess is an action that cannot
 # proceed, and says so with a 422.
 DOCUMENT_NOT_FOUND_MESSAGE = "No %s matches the given query." % Document._meta.object_name
+# DELETE /api/tags/{id} for an id that names no tag it acts on: get_object_or_404's own wording, as
+# DOCUMENT_NOT_FOUND_MESSAGE above restates it for documents.
+TAG_NOT_FOUND_MESSAGE = "No %s matches the given query." % Tag._meta.object_name
+# POST /api/tags (D-128): FR-10 Responses, "409 Conflict on a duplicate tag name within a dimension",
+# for a name already in the dimension, active or retired. The body carries that tag's id, which the
+# Administrator, the route's only caller, already sees in the inventory, retired ones included.
+TAG_ALREADY_EXISTS_MESSAGE = (
+    "A tag with this name already exists in this dimension. A retired tag is not added again here."
+)
+# DELETE /api/departments/{id} for an id that names no Department (D-129): get_object_or_404's own
+# wording, as TAG_NOT_FOUND_MESSAGE restates it for tags.
+DEPARTMENT_NOT_FOUND_MESSAGE = "No %s matches the given query." % Department._meta.object_name
+# POST /api/departments (D-129) for a name an ACTIVE department already has, ignoring case. A retired
+# one is reactivated instead (200), so this message never says the name is retired. The body carries
+# that department's id, which the Administrator, the route's only caller, already sees in the list.
+DEPARTMENT_ALREADY_EXISTS_MESSAGE = "A department with this name is already listed."
+# FR-16's action-item routes (D-125), for an item id that names nothing on the meeting in the path:
+# the scoped meeting lookup's own 404 body, so an item that belongs to another meeting, one that
+# was deleted and one that never existed are one answer.
+MEETING_NOT_FOUND_MESSAGE = "No %s matches the given query." % Meeting._meta.object_name
+# FR-16 Responses: "422 Unprocessable Entity where the transcript is too short to summarise". The
+# transcript is stored and searchable all the same, and the message says so, because the reader's
+# next question is whether the meeting was lost.
+SUMMARY_TOO_SHORT_MESSAGE = (
+    "This transcript is too short to summarise. It is stored and searchable, and action items "
+    "can still be added by hand."
+)
 # FR-12 keyword search: ``q`` was not sent at all. The minimum-length rule is NOT
 # restated here — ``apps.retrieval.search`` owns it and raises, and this view maps the
 # exception (D-41).
@@ -233,6 +366,50 @@ INGESTION_IN_FLIGHT_CODE = "ingestion_in_flight"
 # until it has a turn (D-80), so the placeholder appears there only on a thread whose first
 # question left nothing to name it with.
 NEW_CONVERSATION_TITLE = "New conversation"
+# NFR-19's informative notice for POST /api/knowledge-gaps/cycles (D-107): the embedding provider
+# was unreachable after MAXIMUM_EMBED_ATTEMPTS, and the cycle rolled back. Its own text rather than
+# KNOWLEDGE_SERVICE_UNAVAILABLE_MESSAGE, which tells the reader their question was not recorded.
+KNOWLEDGE_GAP_CYCLE_UNAVAILABLE_MESSAGE = (
+    "The knowledge service is temporarily unavailable, so the aggregation cycle did not run and "
+    "nothing was changed. Please try again shortly."
+)
+# Recording transcription (D-123). Each refusal is answered before any provider call, and
+# none stores anything, because the route stores nothing at all. Each 503 carries a code, so the
+# page can tell "not enabled on this server" (paste or upload the transcript instead) from "FLM is
+# down" (resume shortly) without reading the detail.
+TRANSCRIPTION_DISABLED_MESSAGE = (
+    "Recording transcription is not enabled on this server. Paste or upload the transcript instead."
+)
+TRANSCRIPTION_DISABLED_CODE = "transcription_disabled"
+# NFR-19's informative notice for a segment the provider failed after MAXIMUM_TRANSCRIBE_ATTEMPTS:
+# what happened, and that nothing was stored, so sending the segment again is safe.
+TRANSCRIPTION_UNAVAILABLE_MESSAGE = (
+    "The transcription service is temporarily unavailable. This segment was not transcribed and "
+    "nothing was stored; please send it again shortly."
+)
+TRANSCRIPTION_UNAVAILABLE_CODE = "transcription_unavailable"
+NO_AUDIO_SUBMITTED_MESSAGE = "No audio segment was submitted."
+# 415, as FR-08 answers a format it does not accept: the bytes are not a 16-bit PCM WAV, which is
+# all the page sends (apps/ingestion/audio.py).
+UNSUPPORTED_AUDIO_MESSAGE = "Audio must be a 16-bit PCM mono WAV segment at 16 kHz."
+EMPTY_AUDIO_MESSAGE = "The audio segment holds no audio."
+SEGMENT_TOO_LONG_MESSAGE = (
+    f"An audio segment may hold at most {MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS} seconds of audio."
+)
+# A second segment from a user whose previous one is still with FLM (apps/api/transcription_slot.py).
+TRANSCRIPTION_IN_FLIGHT_MESSAGE = "Your previous audio segment is still being transcribed."
+TRANSCRIPTION_IN_FLIGHT_CODE = "transcription_in_flight"
+# Every server slot is held (MAXIMUM_TRANSCRIPTIONS_IN_FLIGHT, across all users): other people's
+# segments are with FLM. Not this user's doing, so not the in-flight text, which suggests another
+# tab. A 429 with Retry-After, which the page waits out and then sends the segment again.
+TRANSCRIPTION_BUSY_MESSAGE = (
+    "The transcription service is busy with other recordings. This segment was not transcribed "
+    "and nothing was stored; it can be sent again in a few seconds."
+)
+TRANSCRIPTION_BUSY_CODE = "transcription_busy"
+# The values of a transcription reply's "status".
+SEGMENT_TRANSCRIBED = "transcribed"
+SEGMENT_SILENT = "silent"
 
 CanManageRoles = HasRolePermission.for_code(MANAGE_ROLES_PERMISSION)
 CanContributeContent = HasRolePermission.for_code(CONTRIBUTE_CONTENT_PERMISSION)
@@ -244,6 +421,20 @@ CanManageDocuments = HasRolePermission.for_code(MANAGE_DOCUMENTS_PERMISSION)
 # Meeting deletion (D-99), which mirrors D-73 and is not in the proposal. The same rule: never a
 # permission_classes entry, because MeetingDetailView.delete must resolve the scope first.
 CanManageMeetings = HasRolePermission.for_code(MANAGE_MEETINGS_PERMISSION)
+# FR-19's log (D-107): a permission_classes entry on every knowledge-gap route, so the 403 comes
+# before anything else. Nothing on those routes is scoped, so there is nothing for a 403 to
+# disclose by preceding a 404: an entry's existence is the Administrator's to know.
+CanReviewKnowledgeGaps = HasRolePermission.for_code(REVIEW_KNOWLEDGE_GAPS_PERMISSION)
+# FR-10's tag administration (D-119 finding 5; D-128's POST): the same arrangement as FR-19's, for
+# the same reason. A permission_classes entry on both routes, so the 403 precedes the 404 for an
+# unknown tag, and a POST's 400, 409 and throttle; a tag's existence is the Administrator's to know,
+# since they read every source (D-66). Since D-129 it guards the department list's two routes the
+# same way, for the same reason.
+CanManageTags = HasRolePermission.for_code(MANAGE_TAGS_PERMISSION)
+# FR-03's release (D-130): a permission_classes entry, so the 403 comes before the lookup and an
+# Employee cannot tell a real user id from an invented one. Users are not scoped, so a 403
+# preceding the 404 discloses nothing.
+CanReleaseAccountLocks = HasRolePermission.for_code(RELEASE_ACCOUNT_LOCKS_PERMISSION)
 
 
 class ThrottlePostOnlyMixin:
@@ -271,6 +462,30 @@ def ingestion_in_flight():
         {"detail": INGESTION_IN_FLIGHT_MESSAGE, "code": INGESTION_IN_FLIGHT_CODE},
         status=status.HTTP_429_TOO_MANY_REQUESTS,
     )
+
+
+def declares_a_body_over_the_upload_ceiling(request) -> bool:
+    """Whether the request declares a body longer than ``MAX_UPLOAD_BYTES`` (D-124).
+
+    Read from ``CONTENT_LENGTH`` alone, so it is answered without reading the body. An upload
+    route asks it before anything touches ``request.data``. Since D-124 nothing reads the body
+    before the view either, because the CSRF check takes its token from the header
+    (``apps/api/authentication.py``), so a body refused here is never parsed.
+
+    **Why the declared length can be trusted.** Under WSGI, Django reads no more of the body than
+    ``CONTENT_LENGTH`` declares, and with no length, or a malformed one, it reads none. Waitress
+    reads exactly the declared number of bytes, and it reassembles a chunked body and declares its
+    length before the request reaches Django.
+
+    **What it does not bound: receiving.** Waitress has read the whole body by the time Django
+    sees the request. Waitress's own ``--max-request-body-size`` bounds that
+    (``MAX_REQUEST_BODY_BYTES``, D-124).
+    """
+    try:
+        declared_length = int(request.META.get("CONTENT_LENGTH") or 0)
+    except (TypeError, ValueError):
+        declared_length = 0
+    return declared_length > MAX_UPLOAD_BYTES
 
 
 # --- FR-01 registration --------------------------------------------------------------
@@ -308,57 +523,68 @@ class RegisterView(APIView):
 # --- FR-02 login ---------------------------------------------------------------------
 
 
-def _is_locked(user) -> bool:
-    """FR-02: the lock is evaluated before the password result is used, so that no
-    session is issued for a locked account whatever credential was submitted."""
-    return user is not None and user.locked_until is not None and user.locked_until > timezone.now()
+def _invalid_credentials() -> Response:
+    """The one 401 login gives: for an unknown address, for a wrong password whether or
+    not the account is locked, and for a locked account past the notice ceiling
+    whatever the password (D-02, D-25, D-26).
 
-
-def _record_locked_attempt(email: str) -> int:
-    """Count a failed attempt made *during* an active lock, and return the new total.
-
-    The window is deliberately not extended: "locks the account for 15 minutes" stays
-    literally true rather than becoming indefinite under a sustained attack (D-25).
-    But the counter does move, which D-25 originally said it would not. Leaving it
-    still meant the lock withheld only the session cookie and not the *verification
-    oracle*: an attacker could guess without limit for the life of the window, each
-    guess answered 403 or 401 according to whether it was right. Counting is what
-    lets the caller stop announcing the answer (D-26).
+    Built in one place so the paths cannot drift apart. Any byte that differed between
+    them would tell a caller which case it had hit, and so whether an address is
+    registered or locked.
     """
-    with transaction.atomic():
-        try:
-            user = User.objects.select_for_update().get(email=email)
-        except User.DoesNotExist:  # pragma: no cover - the caller found a locked account
-            return 0
-        user.failed_attempts += 1
-        user.save(update_fields=["failed_attempts"])
-        return user.failed_attempts
+    return Response({"detail": INVALID_CREDENTIALS_MESSAGE}, status=status.HTTP_401_UNAUTHORIZED)
 
 
-def _record_failed_attempt(email: str) -> None:
-    """FR-02 Business Logic: "Failed attempts increment a counter; five consecutive
-    failures lock the account for 15 minutes." Reached only for an account that is
-    not currently locked, so an attempt made during a lockout window neither extends
-    the window nor moves the counter. An expired window resets the counter first: it
-    counts *consecutive* failures, and without the reset the single next failure
-    after a lock expired would re-lock the account on one attempt rather than five."""
-    with transaction.atomic():
-        try:
-            user = User.objects.select_for_update().get(email=email)
-        except User.DoesNotExist:
-            return
-        if user.locked_until is not None:
-            # A live lock never reaches here, so this window has expired.
-            user.failed_attempts = 0
-            user.locked_until = None
-        user.failed_attempts += 1
-        if user.failed_attempts >= LOCKOUT_THRESHOLD:
-            user.locked_until = timezone.now() + LOCKOUT_DURATION
-        user.save(update_fields=["failed_attempts", "locked_until"])
+def _source_address(request) -> str | None:
+    """The client address a LoginAttempts row records (FR-03, D-130): DRF's own ``get_ident()``,
+    the key the sign-in throttle counts against.
+
+    That is REMOTE_ADDR, because ``NUM_PROXIES`` is 0. X-Forwarded-For is never read here, as the
+    throttle never reads it (D-79): a client can write any address into that header.
+    """
+    return BaseThrottle().get_ident(request) or None
 
 
-@method_decorator(ensure_csrf_cookie, name="dispatch")
-class LoginView(APIView):
+class SendsCsrfCookieMixin:
+    """Send the ``csrftoken`` cookie with every response from the view, as Django's
+    ``ensure_csrf_cookie`` did, without running Django's CSRF check first (D-124).
+
+    The SPA reads its token from that cookie (D-21). ``ensure_csrf_cookie`` used to set it on
+    login and ``/api/auth/me``. Before the view, it runs a full CSRF check on the raw request, and
+    for an unsafe method that check reads ``request.POST``. Django parses a multipart body to
+    answer that, spooling its files. This happened before DRF's throttle, signed in or not, for
+    anyone holding a well-formed ``csrftoken`` cookie, and a client can make one up. The check
+    never refused anything there, and the cookie came from its one other effect, ``get_token()``.
+    So this keeps only ``get_token()``, in ``finalize_response``, which DRF runs for every
+    response the view returns, its 401s and 429s included. ``get_token()`` marks the cookie for
+    ``CsrfViewMiddleware`` to send. A session's unsafe request to these views is still checked by
+    DRF (``apps/api/authentication.py``).
+    """
+
+    def finalize_response(self, request, response, *args, **kwargs):
+        get_token(request)
+        return super().finalize_response(request, response, *args, **kwargs)
+
+
+class LoginView(SendsCsrfCookieMixin, APIView):
+    """FR-02 login, and the lockout FR-02 enforces (D-25, D-26).
+
+    **The order is what makes the lock hold under concurrency (D-130, security finding
+    H1).** ``authenticate()`` runs first, outside any transaction, so the account row is
+    never locked for the length of a password hash. Then one transaction reads the
+    account row with ``select_for_update()`` and makes the whole decision on that read:
+    whether the account is locked, the count, the lock itself with its LoginAttempts row,
+    and on success the session and the reset. Two requests for one account decide one
+    after the other, the second on the state the first committed.
+
+    It used to decide on ``locked_until`` read without a lock, before ``authenticate()``.
+    Five concurrent wrong passwords at a count of 1 all read "unlocked": the fourth set
+    the lock, and the fifth, finding it set, took it for an expired one and erased it. A
+    right password that had read "unlocked" got a session for an account a concurrent
+    request had just locked, where FR-03 Validation says "No session is issued for a
+    locked account under any circumstance, regardless of the password submitted."
+    """
+
     permission_classes = [AllowAny]  # one of the two opt-outs (D-21)
     # Five requests lock any account, so without this anyone could hold every
     # account in the organisation locked indefinitely (D-26).
@@ -373,53 +599,131 @@ class LoginView(APIView):
         serializer.is_valid(raise_exception=True)
         email = serializer.validated_data["email"]
         password = serializer.validated_data["password"]
-        account = User.objects.filter(email=email).first()
-        # The password is verified even for a locked account, because its result
-        # selects the response and can never grant access. Django's ModelBackend runs
-        # the hasher even when the address is unknown, so the failing cases take the
-        # same time as far as practical.
+        # The password is verified on every path, a locked account's included, because
+        # its result only selects the response and can never grant access (FR-03
+        # Validation). Django's ModelBackend runs the hasher even when the address is
+        # unknown, so the failing cases take the same time as far as practical. It runs
+        # before the row lock below, which is held for a few queries and never for a
+        # hash (D-130).
         user = authenticate(request, username=email, password=password)
-        if _is_locked(account):
-            # The lock is announced ONLY where the password also matched. The
-            # proposal's handleLoginAttempt() pseudocode branches exactly here and
-            # says why: "Confirming a lock to anyone who merely knows the email
-            # address would convert a protective measure into an account-enumeration
-            # tool." So a wrong password against a locked account is the ordinary
-            # 401, indistinguishable from a wrong password against any other
-            # address. FR-02's unqualified "403 if account is locked" is the summary;
-            # the pseudocode and FR-03's messaging clause are the detail (D-25).
-            #
-            # Announcing it for the whole window, however, leaves the lock withholding
-            # only the session and not the answer: guesses are unlimited during a
-            # lock, and each 403 or 401 says whether that guess was right. So the
-            # attempt is counted, and past LOCKOUT_NOTICE_CEILING the answer stops
-            # being given at all (D-26). The password is still verified on every path
-            # so the timing does not separate these cases from an unknown address.
-            attempts = _record_locked_attempt(email)
-            if user is None or attempts > LOCKOUT_NOTICE_CEILING:
+        with transaction.atomic():
+            # The one read the whole decision is made on (D-130). A request for the same
+            # account that is still deciding holds this lock, so this one waits for it and
+            # then sees what it committed.
+            account = User.objects.select_for_update().filter(email=email).first()
+            if account is None:
+                return _invalid_credentials()  # an unknown address writes nothing
+            # The password counts only if authenticate() verified it against this same
+            # row. A row deleted, and its address registered again, while the hash ran is
+            # a different account.
+            password_matched = user is not None and user.pk == account.pk
+            now = timezone.now()
+            if account.locked_until is not None and account.locked_until > now:
+                # The attempt is counted and the window is never extended (D-26). "Locks
+                # the account for 15 minutes" stays literally true rather than becoming
+                # indefinite under a sustained attack (D-25). Counting is what lets the
+                # notice stop once guessing passes the notice ceiling, so the lock
+                # withholds the verification oracle and not only the session.
+                account.failed_attempts += 1
+                account.save(update_fields=["failed_attempts"])
+                # The lock is announced ONLY where the password also matched. The
+                # proposal's handleLoginAttempt() pseudocode branches exactly here and
+                # says why: "Confirming a lock to anyone who merely knows the email
+                # address would convert a protective measure into an account-enumeration
+                # tool." So a wrong password against a locked account is the ordinary
+                # 401, indistinguishable from a wrong password against any other
+                # address. FR-02's unqualified "403 if account is locked" is the summary;
+                # the pseudocode and FR-03's messaging clause are the detail (D-25). Past
+                # the ceiling every attempt gets the 401, right password or wrong (D-26).
+                # The ceiling follows the running threshold (D-26, D-130 decision 7).
+                ceiling = settings.LOCKOUT_THRESHOLD * LOCKOUT_NOTICE_CEILING_FACTOR
+                if not password_matched or account.failed_attempts > ceiling:
+                    return _invalid_credentials()
+                # FR-03's countdown, which the sign-in page runs from this (D-130): whole
+                # seconds until the lock ends, from the row read under the lock, rounded up so
+                # the page never re-enables Sign in early, and at least 1. Only this response
+                # carries it, because a 401 must stay byte-identical on every path. Neither
+                # status has a Retry-After header: in this contract that header is the
+                # throttle's, on a 429, which is where the client reads it.
+                retry_after = max(1, math.ceil((account.locked_until - now).total_seconds()))
                 return Response(
-                    {"detail": INVALID_CREDENTIALS_MESSAGE}, status=status.HTTP_401_UNAUTHORIZED
+                    {
+                        "detail": ACCOUNT_LOCKED_MESSAGE,
+                        "code": ACCOUNT_LOCKED_CODE,
+                        "retry_after": retry_after,
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
                 )
-            return Response(
-                {"detail": ACCOUNT_LOCKED_MESSAGE, "code": ACCOUNT_LOCKED_CODE},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-        if user is None:
-            _record_failed_attempt(email)
-            return Response(
-                {"detail": INVALID_CREDENTIALS_MESSAGE}, status=status.HTTP_401_UNAUTHORIZED
-            )
-        # Cycles the session key and, through the user_logged_in signal, sets
-        # last_login (stored as last_login_at). The CSRF token is rotated too.
-        django_login(request, user)
-        if user.failed_attempts or user.locked_until:
-            # Both, not just the counter. A success that left locked_until standing
-            # would refuse the user's next login for the rest of the window, which is
-            # the trap D-24 recorded and D-25 closes.
-            user.failed_attempts = 0
-            user.locked_until = None
-            user.save(update_fields=["failed_attempts", "locked_until"])
+            if not password_matched:
+                # FR-02 Business Logic: "Failed attempts increment a counter; five
+                # consecutive failures lock the account for 15 minutes."
+                if account.locked_until is not None:
+                    # Found not locked on this same read, under the row lock, so this
+                    # window has expired (D-130). The counter counts *consecutive* failures
+                    # and resets with the window, or the single next failure would re-lock
+                    # the account on one attempt rather than five (D-25).
+                    account.failed_attempts = 0
+                    account.locked_until = None
+                account.failed_attempts += 1
+                # The running policy, from .env (D-130 decision 7).
+                if account.failed_attempts >= settings.LOCKOUT_THRESHOLD:
+                    account.locked_until = now + settings.LOCKOUT_DURATION
+                    # FR-03: "Every lockout is recorded with the attempted email, source
+                    # address, and timestamp." Written here, in this transaction, so the row
+                    # and the lock commit together, and only here: an attempt during a live
+                    # lock never reaches this branch, because it never extends the window
+                    # (D-130).
+                    LoginAttempt.objects.create(
+                        event=LOGIN_ATTEMPT_LOCKOUT,
+                        attempted_email=email,
+                        source_ip=_source_address(request),
+                        success=False,
+                        attempted_at=now,
+                        user=account,
+                        locked_until=account.locked_until,
+                    )
+                account.save(update_fields=["failed_attempts", "locked_until"])
+                return _invalid_credentials()
+            # Cycles the session key and, through the user_logged_in signal, sets
+            # last_login (stored as last_login_at). The CSRF token is rotated too. It runs
+            # here, under the row lock, so the account cannot be locked between the check
+            # above and the login, and the reset below commits with the new session
+            # (D-130). ``user`` rather than ``account``, because it carries the backend
+            # authenticate() recorded; the two are the same row.
+            django_login(request, user)
+            if account.failed_attempts or account.locked_until:
+                # Both, not just the counter. A success that left locked_until standing
+                # would refuse the user's next login for the rest of the window, which is
+                # the trap D-24 recorded and D-25 closes.
+                account.failed_attempts = 0
+                account.locked_until = None
+                account.save(update_fields=["failed_attempts", "locked_until"])
         return Response(UserSerializer(user).data, status=status.HTTP_200_OK)
+
+
+class LockoutPolicyView(APIView):
+    """``GET /api/auth/lockout-policy``: the running lockout policy, for the sign-in page (FR-03,
+    D-130 decision 7).
+
+    FR-03's threshold and duration are .env values (config/settings.py). The sign-in page counts
+    its own failures (D-130 decision 1), so it needs the threshold to know how many attempts
+    remain, and the duration for its countdown. It reads them from here at run time rather than
+    from a copy built into the bundle, so the policy can change without a front-end rebuild.
+
+    Anonymous, because the page asks before anyone is signed in. **It discloses nothing about any
+    account:** it is the same two numbers for every caller, and the warning on the page already
+    shows them. It reads nothing from the request, writes nothing, and is not throttled.
+    """
+
+    permission_classes = [AllowAny]  # the third opt-out (D-21, D-130 decision 7)
+
+    def get(self, request):
+        return Response(
+            {
+                "lockout_threshold": settings.LOCKOUT_THRESHOLD,
+                "lockout_duration_seconds": int(settings.LOCKOUT_DURATION.total_seconds()),
+            }
+        )
 
 
 # --- FR-04 logout ----------------------------------------------------------------------
@@ -441,8 +745,7 @@ class LogoutView(APIView):
 # --- Current user ----------------------------------------------------------------------
 
 
-@method_decorator(ensure_csrf_cookie, name="dispatch")
-class MeView(APIView):
+class MeView(SendsCsrfCookieMixin, APIView):
     def get(self, request):
         return Response(UserSerializer(request.user).data)
 
@@ -463,11 +766,32 @@ class RoleListView(APIView):
 
 
 class UserListView(APIView):
+    """``GET /api/users`` — every user, for FR-05's role management.
+
+    A requester whose role also holds ``release_account_locks`` gets each user with ``lock``,
+    for FR-03's "An Administrator viewing a locked account can release the lock" (D-130).
+    Anyone else gets the plain user object. The gate is still ``manage_roles``.
+    """
+
     permission_classes = [IsAuthenticated, CanManageRoles]
 
     def get(self, request):
         users = User.objects.select_related("role").order_by("created_at", "pk")
-        return Response(UserSerializer(users, many=True).data)
+        if not role_holds(request.user.role_id, RELEASE_ACCOUNT_LOCKS_PERMISSION):
+            return Response(UserSerializer(users, many=True).data)
+        # One instant for the whole list, so every row is judged locked or not at the same
+        # moment. The lockout rows of the locks still running come in one query for the whole
+        # list, never one per user: a row whose locked_until has passed set a lock that is over.
+        now = timezone.now()
+        users = users.prefetch_related(
+            Prefetch(
+                "login_attempts",
+                queryset=LoginAttempt.objects.filter(
+                    event=LOGIN_ATTEMPT_LOCKOUT, locked_until__gt=now
+                ),
+            )
+        )
+        return Response(UserListEntrySerializer(users, many=True, context={"now": now}).data)
 
 
 class UserDirectoryView(APIView):
@@ -548,6 +872,99 @@ class UserRoleView(APIView):
         return Response(UserSerializer(user).data)
 
 
+# --- FR-03 releasing a lock (NIT3004) ----------------------------------------------------
+
+
+class UserUnlockView(APIView):
+    """``POST /api/users/{id}/unlock`` — FR-03's administrator release (D-130).
+
+    FR-03: "An Administrator viewing a locked account can release the lock immediately, so a
+    locked-out user has a route forward", and "releasing a lock clears the expiry and resets the
+    failed-attempt count, returning the account to the state it would reach when the window
+    expires naturally."
+
+    **The order.** 401 without a session, then 403 for a role without
+    ``release_account_locks``, both from ``permission_classes`` and so before any lookup: an
+    Employee cannot tell a real user id from an invented one. Then, in one transaction, on the
+    target row:
+
+    1. 404, ``get_object_or_404``'s own body, for an unknown id, as FR-05's role route gives it;
+    2. 403 where the target is the requester, locked or not: FR-03 refuses a release to "the
+       account holder";
+    3. 409 where ``locked_until`` is empty or not after now, left as it is;
+    4. otherwise the lock and the count are cleared, the release row is written, and the 200 is
+       the user as ``GET /api/users`` lists it, with ``"lock": null``.
+
+    No body is read. The password, the role and every session are left alone: FR-03 "restores the
+    ability to attempt authentication and nothing more". An Administrator may release another
+    Administrator's lock, since FR-03 forbids only their own. No throttle, as FR-05's role change
+    has none.
+    """
+
+    permission_classes = [IsAuthenticated, CanReleaseAccountLocks]
+
+    def post(self, request, pk):
+        with transaction.atomic():
+            # The administrator rows first, ordered by primary key, as FR-05's role change locks
+            # them (D-26), and only then the target. Every transaction here that locks more
+            # than one users row then takes them in the same order, so none waits on another
+            # in a cycle (D-130). That holds while the administrator set does not change during
+            # the request. Each transaction reads the set from its own snapshot, so a promotion
+            # committed mid-request can still put two requests in a cycle, and Postgres aborts
+            # one with a 500. It needs three Administrator actions on the same rows within the
+            # same instant (the pre-PR security review, finding 4).
+            # - **Without it, a release could deadlock with a role change.** The role change
+            #   holds the administrator rows and waits for the account. The release holds the
+            #   account and, at commit, waits for the requester's row, which the release row's
+            #   foreign-key check takes a key-share lock on. Postgres would abort one of the
+            #   two with a 500.
+            # - **Why the requester's row is not waited for:** it is in this set, so the
+            #   key-share lock is on a row this transaction already holds. That rests on only
+            #   Administrators holding release_account_locks (0010).
+            # - **The lock mode:** FOR NO KEY UPDATE. It conflicts with the role change's FOR
+            #   UPDATE and with login's, but not with the key-share locks other inserts take on
+            #   these rows (a question logged, a meeting attendee), so it cannot deadlock with
+            #   them either.
+            list(
+                User.objects.select_for_update(no_key=True, of=("self",))
+                .filter(role__role_name=ADMINISTRATOR_ROLE_NAME)
+                .order_by("pk")
+                .only("pk")
+            )
+            # The target, FOR NO KEY UPDATE as well (security finding L2). It still conflicts
+            # with login's FOR UPDATE, so a release and a login on one account decide one after
+            # the other. of=("self",) leaves the role row unlocked.
+            account = get_object_or_404(
+                User.objects.select_for_update(no_key=True, of=("self",)).select_related("role"),
+                pk=pk,
+            )
+            if account.pk == request.user.pk:
+                return Response(
+                    {"detail": OWN_LOCK_RELEASE_MESSAGE}, status=status.HTTP_403_FORBIDDEN
+                )
+            now = timezone.now()
+            if account.locked_until is None or account.locked_until <= now:
+                return Response({"detail": NOT_LOCKED_MESSAGE}, status=status.HTTP_409_CONFLICT)
+            released = account.locked_until
+            account.locked_until = None
+            account.failed_attempts = 0
+            account.save(update_fields=["failed_attempts", "locked_until"])
+            # FR-03: "Every release is recorded with the Administrator who performed it, the
+            # account affected and the time." success is null: a release is not an
+            # authentication attempt.
+            LoginAttempt.objects.create(
+                event=LOGIN_ATTEMPT_RELEASE,
+                attempted_email=account.email,
+                source_ip=_source_address(request),
+                success=None,
+                attempted_at=now,
+                user=account,
+                released_by=request.user,
+                locked_until=released,
+            )
+        return Response(UserListEntrySerializer(account, context={"now": now}).data)
+
+
 # --- FR-08 document upload -----------------------------------------------------------
 
 
@@ -559,8 +976,12 @@ class DocumentsView(ThrottlePostOnlyMixin, APIView):
     check comes first: "it is the cheapest rejection, and the user's role may have
     changed during a transfer of up to 50 MB". ``CanContributeContent`` is returned
     by ``get_permissions()`` for POST, so DRF runs it in ``initial()`` before this
-    method is entered and before the body is parsed at all (D-30). Processing is
-    synchronous, as FR-08 states, with the interface displaying progress.
+    method is entered (D-30). Since D-124 nothing reads the body before it either, because
+    the CSRF check takes its token from the header (``apps/api/authentication.py``). Before
+    D-124 that was not so. A signed-in session's whole body was parsed while DRF checked CSRF,
+    before this 403, the 429 and the 413 below, and this docstring said otherwise from Stage 3
+    until 11 November 2026. Processing is synchronous, as FR-08 states, with the interface
+    displaying progress.
 
     **POST is throttled per user in the "ingestion" scope** (D-79), one budget with meeting
     ingest and reprocess. DRF checks it in ``initial()`` after the permission and before this
@@ -607,18 +1028,19 @@ class DocumentsView(ThrottlePostOnlyMixin, APIView):
         return Response(DocumentSerializer(documents, many=True).data)
 
     def post(self, request):
-        # Enforced against the declared length BEFORE request.data is touched, so
-        # an oversized body is refused without being parsed or buffered: FR-08 wants
-        # the ceiling applied "before the file is written to storage", and reading
-        # 50 MB into memory to discover it is 50 MB is the thing to avoid. A client
-        # that lies about or omits Content-Length is caught by the second check
-        # below, against the size Django actually received.
-        declared_length = request.META.get("CONTENT_LENGTH") or 0
-        try:
-            declared_length = int(declared_length)
-        except (TypeError, ValueError):
-            declared_length = 0
-        if declared_length > MAX_UPLOAD_BYTES:
+        # Enforced against the declared length BEFORE request.data is touched. Since D-124
+        # nothing upstream reads the body either, so an oversized body is refused without
+        # being parsed: FR-08 wants the ceiling applied "before the file is written to
+        # storage". Before D-124 this comment claimed the same, and it was untrue for every
+        # signed-in browser session: the CSRF check had already parsed the body, spooling a
+        # multipart upload to temporary files, before this line ran.
+        #
+        # It is not refused without being RECEIVED. Waitress reads the whole body before
+        # Django sees the request, and only its --max-request-body-size bounds that
+        # (MAX_REQUEST_BODY_BYTES, D-124). The second check below, against the bytes
+        # received, is defence in depth: Django reads no more than the declared length, so a
+        # body cannot carry a larger file than it declares.
+        if declares_a_body_over_the_upload_ceiling(request):
             return Response(
                 {"detail": FILE_TOO_LARGE_MESSAGE},
                 status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
@@ -723,11 +1145,9 @@ class DocumentsView(ThrottlePostOnlyMixin, APIView):
             release_ingestion_slot(request.user, token)
         # The document object is returned whatever the code: on a 422 the file is
         # kept and the record carries the status saying why it is not indexed, which
-        # is what FR-08's "Processing failed. Please try again" action reads.
-        body = DocumentSerializer(outcome.document).data
-        if outcome.detail:
-            body["detail"] = outcome.detail
-        return Response(body, status=outcome.http_status)
+        # is what FR-08's "Processing failed. Please try again" action reads. A 201
+        # also carries the classification, or null (section 7.8 line 100; D-105).
+        return Response(ingestion_body(outcome), status=outcome.http_status)
 
 
 def scoped_document_or_404(request, pk):
@@ -744,6 +1164,31 @@ def scoped_document_or_404(request, pk):
         ),
         pk=pk,
     )
+
+
+def require_contribute_content(request, view) -> None:
+    """403 unless the caller's role holds ``contribute_content``, checked AFTER the scoped lookup.
+
+    FR-10's routes (D-105) check the permission inside the method, as FR-15's delete does (D-73):
+    a permission class runs in ``initial()``, before the lookup, and would answer 403 for a document
+    outside the caller's scope and so confirm that it exists. The message is the permission class's
+    own, so this 403 reads as every other 403 does.
+    """
+    if not CanContributeContent().has_permission(request, view):
+        view.permission_denied(request, message=CanContributeContent.message)
+
+
+def ingestion_body(outcome) -> dict:
+    """The upload's and the reprocess's body: the document object; ``detail`` on a 422; and on a 201
+    ``classification`` (section 7.8 line 100; D-105), the object or null when classification failed
+    and the document is indexed unclassified (invariant 8, D-33 part 1). The list routes never
+    carry it."""
+    body = DocumentSerializer(outcome.document).data
+    if outcome.detail:
+        body["detail"] = outcome.detail
+    if outcome.http_status == status.HTTP_201_CREATED:
+        body["classification"] = classification_payload(outcome.analysis)
+    return body
 
 
 class DocumentDetailView(APIView):
@@ -969,10 +1414,19 @@ class SearchView(APIView):
     row, with the same post-filter total the caller is given. This view must not write a
     second, and a test counts the rows.
 
+    **Throttled per user, scope "search"** (``SEARCH_THROTTLE_RATE``, D-79's note of 10 November
+    2026), and a term over ``MAXIMUM_SEARCH_LENGTH`` is FR-12's 400. Both bound how fast and how
+    much one user can put into ``SearchLog``, which FR-19's cycle reads (the security review's L1
+    and L2). DRF checks the throttle after authentication, so an anonymous request is still 401,
+    and a throttled search writes no row.
+
     ``UnscopedRequestError`` is not caught. Behind ``IsAuthenticated`` it is unreachable,
     and turning it into a 200 would answer a request whose scope could not be established
     — the same backstop, uncaught, as on the answer path.
     """
+
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "search"
 
     def get(self, request):
         query_text = request.query_params.get("q")
@@ -987,7 +1441,7 @@ class SearchView(APIView):
             # was actually typed (FR-19's evidence) and the term reaches the database only
             # as a bound parameter of an ORM lookup.
             results = search(query_text=query_text, user=request.user)
-        except (SearchQueryTooShort, SearchQueryContainsNullCharacter) as exc:
+        except (SearchQueryTooShort, SearchQueryTooLong, SearchQueryContainsNullCharacter) as exc:
             # FR-12's 400. The rule and its message belong to the search module; this
             # maps the exception rather than re-checking the length, so there is one
             # definition of "too short" and the two cannot drift. An empty ``q=`` arrives
@@ -1022,6 +1476,21 @@ class MeetingsView(ThrottlePostOnlyMixin, APIView):
     throttled per user in the same "ingestion" scope as the upload and reprocess (D-79). GET is
     not throttled.
 
+    **A body over the upload ceiling is 413, refused unread** (D-124). It is checked against its
+    declared length after the 401, the 403 and the 429, and before anything touches
+    ``request.data``, as the document upload checks.
+
+    - **A transcript file** had no ceiling before D-124 but Waitress's default of 1 GB.
+    - **A pasted transcript** was and is held to Django's ``DATA_UPLOAD_MAX_MEMORY_SIZE``
+      (2.5 MiB). DRF parses JSON from ``request.body``, so a larger JSON body is
+      ``400 {"detail": "Bad request."}``, refused unread. The 413 replaces that only above 50 MB.
+    - **Before D-124 either form was parsed while DRF checked CSRF,** before the 403 and the 429.
+
+    FR-09 enumerates only 201 and 400, so the 413 is a *convention*: a body refused unread has no
+    field to report on. The meeting form screens a transcript file's size before sending it
+    (``screenFile``). So the page reaches the 413 only with a pasted transcript over 50 MB, and
+    Django's 400 with one between 2.5 MiB and 50 MB.
+
     **One ingestion in flight per user** (D-85), the upload's slot. It is taken after every 400
     and 403, and an uploaded transcript file is extracted before that, because the minimum-length
     400 needs its text. So the slot bounds chunking and embedding here, and a file's extraction
@@ -1047,6 +1516,13 @@ class MeetingsView(ThrottlePostOnlyMixin, APIView):
         return Response(MeetingListSerializer(meetings, many=True).data)
 
     def post(self, request):
+        # D-124: refused by its declared length, before request.data parses it.
+        if declares_a_body_over_the_upload_ceiling(request):
+            return Response(
+                {"detail": TRANSCRIPT_TOO_LARGE_MESSAGE},
+                status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            )
+
         serializer = MeetingIngestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)  # 400: FR-09's own code
         data = serializer.validated_data
@@ -1112,10 +1588,11 @@ class MeetingsView(ThrottlePostOnlyMixin, APIView):
             file_format = read_file_signature(uploaded_file)
         except OversizedArchiveContentError:
             # The same bound as FR-08's upload (Stage 4 item 12b), reported in this
-            # endpoint's own shape: FR-09 enumerates only 201 and 400, so the transcript
-            # path cannot answer 413, and a field error carrying the accurate message is
-            # closer to the truth than FR-08's code on a response FR-09 does not define.
-            # The two rejections stay distinguishable by their text.
+            # endpoint's own shape: FR-09 enumerates only 201 and 400, and a field error
+            # carrying the accurate message is closer to the truth than FR-08's code on a
+            # response FR-09 does not define. The two rejections stay distinguishable by their
+            # text. The route's one 413 is D-124's, for a body refused before it is read,
+            # when there is no field yet to put an error on.
             return None, {"file": [COMPRESSED_CONTENT_TOO_LARGE_MESSAGE]}
         if file_format is None:
             # The same four formats as FR-08, decided the same way: by content. A
@@ -1202,6 +1679,337 @@ class MeetingDetailView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+# --- FR-16: meeting summary and action items (D-125) ----------------------------------------
+# Every route resolves the meeting through ``scoped_meeting_or_404`` first, so a meeting outside
+# the caller's scope and one that does not exist are one 404 (invariant 1). The three that write
+# then check ``contribute_content`` inside the method, after that lookup, as FR-10's routes and the
+# deletes check theirs (D-73's order): a permission class would answer 403 first and confirm the
+# meeting exists.
+
+
+def summary_response(request, view, meeting, *, too_short: bool = False):
+    """Both summary routes' body, under FR-16's code.
+
+    "202 Accepted while processing, 200 OK with the summary and item list once ready ... 422
+    Unprocessable Entity where the transcript is too short to summarise." Processing here is a run
+    in flight or one queued for its automatic retry (NFR-20): either way a summary is still
+    coming, and the page keeps asking. 200 is every settled state: Ready, Unavailable with its
+    retries spent, and a meeting nobody has asked a summary of. The 422 carries the same body
+    with ``detail``, because the Action Items panel still needs the items.
+
+    The latest run is read once, and both the body and the code come from it through
+    ``apps/meetings/summaries.py`` (``reported_state``, ``is_in_progress``): one rule, so the body
+    and the code cannot disagree.
+    """
+    latest = latest_run(meeting)
+    body = meeting_summary_payload(
+        meeting, can_edit=CanContributeContent().has_permission(request, view), latest=latest
+    )
+    if too_short:
+        body["detail"] = SUMMARY_TOO_SHORT_MESSAGE
+        return Response(body, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+    return Response(
+        body, status=status.HTTP_202_ACCEPTED if is_in_progress(latest) else status.HTTP_200_OK
+    )
+
+
+class MeetingSummaryView(ThrottlePostOnlyMixin, APIView):
+    """``/api/meetings/{id}/summary`` — FR-16's Summary panel (GET) and its Generate and
+    Regenerate Summary button (POST).
+
+    **GET** needs only a session and a meeting in scope. It runs nothing and never touches the
+    provider: it reports the latest run's state, the latest Ready summary and the action items.
+
+    **POST** needs ``contribute_content``, checked after the scoped 404. It starts a run and
+    answers at once; the run happens after the response (apps/meetings/summary_runner.py). Where
+    a run is already in flight for the meeting, it starts nothing and reports that one. Throttled
+    per user in the "ingestion" scope (D-79), one provider call like FR-10's classify; GET is not
+    throttled, because the page polls it while a run is in flight.
+
+    A summary's failure is not an error of either route: the run is marked Unavailable and queued
+    (NFR-20), and the body says so. There is no 503 here, because no provider call is made while
+    the request is open.
+    """
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]  # POST only, through ThrottlePostOnlyMixin
+    throttle_scope = "ingestion"
+
+    def get(self, request, pk):
+        meeting = scoped_meeting_or_404(request, pk)
+        return summary_response(request, self, meeting, too_short=not transcript_is_long_enough(meeting))
+
+    def post(self, request, pk):
+        meeting = scoped_meeting_or_404(request, pk)
+        require_contribute_content(request, self)
+        try:
+            request_summary(meeting, requested_by=request.user)
+        except TranscriptTooShort:
+            # FR-16 Validation: "rejected rather than submitted". Nothing was sent or stored.
+            return summary_response(request, self, meeting, too_short=True)
+        return summary_response(request, self, meeting)
+
+
+def action_item_or_404(meeting, item_id):
+    """The item, if it is one of this meeting's; the meeting lookup's own 404 otherwise."""
+    item = action_items_of(meeting).filter(pk=item_id).first()
+    if item is None:
+        raise Http404(MEETING_NOT_FOUND_MESSAGE)
+    return item
+
+
+ACTION_ITEM_LIMIT_MESSAGE = (
+    f"This meeting already has {MAXIMUM_ACTION_ITEMS_PER_MEETING} action items, the most one meeting "
+    "can hold. Delete one to add another."
+)
+
+
+class MeetingActionItemsView(APIView):
+    """``POST /api/meetings/{id}/action-items`` — FR-16: "manually add items the extraction
+    missed". Body ``{description, owner_id?, due_date?}``; 201 with the item, which carries
+    ``origin`` "user". 400 in DRF's shape for a blank description, an unknown ``owner_id``, an
+    owner who cannot read the meeting or a malformed date. 409 once the meeting holds
+    MAXIMUM_ACTION_ITEMS_PER_MEETING items.
+
+    Throttled in scope "action_items", with the item routes' PATCH and DELETE: the security review
+    of 12 November found one account could add rows without end, and every reader of the meeting
+    loads them all (D-125's third note). DRF checks the throttle in ``initial()``, before the
+    meeting is looked up, so a 429 is the same for every id.
+    """
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "action_items"
+
+    def post(self, request, pk):
+        meeting = scoped_meeting_or_404(request, pk)
+        require_contribute_content(request, self)
+        serializer = ActionItemWriteSerializer(data=request.data, context={"meeting": meeting})
+        serializer.is_valid(raise_exception=True)  # 400 in DRF's shape, keyed on the field
+        try:
+            item = add_action_item(meeting, by=request.user, **serializer.validated_data)
+        except TooManyActionItems:
+            return Response({"detail": ACTION_ITEM_LIMIT_MESSAGE}, status=status.HTTP_409_CONFLICT)
+        return Response(ActionItemSerializer(item).data, status=status.HTTP_201_CREATED)
+
+
+class MeetingActionItemView(APIView):
+    """``PATCH`` and ``DELETE /api/meetings/{id}/action-items/{item_id}`` — FR-16: each item's
+    "description, suggested owner and due date, all editable", and "edit, delete".
+
+    PATCH takes any of ``description``, ``owner_id`` (a user's id, or null for unassigned) and
+    ``due_date`` (a date, or null); 200 with the item. An extracted item is then ``edited``, which
+    NFR-15's badge shows and which keeps it through a Regenerate. DELETE is 204 with no body; the
+    confirmation FR-16 requires is the page's, since a confirmed request is all a server can see.
+    An ``item_id`` that is not one of this meeting's is the meeting lookup's own 404. Both are in
+    the "action_items" throttle scope with the add.
+    """
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "action_items"
+
+    def patch(self, request, pk, item_id):
+        meeting = scoped_meeting_or_404(request, pk)
+        require_contribute_content(request, self)
+        item = action_item_or_404(meeting, item_id)
+        serializer = ActionItemWriteSerializer(data=request.data, partial=True, context={"meeting": meeting})
+        serializer.is_valid(raise_exception=True)  # 400 in DRF's shape, keyed on the field
+        item = edit_action_item(item, by=request.user, **serializer.validated_data)
+        return Response(ActionItemSerializer(item).data)
+
+    def delete(self, request, pk, item_id):
+        meeting = scoped_meeting_or_404(request, pk)
+        require_contribute_content(request, self)
+        action_item_or_404(meeting, item_id).delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# --- Recording transcription (D-123) ---------------------------------------------------
+# Not in the proposal. A person with a meeting recording has the page turn it into a draft
+# transcript, one segment at a time; nothing here indexes anything. The confirmed draft goes in
+# through POST /api/meetings, FR-09's own route and the one path into the index.
+
+
+def transcription_refused(detail: str, code: str):
+    """A 503 carrying ``code``, for the page to branch on, as the in-flight 429s carry theirs."""
+    return Response({"detail": detail, "code": code}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+
+class TranscriptionStatusView(APIView):
+    """``GET /api/transcriptions/status`` — whether a recording can be transcribed here, now.
+
+    The page asks once, when the recording option is chosen, so it can say before a long run
+    starts that transcription is not enabled on this server, or that FLM does not answer. The
+    body also carries the segment lengths, so the page cuts what the server will accept.
+
+    ``available`` is true only when transcription is enabled and the provider's
+    ``transcription_health`` reports FLM answering. That cannot show whether FLM was started with
+    ``--asr 1`` (D-123, "What it does not cover"); a server without it fails the first
+    segment, which the page reports the same way. No provider detail is returned: it names an
+    internal address, and the page needs only ``enabled`` and ``available``.
+
+    Behind ``contribute_content``, as the transcription itself is: only someone who may add a
+    transcript has a reason to ask. **Throttled in the ``transcription`` scope**, one budget with
+    the segments: each request asks FLM for its model list, so an unthrottled one would let a
+    single user make the server call FLM as fast as they could ask (the security review of 11
+    November, suspicion S2). The page asks once per visit to the option.
+    """
+
+    permission_classes = [IsAuthenticated, CanContributeContent]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "transcription"
+
+    def get(self, request):
+        enabled = apps.ai.transcription_enabled()
+        available = enabled and apps.ai.get_ai_service().transcription_health().available
+        return Response(
+            {
+                "enabled": enabled,
+                "available": available,
+                "segment_seconds": TRANSCRIPTION_SEGMENT_SECONDS,
+                "maximum_segment_seconds": MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS,
+            }
+        )
+
+
+class TranscriptionsView(APIView):
+    """``POST /api/transcriptions`` — one recording segment in, its text out (D-123).
+
+    **The request is multipart**, one field, ``audio``: a 16-bit PCM WAV of at most
+    MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS. **It creates nothing**: no meeting, no chunk, no file,
+    no row. The page assembles the replies into a draft, a person corrects and confirms it, and
+    only then does FR-09's ``POST /api/meetings`` store and index it.
+
+    **The rejection order**, each before any provider call:
+
+    1. 401 no session; 403 the role lacks ``contribute_content`` (DRF's ``initial()``).
+    2. 429 past ``TRANSCRIPTION_THROTTLE_RATE``, scope ``transcription`` (D-79), also in
+       ``initial()``, so a rejected request counts against it too.
+    3. 503 ``transcription_disabled`` when ``TRANSCRIPTION_PROVIDER`` is ``none``.
+    4. 413 a declared ``Content-Length`` over MAX_UPLOAD_BYTES; then 400 no ``audio`` part; then
+       413 again against the bytes that arrived.
+    5. 415 not a 16-bit PCM mono WAV at 16 kHz; 400 a segment with no audio frames, or with more
+       than MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS of audio.
+    6. 200 ``"status": "silent"`` for a segment whose loudest half second is below
+       TRANSCRIPTION_SILENCE_DBFS, with no provider call: Whisper invents text from silence.
+    7. 429 ``transcription_in_flight`` while another segment of this user's is with the provider,
+       then 429 ``transcription_busy``, with Retry-After, while every server slot is held
+       (``apps/api/transcription_slot.py``).
+
+    **Since D-124 these order the reading of the body too.** Nothing reads it before step 4's
+    declared-length 413, so a body refused at any step up to it is never parsed.
+
+    - **How:** the CSRF check takes its token from the header (``apps/api/authentication.py``), and
+      the 413 is decided from ``CONTENT_LENGTH`` alone (``declares_a_body_over_the_upload_ceiling``).
+    - **What still bounds receiving:** Waitress's ``--max-request-body-size``
+      (``MAX_REQUEST_BODY_BYTES``). Waitress has read the body before Django sees the request.
+    - **Before D-124:** a session that sent its CSRF token, as the page always does, had the whole
+      body parsed by DRF during authentication, before the 403, the 429, the 503 and the 413. The
+      security review of 11 November found that, and D-123 recorded it as open. D-123's dated note
+      records the close.
+
+    Then the provider: 200 ``"status": "transcribed"`` with the text and the model, or NFR-19's
+    503 ``transcription_unavailable`` after MAXIMUM_TRANSCRIBE_ATTEMPTS (any 4xx refusal at once,
+    D-118). Nothing was stored, so the page sends the same segment again when the person resumes;
+    its draft and recording are its own and were never here to lose (invariant 8).
+    """
+
+    permission_classes = [IsAuthenticated, CanContributeContent]
+    parser_classes = [MultiPartParser]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "transcription"
+
+    def post(self, request):
+        if not apps.ai.transcription_enabled():
+            return transcription_refused(TRANSCRIPTION_DISABLED_MESSAGE, TRANSCRIPTION_DISABLED_CODE)
+
+        # The declared length, before this view touches request.data, as the document upload does.
+        # Since D-124 nothing has read the body before this line, so a body refused here is
+        # never parsed.
+        if declares_a_body_over_the_upload_ceiling(request):
+            return Response(
+                {"detail": FILE_TOO_LARGE_MESSAGE}, status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE
+            )
+
+        uploaded = request.data.get("audio")
+        if not hasattr(uploaded, "read"):
+            return Response(
+                {"audio": [NO_AUDIO_SUBMITTED_MESSAGE]}, status=status.HTTP_400_BAD_REQUEST
+            )
+        # Again against what arrived. Defence in depth: Django reads no more than the declared
+        # length, so a part cannot be larger than the body declares.
+        if uploaded.size > MAX_UPLOAD_BYTES:
+            return Response(
+                {"detail": FILE_TOO_LARGE_MESSAGE}, status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE
+            )
+
+        try:
+            segment = audio.read_segment(uploaded.read())
+        except audio.UnsupportedAudio:
+            return Response(
+                {"detail": UNSUPPORTED_AUDIO_MESSAGE}, status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE
+            )
+        except audio.EmptyAudio:
+            return Response({"audio": [EMPTY_AUDIO_MESSAGE]}, status=status.HTTP_400_BAD_REQUEST)
+        except audio.SegmentTooLong:
+            return Response({"audio": [SEGMENT_TOO_LONG_MESSAGE]}, status=status.HTTP_400_BAD_REQUEST)
+
+        # What every reply carries about the segment itself. ``loudest_dbfs`` is the level the
+        # silence rule compared with TRANSCRIPTION_SILENCE_DBFS, so the threshold (*tune*) can be
+        # checked against real recordings; null for digital silence, which JSON cannot write as
+        # minus infinity.
+        measured = {
+            "duration_seconds": round(segment.duration_seconds, 2),
+            "loudest_dbfs": (
+                round(segment.loudest_window_dbfs, 1)
+                if math.isfinite(segment.loudest_window_dbfs)
+                else None
+            ),
+        }
+        if segment.silent:
+            return Response({"status": SEGMENT_SILENT, "text": "", "model": None, **measured})
+
+        token = take_transcription_slot(request.user)
+        if token is None:
+            return Response(
+                {"detail": TRANSCRIPTION_IN_FLIGHT_MESSAGE, "code": TRANSCRIPTION_IN_FLIGHT_CODE},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+        server_slot = take_server_slot()
+        if server_slot is None:
+            release_transcription_slot(request.user, token)
+            return Response(
+                {"detail": TRANSCRIPTION_BUSY_MESSAGE, "code": TRANSCRIPTION_BUSY_CODE},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+                headers={"Retry-After": str(TRANSCRIPTION_BUSY_RETRY_SECONDS)},
+            )
+        try:
+            # Every failed attempt inside is logged naming this account (apps/ai/attempt_log.py).
+            with attempt_log.account(request.user.pk):
+                result = audio.transcribe(segment)
+        except TranscriptionDisabled:
+            # The setting was read as on above; reached only if it changed in between.
+            return transcription_refused(TRANSCRIPTION_DISABLED_MESSAGE, TRANSCRIPTION_DISABLED_CODE)
+        except ProviderUnavailable as exc:
+            # On the attempts logger, beside the failed attempts it ended, as the ask's 503 is.
+            logging.getLogger(attempt_log.ATTEMPT_LOGGER_NAME).warning(
+                "POST /api/transcriptions answered 503 (account %s): %s: %s",
+                request.user.pk,
+                attempt_log.cause_of(exc),
+                exc,
+            )
+            return transcription_refused(
+                TRANSCRIPTION_UNAVAILABLE_MESSAGE, TRANSCRIPTION_UNAVAILABLE_CODE
+            )
+        finally:
+            release_server_slot(server_slot)
+            release_transcription_slot(request.user, token)
+        return Response(
+            {"status": SEGMENT_TRANSCRIBED, "text": result.text, "model": result.model, **measured}
+        )
+
+
 class DocumentReprocessView(APIView):
     """``POST /api/documents/{doc_id}/reprocess`` — FR-08's "Please try again".
 
@@ -1224,6 +2032,11 @@ class DocumentReprocessView(APIView):
     any chunk is deleted. The cause and the document go to the error log, not to the client.
     **Not covered:** a file removed between this check and that open still raises inside the
     transaction, which rolls back and answers 500.
+
+    **It takes no body, and nothing reads one** (D-124). Before D-124, DRF's CSRF check read and
+    parsed a JSON body sent here, up to Django's 2.5 MiB ``DATA_UPLOAD_MAX_MEMORY_SIZE``, before the
+    403 and the 429. Now none is read at all, so the route needs no ceiling of its own. Waitress
+    bounds what it receives (``MAX_REQUEST_BODY_BYTES``).
     """
 
     permission_classes = [IsAuthenticated, CanContributeContent]
@@ -1284,10 +2097,432 @@ class DocumentReprocessView(APIView):
             )
         finally:
             release_ingestion_slot(request.user, token)
-        body = DocumentSerializer(outcome.document).data
-        if outcome.detail:
-            body["detail"] = outcome.detail
-        return Response(body, status=outcome.http_status)
+        return Response(ingestion_body(outcome), status=outcome.http_status)
+
+
+# --- FR-10 classification (D-104, D-105) -----------------------------------------------------
+#
+# Seven routes over one document (the seventh, a person applying a tag, since D-105's dated note
+# of 10 November 2026, night), and one rule for all of them, in this order: the document is
+# resolved through the caller's scope (404 for an unknown id and one outside the scope alike,
+# D-46); then ``contribute_content`` is checked, 403 without it (D-105 settles the permission,
+# D-73 the order, so a 403 can never confirm that a document the caller cannot see exists); then
+# the body is validated; then apps/documents/classification.py does the work, in one transaction.
+# No body here says more than the 404 would: ``NotOnThisDocument`` (a link, a proposal or an
+# analysis that is not this document's) is answered with the scoped lookup's own 404 body, word
+# for word. Two of the routes are throttled, classify in the "ingestion" scope and a person's apply
+# in "tagging" (D-79 and its note on tagging). DRF checks a throttle before the method runs, so past
+# the rate their 429 comes before the 404, the same for every id. A classification proposes a Topic
+# outside the scheme of up to 255 characters, at any confidence, for the proposed-tags routes, and
+# discards a Project or Process value outside it. It creates no Tag (Objective 05's clause 3 as
+# written; D-129, which reverses D-128's creation; apps/documents/classification.py
+# ``apply_classification``). Since D-134 it discards a longer Topic, a recorded literal departure.
+
+
+class DocumentClassifyView(APIView):
+    """``POST /api/documents/{id}/classify`` — classify now (FR-10, D-105).
+
+    One provider call through ``classify_document_now``, then the apply rules, in one transaction.
+    422 where the document has no extracted text (FR-10 Responses: "where insufficient text was
+    extracted"), before any provider call; 503 with NFR-19's notice when the provider failed after
+    MAXIMUM_CLASSIFY_ATTEMPTS, nothing written. Throttled in the "ingestion" scope (D-79): it is
+    one provider call, like a reprocess. No in-flight slot (D-85): the slot bounds extraction and
+    embedding, and this does neither.
+
+    200 ``{classification, tag_details, department}``. ``department`` is the document's
+    ``department`` column as it stands after the classification, re-read from the row as the
+    confirm route's is: the machine fills a blank department with an applied in-scheme suggestion,
+    and keeps a different one, holding the suggestion for a person (D-105's note of 10 November).
+    The client cannot tell which from the classification object, which does not carry the
+    effective department (D-72), so it is returned rather than inferred.
+    """
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "ingestion"
+
+    def post(self, request, pk):
+        document = scoped_document_or_404(request, pk)
+        require_contribute_content(request, self)
+        try:
+            analysis = classify_document_now(document)
+        except InsufficientText:
+            return Response(
+                {"detail": INSUFFICIENT_TEXT_MESSAGE},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+        except ProviderUnavailable as exc:
+            # The failed attempts themselves are in the provider attempts log (apps/ai); this
+            # names the route and the document the 503 was answered for.
+            logger.warning("POST /api/documents/%s/classify answered 503: %s", document.pk, exc)
+            return Response(
+                {"detail": CLASSIFICATION_UNAVAILABLE_MESSAGE},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        document.refresh_from_db(fields=["department"])
+        return Response(
+            {
+                "classification": classification_payload(analysis),
+                "tag_details": tag_details_payload(document),
+                "department": document.department,
+            }
+        )
+
+
+class DocumentClassificationView(APIView):
+    """``POST /api/documents/{id}/classification`` — a person confirms or edits (FR-10, D-105).
+
+    Body ``{doc_type?, department?}``. Both omitted confirms as it stands: a provisional type is
+    applied and a provisional department is written to ``Documents.department``. A ``doc_type``
+    outside DOCUMENT_TYPES is 400 keyed on ``doc_type``; a document never classified is the scoped
+    lookup's 404, so the body says no more than it would for a document the caller cannot see.
+
+    200 ``{classification, department}``: ``department`` is the document's ``department`` column as
+    it stands after the confirm or edit, re-read from the row, so the client never has to work out
+    the effective department from the outcome (it is not in the classification object, D-72).
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        document = scoped_document_or_404(request, pk)
+        require_contribute_content(request, self)
+        serializer = ClassificationConfirmSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)  # 400 in DRF's shape, keyed on the field
+        data = serializer.validated_data
+        try:
+            analysis = confirm_classification(
+                document, doc_type=data.get("doc_type"), department=data.get("department")
+            )
+        except InvalidClassification as exc:
+            return Response({"doc_type": [str(exc)]}, status=status.HTTP_400_BAD_REQUEST)
+        except NotOnThisDocument:
+            raise Http404(DOCUMENT_NOT_FOUND_MESSAGE)
+        document.refresh_from_db(fields=["department"])
+        return Response(
+            {"classification": classification_payload(analysis), "department": document.department}
+        )
+
+
+class DocumentTagConfirmView(APIView):
+    """``POST /api/documents/{id}/tags/{content_tag_id}/confirm`` — accept a tag "in a single
+    action" (FR-10's provenance clause): confirmed, no longer provisional, ``applied_by`` kept."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk, content_tag_id):
+        document = scoped_document_or_404(request, pk)
+        require_contribute_content(request, self)
+        try:
+            link = confirm_tag(document, content_tag_id)
+        except NotOnThisDocument:
+            raise Http404(DOCUMENT_NOT_FOUND_MESSAGE)
+        return Response(TagDetailSerializer(link).data)
+
+
+class DocumentTagsView(APIView):
+    """``POST /api/documents/{id}/tags`` — a person applies a tag (FR-10's provenance clause; UC-09
+    A3; D-105's dated note of 10 November 2026, night).
+
+    The FR-10 order: the scoped 404, then ``contribute_content``'s 403, then the body
+    (``TagApplySerializer``: exactly one of ``{tag_id}`` and ``{dimension: "Topic", tag_name}``),
+    then ``apply_tag``. A ``tag_id`` not offered for this document, for whatever reason, is one 400
+    keyed on ``tag_id``. A new Topic whose name is already offered is FR-10's 409, carrying that
+    tag's id, which the detail's ``tag_options`` already shows the caller; a Topic of that name that
+    exists only beyond the document's audience, or inactive, is linked and answered as a new one.
+
+    201 ``{"tag_details": [...]}`` when a new link was made; 200 with the same shape when the tag was
+    already on the document and was confirmed, restored or left as it was. ``tag_details`` is the
+    document's whole current list, as the classify reply carries it.
+
+    **Throttled per user, scope "tagging"** (``TAGGING_THROTTLE_RATE``, D-79's note on tagging of 10
+    November 2026, night, answering D-105's security review, finding 4). Each new Topic name typed
+    here becomes a permanent Tag, which joins the scheme that later classification prompts list with
+    no cap and that ``tag_options`` offers, so the rate bounds how fast one user can grow it. DRF
+    checks the throttle in ``initial()``, after authentication and the permission classes and before
+    ``post`` runs. This route's one permission class is ``IsAuthenticated``, so an anonymous request
+    is still 401, and past the rate the 429 comes before the scoped 404 and ``contribute_content``'s
+    403. It is the same answer for every id, so it discloses nothing, as the search throttle answers
+    before any query runs. Every request the throttle admits counts, whatever ``post`` then answers,
+    and a throttled one writes nothing.
+
+    **The other document tag routes are not throttled.** Confirming or removing a link and rejecting
+    a proposal create no Tag. ``confirm_proposed_tag`` can create a value, but only from a proposal
+    the classifier made, and classification is reached over HTTP only through upload, reprocess and
+    classify, which share the "ingestion" budget. Since D-129 a classification creates no value
+    itself. An Administrator adding a value (``POST /api/tags``, D-128) spends
+    this route's "tagging" budget.
+    """
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "tagging"
+
+    def post(self, request, pk):
+        document = scoped_document_or_404(request, pk)
+        require_contribute_content(request, self)
+        serializer = TagApplySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)  # 400 in DRF's shape, keyed on the field
+        data = serializer.validated_data
+        try:
+            applied = apply_tag(document, tag_id=data.get("tag_id"), tag_name=data.get("tag_name"))
+        except NotOnThisDocument:
+            raise Http404(DOCUMENT_NOT_FOUND_MESSAGE)
+        except TagNotOffered:
+            return Response({"tag_id": [TAG_NOT_OFFERED_MESSAGE]}, status=status.HTTP_400_BAD_REQUEST)
+        except TopicAlreadyOffered as exc:
+            return Response(
+                {"detail": TOPIC_ALREADY_OFFERED_MESSAGE, "tag_id": str(exc.tag_id)},
+                status=status.HTTP_409_CONFLICT,
+            )
+        except InvalidClassification as exc:
+            return Response({"tag_name": [str(exc)]}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {"tag_details": tag_details_payload(document)},
+            status=status.HTTP_201_CREATED if applied.created else status.HTTP_200_OK,
+        )
+
+
+class DocumentTagView(APIView):
+    """``DELETE /api/documents/{id}/tags/{content_tag_id}`` — remove a tag "in a single action". 204
+    with no body. The link is kept, marked removed, a person's as well as an AI link with the
+    machine's confidence, and no read lists it again (``reject_tag``, D-105's dated note of 10
+    November 2026, night). The ``Tags`` row, a vocabulary, stays (D-73's note). A link already
+    removed is the same 404 as an unknown one."""
+
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, pk, content_tag_id):
+        document = scoped_document_or_404(request, pk)
+        require_contribute_content(request, self)
+        try:
+            reject_tag(document, content_tag_id)
+        except NotOnThisDocument:
+            raise Http404(DOCUMENT_NOT_FOUND_MESSAGE)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class _ProposedTagView(APIView):
+    """The two proposed-tags routes (D-128, replacing ``/proposed-topics/confirm`` and ``/reject``)
+    share everything but the function they call and how long a value they read.
+
+    The FR-10 order, as on every route here: the session, then the scoped 404 (D-46), then
+    ``contribute_content``'s 403, then the body, ``{"dimension": "Project"|"Process"|"Topic",
+    "value"}`` with both required (``body_serializer``: 400 keyed on ``dimension`` for a missing or
+    any other dimension, Department included, and on ``value`` for a blank or over-long one). Over-
+    long is the route's own bound: confirm's is the Tags column, 255 characters, since confirming
+    creates a Tag; reject's is MAXIMUM_PROPOSED_TAG_LENGTH, since a rejection writes only JSON and,
+    from D-129 until D-134, a run proposed a Topic whatever its length (D-133). Since D-134 a run
+    proposes none longer than the column. The value is normalised before it is matched
+    with the dimension; a pair that is not proposed on this document, a value proposed under another
+    dimension included, is the document 404's exact body. 200 ``{"classification", "tag_details"}``
+    as they now stand.
+    """
+
+    permission_classes = [IsAuthenticated]
+    body_serializer = ProposedTagSerializer
+
+    def act(self, document, dimension, value):  # pragma: no cover - the subclasses decide
+        raise NotImplementedError
+
+    def post(self, request, pk):
+        document = scoped_document_or_404(request, pk)
+        require_contribute_content(request, self)
+        serializer = self.body_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)  # 400 keyed on "dimension" or "value"
+        data = serializer.validated_data
+        try:
+            self.act(document, data["dimension"], data["value"])
+        except NotOnThisDocument:
+            raise Http404(DOCUMENT_NOT_FOUND_MESSAGE)
+        except InvalidClassification as exc:
+            return Response({"value": [str(exc)]}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {
+                "classification": classification_payload(classification_of(document)),
+                "tag_details": tag_details_payload(document),
+            }
+        )
+
+
+class DocumentProposedTagConfirmView(_ProposedTagView):
+    """``POST /api/documents/{id}/proposed-tags/confirm`` — a person confirms a proposal: a Topic the
+    classifier held outside the scheme (D-129), or a Project or Process value a run held while D-128
+    was in force (the route is dimension-generic). Its Tag is fetched or created and brought into
+    use, and linked ``applied_by="ai"``, confirmed (``confirm_proposed_tag``); the
+    answer is the same whether the Tag was created, fetched or reactivated."""
+
+    def act(self, document, dimension, value):
+        confirm_proposed_tag(document, dimension, value)
+
+
+class DocumentProposedTagRejectView(_ProposedTagView):
+    """``POST /api/documents/{id}/proposed-tags/reject`` — the proposal is dropped, nothing is
+    created, and the rejection is recorded with the machine's confidence, so no later run proposes,
+    creates or links the value on this document (``reject_proposed_tag``, D-128; the requirements
+    audit of D-128, finding A5). The reply is unchanged: the record is not exposed.
+
+    The value may be longer than the Tags column, up to MAXIMUM_PROPOSED_TAG_LENGTH
+    (``ProposedTagRejectSerializer``, D-133), so a Topic over 255 characters, which confirm refuses,
+    can still be rejected. Until D-133 both routes read the confirm serializer, and such a proposal
+    could be neither (the re-audit of ``d909537``, finding C15). Since D-134 a run discards such a
+    Topic instead of proposing it, so only a proposal stored before D-134 is that long."""
+
+    body_serializer = ProposedTagRejectSerializer
+
+    def act(self, document, dimension, value):
+        reject_proposed_tag(document, dimension, value)
+
+
+# --- FR-10 tag administration (D-119 finding 5; D-105's dated note of 10 November 2026, night;
+# D-128) ------------------------------------------------------------------------------------------
+
+
+class TagListView(ThrottlePostOnlyMixin, APIView):
+    """``GET /api/tags`` — every Tag in Project, Process and Topic, active or not, ordered by dimension
+    then name, each with ``item_count`` (``apps/documents/taxonomy.py::tag_inventory``).
+    ``POST /api/tags`` — an Administrator adds a value (D-128; FR-10's CRUD line gives Tags "Create").
+
+    ``manage_tags`` is a permission class, so 401 and then 403 come before anything else, as on
+    FR-19's routes. The list is not scoped and needs no scope: its one reader, the Administrator,
+    reads every source (D-66), and the seed's test holds every holder of the code to that. 200 with a
+    bare list, ``[]`` for none.
+
+    The POST: body ``{"dimension": "Project"|"Process"|"Topic", "tag_name"}`` (``TagCreateSerializer``:
+    400 keyed on ``dimension`` for any other, Department included, and on ``tag_name`` for a blank or
+    over-long name, which is normalised). 201 with the new entry, ``TagEntrySerializer``'s shape,
+    ``active`` true and ``item_count`` 0. The value is created **not grown**: vocabulary, offered in
+    every document's ``tag_options`` and listed in every classification prompt, as a seeded value is
+    (``create_tag``). 409 ``{"detail", "tag_id"}`` when the name is already a Tag in the dimension,
+    active or retired, a concurrent create of it included; nothing is changed, and a retired tag is
+    not reactivated. **Throttled per user in the "tagging" scope** (``TAGGING_THROTTLE_RATE``, D-128),
+    the POST only (``ThrottlePostOnlyMixin``), so the GET stays unthrottled. DRF checks the permission
+    classes before the throttles, so the order is 401, 403, then 429.
+    """
+
+    permission_classes = [IsAuthenticated, CanManageTags]
+    throttle_classes = [ScopedRateThrottle]  # POST only, through ThrottlePostOnlyMixin
+    throttle_scope = "tagging"
+
+    def get(self, request):
+        return Response(TagEntrySerializer(tag_inventory(), many=True).data)
+
+    def post(self, request):
+        serializer = TagCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)  # 400 in DRF's shape, keyed on the field
+        data = serializer.validated_data
+        try:
+            tag = create_tag(data["dimension"], data["tag_name"])
+        except TagAlreadyExists as exc:
+            return Response(
+                {"detail": TAG_ALREADY_EXISTS_MESSAGE, "tag_id": str(exc.tag_id)},
+                status=status.HTTP_409_CONFLICT,
+            )
+        return Response(TagEntrySerializer(tag).data, status=status.HTTP_201_CREATED)
+
+
+class TagDetailView(APIView):
+    """``DELETE /api/tags/{id}`` — retire a tag (FR-10: "Tags are deactivated rather than deleted
+    where content still references them, preserving historical classification").
+
+    401, then 403 without ``manage_tags``, then 404 for an id naming no tag in the three dimensions.
+    A tag any link references, in any state, is deactivated and answered 200 with its entry, again
+    for one already inactive; an unreferenced tag is deleted, 204 with no body
+    (``apps/documents/taxonomy.py::retire_tag``). There is no route that reactivates a tag.
+    """
+
+    permission_classes = [IsAuthenticated, CanManageTags]
+
+    def delete(self, request, pk):
+        try:
+            tag = retire_tag(pk)
+        except Tag.DoesNotExist:
+            raise Http404(TAG_NOT_FOUND_MESSAGE)
+        if tag is None:
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        return Response(TagEntrySerializer(tag).data)
+
+
+# --- FR-10's department list (D-129, the lead's decision of 13 November 2026) -------------------------
+
+
+class DepartmentListView(ThrottlePostOnlyMixin, APIView):
+    """``GET /api/departments`` — every Department, active or not, ordered by name ignoring case, each
+    ``{department_id, name, active, item_count}``, ``item_count`` being the number of documents whose
+    ``department`` equals the name ignoring case (``apps/documents/taxonomy.py::department_inventory``;
+    D-129's security review, finding F3).
+    ``POST /api/departments`` — an Administrator adds a department to FR-10's department scheme, the
+    list the classifier suggests from (``tag_scheme``).
+
+    ``manage_tags`` is a permission class, as on ``/api/tags``, so 401 and then 403 come before
+    anything else. The list is not scoped and needs no scope: its one reader, the Administrator, reads
+    every document (D-66), and ``apps/accounts/tests/test_manage_tags_seed.py`` holds every holder of
+    the code to that. 200 with a bare list, ``[]`` for none.
+
+    The POST: body ``{"name"}`` (``DepartmentCreateSerializer``: 400 ``{"name": [...]}`` for a blank or
+    over-long name, and for one holding a control or format character or ";" (finding F4); a name is
+    normalised with its case kept).
+
+    - A new name: 201 with the entry, created **not grown**: vocabulary, offered to every audience,
+      as a value added on ``/api/tags`` is.
+    - A name an ACTIVE department has, ignoring case, a concurrent create of it included: 409
+      ``{"detail", "department_id"}``, and nothing changes.
+    - A RETIRED department's name: **200 with the entry, reactivated**, keeping its ``grown`` and its
+      spelling. ``/api/tags`` answers 409 for a retired tag instead, because a retired tag comes back
+      when a person names it on a document every role reads (``apply_tag``, ``confirm_proposed_tag``);
+      a department has no such path, so this is the only way back for one, and only an Administrator,
+      who reads every document, can take it.
+
+    **Throttled per user in the "tagging" scope** (``TAGGING_THROTTLE_RATE``), the POST only
+    (``ThrottlePostOnlyMixin``), so the GET stays unthrottled. DRF checks the permission classes before
+    the throttles, so the order is 401, 403, then 429.
+    """
+
+    permission_classes = [IsAuthenticated, CanManageTags]
+    throttle_classes = [ScopedRateThrottle]  # POST only, through ThrottlePostOnlyMixin
+    throttle_scope = "tagging"
+
+    def get(self, request):
+        return Response(DepartmentEntrySerializer(department_inventory(), many=True).data)
+
+    def post(self, request):
+        serializer = DepartmentCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)  # 400 in DRF's shape, keyed on the field
+        try:
+            added = create_department(serializer.validated_data["name"])
+        except DepartmentAlreadyExists as exc:
+            return Response(
+                {"detail": DEPARTMENT_ALREADY_EXISTS_MESSAGE, "department_id": str(exc.department_id)},
+                status=status.HTTP_409_CONFLICT,
+            )
+        return Response(
+            DepartmentEntrySerializer(added.department).data,
+            status=status.HTTP_201_CREATED if added.created else status.HTTP_200_OK,
+        )
+
+
+class DepartmentDetailView(APIView):
+    """``DELETE /api/departments/{id}`` — retire a department (D-129).
+
+    401, then 403 without ``manage_tags``, then 404 ``{"detail": "No Department matches the given
+    query."}`` for an id naming no Department. A department any document uses is deactivated and
+    answered 200 with its entry, again for one already inactive: it stays on those documents and in
+    FR-14's and FR-15's filters, which read ``Documents.department`` (D-72), and the classifier no
+    longer sees it. A department no document uses is deleted, 204 with no body
+    (``apps/documents/taxonomy.py::retire_department``). ``POST /api/departments`` with its name brings
+    a retired one back.
+    """
+
+    permission_classes = [IsAuthenticated, CanManageTags]
+
+    def delete(self, request, pk):
+        try:
+            department = retire_department(pk)
+        except Department.DoesNotExist:
+            raise Http404(DEPARTMENT_NOT_FOUND_MESSAGE)
+        if department is None:
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        return Response(DepartmentEntrySerializer(department).data)
 
 
 # --- FR-12 answer generation and FR-13 conversations -------------------------------------
@@ -1589,6 +2824,12 @@ class DashboardView(APIView):
 
     **``ContentChunks`` is not read** (D-70). Ingestion is atomic (invariant 9), so a source's
     ``Indexed`` status already says its chunks exist.
+
+    **The knowledge-gap panel is FR-19's, and only for a role holding ``review_knowledge_gaps``**
+    (D-107, which closes D-69). For that role the payload gains ``knowledge_gaps``: the number of
+    Open entries and up to ``DASHBOARD_GAP_ITEMS`` of them in the list's order. For any other role
+    the key is absent, so an Employee's payload is exactly what it was before FR-19. The filters
+    do not narrow it.
     """
 
     def get(self, request):
@@ -1641,18 +2882,99 @@ class DashboardView(APIView):
             "question", "answered_at", "conversation_id"
         )[:DASHBOARD_RECENT_ITEMS]
 
-        return Response(
-            {
-                # The filters applied, after validation, with null for any not applied.
-                "filters": query.data,
-                "departments": departments,
-                "indexed_totals": {
-                    "documents": indexed_documents,
-                    "meetings": indexed_meetings,
-                    "total": indexed_documents + indexed_meetings,
-                },
-                "recent_documents": DocumentSerializer(recent_documents, many=True).data,
-                "recent_meetings": MeetingListSerializer(recent_meetings, many=True).data,
-                "recent_questions": RecentQuestionSerializer(recent_questions, many=True).data,
+        payload = {
+            # The filters applied, after validation, with null for any not applied.
+            "filters": query.data,
+            "departments": departments,
+            "indexed_totals": {
+                "documents": indexed_documents,
+                "meetings": indexed_meetings,
+                "total": indexed_documents + indexed_meetings,
+            },
+            "recent_documents": DocumentSerializer(recent_documents, many=True).data,
+            "recent_meetings": MeetingListSerializer(recent_meetings, many=True).data,
+            "recent_questions": RecentQuestionSerializer(recent_questions, many=True).data,
+        }
+        # FR-19's panel (D-107, closing D-69): present only for a role holding
+        # review_knowledge_gaps, read from role_permissions on this request, and absent
+        # otherwise, so an Employee's payload keeps its shape. Not narrowed by the date or
+        # department filters: an entry has no department, and its dates are its own.
+        if role_holds(request.user.role_id, REVIEW_KNOWLEDGE_GAPS_PERMISSION):
+            open_gaps = ordered_gaps().filter(status=KNOWLEDGE_GAP_OPEN)
+            payload["knowledge_gaps"] = {
+                "open_count": open_gaps.count(),
+                "top": KnowledgeGapSerializer(open_gaps[:DASHBOARD_GAP_ITEMS], many=True).data,
             }
-        )
+        return Response(payload)
+
+
+# --- FR-19 knowledge-gap log (docs/decisions.md D-107 to D-109) -----------------------------
+
+
+class KnowledgeGapListView(APIView):
+    """``GET /api/knowledge-gaps`` — FR-19's list: "questions the system could not answer and
+    searches returning no results, grouped by subject with an occurrence count".
+
+    ``IsAuthenticated`` and ``review_knowledge_gaps`` (D-107): 401 without a session, 403 for a
+    role that lacks the code. Every entry, Open first by ``occurrence_count`` then
+    ``last_seen_at``, then Addressed in the same order (``gaps.ordered_gaps``). No pagination.
+    Each entry carries six fields and no asker, role or reason (``KnowledgeGapSerializer``).
+    """
+
+    permission_classes = [IsAuthenticated, CanReviewKnowledgeGaps]
+
+    def get(self, request):
+        return Response(KnowledgeGapSerializer(ordered_gaps(), many=True).data)
+
+
+class KnowledgeGapCyclesView(APIView):
+    """``POST /api/knowledge-gaps/cycles`` — run one aggregation cycle now (D-107).
+
+    The scheduled trigger is ``manage.py aggregate_knowledge_gaps``. This route runs the same
+    ``run_cycle`` synchronously for the demonstration, and answers 201 with the cycle row. A
+    provider outage after the embedding retries rolls the cycle back and is NFR-19's 503 with an
+    informative notice, never a partial cycle.
+    """
+
+    permission_classes = [IsAuthenticated, CanReviewKnowledgeGaps]
+
+    def post(self, request):
+        # Every failed embedding attempt inside is logged naming this account (attempt_log).
+        with attempt_log.account(request.user.pk):
+            try:
+                cycle = run_cycle(triggered_by=request.user)
+            except ProviderUnavailable as exc:
+                # On the attempts logger, beside the failed attempts it ended, as the ask's 503
+                # is; the reply's notice stays the fixed one.
+                logging.getLogger(attempt_log.ATTEMPT_LOGGER_NAME).warning(
+                    "POST /api/knowledge-gaps/cycles answered 503 (account %s): %s: %s",
+                    request.user.pk,
+                    attempt_log.cause_of(exc),
+                    exc,
+                )
+                return Response(
+                    {"detail": KNOWLEDGE_GAP_CYCLE_UNAVAILABLE_MESSAGE},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
+        return Response(KnowledgeGapCycleSerializer(cycle).data, status=status.HTTP_201_CREATED)
+
+
+class KnowledgeGapDetailView(APIView):
+    """``PATCH /api/knowledge-gaps/{id}`` — FR-19's "mark an entry as addressed", and back.
+
+    Body ``{"status": "Addressed"}`` or ``{"status": "Open"}``; 200 with the entry. The entry is
+    looked up first, so an unknown id is 404 whatever the body, and then the body is validated:
+    any other value is 400 keyed on ``status``. The row is locked, so a change arriving while a
+    cycle runs waits for it and returns the entry as the cycle left it.
+    """
+
+    permission_classes = [IsAuthenticated, CanReviewKnowledgeGaps]
+
+    def patch(self, request, pk):
+        with transaction.atomic():
+            gap = get_object_or_404(KnowledgeGap.objects.select_for_update(), pk=pk)
+            serializer = KnowledgeGapStatusSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            gap.status = serializer.validated_data["status"]
+            gap.save(update_fields=["status"])
+        return Response(KnowledgeGapSerializer(gap).data)

@@ -1,0 +1,1981 @@
+{
+  "record": {
+    "recorded_at": "2026-11-10T22:56:13+11:00",
+    "commit_sha": "abb41c814023bcc3716119bf830b2d1db722ad29",
+    "uncommitted_tracked_changes": false,
+    "uncommitted_tracked_files": [],
+    "dump_sha256": "3bf98403354dbabceb54052b99b45a25f5f39d4fd685cca1e07233aa1e166f59",
+    "database": "kmp_obj0506_anthropic_20261110",
+    "flm_version": {
+      "cli": "v0.9.39",
+      "cli_output": "FLM v0.9.39",
+      "server": "v0.9.39",
+      "required": "v0.9.39",
+      "notes": []
+    },
+    "configuration": {
+      "ai_provider": "anthropic",
+      "chat_model": "claude-haiku-5-5",
+      "embedding_model": "voyage-4"
+    },
+    "kind": "Objective 05 verification (D-106)",
+    "reference_set": "corpus\\objective-05\\reference.json",
+    "reference_set_sha256": "763e9a62386a3ea951aab8ed74280be5dbd9aa2822f890f8215dd5428393e68e",
+    "reference_set_status": "FROZEN. Approved as drafted by the lead on 8 November 2026 (D-106); never tuned against (D-93).",
+    "threshold": 0.95,
+    "threshold_by_model": {
+      "claude-haiku-5-5": 0.72
+    },
+    "verified_at": "2026-11-10T22:56:13+11:00",
+    "classify_record": {
+      "database": "kmp_obj0506_anthropic_20261110",
+      "commit": "abb41c814023bcc3716119bf830b2d1db722ad29",
+      "uncommitted_tracked_files": [],
+      "started": "2026-11-10T11:55:13.995187+00:00",
+      "finished": "2026-11-10T11:55:58.072229+00:00",
+      "selection": "all",
+      "documents": [
+        {
+          "id": "910d0241-38de-4305-b901-a10bf40b8781",
+          "title": "Employee Leave Policy 2026",
+          "status": "Indexed",
+          "machine_doc_type": "Policy",
+          "machine_doc_type_confidence": 0.95,
+          "machine_department": "Human Resources",
+          "machine_department_confidence": 0.8,
+          "doc_type": "Policy",
+          "doc_type_outcome": "applied",
+          "department": "Human Resources",
+          "department_outcome": "applied",
+          "user_edited": false,
+          "tags": [
+            {
+              "dimension": "Process",
+              "name": "service desk",
+              "applied_by": "ai",
+              "confirmed": false,
+              "provisional": true,
+              "removed": false,
+              "confidence": 0.1
+            },
+            {
+              "dimension": "Project",
+              "name": "policy refresh",
+              "applied_by": "ai",
+              "confirmed": false,
+              "provisional": true,
+              "removed": false,
+              "confidence": 0.5
+            },
+            {
+              "dimension": "Topic",
+              "name": "people",
+              "applied_by": "ai",
+              "confirmed": false,
+              "provisional": false,
+              "removed": false,
+              "confidence": 0.85
+            }
+          ],
+          "proposed_topics": [],
+          "discarded_suggestions": [],
+          "model": "claude-haiku-5-5",
+          "input_truncated": false,
+          "seconds": 2.248
+        },
+        {
+          "id": "e65ad9ac-df6b-4a48-9d41-9b11af281c3f",
+          "title": "IT Acceptable Use Policy",
+          "status": "Indexed",
+          "machine_doc_type": "Policy",
+          "machine_doc_type_confidence": 0.95,
+          "machine_department": "Information Technology",
+          "machine_department_confidence": 0.8,
+          "doc_type": "Policy",
+          "doc_type_outcome": "applied",
+          "department": "Information Technology",
+          "department_outcome": "applied",
+          "user_edited": false,
+          "tags": [
+            {
+              "dimension": "Topic",
+              "name": "compliance",
+              "applied_by": "ai",
+              "confirmed": false,
+              "provisional": true,
+              "removed": false,
+              "confidence": 0.6
+            },
+            {
+              "dimension": "Topic",
+              "name": "safety",
+              "applied_by": "ai",
+              "confirmed": false,
+              "provisional": true,
+              "removed": false,
+              "confidence": 0.4
+            },
+            {
+              "dimension": "Topic",
+              "name": "technology",
+              "applied_by": "ai",
+              "confirmed": false,
+              "provisional": false,
+              "removed": false,
+              "confidence": 0.9
+            }
+          ],
+          "proposed_topics": [],
+          "discarded_suggestions": [],
+          "model": "claude-haiku-5-5",
+          "input_truncated": false,
+          "seconds": 1.554
+        },
+        {
+          "id": "9862c3e2-bd78-4061-a535-2e6f8649d008",
+          "title": "Health and Safety Induction Guide",
+          "status": "Indexed",
+          "machine_doc_type": "Procedure",
+          "machine_doc_type_confidence": 0.8,
+          "machine_department": "Operations",
+          "machine_department_confidence": 0.5,
+          "doc_type": "Procedure",
+          "doc_type_outcome": "applied",
+          "department": "Operations",
+          "department_outcome": "provisional",
+          "user_edited": false,
+          "tags": [
+            {
+              "dimension": "Process",
+              "name": "onboarding",
+              "applied_by": "ai",
+              "confirmed": false,
+              "provisional": true,
+              "removed": false,
+              "confidence": 0.6
+            },
+            {
+              "dimension": "Topic",
+              "name": "safety",
+              "applied_by": "ai",
+              "confirmed": false,
+              "provisional": false,
+              "removed": false,
+              "confidence": 0.95
+            },
+            {
+              "dimension": "Topic",
+              "name": "workplace",
+              "applied_by": "ai",
+              "confirmed": false,
+              "provisional": true,
+              "removed": false,
+              "confidence": 0.5
+            }
+          ],
+          "proposed_topics": [],
+          "discarded_suggestions": [],
+          "model": "claude-haiku-5-5",
+          "input_truncated": false,
+          "seconds": 2.075
+        },
+        {
+          "id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "title": "Records Management Handbook",
+          "status": "Indexed",
+          "machine_doc_type": "Procedure",
+          "machine_doc_type_confidence": 0.7,
+          "machine_department": "Legal and Compliance",
+          "machine_department_confidence": 0.6,
+          "doc_type": null,
+          "doc_type_outcome": "provisional",
+          "department": "Legal and Compliance",
+          "department_outcome": "provisional",
+          "user_edited": false,
+          "tags": [
+            {
+              "dimension": "Process",
+              "name": "records management",
+              "applied_by": "ai",
+              "confirmed": false,
+              "provisional": false,
+              "removed": false,
+              "confidence": 0.9
+            },
+            {
+              "dimension": "Topic",
+              "name": "compliance",
+              "applied_by": "ai",
+              "confirmed": false,
+              "provisional": true,
+              "removed": false,
+              "confidence": 0.6
+            }
+          ],
+          "proposed_topics": [],
+          "discarded_suggestions": [],
+          "model": "claude-haiku-5-5",
+          "input_truncated": true,
+          "seconds": 2.589
+        },
+        {
+          "id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "title": "Procurement Guidelines",
+          "status": "Indexed",
+          "machine_doc_type": "Policy",
+          "machine_doc_type_confidence": 0.9,
+          "machine_department": "Finance",
+          "machine_department_confidence": 0.6,
+          "doc_type": "Policy",
+          "doc_type_outcome": "applied",
+          "department": "Finance",
+          "department_outcome": "provisional",
+          "user_edited": false,
+          "tags": [
+            {
+              "dimension": "Process",
+              "name": "purchasing",
+              "applied_by": "ai",
+              "confirmed": false,
+              "provisional": false,
+              "removed": false,
+              "confidence": 0.9
+            },
+            {
+              "dimension": "Project",
+              "name": "supplier review",
+              "applied_by": "ai",
+              "confirmed": false,
+              "provisional": true,
+              "removed": false,
+              "confidence": 0.4
+            },
+            {
+              "dimension": "Topic",
+              "name": "compliance",
+              "applied_by": "ai",
+              "confirmed": false,
+              "provisional": true,
+              "removed": false,
+              "confidence": 0.5
+            },
+            {
+              "dimension": "Topic",
+              "name": "finance",
+              "applied_by": "ai",
+              "confirmed": false,
+              "provisional": true,
+              "removed": false,
+              "confidence": 0.7
+            }
+          ],
+          "proposed_topics": [],
+          "discarded_suggestions": [],
+          "model": "claude-haiku-5-5",
+          "input_truncated": false,
+          "seconds": 1.527
+        },
+        {
+          "id": "46f78870-1670-45fb-8a00-1d1b53f2cba1",
+          "title": "Customer Complaints Procedure",
+          "status": "Indexed",
+          "machine_doc_type": "Procedure",
+          "machine_doc_type_confidence": 0.9,
+          "machine_department": "Operations",
+          "machine_department_confidence": 0.7,
+          "doc_type": "Procedure",
+          "doc_type_outcome": "applied",
+          "department": "Operations",
+          "department_outcome": "provisional",
+          "user_edited": false,
+          "tags": [],
+          "proposed_topics": [
+            {
+              "value": "customer complaints",
+              "confidence": 0.85
+            }
+          ],
+          "discarded_suggestions": [],
+          "model": "claude-haiku-5-5",
+          "input_truncated": false,
+          "seconds": 2.392
+        },
+        {
+          "id": "3899e26b-b3dd-4478-9845-093046a99ab8",
+          "title": "Remote Work Agreement Template",
+          "status": "Indexed",
+          "machine_doc_type": "Policy",
+          "machine_doc_type_confidence": 0.85,
+          "machine_department": "Human Resources",
+          "machine_department_confidence": 0.85,
+          "doc_type": "Policy",
+          "doc_type_outcome": "applied",
+          "department": "Human Resources",
+          "department_outcome": "applied",
+          "user_edited": false,
+          "tags": [
+            {
+              "dimension": "Topic",
+              "name": "compliance",
+              "applied_by": "ai",
+              "confirmed": false,
+              "provisional": true,
+              "removed": false,
+              "confidence": 0.5
+            },
+            {
+              "dimension": "Topic",
+              "name": "people",
+              "applied_by": "ai",
+              "confirmed": false,
+              "provisional": false,
+              "removed": false,
+              "confidence": 0.8
+            },
+            {
+              "dimension": "Topic",
+              "name": "technology",
+              "applied_by": "ai",
+              "confirmed": false,
+              "provisional": true,
+              "removed": false,
+              "confidence": 0.6
+            },
+            {
+              "dimension": "Topic",
+              "name": "workplace",
+              "applied_by": "ai",
+              "confirmed": false,
+              "provisional": false,
+              "removed": false,
+              "confidence": 0.75
+            }
+          ],
+          "proposed_topics": [],
+          "discarded_suggestions": [],
+          "model": "claude-haiku-5-5",
+          "input_truncated": false,
+          "seconds": 2.281
+        },
+        {
+          "id": "9b5631b9-6175-4830-a353-56b2d0abb817",
+          "title": "Onboarding Checklist for New Starters",
+          "status": "Indexed",
+          "machine_doc_type": "Procedure",
+          "machine_doc_type_confidence": 0.9,
+          "machine_department": "Human Resources",
+          "machine_department_confidence": 0.85,
+          "doc_type": "Procedure",
+          "doc_type_outcome": "applied",
+          "department": "Human Resources",
+          "department_outcome": "applied",
+          "user_edited": false,
+          "tags": [
+            {
+              "dimension": "Process",
+              "name": "onboarding",
+              "applied_by": "ai",
+              "confirmed": false,
+              "provisional": false,
+              "removed": false,
+              "confidence": 0.95
+            },
+            {
+              "dimension": "Topic",
+              "name": "people",
+              "applied_by": "ai",
+              "confirmed": false,
+              "provisional": true,
+              "removed": false,
+              "confidence": 0.6
+            },
+            {
+              "dimension": "Topic",
+              "name": "safety",
+              "applied_by": "ai",
+              "confirmed": false,
+              "provisional": true,
+              "removed": false,
+              "confidence": 0.3
+            },
+            {
+              "dimension": "Topic",
+              "name": "technology",
+              "applied_by": "ai",
+              "confirmed": false,
+              "provisional": true,
+              "removed": false,
+              "confidence": 0.3
+            }
+          ],
+          "proposed_topics": [],
+          "discarded_suggestions": [],
+          "model": "claude-haiku-5-5",
+          "input_truncated": false,
+          "seconds": 1.898
+        },
+        {
+          "id": "0d5a2e7b-f85f-4b3c-b1cf-24910a56ac99",
+          "title": "Project Atlas Kickoff Brief",
+          "status": "Indexed",
+          "machine_doc_type": "Report",
+          "machine_doc_type_confidence": 0.55,
+          "machine_department": "Projects",
+          "machine_department_confidence": 0.8,
+          "doc_type": null,
+          "doc_type_outcome": "provisional",
+          "department": "Projects",
+          "department_outcome": "applied",
+          "user_edited": false,
+          "tags": [
+            {
+              "dimension": "Process",
+              "name": "records management",
+              "applied_by": "ai",
+              "confirmed": false,
+              "provisional": true,
+              "removed": false,
+              "confidence": 0.3
+            },
+            {
+              "dimension": "Project",
+              "name": "atlas",
+              "applied_by": "ai",
+              "confirmed": false,
+              "provisional": false,
+              "removed": false,
+              "confidence": 0.95
+            },
+            {
+              "dimension": "Topic",
+              "name": "technology",
+              "applied_by": "ai",
+              "confirmed": false,
+              "provisional": false,
+              "removed": false,
+              "confidence": 0.8
+            }
+          ],
+          "proposed_topics": [],
+          "discarded_suggestions": [],
+          "model": "claude-haiku-5-5",
+          "input_truncated": false,
+          "seconds": 2.937
+        },
+        {
+          "id": "f9621aa3-d664-44af-a25e-94734780119e",
+          "title": "Expense Claims Guide",
+          "status": "Indexed",
+          "machine_doc_type": "Procedure",
+          "machine_doc_type_confidence": 0.7,
+          "machine_department": "Finance",
+          "machine_department_confidence": 0.8,
+          "doc_type": null,
+          "doc_type_outcome": "provisional",
+          "department": "Finance",
+          "department_outcome": "applied",
+          "user_edited": false,
+          "tags": [
+            {
+              "dimension": "Topic",
+              "name": "compliance",
+              "applied_by": "ai",
+              "confirmed": false,
+              "provisional": true,
+              "removed": false,
+              "confidence": 0.6
+            },
+            {
+              "dimension": "Topic",
+              "name": "finance",
+              "applied_by": "ai",
+              "confirmed": false,
+              "provisional": false,
+              "removed": false,
+              "confidence": 0.9
+            }
+          ],
+          "proposed_topics": [],
+          "discarded_suggestions": [],
+          "model": "claude-haiku-5-5",
+          "input_truncated": false,
+          "seconds": 2.809
+        },
+        {
+          "id": "ab0dcd1f-0bbf-43d4-8241-58e175a7336b",
+          "title": "Data Privacy Notice",
+          "status": "Indexed",
+          "machine_doc_type": "Policy",
+          "machine_doc_type_confidence": 0.9,
+          "machine_department": "Legal and Compliance",
+          "machine_department_confidence": 0.8,
+          "doc_type": "Policy",
+          "doc_type_outcome": "applied",
+          "department": "Legal and Compliance",
+          "department_outcome": "applied",
+          "user_edited": false,
+          "tags": [
+            {
+              "dimension": "Process",
+              "name": "records management",
+              "applied_by": "ai",
+              "confirmed": false,
+              "provisional": true,
+              "removed": false,
+              "confidence": 0.4
+            },
+            {
+              "dimension": "Topic",
+              "name": "compliance",
+              "applied_by": "ai",
+              "confirmed": false,
+              "provisional": false,
+              "removed": false,
+              "confidence": 0.85
+            }
+          ],
+          "proposed_topics": [],
+          "discarded_suggestions": [],
+          "model": "claude-haiku-5-5",
+          "input_truncated": false,
+          "seconds": 2.076
+        },
+        {
+          "id": "6971af02-ec47-4a5f-b3ac-cd481571abdd",
+          "title": "Vendor Register 2026",
+          "status": "Indexed",
+          "machine_doc_type": "Report",
+          "machine_doc_type_confidence": 0.85,
+          "machine_department": "Finance",
+          "machine_department_confidence": 0.5,
+          "doc_type": "Report",
+          "doc_type_outcome": "applied",
+          "department": "Finance",
+          "department_outcome": "provisional",
+          "user_edited": false,
+          "tags": [
+            {
+              "dimension": "Process",
+              "name": "purchasing",
+              "applied_by": "ai",
+              "confirmed": false,
+              "provisional": false,
+              "removed": false,
+              "confidence": 0.8
+            },
+            {
+              "dimension": "Project",
+              "name": "supplier review",
+              "applied_by": "ai",
+              "confirmed": false,
+              "provisional": true,
+              "removed": false,
+              "confidence": 0.4
+            },
+            {
+              "dimension": "Topic",
+              "name": "finance",
+              "applied_by": "ai",
+              "confirmed": false,
+              "provisional": true,
+              "removed": false,
+              "confidence": 0.45
+            }
+          ],
+          "proposed_topics": [],
+          "discarded_suggestions": [],
+          "model": "claude-haiku-5-5",
+          "input_truncated": false,
+          "seconds": 2.482
+        },
+        {
+          "id": "d703ccb2-c424-4dfe-8b0e-a78a6513b6c3",
+          "title": "Training Schedule Q4",
+          "status": "Indexed",
+          "machine_doc_type": "Report",
+          "machine_doc_type_confidence": 0.8,
+          "machine_department": "Human Resources",
+          "machine_department_confidence": 0.6,
+          "doc_type": "Report",
+          "doc_type_outcome": "applied",
+          "department": "Human Resources",
+          "department_outcome": "provisional",
+          "user_edited": false,
+          "tags": [
+            {
+              "dimension": "Topic",
+              "name": "people",
+              "applied_by": "ai",
+              "confirmed": false,
+              "provisional": true,
+              "removed": false,
+              "confidence": 0.7
+            }
+          ],
+          "proposed_topics": [],
+          "discarded_suggestions": [],
+          "model": "claude-haiku-5-5",
+          "input_truncated": false,
+          "seconds": 2.272
+        },
+        {
+          "id": "fd77e898-d2f3-4af0-8f9f-3d44a52d91b2",
+          "title": "Asset Inventory Melbourne Office",
+          "status": "Indexed",
+          "machine_doc_type": "Report",
+          "machine_doc_type_confidence": 0.9,
+          "machine_department": "Operations",
+          "machine_department_confidence": 0.5,
+          "doc_type": "Report",
+          "doc_type_outcome": "applied",
+          "department": "Information Technology",
+          "department_outcome": "provisional",
+          "user_edited": false,
+          "tags": [
+            {
+              "dimension": "Process",
+              "name": "records management",
+              "applied_by": "ai",
+              "confirmed": false,
+              "provisional": true,
+              "removed": false,
+              "confidence": 0.45
+            },
+            {
+              "dimension": "Topic",
+              "name": "technology",
+              "applied_by": "ai",
+              "confirmed": false,
+              "provisional": true,
+              "removed": false,
+              "confidence": 0.6
+            },
+            {
+              "dimension": "Topic",
+              "name": "workplace",
+              "applied_by": "ai",
+              "confirmed": false,
+              "provisional": true,
+              "removed": false,
+              "confidence": 0.7
+            }
+          ],
+          "proposed_topics": [],
+          "discarded_suggestions": [],
+          "model": "claude-haiku-5-5",
+          "input_truncated": false,
+          "seconds": 2.27
+        },
+        {
+          "id": "862c2739-c8a8-45b2-8d24-4e8434266333",
+          "title": "Project Budget Tracker FY27",
+          "status": "Indexed",
+          "machine_doc_type": "Report",
+          "machine_doc_type_confidence": 0.9,
+          "machine_department": "Finance",
+          "machine_department_confidence": 0.8,
+          "doc_type": "Report",
+          "doc_type_outcome": "applied",
+          "department": "Projects",
+          "department_outcome": "provisional",
+          "user_edited": false,
+          "tags": [
+            {
+              "dimension": "Topic",
+              "name": "finance",
+              "applied_by": "ai",
+              "confirmed": false,
+              "provisional": false,
+              "removed": false,
+              "confidence": 0.95
+            }
+          ],
+          "proposed_topics": [],
+          "discarded_suggestions": [],
+          "model": "claude-haiku-5-5",
+          "input_truncated": false,
+          "seconds": 1.898
+        },
+        {
+          "id": "054d33f3-c2cd-4476-8ad3-6b054886a7ba",
+          "title": "Team Roster and Skills Matrix",
+          "status": "Indexed",
+          "machine_doc_type": "Report",
+          "machine_doc_type_confidence": 0.85,
+          "machine_department": "Human Resources",
+          "machine_department_confidence": 0.6,
+          "doc_type": "Report",
+          "doc_type_outcome": "applied",
+          "department": "Human Resources",
+          "department_outcome": "provisional",
+          "user_edited": false,
+          "tags": [
+            {
+              "dimension": "Topic",
+              "name": "people",
+              "applied_by": "ai",
+              "confirmed": false,
+              "provisional": false,
+              "removed": false,
+              "confidence": 0.8
+            }
+          ],
+          "proposed_topics": [],
+          "discarded_suggestions": [],
+          "model": "claude-haiku-5-5",
+          "input_truncated": false,
+          "seconds": 1.742
+        },
+        {
+          "id": "2e101ba3-2d3f-4d92-82b9-53f4da8f2fae",
+          "title": "Meeting Room Booking Rules",
+          "status": "Indexed",
+          "machine_doc_type": "Policy",
+          "machine_doc_type_confidence": 0.85,
+          "machine_department": "Operations",
+          "machine_department_confidence": 0.6,
+          "doc_type": "Policy",
+          "doc_type_outcome": "applied",
+          "department": "Operations",
+          "department_outcome": "provisional",
+          "user_edited": false,
+          "tags": [
+            {
+              "dimension": "Process",
+              "name": "service desk",
+              "applied_by": "ai",
+              "confirmed": false,
+              "provisional": true,
+              "removed": false,
+              "confidence": 0.3
+            },
+            {
+              "dimension": "Topic",
+              "name": "compliance",
+              "applied_by": "ai",
+              "confirmed": false,
+              "provisional": true,
+              "removed": false,
+              "confidence": 0.3
+            },
+            {
+              "dimension": "Topic",
+              "name": "technology",
+              "applied_by": "ai",
+              "confirmed": false,
+              "provisional": true,
+              "removed": false,
+              "confidence": 0.35
+            },
+            {
+              "dimension": "Topic",
+              "name": "workplace",
+              "applied_by": "ai",
+              "confirmed": false,
+              "provisional": false,
+              "removed": false,
+              "confidence": 0.85
+            }
+          ],
+          "proposed_topics": [],
+          "discarded_suggestions": [],
+          "model": "claude-haiku-5-5",
+          "input_truncated": false,
+          "seconds": 2.578
+        },
+        {
+          "id": "a3aee338-142e-4f4e-ba38-2d1b7408cb29",
+          "title": "IT Helpdesk Frequently Asked Questions",
+          "status": "Indexed",
+          "machine_doc_type": "Procedure",
+          "machine_doc_type_confidence": 0.6,
+          "machine_department": "Information Technology",
+          "machine_department_confidence": 0.85,
+          "doc_type": null,
+          "doc_type_outcome": "provisional",
+          "department": "Information Technology",
+          "department_outcome": "applied",
+          "user_edited": false,
+          "tags": [
+            {
+              "dimension": "Process",
+              "name": "service desk",
+              "applied_by": "ai",
+              "confirmed": false,
+              "provisional": false,
+              "removed": false,
+              "confidence": 0.8
+            },
+            {
+              "dimension": "Topic",
+              "name": "technology",
+              "applied_by": "ai",
+              "confirmed": false,
+              "provisional": true,
+              "removed": false,
+              "confidence": 0.7
+            }
+          ],
+          "proposed_topics": [],
+          "discarded_suggestions": [],
+          "model": "claude-haiku-5-5",
+          "input_truncated": false,
+          "seconds": 1.421
+        },
+        {
+          "id": "49c56238-3aa7-465c-a426-de0bbc739a7d",
+          "title": "Fleet Vehicle Usage Notes",
+          "status": "Indexed",
+          "machine_doc_type": "Policy",
+          "machine_doc_type_confidence": 0.85,
+          "machine_department": "Operations",
+          "machine_department_confidence": 0.6,
+          "doc_type": "Policy",
+          "doc_type_outcome": "applied",
+          "department": "Operations",
+          "department_outcome": "provisional",
+          "user_edited": false,
+          "tags": [
+            {
+              "dimension": "Topic",
+              "name": "compliance",
+              "applied_by": "ai",
+              "confirmed": false,
+              "provisional": true,
+              "removed": false,
+              "confidence": 0.6
+            },
+            {
+              "dimension": "Topic",
+              "name": "workplace",
+              "applied_by": "ai",
+              "confirmed": false,
+              "provisional": true,
+              "removed": false,
+              "confidence": 0.4
+            }
+          ],
+          "proposed_topics": [],
+          "discarded_suggestions": [],
+          "model": "claude-haiku-5-5",
+          "input_truncated": false,
+          "seconds": 2.414
+        },
+        {
+          "id": "483170de-7f0f-4750-b259-3fb2f5c22c2b",
+          "title": "Office Relocation Announcement",
+          "status": "Indexed",
+          "machine_doc_type": "Report",
+          "machine_doc_type_confidence": 0.8,
+          "machine_department": "Operations",
+          "machine_department_confidence": 0.5,
+          "doc_type": "Report",
+          "doc_type_outcome": "applied",
+          "department": "Operations",
+          "department_outcome": "provisional",
+          "user_edited": false,
+          "tags": [
+            {
+              "dimension": "Project",
+              "name": "office move",
+              "applied_by": "ai",
+              "confirmed": false,
+              "provisional": false,
+              "removed": false,
+              "confidence": 0.95
+            },
+            {
+              "dimension": "Topic",
+              "name": "workplace",
+              "applied_by": "ai",
+              "confirmed": false,
+              "provisional": false,
+              "removed": false,
+              "confidence": 0.8
+            }
+          ],
+          "proposed_topics": [],
+          "discarded_suggestions": [],
+          "model": "claude-haiku-5-5",
+          "input_truncated": false,
+          "seconds": 2.094
+        }
+      ]
+    },
+    "thresholds_used": {
+      "claude-haiku-5-5": 0.72
+    }
+  },
+  "rows": [
+    {
+      "id": "D01",
+      "title": "Employee Leave Policy 2026",
+      "reference_type": "Policy",
+      "fit": "strong",
+      "reference_department": "Human Resources",
+      "reference_tags": {
+        "Project": [
+          "policy refresh"
+        ],
+        "Topic": [
+          "people"
+        ]
+      },
+      "classified": true,
+      "machine_doc_type": "Policy",
+      "machine_doc_type_confidence": 0.95,
+      "doc_type_outcome": "applied",
+      "effective_doc_type": "Policy",
+      "type_match": true,
+      "machine_department": "Human Resources",
+      "machine_department_confidence": 0.8,
+      "department_outcome": "applied",
+      "effective_department": "Human Resources",
+      "department_match": true,
+      "user_edited": false,
+      "input_truncated": false,
+      "proposed_topics": [],
+      "discarded_suggestions": [],
+      "model": "claude-haiku-5-5",
+      "ai_tags": [
+        {
+          "dimension": "Process",
+          "name": "service desk",
+          "confidence": 0.1,
+          "provisional": true,
+          "confirmed": false
+        },
+        {
+          "dimension": "Topic",
+          "name": "people",
+          "confidence": 0.85,
+          "provisional": false,
+          "confirmed": false
+        },
+        {
+          "dimension": "Project",
+          "name": "policy refresh",
+          "confidence": 0.5,
+          "provisional": true,
+          "confirmed": false
+        }
+      ]
+    },
+    {
+      "id": "D02",
+      "title": "IT Acceptable Use Policy",
+      "reference_type": "Policy",
+      "fit": "strong",
+      "reference_department": "Information Technology",
+      "reference_tags": {
+        "Project": [
+          "policy refresh"
+        ],
+        "Process": [
+          "service desk"
+        ],
+        "Topic": [
+          "technology"
+        ]
+      },
+      "classified": true,
+      "machine_doc_type": "Policy",
+      "machine_doc_type_confidence": 0.95,
+      "doc_type_outcome": "applied",
+      "effective_doc_type": "Policy",
+      "type_match": true,
+      "machine_department": "Information Technology",
+      "machine_department_confidence": 0.8,
+      "department_outcome": "applied",
+      "effective_department": "Information Technology",
+      "department_match": true,
+      "user_edited": false,
+      "input_truncated": false,
+      "proposed_topics": [],
+      "discarded_suggestions": [],
+      "model": "claude-haiku-5-5",
+      "ai_tags": [
+        {
+          "dimension": "Topic",
+          "name": "technology",
+          "confidence": 0.9,
+          "provisional": false,
+          "confirmed": false
+        },
+        {
+          "dimension": "Topic",
+          "name": "compliance",
+          "confidence": 0.6,
+          "provisional": true,
+          "confirmed": false
+        },
+        {
+          "dimension": "Topic",
+          "name": "safety",
+          "confidence": 0.4,
+          "provisional": true,
+          "confirmed": false
+        }
+      ]
+    },
+    {
+      "id": "D03",
+      "title": "Health and Safety Induction Guide",
+      "reference_type": "Procedure",
+      "fit": "fair",
+      "reference_department": "Operations",
+      "reference_tags": {
+        "Process": [
+          "onboarding"
+        ],
+        "Topic": [
+          "safety"
+        ]
+      },
+      "classified": true,
+      "machine_doc_type": "Procedure",
+      "machine_doc_type_confidence": 0.8,
+      "doc_type_outcome": "applied",
+      "effective_doc_type": "Procedure",
+      "type_match": true,
+      "machine_department": "Operations",
+      "machine_department_confidence": 0.5,
+      "department_outcome": "provisional",
+      "effective_department": "Operations",
+      "department_match": true,
+      "user_edited": false,
+      "input_truncated": false,
+      "proposed_topics": [],
+      "discarded_suggestions": [],
+      "model": "claude-haiku-5-5",
+      "ai_tags": [
+        {
+          "dimension": "Topic",
+          "name": "safety",
+          "confidence": 0.95,
+          "provisional": false,
+          "confirmed": false
+        },
+        {
+          "dimension": "Process",
+          "name": "onboarding",
+          "confidence": 0.6,
+          "provisional": true,
+          "confirmed": false
+        },
+        {
+          "dimension": "Topic",
+          "name": "workplace",
+          "confidence": 0.5,
+          "provisional": true,
+          "confirmed": false
+        }
+      ]
+    },
+    {
+      "id": "D04",
+      "title": "Records Management Handbook",
+      "reference_type": "Procedure",
+      "fit": "fair",
+      "reference_department": "Legal and Compliance",
+      "reference_tags": {
+        "Process": [
+          "records management"
+        ],
+        "Topic": [
+          "compliance"
+        ]
+      },
+      "classified": true,
+      "machine_doc_type": "Procedure",
+      "machine_doc_type_confidence": 0.7,
+      "doc_type_outcome": "provisional",
+      "effective_doc_type": null,
+      "type_match": true,
+      "machine_department": "Legal and Compliance",
+      "machine_department_confidence": 0.6,
+      "department_outcome": "provisional",
+      "effective_department": "Legal and Compliance",
+      "department_match": true,
+      "user_edited": false,
+      "input_truncated": true,
+      "proposed_topics": [],
+      "discarded_suggestions": [],
+      "model": "claude-haiku-5-5",
+      "ai_tags": [
+        {
+          "dimension": "Process",
+          "name": "records management",
+          "confidence": 0.9,
+          "provisional": false,
+          "confirmed": false
+        },
+        {
+          "dimension": "Topic",
+          "name": "compliance",
+          "confidence": 0.6,
+          "provisional": true,
+          "confirmed": false
+        }
+      ]
+    },
+    {
+      "id": "D05",
+      "title": "Procurement Guidelines",
+      "reference_type": "Policy",
+      "fit": "strong",
+      "reference_department": "Finance",
+      "reference_tags": {
+        "Project": [
+          "supplier review"
+        ],
+        "Process": [
+          "purchasing"
+        ],
+        "Topic": [
+          "finance"
+        ]
+      },
+      "classified": true,
+      "machine_doc_type": "Policy",
+      "machine_doc_type_confidence": 0.9,
+      "doc_type_outcome": "applied",
+      "effective_doc_type": "Policy",
+      "type_match": true,
+      "machine_department": "Finance",
+      "machine_department_confidence": 0.6,
+      "department_outcome": "provisional",
+      "effective_department": "Finance",
+      "department_match": true,
+      "user_edited": false,
+      "input_truncated": false,
+      "proposed_topics": [],
+      "discarded_suggestions": [],
+      "model": "claude-haiku-5-5",
+      "ai_tags": [
+        {
+          "dimension": "Process",
+          "name": "purchasing",
+          "confidence": 0.9,
+          "provisional": false,
+          "confirmed": false
+        },
+        {
+          "dimension": "Topic",
+          "name": "finance",
+          "confidence": 0.7,
+          "provisional": true,
+          "confirmed": false
+        },
+        {
+          "dimension": "Topic",
+          "name": "compliance",
+          "confidence": 0.5,
+          "provisional": true,
+          "confirmed": false
+        },
+        {
+          "dimension": "Project",
+          "name": "supplier review",
+          "confidence": 0.4,
+          "provisional": true,
+          "confirmed": false
+        }
+      ]
+    },
+    {
+      "id": "D06",
+      "title": "Customer Complaints Procedure",
+      "reference_type": "Procedure",
+      "fit": "strong",
+      "reference_department": "Operations",
+      "reference_tags": {
+        "Process": [
+          "records management"
+        ],
+        "Topic": [
+          "compliance"
+        ]
+      },
+      "classified": true,
+      "machine_doc_type": "Procedure",
+      "machine_doc_type_confidence": 0.9,
+      "doc_type_outcome": "applied",
+      "effective_doc_type": "Procedure",
+      "type_match": true,
+      "machine_department": "Operations",
+      "machine_department_confidence": 0.7,
+      "department_outcome": "provisional",
+      "effective_department": "Operations",
+      "department_match": true,
+      "user_edited": false,
+      "input_truncated": false,
+      "proposed_topics": [
+        {
+          "value": "customer complaints",
+          "confidence": 0.85
+        }
+      ],
+      "discarded_suggestions": [],
+      "model": "claude-haiku-5-5",
+      "ai_tags": []
+    },
+    {
+      "id": "D07",
+      "title": "Remote Work Agreement Template",
+      "reference_type": "Policy",
+      "fit": "weak",
+      "reference_department": "Human Resources",
+      "reference_tags": {
+        "Project": [
+          "policy refresh"
+        ],
+        "Topic": [
+          "people",
+          "workplace"
+        ]
+      },
+      "classified": true,
+      "machine_doc_type": "Policy",
+      "machine_doc_type_confidence": 0.85,
+      "doc_type_outcome": "applied",
+      "effective_doc_type": "Policy",
+      "type_match": true,
+      "machine_department": "Human Resources",
+      "machine_department_confidence": 0.85,
+      "department_outcome": "applied",
+      "effective_department": "Human Resources",
+      "department_match": true,
+      "user_edited": false,
+      "input_truncated": false,
+      "proposed_topics": [],
+      "discarded_suggestions": [],
+      "model": "claude-haiku-5-5",
+      "ai_tags": [
+        {
+          "dimension": "Topic",
+          "name": "people",
+          "confidence": 0.8,
+          "provisional": false,
+          "confirmed": false
+        },
+        {
+          "dimension": "Topic",
+          "name": "workplace",
+          "confidence": 0.75,
+          "provisional": false,
+          "confirmed": false
+        },
+        {
+          "dimension": "Topic",
+          "name": "technology",
+          "confidence": 0.6,
+          "provisional": true,
+          "confirmed": false
+        },
+        {
+          "dimension": "Topic",
+          "name": "compliance",
+          "confidence": 0.5,
+          "provisional": true,
+          "confirmed": false
+        }
+      ]
+    },
+    {
+      "id": "D08",
+      "title": "Onboarding Checklist for New Starters",
+      "reference_type": "Procedure",
+      "fit": "strong",
+      "reference_department": "Human Resources",
+      "reference_tags": {
+        "Process": [
+          "onboarding"
+        ],
+        "Topic": [
+          "people"
+        ]
+      },
+      "classified": true,
+      "machine_doc_type": "Procedure",
+      "machine_doc_type_confidence": 0.9,
+      "doc_type_outcome": "applied",
+      "effective_doc_type": "Procedure",
+      "type_match": true,
+      "machine_department": "Human Resources",
+      "machine_department_confidence": 0.85,
+      "department_outcome": "applied",
+      "effective_department": "Human Resources",
+      "department_match": true,
+      "user_edited": false,
+      "input_truncated": false,
+      "proposed_topics": [],
+      "discarded_suggestions": [],
+      "model": "claude-haiku-5-5",
+      "ai_tags": [
+        {
+          "dimension": "Process",
+          "name": "onboarding",
+          "confidence": 0.95,
+          "provisional": false,
+          "confirmed": false
+        },
+        {
+          "dimension": "Topic",
+          "name": "people",
+          "confidence": 0.6,
+          "provisional": true,
+          "confirmed": false
+        },
+        {
+          "dimension": "Topic",
+          "name": "technology",
+          "confidence": 0.3,
+          "provisional": true,
+          "confirmed": false
+        },
+        {
+          "dimension": "Topic",
+          "name": "safety",
+          "confidence": 0.3,
+          "provisional": true,
+          "confirmed": false
+        }
+      ]
+    },
+    {
+      "id": "D09",
+      "title": "Project Atlas Kickoff Brief",
+      "reference_type": "Meeting Paper",
+      "fit": "weak",
+      "reference_department": "Projects",
+      "reference_tags": {
+        "Project": [
+          "atlas"
+        ]
+      },
+      "classified": true,
+      "machine_doc_type": "Report",
+      "machine_doc_type_confidence": 0.55,
+      "doc_type_outcome": "provisional",
+      "effective_doc_type": null,
+      "type_match": false,
+      "machine_department": "Projects",
+      "machine_department_confidence": 0.8,
+      "department_outcome": "applied",
+      "effective_department": "Projects",
+      "department_match": true,
+      "user_edited": false,
+      "input_truncated": false,
+      "proposed_topics": [],
+      "discarded_suggestions": [],
+      "model": "claude-haiku-5-5",
+      "ai_tags": [
+        {
+          "dimension": "Project",
+          "name": "atlas",
+          "confidence": 0.95,
+          "provisional": false,
+          "confirmed": false
+        },
+        {
+          "dimension": "Topic",
+          "name": "technology",
+          "confidence": 0.8,
+          "provisional": false,
+          "confirmed": false
+        },
+        {
+          "dimension": "Process",
+          "name": "records management",
+          "confidence": 0.3,
+          "provisional": true,
+          "confirmed": false
+        }
+      ]
+    },
+    {
+      "id": "D10",
+      "title": "Expense Claims Guide",
+      "reference_type": "Procedure",
+      "fit": "fair",
+      "reference_department": "Finance",
+      "reference_tags": {
+        "Project": [
+          "supplier review"
+        ],
+        "Process": [
+          "purchasing"
+        ],
+        "Topic": [
+          "finance"
+        ]
+      },
+      "classified": true,
+      "machine_doc_type": "Procedure",
+      "machine_doc_type_confidence": 0.7,
+      "doc_type_outcome": "provisional",
+      "effective_doc_type": null,
+      "type_match": true,
+      "machine_department": "Finance",
+      "machine_department_confidence": 0.8,
+      "department_outcome": "applied",
+      "effective_department": "Finance",
+      "department_match": true,
+      "user_edited": false,
+      "input_truncated": false,
+      "proposed_topics": [],
+      "discarded_suggestions": [],
+      "model": "claude-haiku-5-5",
+      "ai_tags": [
+        {
+          "dimension": "Topic",
+          "name": "finance",
+          "confidence": 0.9,
+          "provisional": false,
+          "confirmed": false
+        },
+        {
+          "dimension": "Topic",
+          "name": "compliance",
+          "confidence": 0.6,
+          "provisional": true,
+          "confirmed": false
+        }
+      ]
+    },
+    {
+      "id": "D11",
+      "title": "Data Privacy Notice",
+      "reference_type": "Policy",
+      "fit": "strong",
+      "reference_department": "Legal and Compliance",
+      "reference_tags": {
+        "Project": [
+          "policy refresh"
+        ],
+        "Process": [
+          "records management"
+        ],
+        "Topic": [
+          "compliance"
+        ]
+      },
+      "classified": true,
+      "machine_doc_type": "Policy",
+      "machine_doc_type_confidence": 0.9,
+      "doc_type_outcome": "applied",
+      "effective_doc_type": "Policy",
+      "type_match": true,
+      "machine_department": "Legal and Compliance",
+      "machine_department_confidence": 0.8,
+      "department_outcome": "applied",
+      "effective_department": "Legal and Compliance",
+      "department_match": true,
+      "user_edited": false,
+      "input_truncated": false,
+      "proposed_topics": [],
+      "discarded_suggestions": [],
+      "model": "claude-haiku-5-5",
+      "ai_tags": [
+        {
+          "dimension": "Topic",
+          "name": "compliance",
+          "confidence": 0.85,
+          "provisional": false,
+          "confirmed": false
+        },
+        {
+          "dimension": "Process",
+          "name": "records management",
+          "confidence": 0.4,
+          "provisional": true,
+          "confirmed": false
+        }
+      ]
+    },
+    {
+      "id": "D12",
+      "title": "Vendor Register 2026",
+      "reference_type": "Report",
+      "fit": "fair",
+      "reference_department": "Finance",
+      "reference_tags": {
+        "Project": [
+          "supplier review"
+        ],
+        "Process": [
+          "purchasing"
+        ],
+        "Topic": [
+          "finance"
+        ]
+      },
+      "classified": true,
+      "machine_doc_type": "Report",
+      "machine_doc_type_confidence": 0.85,
+      "doc_type_outcome": "applied",
+      "effective_doc_type": "Report",
+      "type_match": true,
+      "machine_department": "Finance",
+      "machine_department_confidence": 0.5,
+      "department_outcome": "provisional",
+      "effective_department": "Finance",
+      "department_match": true,
+      "user_edited": false,
+      "input_truncated": false,
+      "proposed_topics": [],
+      "discarded_suggestions": [],
+      "model": "claude-haiku-5-5",
+      "ai_tags": [
+        {
+          "dimension": "Process",
+          "name": "purchasing",
+          "confidence": 0.8,
+          "provisional": false,
+          "confirmed": false
+        },
+        {
+          "dimension": "Project",
+          "name": "supplier review",
+          "confidence": 0.4,
+          "provisional": true,
+          "confirmed": false
+        },
+        {
+          "dimension": "Topic",
+          "name": "finance",
+          "confidence": 0.45,
+          "provisional": true,
+          "confirmed": false
+        }
+      ]
+    },
+    {
+      "id": "D13",
+      "title": "Training Schedule Q4",
+      "reference_type": "Report",
+      "fit": "weak",
+      "reference_department": "Human Resources",
+      "reference_tags": {
+        "Process": [
+          "onboarding"
+        ],
+        "Topic": [
+          "people"
+        ]
+      },
+      "classified": true,
+      "machine_doc_type": "Report",
+      "machine_doc_type_confidence": 0.8,
+      "doc_type_outcome": "applied",
+      "effective_doc_type": "Report",
+      "type_match": true,
+      "machine_department": "Human Resources",
+      "machine_department_confidence": 0.6,
+      "department_outcome": "provisional",
+      "effective_department": "Human Resources",
+      "department_match": true,
+      "user_edited": false,
+      "input_truncated": false,
+      "proposed_topics": [],
+      "discarded_suggestions": [],
+      "model": "claude-haiku-5-5",
+      "ai_tags": [
+        {
+          "dimension": "Topic",
+          "name": "people",
+          "confidence": 0.7,
+          "provisional": true,
+          "confirmed": false
+        }
+      ]
+    },
+    {
+      "id": "D14",
+      "title": "Asset Inventory Melbourne Office",
+      "reference_type": "Report",
+      "fit": "fair",
+      "reference_department": "Information Technology",
+      "reference_tags": {
+        "Project": [
+          "office move"
+        ],
+        "Process": [
+          "service desk"
+        ],
+        "Topic": [
+          "technology"
+        ]
+      },
+      "classified": true,
+      "machine_doc_type": "Report",
+      "machine_doc_type_confidence": 0.9,
+      "doc_type_outcome": "applied",
+      "effective_doc_type": "Report",
+      "type_match": true,
+      "machine_department": "Operations",
+      "machine_department_confidence": 0.5,
+      "department_outcome": "provisional",
+      "effective_department": "Information Technology",
+      "department_match": false,
+      "user_edited": false,
+      "input_truncated": false,
+      "proposed_topics": [],
+      "discarded_suggestions": [],
+      "model": "claude-haiku-5-5",
+      "ai_tags": [
+        {
+          "dimension": "Topic",
+          "name": "workplace",
+          "confidence": 0.7,
+          "provisional": true,
+          "confirmed": false
+        },
+        {
+          "dimension": "Topic",
+          "name": "technology",
+          "confidence": 0.6,
+          "provisional": true,
+          "confirmed": false
+        },
+        {
+          "dimension": "Process",
+          "name": "records management",
+          "confidence": 0.45,
+          "provisional": true,
+          "confirmed": false
+        }
+      ]
+    },
+    {
+      "id": "D15",
+      "title": "Project Budget Tracker FY27",
+      "reference_type": "Report",
+      "fit": "strong",
+      "reference_department": "Projects",
+      "reference_tags": {
+        "Project": [
+          "atlas"
+        ],
+        "Process": [
+          "purchasing"
+        ],
+        "Topic": [
+          "finance"
+        ]
+      },
+      "classified": true,
+      "machine_doc_type": "Report",
+      "machine_doc_type_confidence": 0.9,
+      "doc_type_outcome": "applied",
+      "effective_doc_type": "Report",
+      "type_match": true,
+      "machine_department": "Finance",
+      "machine_department_confidence": 0.8,
+      "department_outcome": "provisional",
+      "effective_department": "Projects",
+      "department_match": false,
+      "user_edited": false,
+      "input_truncated": false,
+      "proposed_topics": [],
+      "discarded_suggestions": [],
+      "model": "claude-haiku-5-5",
+      "ai_tags": [
+        {
+          "dimension": "Topic",
+          "name": "finance",
+          "confidence": 0.95,
+          "provisional": false,
+          "confirmed": false
+        }
+      ]
+    },
+    {
+      "id": "D16",
+      "title": "Team Roster and Skills Matrix",
+      "reference_type": "Report",
+      "fit": "fair",
+      "reference_department": "Human Resources",
+      "reference_tags": {
+        "Process": [
+          "onboarding"
+        ],
+        "Topic": [
+          "people"
+        ]
+      },
+      "classified": true,
+      "machine_doc_type": "Report",
+      "machine_doc_type_confidence": 0.85,
+      "doc_type_outcome": "applied",
+      "effective_doc_type": "Report",
+      "type_match": true,
+      "machine_department": "Human Resources",
+      "machine_department_confidence": 0.6,
+      "department_outcome": "provisional",
+      "effective_department": "Human Resources",
+      "department_match": true,
+      "user_edited": false,
+      "input_truncated": false,
+      "proposed_topics": [],
+      "discarded_suggestions": [],
+      "model": "claude-haiku-5-5",
+      "ai_tags": [
+        {
+          "dimension": "Topic",
+          "name": "people",
+          "confidence": 0.8,
+          "provisional": false,
+          "confirmed": false
+        }
+      ]
+    },
+    {
+      "id": "D17",
+      "title": "Meeting Room Booking Rules",
+      "reference_type": "Policy",
+      "fit": "strong",
+      "reference_department": "Operations",
+      "reference_tags": {
+        "Project": [
+          "office move"
+        ],
+        "Topic": [
+          "safety",
+          "workplace"
+        ]
+      },
+      "classified": true,
+      "machine_doc_type": "Policy",
+      "machine_doc_type_confidence": 0.85,
+      "doc_type_outcome": "applied",
+      "effective_doc_type": "Policy",
+      "type_match": true,
+      "machine_department": "Operations",
+      "machine_department_confidence": 0.6,
+      "department_outcome": "provisional",
+      "effective_department": "Operations",
+      "department_match": true,
+      "user_edited": false,
+      "input_truncated": false,
+      "proposed_topics": [],
+      "discarded_suggestions": [],
+      "model": "claude-haiku-5-5",
+      "ai_tags": [
+        {
+          "dimension": "Topic",
+          "name": "workplace",
+          "confidence": 0.85,
+          "provisional": false,
+          "confirmed": false
+        },
+        {
+          "dimension": "Topic",
+          "name": "technology",
+          "confidence": 0.35,
+          "provisional": true,
+          "confirmed": false
+        },
+        {
+          "dimension": "Process",
+          "name": "service desk",
+          "confidence": 0.3,
+          "provisional": true,
+          "confirmed": false
+        },
+        {
+          "dimension": "Topic",
+          "name": "compliance",
+          "confidence": 0.3,
+          "provisional": true,
+          "confirmed": false
+        }
+      ]
+    },
+    {
+      "id": "D18",
+      "title": "IT Helpdesk Frequently Asked Questions",
+      "reference_type": "Procedure",
+      "fit": "fair",
+      "reference_department": "Information Technology",
+      "reference_tags": {
+        "Process": [
+          "service desk"
+        ],
+        "Topic": [
+          "technology"
+        ]
+      },
+      "classified": true,
+      "machine_doc_type": "Procedure",
+      "machine_doc_type_confidence": 0.6,
+      "doc_type_outcome": "provisional",
+      "effective_doc_type": null,
+      "type_match": true,
+      "machine_department": "Information Technology",
+      "machine_department_confidence": 0.85,
+      "department_outcome": "applied",
+      "effective_department": "Information Technology",
+      "department_match": true,
+      "user_edited": false,
+      "input_truncated": false,
+      "proposed_topics": [],
+      "discarded_suggestions": [],
+      "model": "claude-haiku-5-5",
+      "ai_tags": [
+        {
+          "dimension": "Process",
+          "name": "service desk",
+          "confidence": 0.8,
+          "provisional": false,
+          "confirmed": false
+        },
+        {
+          "dimension": "Topic",
+          "name": "technology",
+          "confidence": 0.7,
+          "provisional": true,
+          "confirmed": false
+        }
+      ]
+    },
+    {
+      "id": "D19",
+      "title": "Fleet Vehicle Usage Notes",
+      "reference_type": "Policy",
+      "fit": "fair",
+      "reference_department": "Operations",
+      "reference_tags": {
+        "Topic": [
+          "safety",
+          "workplace"
+        ]
+      },
+      "classified": true,
+      "machine_doc_type": "Policy",
+      "machine_doc_type_confidence": 0.85,
+      "doc_type_outcome": "applied",
+      "effective_doc_type": "Policy",
+      "type_match": true,
+      "machine_department": "Operations",
+      "machine_department_confidence": 0.6,
+      "department_outcome": "provisional",
+      "effective_department": "Operations",
+      "department_match": true,
+      "user_edited": false,
+      "input_truncated": false,
+      "proposed_topics": [],
+      "discarded_suggestions": [],
+      "model": "claude-haiku-5-5",
+      "ai_tags": [
+        {
+          "dimension": "Topic",
+          "name": "compliance",
+          "confidence": 0.6,
+          "provisional": true,
+          "confirmed": false
+        },
+        {
+          "dimension": "Topic",
+          "name": "workplace",
+          "confidence": 0.4,
+          "provisional": true,
+          "confirmed": false
+        }
+      ]
+    },
+    {
+      "id": "D20",
+      "title": "Office Relocation Announcement",
+      "reference_type": "Report",
+      "fit": "weak",
+      "reference_department": "Operations",
+      "reference_tags": {
+        "Project": [
+          "office move"
+        ],
+        "Topic": [
+          "workplace"
+        ]
+      },
+      "classified": true,
+      "machine_doc_type": "Report",
+      "machine_doc_type_confidence": 0.8,
+      "doc_type_outcome": "applied",
+      "effective_doc_type": "Report",
+      "type_match": true,
+      "machine_department": "Operations",
+      "machine_department_confidence": 0.5,
+      "department_outcome": "provisional",
+      "effective_department": "Operations",
+      "department_match": true,
+      "user_edited": false,
+      "input_truncated": false,
+      "proposed_topics": [],
+      "discarded_suggestions": [],
+      "model": "claude-haiku-5-5",
+      "ai_tags": [
+        {
+          "dimension": "Project",
+          "name": "office move",
+          "confidence": 0.95,
+          "provisional": false,
+          "confirmed": false
+        },
+        {
+          "dimension": "Topic",
+          "name": "workplace",
+          "confidence": 0.8,
+          "provisional": false,
+          "confirmed": false
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "documents": 20,
+    "classified": 20,
+    "problems": [],
+    "clause_1": {
+      "type_matches": 19,
+      "of": 20,
+      "rate_percent": 95.0,
+      "passes_75_percent": true,
+      "misses": [
+        {
+          "id": "D09",
+          "reference": "Meeting Paper",
+          "suggested": "Report",
+          "fit": "weak"
+        }
+      ],
+      "department_matches": 18
+    },
+    "clause_2": {
+      "below_threshold": 45,
+      "below_and_held": 45,
+      "at_or_above": 44,
+      "at_or_above_and_applied": 43,
+      "at_or_above_held_to_keep_a_given_department": 1,
+      "violations": [],
+      "passes": true
+    },
+    "clause_3": {
+      "department_out_of_scheme": 0,
+      "department_discarded": 0,
+      "project_process_discarded": 0,
+      "topic_proposed": 1,
+      "out_of_scheme_links": 0,
+      "violations": [],
+      "passes": true
+    },
+    "tags_for_information": {
+      "reference_pairs": 48,
+      "ai_suggested_pairs": 49,
+      "in_both": 31,
+      "precision_percent": 63.3,
+      "recall_percent": 64.6
+    }
+  }
+}

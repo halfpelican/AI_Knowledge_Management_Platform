@@ -1,0 +1,33 @@
+Ben: Welcome to the retro for the third quarter. Let's do what went well, what didn't, and what we'll change. Chloe, do you want to start?
+
+Chloe: What went well is renewals. We renewed ninety-one percent of accounts, and the new onboarding checklist cut the time to first value by about a week.
+
+Marcus: What didn't go well, from my side, is the CRM sync. Contacts updated in the CRM sometimes don't reach the billing system, so invoices go to people who've left the customer.
+
+Ben: How often?
+
+Marcus: About twenty accounts last quarter that we know of. I know what the bug is. I'll fix the sync by the end of the month.
+
+Alex Petrov: I'd add that we found out about churn too late. Two big accounts cancelled and nobody saw the warning signs.
+
+Ben: That's on me. We don't have a view of account health. I'll build a churn dashboard, with usage, tickets and survey scores in one place. I'll have a first version by next Monday.
+
+Chloe: On onboarding, the webinars we trialled in September were really popular. I'd like to run them every fortnight. I'll start them on the seventeenth.
+
+Ben: Good. What else didn't go well?
+
+Alex Morgan: The renewal list reaches the account managers too late. They get it two weeks before the renewal date, and they need at least six.
+
+Ben: Then let's send it earlier. Alex will send the renewal list to the account managers tomorrow, and from now on it goes out eight weeks ahead.
+
+Chloe: We might want to try a customer advisory board at some point, a few key customers who give us feedback before we build things.
+
+Ben: Maybe, but let's not commit to that yet. We've got enough on.
+
+Marcus: Should we change the survey? NPS every month is too often. Customers have started ignoring it.
+
+Ben: Agreed. The NPS survey moves to quarterly from now on.
+
+Alex Petrov: I can update the survey schedule in the system. It's a small change. I'll do it by Friday.
+
+Ben: Thanks. So: Marcus fixes the CRM sync by the end of the month. I build the churn dashboard by next Monday. Chloe starts fortnightly webinars on the seventeenth. The renewal list goes out tomorrow, and eight weeks ahead from now on. Alex Petrov moves the survey to quarterly by Friday. Good retro, everyone.

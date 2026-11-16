@@ -472,13 +472,15 @@ def answer_question(*, question: str, user, conversation=None) -> RetrievalOutco
     # list, above the path-A branch — so that both no-answer paths are handed the same value
     # (invariant 7, apps/retrieval/partial_matches.py). Every item named is in the asking
     # role's scope because ``candidates`` was (invariant 1), and none of them carries passage
-    # text. Only items whose best passage reaches PARTIAL_MATCH_FLOOR are named (D-56's
-    # floor; 0.0, none, since step 7: D-56 stays open). With a floor above zero an EMPTY
-    # offer implies path A; that module says why this discloses nothing outside the
-    # caller's scope.
-    offered = partial_matches(ranked)
+    # text. Only items whose best passage reaches the embedding model's floor are named
+    # (D-56's floor, per model since D-120: none for EmbeddingGemma, 0.2468 for Voyage).
+    # With a floor above zero an EMPTY offer implies path A; that module says why this
+    # discloses nothing outside the caller's scope.
+    offered = partial_matches(ranked, embedding_model=embedding.model)
 
-    admitted = admit(ranked)
+    # The threshold is the embedding model's own too (D-120): the model that answered for
+    # the question, which is the model every candidate was recorded against.
+    admitted = admit(ranked, embedding_model=embedding.model)
 
     # Step 6. No-answer path A: return BEFORE the call site below, not around it.
     # Answerability is settled on the scores, so with no grounding material the model is

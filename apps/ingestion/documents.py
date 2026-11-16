@@ -19,10 +19,12 @@ Two rules govern the transaction, and they are one rule seen from two sides
   way out, because a filesystem does not roll back with the database.
 """
 
+import logging
 from dataclasses import dataclass
 
 from django.db import transaction
 
+from apps.ai.base import ProviderUnavailable
 from apps.core.constants import (
     DOCUMENT_EXTRACTION_FAILED,
     DOCUMENT_INDEXED,
@@ -33,7 +35,8 @@ from apps.core.constants import (
     MAXIMUM_CHUNKS_PER_SOURCE,
     MINIMUM_CONTENT_LENGTH,
 )
-from apps.documents.models import ContentChunk, Document, ExtractedContent
+from apps.documents.classification import ClassificationError, classify_document_now
+from apps.documents.models import ContentChunk, Document, DocumentAnalysis, ExtractedContent
 from apps.ingestion.signatures import compute_content_hash
 from apps.ingestion.chunking import (
     chunk_count_for_tokens,
@@ -43,6 +46,9 @@ from apps.ingestion.chunking import (
 from apps.ingestion.embedding import DOCUMENT_SOURCE_TYPE, embed_and_store_chunks
 from apps.ingestion.errors import ExtractionError, TooLargeToExtractError
 from apps.ingestion.extraction import extract_plain_text
+
+# The classification hook's record of why a document was left unclassified (D-105).
+logger = logging.getLogger(__name__)
 
 # Section 7.8 message 43: RETURN response(422, "No readable text could be
 # extracted"). FR-08 Responses: "422 Unprocessable Entity where no text can be
@@ -92,6 +98,9 @@ class IngestionOutcome:
     document: Document
     http_status: int
     detail: str = ""
+    # The FR-10 classification this run wrote, for the 201 body (section 7.8 line 100; D-105).
+    # None on a 422, and on a 201 whose classification failed and left the document unclassified.
+    analysis: DocumentAnalysis | None = None
 
 
 def ingest_and_index_document(
@@ -266,6 +275,10 @@ def _run_pipeline(document: Document, source_file) -> IngestionOutcome:
     # require the document to be parsed a second time (FR-08, D-05).
     ExtractedContent.objects.create(document=document, extracted_text=text)
 
+    # Section 7.8 step 4: the hand-off to FR-10, between the extracted text and chunking (D-33
+    # part 1, D-105). It cannot fail the ingestion; see _classify.
+    analysis = _classify(document)
+
     chunks = split_into_overlapping_chunks(text)
     failed_chunk_count = embed_and_store_chunks(
         chunks=chunks,
@@ -284,7 +297,41 @@ def _run_pipeline(document: Document, source_file) -> IngestionOutcome:
         return _decided_failure(document, DOCUMENT_INDEXING_FAILED, INDEXING_FAILED_MESSAGE)
     document.status = DOCUMENT_PARTIALLY_INDEXED if failed_chunk_count else DOCUMENT_INDEXED
     document.save(update_fields=["status"])
-    return IngestionOutcome(document, 201)
+    return IngestionOutcome(document, 201, analysis=analysis)
+
+
+def _classify(document: Document) -> DocumentAnalysis | None:
+    """Section 7.8 step 4: hand the extracted text to FR-10 (D-33 part 1, D-105).
+
+    FR-08 Business logic (classification): "A failure of classification marks the document
+    unclassified but never prevents it reaching indexed status" (CLAUDE.md invariant 8). So:
+
+    - it runs in its own ``transaction.atomic()`` savepoint, so a database error inside it rolls
+      back to the savepoint and the ingestion transaction around it stays usable;
+    - ``ProviderUnavailable`` (the provider failed after MAXIMUM_CLASSIFY_ATTEMPTS) and
+      ``ClassificationError`` (the apply layer refused: no text, a value outside its list) are the
+      expected ways to be left unclassified, logged at INFO;
+    - ANY other exception is logged at WARNING with its traceback and swallowed too. A defect in
+      classification is a defect in classification and not a reason to lose the upload; the log
+      is where it is found.
+
+    Returns the analysis, or None, and None means no analysis row exists: ``apply_classification``
+    is atomic, and the savepoint takes back anything written before the failure.
+    """
+    try:
+        with transaction.atomic():
+            return classify_document_now(document)
+    except (ProviderUnavailable, ClassificationError) as exc:
+        logger.info(
+            "Document %s left unclassified: %s: %s", document.pk, type(exc).__name__, exc
+        )
+    except Exception:
+        logger.warning(
+            "Document %s left unclassified by an unexpected error in classification",
+            document.pk,
+            exc_info=True,
+        )
+    return None
 
 
 def _decided_failure(document: Document, status: str, detail: str) -> IngestionOutcome:

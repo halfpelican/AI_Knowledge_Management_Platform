@@ -1,0 +1,62 @@
+Provider gate: PASS (anthropic, claude-haiku-5-5)
+  X01 #1: ok  Policy (0.97) dept Legal and Compliance (0.80) 1.8s
+  X01 #2: ok  Policy (0.97) dept Legal and Compliance (0.80) 1.3s
+  X01 #3: ok  Policy (0.95) dept Legal and Compliance (0.70) 1.2s
+  X02 #1: ok  Policy (0.95) dept Legal and Compliance (0.50) 1.3s
+  X02 #2: ok  Policy (0.95) dept Legal and Compliance (0.50) 2.7s
+  X02 #3: ok  Policy (0.95) dept Legal and Compliance (0.50) 1.4s
+  X03 #1: ok  Policy (0.95) dept Operations (0.60) 1.1s
+  X03 #2: ok  Policy (0.96) dept Operations (0.60) 1.4s
+  X03 #3: ok  Policy (0.95) dept Operations (0.60) 1.2s
+  X04 #1: ok  Procedure (0.95) dept Operations (0.60) 1.9s
+  X04 #2: ok  Procedure (0.93) dept Operations (0.60) 2.0s
+  X04 #3: ok  Procedure (0.93) dept Operations (0.60) 1.9s
+  X05 #1: ok  Procedure (0.96) dept Finance (0.90) 1.4s
+  X05 #2: ok  Procedure (0.95) dept Finance (0.90) 1.2s
+  X05 #3: ok  Procedure (0.95) dept Finance (0.90) 1.2s
+  D21 #1: ok  Procedure (0.80) dept Operations (0.60) 2.3s
+  D21 #2: ok  Procedure (0.80) dept Operations (0.60) 2.6s
+  D21 #3: ok  Procedure (0.80) dept Operations (0.60) 2.5s
+  X06 #1: ok  Report (0.95) dept Operations (0.50) 1.0s
+  X06 #2: ok  Report (0.95) dept Operations (0.50) 3.0s
+  X06 #3: ok  Report (0.95) dept Operations (0.50) 2.3s
+  X07 #1: ok  Report (0.93) dept Operations (0.60) 3.2s
+  X07 #2: ok  Report (0.93) dept Operations (0.60) 2.5s
+  X07 #3: ok  Report (0.93) dept Operations (0.60) 2.1s
+  X08 #1: ok  Report (0.95) dept Human Resources (0.85) 1.6s
+  X08 #2: ok  Report (0.95) dept Human Resources (0.85) 1.2s
+  X08 #3: ok  Report (0.95) dept Human Resources (0.85) 1.1s
+  X09 #1: ok  Meeting Paper (0.96) dept Information Technology (0.90) 2.6s
+  X09 #2: ok  Meeting Paper (0.95) dept Information Technology (0.90) 2.6s
+  X09 #3: ok  Meeting Paper (0.95) dept Information Technology (0.90) 2.2s
+  X10 #1: ok  Meeting Paper (0.93) dept Legal and Compliance (0.50) 2.7s
+  X10 #2: ok  Meeting Paper (0.93) dept Legal and Compliance (0.55) 2.6s
+  X10 #3: ok  Meeting Paper (0.93) dept Legal and Compliance (0.45) 3.1s
+  X11 #1: ok  Meeting Paper (0.95) dept Finance (0.90) 1.8s
+  X11 #2: ok  Meeting Paper (0.93) dept Finance (0.70) 1.9s
+  X11 #3: ok  Meeting Paper (0.95) dept Finance (0.85) 2.2s
+  X12 #1: ok  Report (0.85) dept Information Technology (0.70) 2.4s
+  X12 #2: ok  Report (0.85) dept Information Technology (0.70) 2.2s
+  X12 #3: ok  Report (0.90) dept Information Technology (0.80) 1.8s
+  X13 #1: ok  Report (0.90) dept Finance (0.60) 1.1s
+  X13 #2: ok  Report (0.85) dept Finance (0.50) 1.0s
+  X13 #3: ok  Report (0.90) dept Finance (0.60) 1.1s
+  X14 #1: ok  Report (0.85) dept Human Resources (0.60) 2.5s
+  X14 #2: ok  Report (0.80) dept Human Resources (0.60) 2.1s
+  X14 #3: ok  Report (0.85) dept Human Resources (0.60) 1.8s
+  X15 #1: ok  Report (0.90) dept Operations (0.30) 2.1s
+  X15 #2: ok  Report (0.85) dept Operations (0.30) 1.8s
+  X15 #3: ok  Report (0.85) dept Operations (0.40) 1.8s
+  X16 #1: ok  Policy (0.90) dept Human Resources (0.55) 1.8s
+  X16 #2: ok  Policy (0.93) dept Operations (0.45) 2.1s
+  X16 #3: ok  Policy (0.93) dept Operations (0.40) 1.8s
+  X17 #1: ok  Report (0.80) dept Operations (0.60) 1.7s
+  X17 #2: ok  Report (0.72) dept Operations (0.60) 1.9s
+  X17 #3: ok  Report (0.80) dept Operations (0.60) 2.4s
+  X18 #1: ok  Procedure (0.93) dept Operations (0.50) 2.1s
+  X18 #2: ok  Procedure (0.93) dept Operations (0.50) 2.2s
+  X18 #3: ok  Procedure (0.93) dept Operations (0.50) 1.0s
+
+wrote corpus\objective-05\runs\2026-11-10\dev-sweep-haiku\sweep\dev-sweep.json and dev-sweep.md
+threshold by D-106's rule: 0.72 (separates: False)
+Claude usage: {'calls': 57, 'input_tokens': 104271, 'output_tokens': 14382, 'estimated_usd': 0.0176}

@@ -30,6 +30,11 @@ The user object, wherever a user is returned:
 
 Never `password_hash`, `failed_attempts` or `locked_until`.
 
+> **13 November 2026 (D-130).** `GET /api/users` adds one field, `lock`, for a requester holding
+> `release_account_locks`, which only Administrators hold. That is FR-03's "An Administrator viewing
+> a locked account". Every other route's user object is unchanged. See "NIT3004 — FR-03" at the end
+> of this file.
+
 ## Stage 2 — FR-01, FR-02, FR-04, FR-05, FR-06
 
 Every code below is quoted from the FR's own Responses clause unless marked
@@ -65,8 +70,9 @@ cannot drift.
 
 **Rate limiting.** `POST /api/auth/register` and `POST /api/auth/login` are limited
 per client address and answer `429` past the rate (D-26). Since Stage 5 item 5, asks, ingestion
-and thread creation are limited per user as well; "Stage 5 item 5" below lists every throttled
-route (D-79).
+and thread creation are limited per user as well, and keyword search and a person applying a tag
+since 10 November 2026, and a recording segment sent for transcription since D-123;
+"Stage 5 item 5" below lists every throttled route (D-79).
 
 **FR-02 login side effects.** A failed attempt increments `failed_attempts`; five
 consecutive failures lock the account for `LOCKOUT_DURATION`. While the lock holds,
@@ -80,6 +86,29 @@ there. A success resets `failed_attempts` to 0, clears
 `locked_until`, and sets `last_login_at`. The lock is FR-02's own clause and is
 enforced here; FR-03 adds only the warning interface and stays out of the gate
 (D-25).
+
+> **13 November 2026: FR-03 is built (D-130).**
+>
+> - **What it adds:** the warning, the countdown, `POST /api/users/{id}/unlock`, `lock` on
+>   `GET /api/users`, `retry_after` on the login `403`, and the `LoginAttempts` table. See
+>   "NIT3004 — FR-03" at the end of this file. The `401` is unchanged.
+> - **The threshold and the duration are the running `.env` policy** (D-130 decisions 7 and 8,
+>   14 and 15 November). The policy is five failures and `LOCKOUT_DURATION` (15 minutes) by
+>   default, and can only be tightened. Login reads it at request time, and
+>   `GET /api/auth/lockout-policy` gives it to the sign-in page. "Five consecutive failures"
+>   above is the default.
+> - **The locked-account message names the release again** (D-26 finding 4 removed it while no
+>   release existed): "…Try again later, or ask an administrator to unlock it."
+> - **The decision is made on the row read under lock** (D-130's H1). Login now decides on the
+>   account row read with `select_for_update()` after the password check: whether the account is
+>   locked, the count, the lock itself, and on success the sign-in and the reset. All of it happens
+>   while that row lock is held.
+>   - **Before,** it decided on an unlocked read taken before the check. Concurrent wrong passwords
+>     could erase a lock that one of them had just set, and a right password could get a session for
+>     an account a concurrent request had just locked.
+>   - **What the lock does not reach:** Django saves the new session's signed-in keys just after the
+>     view returns, which is after the row lock is released. A lock committed after that decision is
+>     D-26's residue, that a lock does not end a session.
 
 **FR-05 role change.** The body is `{"role_id": "<uuid>"}`, matching the FR's
 `{ user_id, new_role_id }`; the user id travels in the path. A user cannot remove
@@ -104,9 +133,28 @@ Response bodies the front end relies on (Stage 2 implementation):
   outside `/api/` is the SPA's (see "Stage 5 item 9" at the end of this file).
 - CSRF: `POST /api/auth/logout` and `PATCH` always require `X-CSRFToken`; so does
   `POST /api/auth/login` when the browser already holds a session.
+  - **The token is read from that header only, never from a `csrfmiddlewaretoken` form field
+    (D-124).** That is so the check never reads the request body. Every client already sends the
+    header.
+  - **A refusal is `403 {"detail": "CSRF Failed: ..."}`,** given before any permission check,
+    throttle or body is read.
 - `POST /api/auth/register` starts no session (D-23).
 - Any endpoint, a request body that is not `application/json`: `415`. The API parses
   JSON only, which is what stops a cross-site form from posting credentials (D-24).
+- Any endpoint that reads a JSON body, one declaring more than 2.5 MiB:
+  `400 {"detail": "Bad request."}`, refused unread.
+  - **Why:** DRF parses JSON from `request.body`, which applies Django's
+    `DATA_UPLOAD_MAX_MEMORY_SIZE` to the declared length.
+  - **Not new:** it held from the start and was first written down at D-124. The one body it does
+    not cover is FR-09's pasted transcript above 50 MB, which gets the upload ceiling's `413`.
+- Any endpoint, a body declaring `MAX_REQUEST_BODY_BYTES` (54,525,952) or more: `413` from Waitress,
+  not from the API (D-124).
+  - **It is Waitress's own plain-text page, not JSON.** Waitress gives it at the request's headers,
+    before reading the body, then closes the connection. A client still sending may see the
+    connection reset instead.
+  - **A chunked body declares no length.** Waitress counts it as it arrives and refuses it when it
+    reaches the cap, so up to the cap is received first.
+  - **It applies only where the server is started as `docs/alpha-deployment.md` starts it.**
 
 ## Stage 3 — FR-08, FR-09
 
@@ -115,8 +163,8 @@ Every code below is quoted from the FR's own Responses clause unless marked
 
 | Method | Path | Auth | Success | Failures |
 |---|---|---|---|---|
-| POST | `/api/documents` | session + `contribute_content` | `201` document object, carrying `doc_id` | `400` no file, or an empty title, or a `visible_to_roles` that is empty or names an unknown role; `401`; `403` the role lacks `contribute_content`, or the list excludes the uploader's own role (*convention*, D-29); `409` a document with the same content already exists; `413` over 50 MB, or a DOCX or XLSX whose members declare more decompressed content than a parser may inflate (*convention*, Stage 4 item 12b — a size rejection of decompressed size, carrying its own message, not the 415); `415` the file signature is not one of the four accepted formats; `422` the document was stored but no text could be extracted, or it holds too little text to index, or it is too large to index (D-51; for a PDF, any of D-81's bounds), or every chunk failed to embed; `429` past `INGESTION_THROTTLE_RATE`, shared with meeting ingest and reprocess (D-79); `429 {"detail": "...", "code": "ingestion_in_flight"}` while another upload, transcript or reprocess of this user's is still being processed, nothing stored (D-85) |
-| POST | `/api/documents/{id}/reprocess` | session + `contribute_content` | `201` the document object, now `Indexed` or `Partially indexed` | `401`; `403` the role lacks `contribute_content`; `404` no such document, or one outside the caller's scope; `409` already indexed, or restoring its content hash collided with a copy indexed meanwhile; `422` the reprocess failed the same way the upload did, or the document has no stored original: its `file_path` is blank or names a file missing from disk or outside the media folder (`NO_STORED_ORIGINAL_MESSAGE`, D-75); `429` past the ingestion rate (D-79); `429 {"detail": "...", "code": "ingestion_in_flight"}` while another upload, transcript or reprocess of this user's is still being processed, the document left as it was (D-85) |
+| POST | `/api/documents` | session + `contribute_content` | `201` document object, carrying `doc_id`, and since FR-10 `classification` (the object or `null`; see NIT3004 — FR-10) | `400` no file, or an empty title, or a `visible_to_roles` that is empty or names an unknown role; `401`; `403` the role lacks `contribute_content`, or the list excludes the uploader's own role (*convention*, D-29); `409` a document with the same content already exists; `413` over 50 MB, or a DOCX or XLSX whose members declare more decompressed content than a parser may inflate (*convention*, Stage 4 item 12b — a size rejection of decompressed size, carrying its own message, not the 415); `415` the file signature is not one of the four accepted formats; `422` the document was stored but no text could be extracted, or it holds too little text to index, or it is too large to index (D-51; for a PDF, any of D-81's bounds), or every chunk failed to embed; `429` past `INGESTION_THROTTLE_RATE`, shared with meeting ingest, reprocess and, since FR-10, classify (D-79, D-105); `429 {"detail": "...", "code": "ingestion_in_flight"}` while another upload, transcript or reprocess of this user's is still being processed, nothing stored (D-85) |
+| POST | `/api/documents/{id}/reprocess` | session + `contribute_content` | `201` the document object, now `Indexed` or `Partially indexed`, with `classification` since FR-10 (NIT3004 — FR-10) | `401`; `403` the role lacks `contribute_content`; `404` no such document, or one outside the caller's scope; `409` already indexed, or restoring its content hash collided with a copy indexed meanwhile; `422` the reprocess failed the same way the upload did, or the document has no stored original: its `file_path` is blank or names a file missing from disk or outside the media folder (`NO_STORED_ORIGINAL_MESSAGE`, D-75); `429` past the ingestion rate (D-79); `429 {"detail": "...", "code": "ingestion_in_flight"}` while another upload, transcript or reprocess of this user's is still being processed, the document left as it was (D-85) |
 | GET | `/api/documents` | session | `200 [document object, ...]`, newest first, scoped to the caller's role | `401` |
 | GET | `/api/documents/{id}` | session | `200` document object, with the detail fields Stage 5 adds (`extracted_text`, `tags`, `can_delete`; see Stage 5 — FR-15) | `401`; `404` no such document, or one outside the caller's scope |
 
@@ -152,10 +200,33 @@ content than may be inflated — the same step, a different rejection**), then s
 says why the permission is first — "it is the cheapest rejection, and the user's role
 may have changed during a transfer of up to 50 MB".
 
-**The size ceiling is applied twice**: once against the declared `Content-Length`,
-before the body is parsed, so a 50 MB transfer is refused without being buffered; and
-once against the bytes actually received, for a client that lies about or omits the
-header.
+**The size ceiling is applied twice**: once against the declared `Content-Length`, before the
+body is read, and once against the bytes actually received. The second is defence in depth:
+Django reads no more of a body than its declared length, so a body cannot carry a larger file than
+it declares.
+
+- **One step runs ahead of the order above, as it has since Stage 3.** The declared-length 413
+  comes before the signature's 415, because the signature cannot be read without reading the body.
+  So an oversized disguised file is `413`, not `415`.
+- **Every step after it** runs in §7.2's order.
+- **Nothing reads the body before the view** (D-124). The view reads it only after the 403, the 429
+  and the declared-length 413.
+
+> **Corrected 11 November 2026 (D-124).** From Stage 3 until then, this paragraph said the first
+> check refused a 50 MB transfer "without being buffered".
+>
+> - **For every signed-in browser session it did not.** DRF's CSRF check read `request.POST`, which
+>   parsed the whole body, spooling the upload to temporary files. That happened before the 403,
+>   the 429 and this 413, so §7.2's "cheapest rejection" was not cheap.
+> - **The suite did not catch it,** because the test client enforces CSRF only when asked.
+> - **The fix:** the CSRF check now reads its token from the `X-CSRFToken` header and parses
+>   nothing.
+
+**What is not refused unread: receiving.** Waitress reads the whole body before Django sees the
+request. The serve command's `--max-request-body-size` caps that, on every route, at
+`MAX_REQUEST_BODY_BYTES`: 54,525,952 bytes, 2 MiB over the upload ceiling (D-124). A body at or
+over that cap is refused by Waitress itself (see Stage 2's last bullet), as is a chunked one when it
+reaches the cap. A body over 50 MB and under the cap gets this route's JSON `413`.
 
 **A third size rejection shares the 413 and does not share the message** (Stage 4
 item 12b). Both checks above are checks on the *upload*, and a 199 KB DOCX whose
@@ -250,7 +321,7 @@ an upload may *write* into `visible_to_roles` is unchanged (D-29).
 
 | Method | Path | Auth | Success | Failures |
 |---|---|---|---|---|
-| POST | `/api/meetings` | session + `contribute_content` | `201` meeting object, carrying `meeting_id` | `422` the transcript was stored but every chunk failed to embed (*convention*: FR-09 enumerates only 201 and 400, and this mirrors FR-08's code for the same condition); `400` a missing or empty title, a missing date, a date in the future, a transcript below the minimum length, neither text nor file, both text and file, an unreadable file, a PDF file over one of D-81's extraction bounds (`{"file": ["..."]}` with that bound's own message, nothing stored), or an attendee who is not a registered user; `401`; `403` the role lacks `contribute_content`, or `visible_to_roles` excludes the ingester's own role; `429` past the ingestion rate (D-79); `429 {"detail": "...", "code": "ingestion_in_flight"}` while another upload, transcript or reprocess of this user's is still being processed, nothing stored (D-85) |
+| POST | `/api/meetings` | session + `contribute_content` | `201` meeting object, carrying `meeting_id` | `422` the transcript was stored but every chunk failed to embed (*convention*: FR-09 enumerates only 201 and 400, and this mirrors FR-08's code for the same condition); `400` a missing or empty title, a missing date, a date in the future, a transcript below the minimum length, neither text nor file, both text and file, an unreadable file, a PDF file over one of D-81's extraction bounds (`{"file": ["..."]}` with that bound's own message, nothing stored), or an attendee who is not a registered user; `401`; `403` the role lacks `contribute_content`, or `visible_to_roles` excludes the ingester's own role; `413 {"detail": "Transcript exceeds the maximum permitted size of 50 MB."}` a body, pasted or a file, declaring more than 50 MB, refused before it is read, after the 403 and the 429, nothing stored (*convention*, D-124: FR-09 enumerates only 201 and 400, and a body refused unread has no field to report on); `400 {"detail": "Bad request."}` a pasted transcript whose JSON body declares between 2.5 MiB and 50 MB, refused unread by Django's `DATA_UPLOAD_MAX_MEMORY_SIZE`, nothing stored (always so; first written down at D-124); `429` past the ingestion rate (D-79); `429 {"detail": "...", "code": "ingestion_in_flight"}` while another upload, transcript or reprocess of this user's is still being processed, nothing stored (D-85) |
 | GET | `/api/meetings` | session | `200 [meeting object without `transcript_text`, ...]`, newest first, scoped to the caller's role | `401` |
 | GET | `/api/meetings/{id}` | session | `200` meeting object **with** `transcript_text`, and `can_delete` since D-99 (see Meeting deletion, below FR-15) | `401`; `404` no such meeting, or one outside the caller's scope |
 | DELETE | `/api/meetings/{id}` | session + `manage_meetings` | `204` no body (D-99; not in the proposal, see Meeting deletion, below FR-15) | `401`; `404` no such meeting, or one outside the caller's scope, checked **before** the permission; `403` the meeting is in scope and the role lacks `manage_meetings` |
@@ -310,7 +381,7 @@ query; the codes below are its own except where marked *convention*.
 
 | Method | Path | Auth | Success | Failures |
 |---|---|---|---|---|
-| GET | `/api/search?q=<term>` | session | `200` grouped results, scoped to the caller's role; also `200` when nothing matched | `400 {"q": ["..."]}` `q` was not sent, or the term is shorter than `MINIMUM_SEARCH_LENGTH` (2 characters), which includes `?q=`; `401` |
+| GET | `/api/search?q=<term>` | session | `200` grouped results, scoped to the caller's role; also `200` when nothing matched | `400 {"q": ["..."]}` `q` was not sent, or the term is shorter than `MINIMUM_SEARCH_LENGTH` (2 characters), which includes `?q=`, or longer than `MAXIMUM_SEARCH_LENGTH` (500, D-79's note of 10 November 2026), and no `SearchLog` row is written; `401`; `429` past `SEARCH_THROTTLE_RATE`, with DRF's body and `Retry-After`, and no row written (D-79's note) |
 
 The reply:
 
@@ -758,8 +829,9 @@ re-login, and asserts the second turn's answer changed with the role.
 ### FR-14 — dashboard
 
 One endpoint aggregates every panel, in one request (FR-14's Server-End clause). Decisions:
-D-68 (recent questions), D-69 (KnowledgeGaps deferred), D-70 (filters and totals), D-65 (how
-the query parameters are read), D-66 (what "scoped to the caller's role" means).
+D-68 (recent questions), D-69 (KnowledgeGaps deferred, closed by D-107 on 9 November 2026), D-70
+(filters and totals), D-65 (how the query parameters are read), D-66 (what "scoped to the caller's
+role" means).
 
 | Method | Path | Auth | Success | Errors |
 |---|---|---|---|---|
@@ -797,6 +869,9 @@ All three parameters are optional, and an empty value for any of them (`date_fro
 - **`recent_questions`** holds up to 5 of the **caller's own** `QueryLog` rows, newest
   `answered_at` first: the question as asked, when, and its conversation if any. There is no
   answer text, no `answered` flag and no reason field (D-68).
+- **`knowledge_gaps`** is present **only** for a caller whose role holds
+  `review_knowledge_gaps`, and absent from every other payload, so an Employee's dashboard has
+  exactly the six keys above. Its shape is under FR-19 below (D-107).
 
 **What each filter narrows (D-70):**
 
@@ -867,7 +942,8 @@ AND. `sort` is not a filter: it never causes a 204.
 - **`documents`** is the document object `GET /api/documents` returns, filtered and sorted, with
   no paging.
 
-**The detail object adds three fields** to the document object (D-63, D-73):
+**The detail object adds three fields** to the document object (D-63, D-73), and since FR-10 three
+more, `classification`, `tag_details` and `tag_options` (NIT3004 — FR-10, at the end of this file):
 
 ```json
 {
@@ -961,8 +1037,12 @@ not grant it, and it does not grant `manage_documents`.
 |---|---|---|
 | `auth` | `POST /api/auth/register`, `POST /api/auth/login`, per client address (D-26) | 20/min |
 | `ask` | `POST /api/ask` | 10/min |
-| `ingestion` | `POST /api/documents`, `POST /api/meetings`, `POST /api/documents/{id}/reprocess`, one shared budget | 60/hour |
+| `ingestion` | `POST /api/documents`, `POST /api/meetings`, `POST /api/documents/{id}/reprocess`, since FR-10 `POST /api/documents/{id}/classify` (D-105), and since FR-16 `POST /api/meetings/{id}/summary` (D-125), one shared budget | 60/hour |
 | `conversation_create` | `POST /api/conversations` | 10/min, its own budget |
+| `search` | `GET /api/search`, since D-79's note of 10 November 2026 | 30/min |
+| `tagging` | `POST /api/documents/{id}/tags`, since D-79's note on tagging of the same night; checked before the document is looked up, so past the rate the `429` comes before the `404` and the `403`. Since D-128 also `POST /api/tags`, the Administrator's add, checked after its `401` and `403`; one budget per user across both routes. Since D-129 also `POST /api/departments`, on the same budget | 30/min |
+| `transcription` | `POST /api/transcriptions`, one recording segment per request, and `GET /api/transcriptions/status`, which asks FLM each time (D-123; see "Recording transcription" at the end of this file) | 60/min |
+| `action_items` | FR-16's `POST /api/meetings/{id}/action-items` and `PATCH` and `DELETE /api/meetings/{id}/action-items/{item_id}`, one budget (the security review of 12 November 2026, D-125's third note); checked before the meeting is looked up, so past the rate the `429` comes before the `404` and the `403` | 30/min |
 
 A request over its rate is answered with DRF's 429, `{"detail": "Request was throttled. Expected
 available in N seconds."}`, and a `Retry-After` header in seconds. The rate is checked before the
@@ -999,10 +1079,11 @@ user, another from the same user, on any of the three, answers at once:
   404, 409 and the 422 for a missing original. Those are answered as before. A 422 for content
   stored but not indexed is ingestion's own outcome, reached inside the slot. The rate is checked
   before the slot, so this 429 counts against the rate.
-- **It is separate from the ask's slot.** A user may have one question and one ingestion in
-  flight at once.
-- The client tells the three kinds of 429 apart by `code`: none for the rate, `ask_in_flight`,
-  and `ingestion_in_flight`. It does not parse `detail`.
+- **It is separate from the ask's slot.** A user may have a question and an ingestion in flight
+  at once, and since D-123 a recording segment in transcription as well.
+- The client tells the kinds of 429 apart by `code`: none for the rate, `ask_in_flight`,
+  `ingestion_in_flight` and, on the transcription route, `transcription_in_flight` and
+  `transcription_busy` (D-123). It does not parse `detail`.
 
 **The conversation list leaves out empty threads (D-80).** `GET /api/conversations` returns only
 threads with at least one turn, answered or not. It never filters on the title, or on what a turn
@@ -1033,7 +1114,7 @@ Waitress, on loopback (D-64). `docs/alpha-deployment.md` is the runbook.
 | a file in the build, such as `/assets/index-<hash>.js` or `/favicon.svg` | `200` the file. Under `/assets/`, `Cache-Control: max-age=315360000, public, immutable`, because Vite puts a content hash in every name there; anything else, `max-age=60, public` |
 | `/assets/...` naming no file in the build | `404 {"detail": "Not found."}`, never `index.html` |
 | any other path, for `GET` or `HEAD` | `200` the build's `index.html`, `Cache-Control: no-cache`, so the React router answers a reload or a typed address on a client route |
-| any other path, another method | `405`, or Django's `403` page first when the CSRF check refuses it |
+| any other path, another method | `405`, and nothing is read. Until D-124, Django's CSRF check ran first: it could answer its `403` page, and it parsed a multipart body to look for a form-field token. The catch-all is exempt now, because it makes no write |
 | any path outside `/api/`, with no build in `SPA_DIST_DIR` | `404 {"detail": "Not found."}`, as before item 9 |
 
 - **`/media/` is a client route like any other.** It answers `index.html` and never a stored file.
@@ -1048,3 +1129,645 @@ Waitress, on loopback (D-64). `docs/alpha-deployment.md` is the runbook.
   one reason the alpha runs with `DEBUG=False`.
 - **Nothing outside `/api/` is marked never-cache** by D-76's middleware: `index.html` is
   `no-cache` (stored, but revalidated on every load) and the assets are cached as above.
+
+## NIT3004 — FR-10 document classification (D-104, D-105)
+
+FR-10's server side, 8 and 9 November 2026. The AI operation is `AIService.classify_document`
+(D-104). What becomes of its suggestions is application code in `apps/documents/classification.py`
+(D-105, D-128, D-129). Each value is compared with the classifying model's confidence threshold for
+its kind: `confidence_threshold` for the type and the tags (0.72 on Haiku), and `department_threshold`
+for the department (0.30 on Haiku, D-129; a model it does not list uses its shared value).
+
+- **The type:** **applied** at or above the threshold, **provisional** below it.
+- **The department:** likewise, against its own threshold, and **discarded** outside the established
+  scheme, which since D-129 is the department list an Administrator keeps on the Tags page.
+- **A tag in the scheme:** linked `applied_by: "ai"`, provisional below the threshold.
+- **A value outside the scheme,** Objective 05's clause 3 as written, with two recorded literal
+  departures (the long Topic and the value that cannot be stored, below):
+  - **a Topic** is **proposed** in `proposed_tags`, at any confidence, for a person to confirm (which
+    creates it) or reject. The classifier never creates, links or reactivates one. **A Topic longer
+    than a tag name's 255 characters** (once normalised) is **discarded** instead, at any confidence,
+    because no tag can hold it: a literal departure from clause 3's wording, recorded in D-134
+    (15 November 2026). So every proposal a run makes can be confirmed. From D-129 until D-134 such a
+    Topic was proposed: until D-133 it could be neither confirmed nor rejected, and from D-133 it
+    could only be rejected;
+  - **a Project or Process value** is **discarded**;
+  - **a value that cannot be stored,** one holding U+0000 or a lone surrogate, is discarded too, with
+    U+FFFD in its place (for a Topic, the other literal departure, D-129). No discard is exposed;
+  - **a value this document's readers removed or rejected** is neither linked nor proposed again.
+
+  For one day (12 November, D-128) the classifier created values at or above the threshold. D-129
+  reversed it.
+
+The scheme is built for the document's own audience, so the classifier is never shown a value that
+exists only on material some reader of the document may not see (invariant 1). A value outside the
+scheme gets the same treatment whether no Tag has it, a grown Tag carried only by restricted
+material has it, or a retired Tag has it, so no reply tells a reader which (D-105, D-129). A person's
+decision (`user_edited`, a confirmed or removed link) is never overwritten by a later run; the
+machine's values are recorded alongside it.
+
+Every route below: a session; the document resolved through the caller's scope **first**, so an
+unknown id and one outside the scope are the same `404 {"detail": "No Document matches the given
+query."}` (D-46); then `contribute_content`, held by both roles (D-105), `403` without it, checked
+after the 404 as D-73 orders it; then the body. No body says more than the 404 would: a link, a
+proposal or an analysis that is not this document's gets that same 404, word for word. Two of the
+routes are rate limited per user: classify, in the `ingestion` scope, and applying a tag, in
+`tagging` (D-79 and its note on tagging). The rate is checked after the session and before the
+document is looked up, so past it the `429` comes before the `404` and the `403`, and is the same
+for every id.
+
+| Method | Path | Auth | Success | Errors |
+|---|---|---|---|---|
+| POST | `/api/documents/{id}/classify` | session + `contribute_content` | `200 {"classification": ..., "tag_details": [...], "department": "Finance"}` after one provider call and the apply rules, in one transaction; a second call updates the one analysis. `department` is the document's `department` column after the classification, re-read from the row: an applied in-scheme suggestion fills a blank department, and a different department already there is kept, with the suggestion held as `department_outcome: "provisional"` (D-105's note of 10 November) | `401`; `404`; `403`; `422 {"detail": "..."}` no extracted text (FR-10: "where insufficient text was extracted"), before any provider call; `503 {"detail": "..."}` the provider failed after `MAXIMUM_CLASSIFY_ATTEMPTS` (NFR-19), nothing written; `429` past the ingestion rate, one budget with upload, meeting ingest and reprocess (D-79); no in-flight slot |
+| POST | `/api/documents/{id}/classification` | session + `contribute_content` | `200 {"classification": ..., "department": "Finance"}`, where `department` is the document's `department` column after the confirm or edit, so the client need not infer it from the outcome. Body `{"doc_type"?: string, "department"?: string}`: both omitted confirms as it stands (a provisional type is applied; a provisional department is written to `department`); `doc_type` must be one of `DOCUMENT_TYPES`; `department` may be blank, which clears it; `null` means omitted | `401`; `404`, also when the document has no classification yet; `403`; `400 {"doc_type": ["..."]}` or `{"department": ["..."]}` |
+| POST | `/api/documents/{id}/tags/{content_tag_id}/confirm` | session + `contribute_content` | `200` the `tag_details` entry, now `confirmed: true, provisional: false`, `applied_by` unchanged | `401`; `404`, also when the link is not this document's or has been removed; `403` |
+| DELETE | `/api/documents/{id}/tags/{content_tag_id}` | session + `contribute_content` | `204` no body: the tag is removed (FR-10: "accepted or removed in a single action"). The link is **kept, marked removed**, a person's (`applied_by: "user"`) as well as an AI link (`applied_by: "ai"`, held or applied, confirmed or not, with the confidence the machine gave it), and no read lists it again; a later classify, reprocess or `classify_documents` run neither links it again nor alters it, and a removed value is neither proposed, created nor reactivated again on this document, in any dimension (D-128; a removed Topic until then). Applying the tag again restores it (`200` on the POST below). A person's link was deleted until the requirements re-audit of 10 November 2026 (D-105). The `Tags` row stays | `401`; `404`, also when the link is not this document's or has already been removed; `403` |
+| POST | `/api/documents/{id}/tags` | session + `contribute_content` | A person applies a tag (D-105's dated note of 10 November 2026, night). Body, exactly one of: `{"tag_id": "uuid"}`, an existing tag from the detail's `tag_options`; or `{"dimension": "Topic", "tag_name": string}`, a new Topic, matched after normalisation (trimmed, single spaces, lower case). `201 {"tag_details": [...]}` when a new link was made: `applied_by: "user"`, `confirmed: true`, `provisional: false`, `confidence: null`. `200` with the same shape when the tag was already on the document: a held AI link is confirmed, a removed one is restored and confirmed (its `applied_by` and confidence kept), and an applied or confirmed one is left as it is. `tag_details` is the document's whole current list | `401`; `404`; `403`; `400 {"tag_id": ["Choose a tag from this document's tag options."]}` for a `tag_id` that is unknown, inactive, a Department tag or not offered for this document, **one body for all of them**; `400 {"dimension": ["..."]}` a dimension other than `Topic` in the name form, or none given with `tag_name`; `400 {"tag_name": ["..."]}` blank, over 255 characters or missing; `400 {"tag_id": ["..."]}` not a UUID; `400 {"non_field_errors": ["..."]}` neither form, or both; `409 {"detail": "A Topic with this name is already offered for this document. Choose it from the tag options.", "tag_id": "uuid"}` the name is a Topic already in `tag_options`, whose id this is; `429` past `TAGGING_THROTTLE_RATE` (30 a minute per user), with DRF's body and `Retry-After`, nothing written, and answered before the document is looked up, so the same for every id (D-79's note on tagging) |
+| POST | `/api/documents/{id}/proposed-tags/confirm` | session + `contribute_content` | `200 {"classification": ..., "tag_details": [...]}`. Body `{"dimension": "Project"\|"Process"\|"Topic", "value": string}`, both required; the value is matched after normalisation (lower case, single spaces) within that dimension. The tag is created, or reused and reactivated, and linked `applied_by: "ai", confirmed: true`. A tag it creates or reactivates is grown, and an active one it reuses keeps its state, so a vocabulary value stays vocabulary (D-105). The proposal leaves `proposed_tags`. Replaces `/proposed-topics/confirm`, which took Topics only (D-128) | `401`; `404`, also when that value is not proposed under that dimension on this document; `403`; `400 {"dimension": ["..."]}` missing or not one of the three; `400 {"value": ["..."]}` blank or over 255 characters: confirming creates a tag, whose name the column limits, so a proposal longer than that can only be rejected (D-133). Since D-134 no run proposes one, so only a proposal stored before D-134 can be that long |
+| POST | `/api/documents/{id}/proposed-tags/reject` | session + `contribute_content` | `200 {"classification": ..., "tag_details": [...]}`: the proposal is dropped and no tag is created. **The rejection is kept** on the document (`rejected_tags`, not exposed, with the machine's confidence; the requirements audit of 13 November, D-128). A later classify, reprocess or `classify_documents` run then neither proposes, creates nor links that value for this document, in any dimension, even after the value has entered the scheme (FR-10's correction clause). A person may still apply it themselves. Same body, except that `value` may be longer than a tag name: up to `MAXIMUM_PROPOSED_TAG_LENGTH`, 100,000 characters, since a rejection writes no tag, and from D-129 until D-134 a run proposed a Topic whatever its length (D-133). Since D-134 a run proposes none longer than 255 characters, so the longer bound serves proposals stored before D-134. Replaces `/proposed-topics/reject` (D-128) | `401`; `404`, also when that value is not proposed under that dimension on this document; `403`; `400 {"dimension": ["..."]}` missing or not one of the three; `400 {"value": ["..."]}` blank or over 100,000 characters. **Not** over 255: until D-133 (15 November 2026) this route refused a value over 255 characters as confirm does, so a longer Topic proposal could be neither confirmed nor rejected |
+
+The classification object (`null` for a document never classified):
+
+```json
+{"doc_type": "Policy", "doc_type_outcome": "applied", "department_outcome": "provisional",
+ "department_applied_by": "user",
+ "machine_doc_type": "Policy", "machine_doc_type_confidence": 0.9,
+ "machine_department": "Finance", "machine_department_confidence": 0.6,
+ "user_edited": false,
+ "proposed_tags": [{"dimension": "Topic", "value": "budget planning", "confidence": 0.6},
+                   {"dimension": "Project", "value": "harbour upgrade", "confidence": 0.5}],
+ "classified_at": "2026-11-09T10:00:00+11:00", "model": "gemma3:4b", "input_truncated": false}
+```
+
+- **The effective department is the document object's `department`** (D-72); `department_outcome`
+  says how the machine's suggestion was disposed of. `doc_type` is `null` while the type is
+  provisional. The outcomes are `applied`, `provisional`, `discarded` and `confirmed`
+  (`docs/schema-v1.md` §3). Confidences are numbers to three places. `discarded_suggestions` is not
+  exposed: it is a record for the Objective 05 measurement (D-106). It holds the out-of-scheme
+  Project and Process suggestions, a value that cannot be stored (U+0000 or a lone surrogate)
+  with U+FFFD in its place (D-129), and an out-of-scheme Topic longer than 255 characters (D-134).
+  `rejected_tags`, the proposals a person rejected, is not exposed either.
+- **`proposed_tags`** (D-128, replacing `proposed_topics`) lists the out-of-scheme Topic values held
+  for a person, at any confidence, each `{dimension, value, confidence}` with `dimension` "Topic". It
+  is deduplicated by value and replaced by each run. Since D-134 no value a run proposes is longer
+  than 255 characters. A longer one was stored before D-134, and can be rejected but not confirmed.
+  - **D-129:** the shape carries a dimension because, for one day (D-128), Project and Process values
+    below the threshold were proposed too.
+- **`department_applied_by`** says whose value the document's department is, in the tags'
+  provenance vocabulary (D-119 finding 10; D-105's dated note of 10 November 2026, night):
+  - `"user"`: a person gave it, typed at upload or written through the confirm route. With
+    `department_outcome: "applied"` this is a department a person supplied that the machine's
+    suggestion **matched**: show it as the person's, not as "Suggested by AI".
+  - `"ai"`: a classification run wrote its suggestion into a blank department, and no person has
+    written the department since. A person who confirms that value as it stands keeps it `"ai"`,
+    with `department_outcome: "confirmed"`, as a confirmed AI tag keeps `applied_by: "ai"`.
+  - `null`: the document has no department, or its classification was recorded before
+    `documents 0009` and no run or confirmation has set the field since. Treat it as before the
+    field existed.
+
+  It is in the object wherever the object is: the detail, the classify and confirm replies, the
+  proposed-tag replies and the upload's and reprocess's 201 bodies.
+
+A `tag_details` entry, one per `ContentTags` link in Project, Process or Topic, provisional
+included and removed excluded, sorted by dimension then name:
+
+```json
+{"content_tag_id": "uuid", "dimension": "Project", "name": "bridge maintenance",
+ "applied_by": "ai", "confirmed": false, "provisional": true, "confidence": 0.6}
+```
+
+**The detail** `GET /api/documents/{id}` carries both, `classification` and `tag_details`, beside
+FR-15's fields. `tags` is unchanged in shape and lists **applied** links only.
+
+**The detail also carries `tag_options`** (D-105's dated note of 10 November 2026, night): the tags a
+person may apply to this document, which are the document's own classification scheme, each
+dimension sorted by name and always present:
+
+```json
+"tag_options": {
+  "Project": [{"tag_id": "uuid", "tag_name": "bridge maintenance"}],
+  "Process": [{"tag_id": "uuid", "tag_name": "purchasing"}],
+  "Topic":   []
+}
+```
+
+- **It discloses nothing to anyone who may read the document.** A tag is offered if it is **not
+  grown**, whatever its links, or if every role in the document's audience can read a source
+  carrying it. A caller reaches the detail only if their role reads the document, so every grown
+  value offered is on material the caller could open (D-105's dated note of 10 November 2026,
+  night: the security review).
+  - A tag that is not grown is vocabulary, offered to every reader: the Project, Process and Topic
+    values a database is seeded with, and since D-128 those an Administrator adds with
+    `POST /api/tags`. Its being offered says nothing about any source.
+  - A grown tag is one of three kinds:
+    - a Topic a person's name created or brought back from retirement, typed on this route;
+    - a Topic that a person's confirmation of a proposal created or brought back (D-105). For one
+      day, D-128 also had the classifier create values; D-129 reversed it;
+    - a value that only material some role cannot read carried when the database was seeded, or
+      when `documents 0011` ran.
+  - An inactive tag never is.
+- **What can appear or disappear.** Nothing here moves because a link on material the caller cannot
+  read was made or destroyed.
+  - A grown tag appears when a source every role in the audience reads comes to carry it, and
+    disappears only when the last such source is deleted, or the tag is retired: a removed link is
+    kept and still counts.
+  - A tag that is not grown never moves while it is active: no link anyone makes or destroys changes
+    whether it is offered, a person confirming a proposal of its name made before it was vocabulary
+    included. It leaves only when an Administrator retires or deletes it. A retired value comes
+    back grown: a Topic a person names again, and since D-128 any value a person confirms from a
+    proposal or the classifier suggests at or above the threshold.
+- **It includes tags already on the document,** held, applied or removed: applying one of those
+  is the `200` above.
+- **A `409` names a tag in this list:** the interface can select it rather than create a duplicate.
+- **A Topic name that is not in this list but exists** (grown and on no source the document's
+  whole audience reads, or inactive) is linked and answered `201` exactly as a new Topic is, unless
+  this document already holds a link to it, live or removed: that link is kept, or restored if
+  removed, and the answer is `200`. Either answer depends only on this document's own links, so it
+  never tells the caller that a value they cannot see exists. After that the Topic is
+  in this document's list, and it stays there after a person removes it, since the removed link is
+  kept: a person who applies a new Topic, removes it and applies it again by name gets `201`, `204`,
+  `409`, whatever exists elsewhere, and the `409` names the Topic, which its id restores (`200`).
+
+**The 201 bodies** of `POST /api/documents` and `POST /api/documents/{id}/reprocess` carry
+`classification` (section 7.8 line 100): the object, or `null` when classification failed or the
+provider was unavailable, in which case the document is indexed and unclassified (invariant 8,
+D-33 part 1). A 422 body does not carry it, and neither do the list and browse routes.
+
+**FR-15's reads and provisional links (D-105).** A provisional link is held, not applied: it is not
+in the detail's `tags`, not a browse facet value and not a filter hit until it is confirmed.
+`tag_details` is where a held suggestion is seen.
+
+**Removed links (D-105's dated note of 10 November 2026, night).** A link a person removed, the
+machine's or a person's, is in **no** read: not the detail's `tags` or `tag_details`, not the
+classify, confirm or proposed-tag replies' `tag_details`, not a browse facet value and not a
+filter hit. Its id answers `404` on the confirm and remove routes, exactly as an unknown id does.
+It stays in the database for FR-10's correction clause, for two reasons:
+
+- an AI link, so that the machine's assignment is kept beside the person's decision;
+- a person's link, so that a later classify or reprocess neither links the value again nor
+  proposes it again ("not overwritten by later reprocessing").
+
+Since D-128 any removed link on the document, the machine's or a person's, keeps a later run from
+proposing, creating or reactivating that value for this document, in any dimension.
+
+Applying the tag again restores the link (`200`).
+
+**The management command** `python manage.py classify_documents --all | --document <uuid>...
+[--out record.json]` runs the same path per document and writes the Objective 05 record (D-106:
+database, commit, per-document values, outcomes, links, seconds or error). It refuses the
+database `kmp`.
+
+### Tag administration (D-119 finding 5; D-105's dated note of 10 November 2026, night)
+
+FR-10's taxonomy clause: "Tags are deactivated rather than deleted where content still references
+them, preserving historical classification"; its CRUD line gives Tags "Create" and "Delete" (Create since D-128). Every route needs a
+session **and** `manage_tags`, which accounts 0008 gives the Administrator alone: `401` without a
+session, `403` for a role that lacks the code (invariant 4), checked before anything else on the
+request, since nothing on these routes is scoped.
+
+| Method | Path | Auth | Success | Errors |
+|---|---|---|---|---|
+| GET | `/api/tags` | session + `manage_tags` | `200` a list of tag entries (below): every Tag in Project, Process and Topic, active or not, ordered by dimension (alphabetically: Process, Project, Topic) then name. `[]` when there are none. No pagination | `401`; `403` |
+| POST | `/api/tags` | session + `manage_tags` | **D-128:** an Administrator adds a value to the established scheme. Body `{"dimension": "Project"\|"Process"\|"Topic", "tag_name": string}`, the name trimmed and normalised (single spaces, lower case). `201` the tag entry, `active: true`, `item_count: 0`. The new Tag is **vocabulary** (not grown): offered in every document's `tag_options` and listed in every classification prompt, whatever the document's audience, as a seeded value is | `401`; `403`, before the body is read; `400 {"dimension": ["..."]}` missing or not one of the three (`Department` included); `400 {"tag_name": ["..."]}` blank, missing or over 255 characters; `409 {"detail": "...", "tag_id": "uuid"}` a Tag with that normalised name already exists in that dimension, **active or retired** (a concurrent create of the same name included). It is not reactivated, and its `grown` is not changed. `429` past `TAGGING_THROTTLE_RATE`, the `tagging` scope, after the 401 and the 403; `GET` is not throttled |
+| DELETE | `/api/tags/{id}` | session + `manage_tags` | `200` the tag entry, now `active: false`, when any `ContentTags` row references the tag, in **any** state (held and removed links included); `200` again for a tag already inactive and still referenced. `204` no body when nothing references it: the tag is deleted | `401`; `403`, before the id is looked at; `404 {"detail": "No Tag matches the given query."}` no tag with that id in Project, Process or Topic (a Department tag included) |
+
+The tag entry, in the list, in the `POST`'s `201` and in the `DELETE`'s `200`:
+
+```json
+{"tag_id": "uuid", "dimension": "Project", "tag_name": "bridge maintenance", "active": true,
+ "item_count": 3}
+```
+
+- **`item_count`** is the number of sources, documents and meetings alike, with a link to the tag
+  that is neither provisional nor removed, each source counted once. It is not scoped: an
+  Administrator reads every source (D-66), so a count discloses nothing to the one role that may
+  ask for it, and a test holds that every role given `manage_tags` has the Administrator's scope.
+- **A retired tag** (`active: false`) leaves every document's `tag_options` and cannot be applied
+  by `tag_id` (the `400`). The classifier is no longer shown it.
+  - **A suggestion of it is treated as a new value:** a Topic one is proposed, and a Project or
+    Process one is discarded (D-129, as before D-128). The classifier never reactivates it.
+  - **A person's confirmation of a proposed Topic,** or their Topic name form below, reactivates it,
+    grown, only through a document every role can read: the security review of D-128, finding 1.
+    - Through any other document, it is linked and stays retired. Reactivating it there would put
+      the value back in front of every reader of material that already carries it, though nothing
+      they read had changed.
+    - The readers of such a document are Administrators, who see retired tags in `GET /api/tags`.
+  - **It stays on the documents that carry it:** FR-15's reads do not consult `active` (D-72), so
+    it is still in their `tags` and `tag_details`, a facet value and a filter.
+- **There is no reactivation route,** and `POST /api/tags` answers `409` for a retired name rather
+  than reactivating it. A retired Topic comes back in two ways, each only through a document every
+  role can read (D-128's security review); through any other document it is linked and stays
+  retired:
+  - a person types the name of a retired Topic on `POST /api/documents/{id}/tags`, where it is
+    linked and reactivated and answered `201` exactly as a new Topic would be. If that document
+    already holds a link to it, live or removed, the link is kept or restored: `200`;
+  - a person confirms a proposal of it.
+
+  Applying it by `tag_id` is the `400`: an inactive tag is never offered. A retired Project or
+  Process tag stays retired (D-129; for one day D-128 let the classifier bring one back).
+
+### Departments (D-129)
+
+The department list an Administrator keeps on the Tags page: FR-10's fourth dimension. The classifier
+assigns a department only from it, applied or held for a person (`tag_scheme`'s `departments`), while a document's department stays
+the free-text `Documents.department` field that FR-14 and FR-15 read (D-72). Every route needs a session
+**and** `manage_tags`: `401`, then `403` for a role without it, before anything else. POST is throttled
+in the `tagging` scope, after the `401` and `403`, on one budget with `POST /api/tags`; GET is not.
+
+| Method | Path | Auth | Success | Errors |
+|---|---|---|---|---|
+| GET | `/api/departments` | session + `manage_tags` | `200` every department, active or not, ordered by name ignoring case, each `{"department_id", "name", "active", "item_count"}`. `item_count` is the number of documents whose department equals the name ignoring case, as the list's uniqueness does (the security review of D-129, F3). Not scoped: the Administrator reads every source (D-66) | `401`; `403` |
+| POST | `/api/departments` | session + `manage_tags` | Body `{"name": string}`, trimmed with internal spaces collapsed, case kept. `201` the entry for a new department, which is vocabulary (not hidden): offered for every document whatever its audience. `200` the entry for a retired name, which is reactivated, keeping its stored spelling and whether it is hidden; a department has no other way back, which is why this differs from `POST /api/tags` | `401`; `403`; `400 {"name": ["..."]}` missing, blank, over 255 characters, or holding a control or format character (Unicode Cc or Cf, NUL included) or ";", the separator the prompt lists departments with (the security review of D-129, F4); `409 {"detail": "...", "department_id": "uuid"}` an active department with that name ignoring case, a concurrent create of it included; `429` past `TAGGING_THROTTLE_RATE` |
+| DELETE | `/api/departments/{id}` | session + `manage_tags` | `200` the entry, now `active: false`, when any document's department equals its name ignoring case: it is retired, stays on those documents and in FR-14 and FR-15's filters, and is no longer offered to the classifier; `200` again for one already retired. `204` no body when no document uses it: it is deleted | `401`; `403`; `404 {"detail": "No Department matches the given query."}` |
+
+- **Seeded by `documents 0015`** from the departments in use when it runs. A department carried only by
+  documents some role cannot read is seeded **hidden**. A hidden department is offered only for a
+  document whose whole audience reads everything, today an Administrator-only document. A document
+  an Employee can read is never offered one, whatever documents carry it, so what an Employee sees
+  never depends on whether a hidden department exists (invariant 1; the security review of D-129,
+  finding F1). A department an Administrator adds is not hidden.
+- **The upload form and the classification confirm/edit control still take any department** as free
+  text. One that is not in the list stays on its document, but the classifier never assigns it.
+
+## NIT3004 — FR-19, Objective 06
+
+### FR-19 — knowledge-gap log
+
+The Administrator's list of "questions the system could not answer and searches returning no
+results, grouped by subject with an occurrence count and the ability to mark an entry as
+addressed". Decisions: D-107 (the tables, the cycle, the routes, the permission and the dashboard
+panel), D-108 (the permission exclusion), D-109 (similarity grouping), D-126 (the exclusion's rule
+per embedding model) and D-127 (a follow-up's two strings). Every route needs a
+session **and** `review_knowledge_gaps`, which accounts 0007 gives the Administrator alone: `401`
+without a session, `403` for a role that lacks the code (invariant 4), checked before anything
+else on the request.
+
+| Method | Path | Auth | Success | Errors |
+|---|---|---|---|---|
+| GET | `/api/knowledge-gaps` | session + `review_knowledge_gaps` | `200` a list of entry objects (below): Open entries first, by `occurrence_count` descending then `last_seen_at` descending, then Addressed entries in the same order. `[]` before any cycle. No pagination | `401`; `403` |
+| POST | `/api/knowledge-gaps/cycles` | session + `review_knowledge_gaps` | `201` the cycle object (below). One aggregation cycle runs synchronously, in one transaction | `401`; `403`; `503 {"detail": "The knowledge service is temporarily unavailable, so the aggregation cycle did not run and nothing was changed. Please try again shortly."}` when embedding fails after `MAXIMUM_EMBED_ATTEMPTS` (NFR-19); the cycle rolls back |
+| PATCH | `/api/knowledge-gaps/{id}` | session + `review_knowledge_gaps` | `200` the updated entry object. Body `{"status": "Addressed"}` or `{"status": "Open"}`; only the status changes | `401`; `403`; `404` no entry with that id, checked before the body; `400 {"status": ["..."]}` any other value, or none |
+
+The entry object, in the list, in `PATCH`'s reply and in the dashboard's `knowledge_gaps.top`:
+
+```json
+{"gap_id": "uuid", "subject": "What is the WFH stipend policy?", "occurrence_count": 6,
+ "status": "Open", "first_seen_at": "2026-11-02T09:14:00+11:00",
+ "last_seen_at": "2026-11-09T09:25:00+11:00"}
+```
+
+The cycle object:
+
+```json
+{"cycle_id": "uuid", "started_at": "2026-11-09T21:40:02+11:00",
+ "finished_at": "2026-11-09T21:40:05+11:00", "queries_considered": 4,
+ "searches_considered": 1, "entries_created": 2, "entries_updated": 1}
+```
+
+The dashboard's addition, in `GET /api/dashboard` for a role holding `review_knowledge_gaps`
+only:
+
+```json
+"knowledge_gaps": {"open_count": 7, "top": [entry object, ...]}
+```
+
+- **`subject`** is the first member's wording, verbatim: no model writes it (D-107).
+- **`occurrence_count`** is the number of questions and searches grouped into the entry, and
+  equals its membership rows. **No payload names who asked, their role, or why a question went
+  unanswered**, and none counts the rows left out (D-107, D-108).
+- **The cycle's counts are of rows that entered the log:** `queries_considered` and
+  `searches_considered` are the `QueryLog` and `SearchLog` rows the cycle added, `entries_created`
+  the entries it started, and `entries_updated` the entries that already existed and gained a
+  member. A row left out on permission grounds appears in no count.
+- **`top`** holds up to `DASHBOARD_GAP_ITEMS` (5) **Open** entries, in the list's order, and
+  `open_count` counts every Open entry. The dashboard's `date_from`, `date_to` and `department`
+  filters do not narrow either: an entry has no department, and its dates are its own.
+
+**What a cycle does** (D-107 to D-109, D-126, D-127). The scheduled trigger is `python manage.py
+aggregate_knowledge_gaps`, which prints the database name, runs one cycle and prints its counts,
+and exits 1 on a provider outage. The route runs the same cycle on demand.
+
+1. **The window** is every unanswered `QueryLog` row (FR-13 turns included) and every `SearchLog`
+   row with `result_count` 0, timestamped from the previous cycle's start less
+   `CYCLE_GRACE_SECONDS` (60) up to this cycle's start, and not already in the log. The first
+   cycle takes everything before it.
+2. **A row is left out when the asker's role explains it** (D-108, D-126, D-127). A question is
+   embedded and ranked over the Administrator's whole scope. A one-off question is decided on its
+   own wording. A conversation follow-up is decided first on the string retrieval ranked, its
+   earlier turns and then the question as the ask composed them, and then, unless that left it
+   out, on its own wording; either can leave it out. A question from a role that reads nothing is
+   left out before anything is embedded. Which passage decides is the embedding model's rule
+   (`GAP_EXCLUSION_RULE_BY_MODEL`):
+   - **rank-one,** for every model the map does not list, EmbeddingGemma included: the top-ranked
+     passage, whether or not it clears `RELEVANCE_THRESHOLD`;
+   - **threshold-first,** for `voyage-4`: the top passage at or above the model's own relevance
+     threshold. If no passage reaches it, nobody could have been answered, and that string does not
+     leave the row out.
+
+   If a string's deciding passage is one the asker's role cannot read, the row is left out.
+   Otherwise that string does not leave it out, as when no passage of the question's embedding
+   model exists. A row that no string leaves out is kept. A search is
+   counted again as the Administrator, writing no `SearchLog` row; above zero, it is left out. A
+   kept search term longer than `MAXIMUM_QUESTION_LENGTH` is cut to that length before it is
+   embedded and stored as a subject. Nothing records a row that was left out.
+3. **Kept rows are grouped by similarity** (D-109): in timestamp order, each joins the nearest
+   Open entry, embedded by the same model, whose centroid's cosine is at least the model's
+   grouping threshold (`GAP_GROUPING_THRESHOLD`, or its own value in
+   `GAP_GROUPING_THRESHOLD_BY_MODEL`, D-122), or starts a new entry. A follow-up is grouped, and
+   shown as a subject, on its own wording. An Addressed entry is never joined, so a subject that
+   recurs after being addressed opens a new one.
+
+## Recording transcription (D-123)
+
+Not in the proposal: §1.9 puts live transcription and native recording capture out of scope, and
+FR-09 takes a transcript file or pasted text. The user decided on 10 November 2026 that a person
+with a meeting **recording** can have it transcribed into a **draft**, which they review before it
+is added. These routes, the status and the segment, turn the recording into the draft's text. **Neither stores anything**:
+no meeting, no chunk, no file and no row. The reviewed draft is added through FR-09's
+`POST /api/meetings` as `transcript_text`, exactly as pasted text is, which stays the one path
+into the index.
+
+| Method | Path | Auth | Success | Failures |
+|---|---|---|---|---|
+| GET | `/api/transcriptions/status` | session + `contribute_content` | `200 {"enabled": bool, "available": bool, "segment_seconds": 30, "maximum_segment_seconds": 60}` | `401`; `403` the role lacks `contribute_content`; `429` past `TRANSCRIPTION_THROTTLE_RATE`, one budget with the segments |
+| POST | `/api/transcriptions` | session + `contribute_content` | `200 {"status": "transcribed", "text": "...", "model": "whisper-v3:turbo", "duration_seconds": 29.6, "loudest_dbfs": -18.4}`, or `200 {"status": "silent", "text": "", "model": null, "duration_seconds": 30.0, "loudest_dbfs": -61.2}` | `401`; `403` the role lacks `contribute_content`; `429` past `TRANSCRIPTION_THROTTLE_RATE` (DRF's body, with `Retry-After`); `503 {"detail": "...", "code": "transcription_disabled"}` transcription is not enabled on this server; `413` a declared `Content-Length` over 50 MB, or a segment over it; `400 {"audio": ["..."]}` no `audio` part, a segment with no audio frames, or one longer than `MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS`; `415` not a 16-bit PCM mono WAV at 16 kHz, or a body that is not multipart; `429 {"detail": "...", "code": "transcription_in_flight"}` another segment of this user's is with the provider; `429 {"detail": "...", "code": "transcription_busy"}` with `Retry-After` (5 s), the server is already transcribing `MAXIMUM_TRANSCRIPTIONS_IN_FLIGHT` (2) segments; `503 {"detail": "...", "code": "transcription_unavailable"}` the provider failed after `MAXIMUM_TRANSCRIBE_ATTEMPTS`, or refused the segment (D-118) |
+
+**The request is `multipart/form-data`**, one field, `audio`: one segment of the recording as a
+16-bit PCM WAV. The page decodes the recording in the browser, resamples it to 16 kHz mono and cuts
+it into segments of at most `segment_seconds`, at the quietest tenth of a second in each segment's
+last third (the last may run up to a second longer), then sends them one at a time. The recording itself never reaches the server, so the
+50 MB ceiling bounds each segment, not the recording; the page bounds the recording at
+`MAXIMUM_RECORDING_BYTES` (500 MB), which only the client enforces. A cross-site multipart POST is
+refused for want of the CSRF token, as on the upload.
+
+**The rejection order** is fixed, each before any provider call: `401`, `403`, the `429` rate, the
+`503` `transcription_disabled`, the `413` on the declared length, the `400` for no `audio`, the `413`
+on the bytes received, the `415`, the `400` for an empty or over-long segment. Then a silent segment
+is answered `200` `silent`, then the in-flight `429`, then the busy `429`, then the provider.
+
+**Since D-124 the order is of the reading too.** Nothing reads the body before the declared-length
+`413`, so a body refused there or earlier is never parsed.
+
+- **How:** the CSRF check takes its token from the `X-CSRFToken` header and parses nothing.
+- **What still bounds receiving:** Waitress's cap, `MAX_REQUEST_BODY_BYTES` (see Stage 2).
+- **Corrected 11 November 2026.** Until D-124 this paragraph said, truly, that a session sending its
+  CSRF token had its whole multipart body parsed by DRF while authenticating, before any of these
+  answers. D-123 recorded that as open, and its dated note records the close.
+
+**Only what the page sends is accepted:** a 16-bit PCM mono WAV at 16 kHz.
+
+**Format is decided by the bytes.** A WAV is a RIFF file whose form type is `WAVE`; the filename
+and the part's declared type are never consulted.
+
+**Silence never reaches Whisper.** The server measures the segment's loudest half second, and below
+`TRANSCRIPTION_SILENCE_DBFS` (-45 dBFS) answers `silent` without calling the provider: Whisper
+invents text from silence. Every reply carries that level as `loudest_dbfs`, rounded to a tenth,
+and `null` for digital silence, so the threshold (*tune*) can be checked on real recordings. What is sent to the provider is a WAV rebuilt from exactly the frames
+measured, so a header that understates its data cannot carry more audio past the checks.
+
+**The 503s are told apart by `code`.** `transcription_disabled` means paste or upload the
+transcript instead; `transcription_unavailable` means nothing was stored and the same segment can
+be sent again. The page keeps the recording and the draft through either (invariant 8). After
+`transcription_unavailable` it resumes from the failed segment; after `transcription_disabled` there
+is nothing to resume until transcription is switched on again.
+
+**`available` means FLM answered, not that its speech model is loaded.** FLM's model list names
+its chat catalogue, not `whisper-v3:turbo`, so a server started without `--asr 1` reports
+available and fails the first segment, which the page shows as unavailable. No provider detail is
+returned: it names an internal address.
+
+**Transcription is off by default** (`TRANSCRIPTION_PROVIDER=none`), so a host without the NPU
+offers no control that cannot work (D-114). Such a host still ingests a transcript made elsewhere,
+saved from the page as a text file, through FR-09's file option.
+
+
+## NIT3004 — FR-16 meeting summary and action items (D-125)
+
+"A "Summary" panel on the meeting page", "A "Regenerate Summary" button", and "An "Action Items"
+panel [that] lists each extracted item with description, suggested owner and due date, all
+editable." One decision, D-125, holds the operation, the schema, the retrieval exposure, the retry
+queue and every route below.
+
+**Scope first, permission second, on every route.** The meeting is resolved through the caller's
+scope, so a meeting the caller cannot see and one that does not exist are the same
+`404 {"detail": "No Meeting matches the given query."}` (invariant 1). Reading needs only a
+session. The four writes then need `contribute_content`, which both roles hold (D-30), checked
+inside the method after that lookup: `403` for a role without it (invariant 4).
+
+| Method | Path | Auth | Success | Errors |
+|---|---|---|---|---|
+| GET | `/api/meetings/{id}/summary` | session, meeting in scope | `200` the summary state (below) when nothing is pending; **`202`** with the same body while a run is `Processing` or queued for its automatic retry | `401`; `404`; **`422`** the same body plus `detail` when the transcript is under `MINIMUM_SUMMARY_TRANSCRIPT_LENGTH` (200 words) |
+| POST | `/api/meetings/{id}/summary` | session + `contribute_content` | **`202`** the summary state, with `status` `"Processing"`. Starts a run, or reports the one already in flight for this meeting. No body is read | `401`; `404`; `403`; `422` too short, nothing started; `429` past the "ingestion" rate |
+| POST | `/api/meetings/{id}/action-items` | session + `contribute_content` | `201` the action item object. Body `{"description": "...", "owner_id": "uuid" or null, "due_date": "YYYY-MM-DD" or null}`; only `description` is required | `401`; `404`; `403`; `400 {"description": [...]}` blank, missing or over 1,000 characters; `400 {"owner_id": ["No user has this id."]}`; `400 {"owner_id": ["This person cannot see this meeting, so its action items cannot be theirs."]}` a user whose role cannot read the meeting (D-125's third note; only an Administrator can meet it, on a meeting marked for Administrators only, since every role reads what an Employee can reach, D-66); `400 {"due_date": [...]}`; `409 {"detail": "This meeting already has 200 action items, the most one meeting can hold. Delete one to add another."}` at `MAXIMUM_ACTION_ITEMS_PER_MEETING`, every item counted, nothing written (D-125's third note); `429` past the `action_items` rate |
+| PATCH | `/api/meetings/{id}/action-items/{item_id}` | session + `contribute_content` | `200` the updated item. Body: any of `description`, `owner_id`, `due_date`; a field left out is unchanged, and `null` clears the owner or the date | `401`; `404` the meeting, or an `item_id` that is not one of this meeting's (the same body); `403`; `400` as above, and `400 {"non_field_errors": ["Send at least one of description, owner_id and due_date."]}` for an empty body; `429` past the `action_items` rate |
+| DELETE | `/api/meetings/{id}/action-items/{item_id}` | session + `contribute_content` | `204`, no body | `401`; `404` as PATCH; `403`; `429` past the `action_items` rate |
+
+The summary state, from both summary routes at every status code they answer:
+
+```json
+{"status": "Ready",
+ "queued_for_retry": false,
+ "summary": {
+   "summary_id": "uuid",
+   "summary_text": "The team reviewed the first quarter. It froze discretionary travel until January.",
+   "narrative": [{"text": "The team reviewed the first quarter.", "passages": [1]},
+                 {"text": "It froze discretionary travel until January.", "passages": [1, 2]}],
+   "decisions": [{"text": "Discretionary travel is frozen until 31 January.", "passages": [2]}],
+   "highlights": [{"text": "Travel was twice its budget.", "passages": [1]}],
+   "passages": {"1": "Ravi: Thanks, everyone. This is the first-quarter review ...",
+                "2": "... So the decision is that discretionary travel is frozen ..."},
+   "model": "claude-haiku-5-5",
+   "generated_at": "2026-11-11T14:02:11+11:00",
+   "input_truncated": false,
+   "passages_sent": 2,
+   "passages_total": 2,
+   "action_items_extracted": 4},
+ "action_items": [action item object, ...],
+ "can_edit": true}
+```
+
+- **`status`** is the latest run's: `"Processing"`, `"Ready"` or `"Unavailable"`, or `null` where
+  no summary was ever requested for this meeting (one ingested before FR-16, or one too short).
+- **`queued_for_retry`** is NFR-20's flag on that run. `"Unavailable"` with it true means the
+  hourly retry will run it again, and the route answers `202`. `"Unavailable"` with it false means
+  the retries are spent, and only Generate will try again; the route answers `200`.
+- **A run left `"Processing"` for more than `SUMMARY_STALE_AFTER_SECONDS` (2,400 s) is reported
+  as `"Unavailable"` with `queued_for_retry` true.** Such a run was left by a server that stopped
+  mid-run, and that is what the next scheduled retry makes of it. The page then stops asking and
+  offers Generate, and a POST closes the stale run and starts a new one.
+- **`summary`** is the meeting's latest **Ready** summary, or `null`. It is never a failed one:
+  "in the failed state it is never presented to a user" (UC-04). While a Regenerate runs, and
+  after one fails, it is still the previous Ready summary, so `status` and `summary` can differ.
+- **`narrative`, `decisions`, `highlights`:** each element's `passages` are numbers into the
+  summary's `passages` object, which holds the text of every transcript passage an element names
+  (UC-04: "every element of the summary carries a reference to the passage of the transcript it
+  was drawn from"). `summary_text` is the narrative's sentences joined. Every reference was
+  checked by the application to be a passage that was sent to the model; an element that named
+  none is not here (invariant 5).
+- **`model`, `generated_at`:** UC-04's "record of the model that produced it and the date".
+- **`input_truncated`:** true when the transcript was longer than one request carries
+  (`SUMMARY_INPUT_TOKENS`, or `SUMMARY_INPUT_CHARACTERS`, which real speech does not reach). The
+  summary then covers the first `passages_sent` of `passages_total` passages, and the page says so.
+- **`action_items_extracted`** is how many items that run extracted. 0 is UC-04 A1's meeting
+  that raised none, "recorded as empty rather than omitted".
+- **`can_edit`** is whether the caller's role holds `contribute_content`: a hint for showing the
+  controls. Every write checks the permission itself.
+
+The action item object:
+
+```json
+{"action_item_id": "uuid",
+ "description": "Reconcile the September card statements",
+ "owner": {"id": "uuid", "name": "Alex Morgan"},
+ "owner_name": "Alex",
+ "due_date": "2026-10-23",
+ "due_text": "next Friday",
+ "passages": [2],
+ "origin": "ai",
+ "edited": false,
+ "created_at": "2026-11-11T14:02:11+11:00",
+ "updated_at": "2026-11-11T14:02:11+11:00"}
+```
+
+- **`owner`** is the user the item is assigned to, or `null`: **unassigned**. The server assigns
+  an extracted item only where the transcript's name, a full name or a lone first name, matches
+  exactly one of the meeting's recorded attendees, and that attendee's role can read the meeting.
+  Anything else is unassigned, "rather than attributed to the wrong person". Until the security
+  review of 12 November a full name was matched against every user (D-125's third note).
+  `GET /api/users/directory` lists the people a person may choose; one whose role cannot read the
+  meeting is refused with a `400` keyed on `owner_id`.
+- **`owner_name`** and **`due_text`** are the transcript's own words for the owner and the
+  deadline ("the facilities team", "next Friday"), blank where it said nothing and on an item a
+  person added. An edit does not change them.
+- **`due_date`** is the date the server converted `due_text` to, from the meeting's date, or
+  `null` where the phrase fixes none ("next week", "before the move"). A date is never invented.
+- **`passages`** are numbers into the extracting summary's `passages`; `[]` on an item a person
+  added. After a Regenerate, a kept item's numbers still name the transcript's own passages, but
+  the current summary's `passages` object holds only the passages *it* cites, so the page shows a
+  passage where it has the text and the number alone where it does not.
+- **`origin`** is `"ai"` (extracted) or `"user"` (added by a person). **`edited`** is true once a
+  person has changed an extracted item. NFR-15's badge reads both: "Suggested by AI",
+  "Suggested by AI, edited by a person", and none for `"user"`.
+- **Order:** the latest run's extracted items in the model's order, then the items a person
+  edited or added, in the order they already had. A Regenerate renumbers them so this stays true.
+
+**What a run does** (D-125). It starts automatically when `POST /api/meetings` stores a transcript
+of 200 words or more, and again on `POST .../summary`. One run is in flight per meeting.
+
+1. The transcript's own passages (FR-09's chunks) are sent in one request, up to
+   `SUMMARY_INPUT_TOKENS` and `SUMMARY_INPUT_CHARACTERS` (D-125's third note: a whitespace token
+   has no length limit). The reply must match `SUMMARY_SCHEMA`, whose every limit the prompt
+   states: a malformed reply gets one
+   retry, a failed call two (`MAXIMUM_SUMMARY_ATTEMPTS`, three in total), and a `429` is retried
+   while any other `4xx` ends the run at once (D-118).
+2. Every reference is checked against the passages sent. Owners are matched and dates converted
+   by the application.
+3. The summary, its action items and its search index entries are written in one transaction.
+   The extracted items nobody touched are replaced; **items a person added or edited are kept**.
+4. A run that fails is `"Unavailable"` and queued. `python manage.py retry_meeting_summaries`,
+   scheduled hourly (`scripts/register_meeting_summary_schedule.ps1`), runs each queued summary
+   again, up to `MAXIMUM_SUMMARY_RETRY_RUNS` (3) times; a run that failed because no reply
+   conformed is queued once (`MAXIMUM_MALFORMED_RETRY_RUNS`, D-125's third note). A run the server
+   has no room to start, with `MAXIMUM_SUMMARIES_WAITING` already waiting, is queued the same way
+   without reaching the provider. The transcript is stored and searchable throughout: a summary's
+   failure never touches it (invariant 8, NFR-20).
+
+**`POST /api/meetings` is unchanged.** Its `201` body does not mention the summary; the meeting
+page asks `GET .../summary`.
+
+### The summary as source material (UC-04, D-125 choice 1)
+
+A Ready summary's narrative, decisions and highlights are indexed as passages of **the meeting
+itself**, under the meeting's own `visible_to_roles`, so FR-12 can find and cite them. Its action
+items are not indexed. Two existing payloads gain one field each, so that an AI-written passage
+is never shown as the transcript's words (NFR-15):
+
+- **`POST /api/ask` and `GET /api/conversations/{id}`:** each object in `sources[].passages`
+  gains **`"ai_generated": true | false`**. True for a passage of a meeting's AI-generated
+  summary. Such a passage's `text` is the summary's own sentences (the narrative, then each
+  decision and highlight, one to a line) with nothing added, so the flag is the only thing that
+  says it is AI content. Its source is the meeting, as for any other passage of it.
+- **`GET /api/search`:** each result gains **`"snippet_ai_generated": true | false`**. True where
+  the snippet shown comes from the meeting's AI-generated summary, which happens only when the
+  term occurs in the summary and nowhere in the transcript. A meeting found through its summary
+  alone is still one result, in the meetings group, counted once.
+
+## NIT3004 — FR-03 account lockout interface (D-130)
+
+FR-02 enforces the lock (D-25). FR-03 adds:
+
+- the warning;
+- the countdown;
+- an Administrator's release;
+- the `LoginAttempts` record;
+- the policy as `.env` configuration, with a route that gives it to the sign-in page.
+
+Benjamin's eight decisions, of 13, 14 and 15 November 2026, are D-130's. Every code below is quoted from FR-03's
+Responses clause unless marked *convention*.
+
+| Method | Path | Auth | Success | Failures |
+|---|---|---|---|---|
+| GET | `/api/auth/lockout-policy` | none | `200 {"lockout_threshold": 5, "lockout_duration_seconds": 900}`: the running policy, from `.env` (decision 7), the same for every caller. Read-only and not throttled | `405` for POST, PUT, PATCH and DELETE (*convention*). HEAD answers as GET, and OPTIONS with DRF's metadata, as on every DRF view |
+| POST | `/api/users/{id}/unlock` | Administrator (`release_account_locks`) | `200` the user as `GET /api/users` lists it, now with `"lock": null`. `locked_until` is cleared and `failed_attempts` is reset to 0, the state natural expiry reaches, and a release row is written to `LoginAttempts`. No body is read | `401` no session; `403 {"detail": "Your role does not hold the 'release_account_locks' permission."}`, given before any lookup, so an Employee cannot probe user ids; `404 {"detail": "No User matches the given query."}` for an unknown id; `403 {"detail": "You cannot release a lock on your own account."}` where the target is the requester, locked or not; `409 {"detail": "This account is not locked."}` where `locked_until` is empty or already past |
+
+**The release touches nothing else.**
+
+- **Never touched:** the password, the role and any session. The Administrator never sees, sets or
+  resets the password (FR-03).
+- **Who may release a lock:** an Administrator may release another Administrator's lock, but never
+  their own.
+- **No throttle,** as FR-05's role change has none.
+
+**`GET /api/users` gains `lock`** for a requester holding `release_account_locks`. Only
+Administrators hold it. A requester without it gets the plain user object.
+
+```json
+{"id": "uuid", "name": "Jane Doe", "email": "jane.doe@company.com", "role": "Employee",
+ "created_at": "2026-09-20T10:00:00+10:00",
+ "lock": {"locked_until": "2026-11-13T10:42:00+11:00",
+          "locked_at": "2026-11-13T10:27:00+11:00", "source_ip": "203.0.113.42"}}
+```
+
+- **`lock` is `null` unless the lock is active.** A `locked_until` already past reads as unlocked.
+- **`locked_at` and `source_ip`** come from the `LoginAttempts` lockout row that set this lock,
+  matched on its `locked_until`. Both are `null` for a lock that has no such row.
+- **Every other route's user object is unchanged,** and never carries `lock`, `failed_attempts` or
+  `locked_until`.
+
+**The login `403` gains `retry_after`:**
+`{"detail": "This account is temporarily locked after repeated failed sign-ins. Try again later, or ask an administrator to unlock it.", "code": "account_locked", "retry_after": 812}`.
+
+- **What it is:** whole seconds until the lock ends, rounded up, at least 1, read from the account row
+  under lock.
+- **Who gets it:** only a request whose password matched, within D-26's notice ceiling (twice the running threshold), as before
+  (D-26).
+- **Never on a `401`.** No `Retry-After` header is sent with either.
+- **The `401` is unchanged:** byte-identical for an unknown address, a wrong password, and a locked
+  account given a wrong password or given the right one past the ceiling.
+
+**The policy is `.env` configuration** (D-130 decision 7).
+
+- **The variables:** `LOCKOUT_THRESHOLD` and `LOCKOUT_DURATION_MINUTES`, which default to five and 15.
+  The policy may only be tightened (decision 8): a threshold from 1 to 5 and a duration from 15
+  minutes to 365 days. Any other value, or one that is not a whole number, stops the server
+  starting with `ImproperlyConfigured`.
+- **Who reads them:** login reads them at request time, and D-26's notice ceiling is twice the
+  threshold.
+- **When a change applies:** after a server restart, with no front-end rebuild, because the sign-in
+  page reads the policy from `GET /api/auth/lockout-policy`.
+
+**The warning and the countdown use no account's state from the server** (D-130 decision 1).
+
+- **The count is the sign-in page's own:** consecutive `401`s for the address typed, held in memory.
+- **The policy:** after the first failed attempt the page asks `GET /api/auth/lockout-policy`, once,
+  and works out the remaining attempts from its threshold. Until it arrives, or if it cannot be had,
+  the page shows no warning and no lock of its own.
+- **At the threshold** the page disables Sign in and counts down the policy's duration.
+- **On a `403`** it counts down `retry_after` instead, or the policy's duration where the `403` gave
+  none.
+- **Nothing in any response tells a stranger whether an address is registered or locked** (UC-02
+  E1). The policy route is the same two numbers for everyone. The cost is in D-130.
+
+**`LoginAttempts`** (`login_attempts`, `docs/schema-v1.md` §1) gets one row for each lockout and one
+for each release, and nothing for an ordinary attempt (D-130 decision 5). No route lists it. Its Read
+is the `lock` object above.

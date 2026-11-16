@@ -96,6 +96,23 @@ Changing the order is a decision, not an edit to make on the day.
    Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue   # must print nothing
    ```
 
+   **This check can be wrong in both directions on this laptop** (D-87's notes of 11 and 12
+   November 2026). Windows has reported a serving socket in another state, so it can print nothing
+   while a server is listening. It has also left a row whose `OwningProcess` is 0 after a server
+   stopped, which is not a server. And with two servers on the port it prints one of them. When in
+   doubt, ask the script the pre-flight uses. It reads netstat and the port's own rows as well, and
+   takes about a minute to give up. The two paths are spelled out because `$py` and `$repo` are set
+   in section 1, below:
+
+   ```powershell
+   & 'C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.venv\Scripts\python.exe' `
+     'C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\scripts\server_record.py' http://127.0.0.1:8000
+   ```
+
+   The port is free only when its `notes` say that nothing is listening. A note that no single
+   process holds the port means something does. A note that it is not known means a lookup could
+   not be read: look again before treating the port as free.
+
 ## 1. The names, in every PowerShell window used below
 
 Each step runs in a PowerShell window that has this block pasted into it. Environment variables
@@ -188,12 +205,18 @@ Paste the step 1 block, then, every time the server starts:
 ```powershell
 $env:DEBUG = 'False'                                 # .env says True; only the shell overrides it
 $env:WAITRESS_LOG_PATH = "$root\logs\waitress.log"   # the same path the run.ps1 window has
-& $waitress --listen=127.0.0.1:8000 --threads=24 config.wsgi:application
+& $py manage.py check                                # Waitress runs no checks (D-131)
+if ($LASTEXITCODE -ne 0) { throw "Not starting: manage.py check reported an error." }
+& $waitress --listen=127.0.0.1:8000 --threads=24 --max-request-body-size=54525952 config.wsgi:application
 ```
 
-This is D-85 §2's command, `waitress-serve --listen=127.0.0.1:8000 --threads=24
-config.wsgi:application`, run from the venv's `Scripts` folder so that it is the venv's Waitress.
-The two lines before it repeat step 1's on purpose: a server started from a window without them
+`manage.py check` refuses a database set up for another provider (ai.E005), and warns when it
+cannot read the database (ai.W004): start the database first.
+
+This is D-85 §2's command with D-124's body cap,
+`waitress-serve --listen=127.0.0.1:8000 --threads=24 --max-request-body-size=54525952 config.wsgi:application`,
+run from the venv's `Scripts` folder so that it is the venv's Waitress.
+The first two lines repeat step 1's on purpose: a server started from a window without them
 runs under `.env`'s `DEBUG=True` and logs Waitress's lines to the checkout's `logs\waitress.log`.
 
 - **`DEBUG=False` is explicit** (D-87 §2). With `DEBUG` on, Django serves its HTML debug pages,
@@ -202,6 +225,11 @@ runs under `.env`'s `DEBUG=True` and logs Waitress's lines to the checkout's `lo
 - **`--threads=24` is set explicitly** (D-85 §3). Waitress's default is 4, which NFR-08's five
   users already exceed. 24 is NFR-09's 20 users plus 4 for screens, logins and uploads, so a load
   run waits on the NPU, not in Waitress.
+- **`--max-request-body-size=54525952` caps any request body** (D-124), at
+  `MAX_REQUEST_BODY_BYTES`, 2 MB over the 50 MB upload limit. Without it Waitress takes bodies up to
+  1 GB. It changes nothing a run measures. The largest measured request is the ingestion's
+  oversized item I02, generated 1 MB past 50 MB, so it stays under the cap and still gets the API's
+  own 413; a test ties the two. `run.ps1` does not check the flag.
 - **Waitress writes its own log** to `$root\logs\waitress.log` (D-87 §3). Its first line is
   `Serving on http://127.0.0.1:8000`, with a timestamp: that line is how `run.ps1` knows when the
   server started. A `Task queue depth is N` line means a request arrived with no thread free;
@@ -612,3 +640,23 @@ database.
 | 12a threads | the thread run's records | `$runs\threads.json` |
 | 12b HTTP check | 3 conversations, 6 asks, their citations; sign-ins; record | `$db`, `$root\logs`; `$runs\http_check.json` |
 | 13 NFR-09 | up to 1,210 uploads; summary, with the server observed and its queueing | `$db`, `$root\media`; `$runs\nfr09_summary.json` |
+
+## A database for another provider (D-131)
+
+A database keeps the provider it was set up with (D-131). So measuring another provider needs a
+database set up under that provider from the start, not a copy of this one moved across.
+`reindex --resize-column`, which did that (D-117), was removed on 14 November 2026.
+
+1. **Create the database** with a new name, and point a session at it, with `AI_PROVIDER` set in
+   that session or in the checkout's `.env`.
+2. **Run `& $py manage.py migrate`, then `& $py manage.py check`.** Both vector columns take the
+   provider's width, and the check refuses anything else (ai.E004, ai.E005).
+3. **Start the server, as this runbook's section 5 does, and ingest the corpus through the API.**
+   `corpus/objective-02/runs/2026-11-13-alpha-anthropic/` did this for the anthropic provider, with
+   that folder's two scripts. Its README gives the order, the tags included.
+4. **Snapshot it** (`scripts/snapshot_measurement_db.py snapshot`). Later restores of that snapshot,
+   under its own provider, are plain restores.
+
+**The copies of 10 November.** `kmp_voyage_20261110` and `kmp_anthropic` were moved from FLM with
+the old flag (D-113, D-117, D-122). They are kept as they are. `kmp_anthropic`'s gap column was
+altered to match its chunks on 13 November 2026 (D-117's note of that day).

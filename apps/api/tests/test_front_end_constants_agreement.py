@@ -21,9 +21,22 @@ text and runs no JavaScript, so it passes on a machine with nothing but Python.
 **What it holds**, enumerated from ``constants.js`` on 2 November 2026, every export that
 copies a value of ``apps/core/constants.py``:
 
-- ``SEARCH_MINIMUM_LENGTH``, ``QUESTION_MINIMUM_LENGTH``, ``QUESTION_MAXIMUM_LENGTH`` and
+- ``SEARCH_MINIMUM_LENGTH``, ``SEARCH_MAXIMUM_LENGTH`` (since 10 November 2026),
+  ``QUESTION_MINIMUM_LENGTH``, ``QUESTION_MAXIMUM_LENGTH`` and
   ``MAX_UPLOAD_BYTES``: each equal to its server constant.
+- ``TAG_NAME_MAXIMUM_LENGTH`` (since 10 November 2026, FR-10's new Topic name): equal to
+  ``NAME_MAX_LENGTH``, which is a column width in ``apps/core/models.py`` and not a value of
+  ``apps/core/constants.py``, so it is read from there.
 - ``MAX_UPLOAD_LABEL``: the ceiling in whole megabytes, as the server's value states it.
+- ``MAXIMUM_RECORDING_BYTES``, ``MAXIMUM_RECORDING_LABEL`` and ``TRANSCRIPTION_SAMPLE_RATE``
+  (since 10 November 2026, D-123): the largest recording the page decodes, which only the
+  client enforces because the recording never reaches the server, its label in whole megabytes,
+  and the rate the page resamples to before cutting.
+- **FR-03's lockout policy: the absence of a copy** (since 14 November 2026, D-130 decision 7).
+  The threshold and the duration are the server's .env values, and the sign-in page fetches them
+  from ``GET /api/auth/lockout-policy``. A copy in ``constants.js`` would be the stale value the
+  decision removed, so the test fails if one comes back. From 13 November until then, this file
+  held the copies equal instead.
 - ``ACCEPTED_EXTENSIONS`` and ``ACCEPTED_FORMATS_LABEL``: D-15's four, no more, no fewer.
 - ``DOCUMENT_STATUS``, ``ROLES`` and ``SOURCE_TYPE``: the server's whole vocabulary, each
   value once. Equality and not inclusion, for ``DOCUMENT_STATUS`` especially: D-51 is the
@@ -38,7 +51,9 @@ is ``apps/api/serializers.py`` ``DATE_RANGE_REVERSED_MESSAGE``) and the four for
 ``VALIDATION.fileTypeUnsupported`` (``apps/api/views.py`` ``UNSUPPORTED_FORMAT_MESSAGE``).
 Neither is tied here. Nor is the literal "50 MB" in ``apps/api/views.py``
 ``FILE_TOO_LARGE_MESSAGE``, which is the server restating its own constant and an open item
-of its own.
+of its own. ``LOCKOUT_WARNING_REMAINING`` is the sign-in page's own rule (Benjamin's decision 2,
+D-130) and has no server value to equal. The minutes in ``TEXT.accountMayBeLocked`` come from
+the fetched policy.
 """
 
 from __future__ import annotations
@@ -51,6 +66,7 @@ import pytest
 from django.conf import settings
 
 from apps.core import constants
+from apps.core import models as core_models
 
 CLIENT_CONSTANTS = Path(settings.BASE_DIR) / "frontend" / "src" / "constants.js"
 
@@ -60,9 +76,18 @@ MEGABYTE = 1024 * 1024
 # (the client's export, the server constant it copies)
 BOUNDS = [
     ("SEARCH_MINIMUM_LENGTH", "MINIMUM_SEARCH_LENGTH"),
+    ("SEARCH_MAXIMUM_LENGTH", "MAXIMUM_SEARCH_LENGTH"),
     ("QUESTION_MINIMUM_LENGTH", "MINIMUM_QUESTION_LENGTH"),
     ("QUESTION_MAXIMUM_LENGTH", "MAXIMUM_QUESTION_LENGTH"),
     ("MAX_UPLOAD_BYTES", "MAX_UPLOAD_BYTES"),
+    ("MAXIMUM_RECORDING_BYTES", "MAXIMUM_RECORDING_BYTES"),
+    ("TRANSCRIPTION_SAMPLE_RATE", "TRANSCRIPTION_SAMPLE_RATE"),
+]
+
+# (the client's export, the column width in apps/core/models.py it copies). The new Topic
+# name's limit is the width of Tags.tag_name and the apply route's max_length (FR-10).
+COLUMN_BOUNDS = [
+    ("TAG_NAME_MAXIMUM_LENGTH", "NAME_MAX_LENGTH"),
 ]
 
 VOCABULARIES = [
@@ -138,12 +163,44 @@ def test_the_clients_copy_of_each_bound_equals_the_server_constant(client_source
     )
 
 
+@pytest.mark.parametrize(
+    ("client_name", "server_name"), COLUMN_BOUNDS, ids=[client for client, _ in COLUMN_BOUNDS]
+)
+def test_the_clients_copy_of_each_column_width_equals_the_model_constant(client_source, client_name, server_name):
+    client = _javascript_integer(_exported(client_source, client_name))
+    server = getattr(core_models, server_name)
+    assert client == server, (
+        f"constants.js has {client_name} = {client}, and apps/core/models.py has "
+        f"{server_name} = {server}. The screen would refuse, or allow, what the server does not."
+    )
+
+
+def test_the_client_holds_no_copy_of_the_lockout_policy(client_source):
+    """D-130 decision 7: the policy is the server's .env, fetched at run time. A built-in copy
+    would warn, lock or count down by a value the server no longer uses after a .env change."""
+    for name in ("LOCKOUT_THRESHOLD", "LOCKOUT_DURATION"):
+        copies = re.findall(rf"^\s*(?:export\s+)?const\s+({name}\w*)\s*=", client_source, re.MULTILINE)
+        assert not copies, (
+            f"constants.js declares {copies}, a copy of FR-03's lockout policy. Since D-130 decision 7 "
+            "the sign-in page reads it from GET /api/auth/lockout-policy."
+        )
+
+
 def test_the_clients_upload_ceiling_label_states_the_servers_ceiling(client_source):
     assert constants.MAX_UPLOAD_BYTES % MEGABYTE == 0, "the server's ceiling is no longer a whole number of MB"
     label = _javascript_string(_exported(client_source, "MAX_UPLOAD_LABEL"))
     assert label == f"{constants.MAX_UPLOAD_BYTES // MEGABYTE} MB", (
         f"constants.js tells the user the ceiling is {label!r}; the server's is "
         f"{constants.MAX_UPLOAD_BYTES} bytes."
+    )
+
+
+def test_the_clients_recording_ceiling_label_states_the_servers_ceiling(client_source):
+    assert constants.MAXIMUM_RECORDING_BYTES % MEGABYTE == 0, "the recording ceiling is no longer whole MB"
+    label = _javascript_string(_exported(client_source, "MAXIMUM_RECORDING_LABEL"))
+    assert label == f"{constants.MAXIMUM_RECORDING_BYTES // MEGABYTE} MB", (
+        f"constants.js tells the user the recording ceiling is {label!r}; the server's constant is "
+        f"{constants.MAXIMUM_RECORDING_BYTES} bytes."
     )
 
 

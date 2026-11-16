@@ -1,0 +1,1 @@
+Created the empty database kmp_obj02_anthropic_20261110. Next: manage.py migrate.

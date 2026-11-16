@@ -4,6 +4,7 @@ import { TEXT } from '../constants.js'
 import { formatDate } from '../utils/dates.js'
 import { sourceLinkFor, sourceTypeLabel } from '../utils/sources.js'
 import { TURN_STATE, turnStateOf } from '../utils/turns.js'
+import AiMark from './AiMark.jsx'
 import Notice from './Notice.jsx'
 import './Answer.css'
 
@@ -78,10 +79,22 @@ function SourceLine({ source }) {
  * control that expands nothing. The statement is still cited; what is missing is
  * the passage, and saying so is better than either inventing one or dropping the
  * citation number the reader was given.
+ *
+ * **A passage of a meeting's AI-generated summary is said to be one** (NFR-15;
+ * D-125, choice 1). Since FR-16 a meeting's Ready summary is indexed as passages of
+ * the meeting itself, so a citation can expand to a sentence the AI wrote about the
+ * meeting rather than to the transcript's words. Such a passage arrives with
+ * `ai_generated: true`, and it then carries the mark every AI surface carries,
+ * "Suggested by AI", a sentence saying where it is from, and the dashed boundary;
+ * the region is described by both, so a screen reader hears them before the text.
+ * **Only the flag decides.** The passage's text is the summary's own sentences with
+ * nothing added, so nothing in it says what it is, and nothing here reads it to
+ * find out. A reply from before the field has no flag, which is false.
  */
 function CitedStatement({ idPrefix, statement, found }) {
   const [open, setOpen] = useState(false)
   const panelId = `${idPrefix}-citation-${statement.position}`
+  const aiGenerated = found?.passage?.ai_generated === true
 
   return (
     <div className="answer__statement">
@@ -111,15 +124,23 @@ function CitedStatement({ idPrefix, statement, found }) {
             <p className="citation-panel__label" id={`${panelId}-label`}>
               {TEXT.citationPassageHeading}
             </p>
+            {aiGenerated ? (
+              <p className="citation-panel__provenance" id={`${panelId}-provenance`}>
+                <AiMark /> {TEXT.aiSummaryPassage}
+              </p>
+            ) : null}
             {/* A passage is a whole chunk and can run to thousands of characters, so
                 it scrolls rather than pushing the rest of the thread off the screen.
                 A scrollable box needs to be reachable by keyboard to be scrollable
                 at all, which is what the labelled region and tabIndex are for — the
                 same pattern the stored transcript uses (WCAG 2.1 SC 2.1.1). */}
             <blockquote
-              className="citation-panel__passage"
+              className={
+                aiGenerated ? 'citation-panel__passage citation-panel__passage--ai' : 'citation-panel__passage'
+              }
               role="region"
               aria-labelledby={`${panelId}-label`}
+              aria-describedby={aiGenerated ? `${panelId}-provenance` : undefined}
               tabIndex={0}
             >
               {found.passage.text}
@@ -148,10 +169,18 @@ function CitedStatement({ idPrefix, statement, found }) {
 export function AnswerBody({ idPrefix, statements, sources }) {
   const index = passageIndex(sources)
   const headingId = `${idPrefix}-answer-heading`
+  const markId = `${idPrefix}-answer-mark`
 
+  // NFR-15: an answer is AI-generated content, so it carries the one convention every AI surface
+  // carries: the words "Suggested by AI" under its heading, and the dashed boundary round it
+  // (src/components/AiMark.jsx). Every answer is the model's, so nothing here is conditional.
+  // The audit of 12 November found the answer was the one AI output surface without it (D-125).
   return (
-    <section className="answer" aria-labelledby={headingId}>
+    <section className="answer ai-content" aria-labelledby={headingId} aria-describedby={markId}>
       <h3 id={headingId}>{TEXT.answerHeading}</h3>
+      <p className="answer__provenance">
+        <AiMark id={markId} />
+      </p>
       {statements.map((statement) => (
         <CitedStatement
           key={statement.position}

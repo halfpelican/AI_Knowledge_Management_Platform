@@ -1,0 +1,47 @@
+Sofia: Let's begin. The main question for the committee today is whether we keep the thirtieth of November go-live. Jamal, where are we?
+
+Jamal: Development is about eighty-five percent done. The blocker is the data migration. The scripts for the customer records are written, but the ones for the historical invoices aren't, and that's the larger set.
+
+Wei: And testing can't really start until the migrated data is there. If we keep the thirtieth, we get about a week and a half of testing, and last time we needed four.
+
+Ravi: What does a two-week delay cost?
+
+Sofia: The contractor's extension, roughly twenty thousand dollars. Nothing else changes on cost.
+
+Ravi: Then I'd rather pay twenty thousand than go live on untested data.
+
+Sofia: So my proposal is that we move go-live from the thirtieth of November to the fourteenth of December. Does anyone object? No? Then that's decided: go-live is the fourteenth of December.
+
+Aisha: Should we also take the mobile app out of the first release? It's the least tested part.
+
+Sofia: I think we should. The mobile app moves to a second release in the new year. Agreed?
+
+Jamal: Agreed.
+
+Sofia: Good. Then the first release excludes the mobile app. Now, actions. Jamal, the migration scripts.
+
+Jamal: I'll finish the invoice migration scripts by the thirteenth.
+
+Wei: That's later than I'd hoped. Can I at least run the regression suite on the customer data before then?
+
+Jamal: Yes, that data's ready now.
+
+Wei: Then I'll run the full regression suite on the customer records by the end of next week.
+
+Ravi: I need to approve the contractor extension. I'll sign it off this Friday, so there's no gap in their contract.
+
+Aisha: The release notes need rewriting now that the mobile app is out. I'll update them by Monday.
+
+Sofia: I'll present the revised timeline to the board on the nineteenth of November. Ravi, can you join me for the budget part?
+
+Ravi: Yes, I'll be there.
+
+Jamal: There's one more dependency. The integration adapter for the payments system is being built by Sam, the contractor. He's told me he'll have it finished next Tuesday.
+
+Wei: And there's the performance problem on the search page. It's slow with more than a thousand records.
+
+Jamal: Wei and I will pair on the performance fix. It's probably a missing index.
+
+Aisha: For user acceptance testing, I'll set up the sessions with the business users. They'll need to be in the week after next.
+
+Sofia: Good. Anything else? Then thank you. The decisions are that go-live moves to the fourteenth of December and the mobile app moves to a later release.

@@ -1,0 +1,5 @@
+2026-11-10 22:14:20,516 INFO apps.ai.attempts classification attempt 1 of 3 parsed after 17.1 s [finish_reason=stop completion_tokens=141 prompt_tokens=2535 max_tokens=400 max_statements=unreported] (account not set): 2 tag(s)
+2026-11-10 22:15:07,098 INFO apps.ai.attempts classification attempt 1 of 3 parsed after 15.1 s [finish_reason=stop completion_tokens=141 prompt_tokens=2535 max_tokens=400 max_statements=unreported] (account not set): 2 tag(s)
+2026-11-10 22:15:53,036 INFO apps.ai.attempts classification attempt 1 of 3 parsed after 15.3 s [finish_reason=stop completion_tokens=140 prompt_tokens=2535 max_tokens=400 max_statements=unreported] (account not set): 2 tag(s)
+2026-11-10 22:16:36,484 INFO apps.ai.attempts classification attempt 1 of 3 parsed after 15.1 s [finish_reason=stop completion_tokens=141 prompt_tokens=2535 max_tokens=400 max_statements=unreported] (account not set): 2 tag(s)
+2026-11-10 22:17:22,093 INFO apps.ai.attempts classification attempt 1 of 3 parsed after 15.4 s [finish_reason=stop completion_tokens=141 prompt_tokens=2535 max_tokens=400 max_statements=unreported] (account not set): 2 tag(s)

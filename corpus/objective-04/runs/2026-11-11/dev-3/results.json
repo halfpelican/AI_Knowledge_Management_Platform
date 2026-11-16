@@ -1,0 +1,124 @@
+{
+  "reference_items": 39,
+  "matched_reference_items": 37,
+  "recall": 0.9487179487179487,
+  "recall_met": true,
+  "extracted_items": 39,
+  "extras": 2,
+  "extras_rate": 0.05128205128205128,
+  "extras_met": true,
+  "items_with_a_named_owner": 38,
+  "wrong_owner": [],
+  "attribution_met": true,
+  "met": true,
+  "transcripts_without_a_ready_summary": [],
+  "missed": [
+    {
+      "ref": "T03-A6",
+      "transcript": "T03",
+      "description": "Produce the accessibility fixes list"
+    },
+    {
+      "ref": "X02-A4",
+      "transcript": "X02",
+      "description": "Renew the intranet certificate"
+    }
+  ],
+  "extra_items": [
+    {
+      "where": "T01 row 3",
+      "description": "Observe the Thursday-night dry run"
+    },
+    {
+      "where": "T06 row 4",
+      "description": "Plan installation of refill stations on every floor"
+    }
+  ],
+  "due_dates": {
+    "compared": 18,
+    "agree": 18,
+    "differ": []
+  },
+  "per_transcript": [
+    {
+      "transcript": "X01",
+      "status": "Ready",
+      "reference_items": 4,
+      "matched": 4,
+      "extracted_items": 4,
+      "extras": 0,
+      "reference_decisions": 2,
+      "extracted_decisions": 2
+    },
+    {
+      "transcript": "X02",
+      "status": "Ready",
+      "reference_items": 5,
+      "matched": 4,
+      "extracted_items": 4,
+      "extras": 0,
+      "reference_decisions": 3,
+      "extracted_decisions": 3
+    },
+    {
+      "transcript": "T01",
+      "status": "Ready",
+      "reference_items": 5,
+      "matched": 5,
+      "extracted_items": 6,
+      "extras": 1,
+      "reference_decisions": 1,
+      "extracted_decisions": 2
+    },
+    {
+      "transcript": "T02",
+      "status": "Ready",
+      "reference_items": 5,
+      "matched": 5,
+      "extracted_items": 5,
+      "extras": 0,
+      "reference_decisions": 2,
+      "extracted_decisions": 2
+    },
+    {
+      "transcript": "T03",
+      "status": "Ready",
+      "reference_items": 7,
+      "matched": 6,
+      "extracted_items": 6,
+      "extras": 0,
+      "reference_decisions": 2,
+      "extracted_decisions": 3
+    },
+    {
+      "transcript": "T04",
+      "status": "Ready",
+      "reference_items": 6,
+      "matched": 6,
+      "extracted_items": 6,
+      "extras": 0,
+      "reference_decisions": 2,
+      "extracted_decisions": 1
+    },
+    {
+      "transcript": "T05",
+      "status": "Ready",
+      "reference_items": 3,
+      "matched": 3,
+      "extracted_items": 3,
+      "extras": 0,
+      "reference_decisions": 1,
+      "extracted_decisions": 1
+    },
+    {
+      "transcript": "T06",
+      "status": "Ready",
+      "reference_items": 4,
+      "matched": 4,
+      "extracted_items": 5,
+      "extras": 1,
+      "reference_decisions": 2,
+      "extracted_decisions": 2
+    }
+  ]
+}

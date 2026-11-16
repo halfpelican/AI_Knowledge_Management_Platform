@@ -1,0 +1,53 @@
+--- corpus/objective-02/runs/2026-11-10/haiku/citation_harness_haiku.py
++++ corpus/objective-06/runs/2026-11-11-anthropic-draws/pre-measurement-asks/citation_harness_fr12_declines.py
+@@ -1,4 +1,22 @@
+-"""The Haiku round, step 2 (10 November 2026): the frozen sets on claude-haiku-5-5.
++"""FR-12's decline weakness on anthropic (11 November 2026): the first half of D-110's acceptance test.
++
++A copy of corpus/objective-02/runs/2026-11-10/haiku/citation_harness_haiku.py at bd95f92, the
++harness D-121's Haiku round ran, changed only where its database and its own path are named:
++
++- **The database** is kmp_fr12_declines_20261111, restored with ``restore --into`` from
++  kmp_anthropic's snapshot (dump 8e79cb37...), the user's choice of 11 November. The provider gate
++  requires it, as the Haiku copy's required kmp_voyage_20261110.
++- **The server record** names this copy, and the comment on REPOSITORY_ROOT names this folder.
++
++Everything else is the Haiku copy's: Voyage voyage-4 at 1024, Claude Haiku 5.5 (D-121), D-120's
++threshold and floor, the gates, the scoring and the record. It runs
++corpus/objective-06/pre-measurement-asks.json: the draft's original eight unanswerable wordings and
++its six permission-only asks. D-110 names those eight, with the frozen thirty, as the acceptance
++test for a decline fix. Claude's generation is not deterministic (D-115, D-110's note), so the set
++is run in five draws, as the user decided on 11 November. The harness writes nothing to the
++database, so every draw starts from the same state. The Haiku copy's docstring follows.
++
++The Haiku round, step 2 (10 November 2026): the frozen sets on claude-haiku-5-5.
+ 
+ A copy of runs/2026-11-10/voyage-frozen/citation_harness_voyage.py at cfcae92, the harness #75 ran on
+ Sonnet 5.5, changed only where the Claude model was named:
+@@ -166,7 +184,7 @@
+ from pathlib import Path
+ 
+ HERE = Path(__file__).resolve().parent
+-REPOSITORY_ROOT = HERE.parents[4]  # corpus/objective-02/runs/2026-11-10/<this folder>
++REPOSITORY_ROOT = HERE.parents[4]  # corpus/objective-06/runs/2026-11-11-anthropic-draws/<this folder>
+ SCRIPTS_DIRECTORY = REPOSITORY_ROOT / "scripts"
+ sys.path.insert(0, str(REPOSITORY_ROOT))
+ if str(SCRIPTS_DIRECTORY) not in sys.path:
+@@ -175,7 +193,7 @@
+ 
+ # This copy: the Voyage-indexed database and the anthropic provider, set before Django reads
+ # its settings, so the run cannot reach FLM's database or FLM (D-113).
+-VOYAGE_DATABASE = "kmp_voyage_20261110"
++VOYAGE_DATABASE = "kmp_fr12_declines_20261111"  # this copy: restored --into from kmp_anthropic's snapshot
+ EXPECTED_SETTINGS = {
+     "AI_PROVIDER": "anthropic",
+     "ANTHROPIC_MODEL": "claude-haiku-5-5",  # this copy: the Haiku round (D-115 is Sonnet)
+@@ -1543,7 +1561,7 @@
+             return refuse([f"the run cannot be recorded: {exc}"])
+         record = {"commit_sha": None, "error": str(exc), "flm_version": None}
+     record["provider_record"] = provider_record()
+-    record.update({"recorded": recorded, "server": server_record.in_process("corpus/objective-02/runs/2026-11-10/haiku/citation_harness_haiku.py")})
++    record.update({"recorded": recorded, "server": server_record.in_process("corpus/objective-06/runs/2026-11-11-anthropic-draws/pre-measurement-asks/citation_harness_fr12_declines.py")})
+     if arguments.threads:
+         record.update({
+             "thread_set": str(set_path),

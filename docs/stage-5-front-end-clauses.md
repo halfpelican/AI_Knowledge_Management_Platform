@@ -94,7 +94,7 @@ matrix. Nothing here stands in for it.
 
 | # | Clause | State | Test |
 |---|---|---|---|
-| 1 | "A search field available from every page…" | ⚠️ | `search.test.jsx` uses the header field on `/dashboard` and the field on `/search` (new). It does not test "every page". The field is in the shell (`App.jsx` `HeaderSearch`), so it is on every signed-in route by construction, but no test walks the routes. Outside this step's list |
+| 1 | "A search field available from every page…" | ⚠️, and ✅ since 12 November 2026 | `search.test.jsx` uses the header field on `/dashboard` and the field on `/search` (new). It does not test "every page". The field is in the shell (`App.jsx` `HeaderSearch`), so it is on every signed-in route by construction, but no test walks the routes. Outside this step's list. **Walked 12 November 2026:** `headerSearchField.test.jsx` :: FR-12: the search field is in the header of every page, for each role (34 cases: every path in `App.jsx`'s route table and `/`, as an Employee and as an Administrator), and :: shows the Search screen at /search for a term an Administrator submits from /admin/tags. **Still uncovered:** whether the field can be seen, an anonymous visitor, and a term submitted from every page (the dated note of 12 November) |
 | 2 | "…returning results grouped by type (Documents and Meetings) with a count per group." | ✅ new | `search.test.jsx` :: puts documents and meetings in their own groups, each headed by its count, each result with its title, snippet, department and date. Failure path: :: keeps both groups on screen at a count of zero when nothing matched, and says so plainly rather than as an error |
 | 3 | "Each result shows its title, the matching passage as a snippet, its department, and its date." | ✅ new | The first grouping test. The "matched on its title, no passage" note for an empty snippet is not tested |
 | 4 | "queries shorter than two characters are rejected client-side" (Server-End, Validation) | ✅ new | `search.test.jsx` :: refuses one character from the header field with a message naming the minimum, sends nothing, and searches at two, and :: refuses a one-character term typed into the address without sending it |
@@ -197,7 +197,7 @@ None is fixed here. Fixing them is react-frontend's work, under a decision the u
 | FR-08 | The "Processing failed…" sentence for each status | Thin: the action is tested, the per-status wording is not |
 | FR-09 | Attendee association | Outside this step's list |
 | FR-09 | The stored transcript viewable in full | Outside this step's list |
-| FR-12 | The search field "from every page" | Outside this step's list. Tested on two pages, not walked across the routes |
+| FR-12 | The search field "from every page" | Covered 12 November 2026: `headerSearchField.test.jsx` :: FR-12: the search field is in the header of every page, for each role, which walks every route as an Employee and as an Administrator. What the walk cannot reach is in the dated note of 12 November |
 
 ## Dated notes
 
@@ -226,3 +226,71 @@ These correct the record without editing it.
 - **Observation 4 still stands.** A failed logout that is not a 401 still clears the user in the
   page. No test pins this either way, and whether it should is the user's call (D-97).
 - **The line numbers in defects 1 to 3** refer to the code before the fix.
+
+### 12 November 2026: FR-12 row 1, the search field "from every page", is walked across the routes
+
+- **What was added.** Tests only, on `test/FR-12-search-field-every-page`. No product file changed.
+  - `frontend/tests/headerSearchField.test.jsx` :: FR-12: the search field is in the header of
+    every page, for each role. 34 cases: the whole application at every path in `App.jsx`'s route
+    table, and at `/`, once as an Employee and once as an Administrator.
+    - On the page each case ends on, the banner landmark holds exactly one search landmark, and
+      that holds exactly one input labelled `TEXT.searchFieldLabel`, not disabled.
+    - The field is looked for inside the banner. The search screen has a field of its own and the
+      component sheet shows a sample, and neither can stand in for the header's.
+  - The same file :: shows the Search screen at /search for a term an Administrator submits from
+    /admin/tags. The same as an Employee, from the dashboard, was already row 4's first test, and
+    is not repeated.
+  - The cases are the walk `askNavLink.test.jsx` was given on 11 November for FR-13's "reachable
+    from any page". They moved, unchanged, into `frontend/tests/routeWalk.jsx`, which both files
+    import. `askNavLink.test.jsx` :: has a case, as each role, for every path in the route table
+    of src/App.jsx holds the walk to the route table for both.
+- **The breaks.** Each new test was seen failing under a deliberate break of `frontend/src`,
+  applied alone and restored. They are listed in the commit message. Four of 11 November's
+  breaks were run again as well, to show the move did not blunt FR-13's tests.
+- **What changes in the tables above:**
+  - **FR-12 row 1** is now ✅. The row keeps its text of 2 November and adds the new tests under
+    their date.
+  - **"Left uncovered":** the FR-12 row is closed.
+- **Still uncovered:**
+  - **Whether the field can be seen.** jsdom applies no stylesheet, so a rule that hid the field
+    or the header would not fail the walk.
+  - **An anonymous visitor.** One has no search field, by design (`App.jsx` `HeaderSearch`).
+    `logout.test.jsx` asserts there is no search landmark after logging out. Nothing asserts it
+    for a visitor who never signed in.
+  - **A term submitted from every page.** The field's presence is asserted on every page. A term
+    is submitted from two: `/dashboard` as an Employee and `/admin/tags` as an Administrator.
+  - **An address no route matches.** It is not a page, and it is not walked.
+  - **A disabled field, in the test that submits a term.** That test passed with the field
+    disabled: Testing Library's `fireEvent` sets a disabled input's value all the same, where a
+    browser would not let a user type. The walk fails on a disabled field.
+
+### 12 November 2026, later: FR-09 rows 1 and 3, and what the stylesheet checks reach
+
+Found while the demonstration script's "What is not verified by any test?" was derived again from
+`frontend/tests`, on `docs/FR-01-demonstration-untested-list`. The tests below are cited as they
+stand, and were not re-broken here, as this file treats a test that already existed.
+
+- **FR-09 row 1 is now ✅.** The attendee half is `meetingAttendees.test.jsx` :: records two people
+  chosen one after the other, shows both, and sends both. It chooses attendees on the form, and
+  the `POST /api/meetings` it sends carries them. It was added on 8 November (`09ae33e`, usability
+  finding 5).
+- **FR-09 row 3 is now ⚠️.** `meetingDelete.test.jsx` renders `MeetingDetail.jsx` and checks
+  that its transcript region holds part of the stored text ("supplier review"). It was added on
+  7 November (`cc2ac42`, D-99). No test checks that all of the transcript is shown.
+- **"Left uncovered":** the FR-09 attendee row is closed. The FR-09 transcript row is partly
+  covered, as row 3 says.
+- **A correction to the note above.** Its first "Still uncovered" item says a rule that hid the
+  field or the header would not fail the walk. That is true of the walk, and it reads as if no
+  test could see such a rule. One can:
+  - Since 8 November, `tests/stylesheets.js` reads the stylesheets as text (`c2d7fce`).
+    `tabOrder.test.jsx` uses it to fail on any keyboard stop a rule hides, on the screens it
+    walks: `/login`, and, as an Employee, `/dashboard`, `/documents`, `/upload`, `/meetings` and
+    `/ask`. The header search field is one of those stops on every one of them except `/login`.
+  - Break V1 appended `.search-field--header { display: none; }` to
+    `src/components/SearchField.css`. `tabOrder.test.jsx` failed its dashboard, documents,
+    upload, meetings and ask cases, and the walk passed. The break is named in `0ca090c`'s
+    message.
+  - **Still not seen:** the field hidden on a route `tabOrder.test.jsx` does not walk, or as an
+    Administrator, and whether it is laid out on screen.
+  - The section "What jsdom cannot see", at the head of this file, was true on 2 November. Since
+    8 November the stylesheet checks reach further than it says.

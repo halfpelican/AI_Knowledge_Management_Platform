@@ -1,0 +1,30 @@
+MONTH-END CLOSE PROCEDURE
+
+Purpose
+This procedure describes the steps the finance team follows to close the ledger each month and to produce the management reporting pack. The close runs over five working days, counted from the first working day of the new month.
+
+Day 1
+1. Confirm the purchasing cut-off: invoices dated in the closed month that arrive after the cut-off are accrued, not posted.
+2. Lock the accounts payable and accounts receivable sub-ledgers at five in the afternoon.
+3. Run the Thistledown bank import and match every bank line to a ledger entry.
+
+Day 2
+4. Post the standard accruals and prepayments from the schedule. Any new accrual over ten thousand dollars needs a department head's confirmation attached.
+5. Reconcile every balance sheet control account and record the reconciliation in the close checklist.
+
+Day 3
+6. Review the unmatched items report. Items older than sixty days are escalated to the financial controller with a proposed treatment.
+7. Post depreciation and the payroll journal.
+
+Day 4
+8. Produce the draft reporting pack and circulate it to department heads for a same-day review of their cost centres.
+9. Post any correcting journals agreed in that review. A journal after this point needs the financial controller's approval.
+
+Day 5
+10. Lock the general ledger, publish the final pack to the executive committee and file the close checklist with the sign-offs.
+
+Additional guidance
+Staff are expected to follow the arrangements for the month-end close procedure and to ask their manager when they are unsure how a rule applies to their situation. Exceptions to the procedure require written approval and are kept on file so that they can be checked during an audit.
+
+Review and ownership
+The owner of the month-end close procedure reviews it at least once a year and records any change, together with the date and the reason for the change.

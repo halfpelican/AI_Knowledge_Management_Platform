@@ -1,0 +1,90 @@
+/* FR-16's "Summary" panel on the meeting page. Tokens only. The dashed boundary
+   and the words of the AI mark are AiMark.css's (NFR-15); the passage markers and
+   the panels they open are Answer.css's, FR-12's citation pattern. */
+
+.meeting-summary {
+  margin: 0 0 var(--space-6);
+}
+
+/* Where the summary stands, in one sentence, and a live region: empty, it takes no
+   room and stays in the accessibility tree, because a live region that was
+   display: none is not reliably announced when it fills. */
+.meeting-summary__standing {
+  max-width: var(--measure-text);
+  margin: 0 0 var(--space-3);
+}
+
+.meeting-summary__standing:empty {
+  margin: 0;
+}
+
+.meeting-summary .notice {
+  max-width: var(--measure-text);
+}
+
+/* The summary itself: one block, bounded as AI content is. The boundary is
+   `ai-content`'s, so this rule sets no border of its own. */
+.meeting-summary__content {
+  max-width: var(--measure-text);
+  margin: 0 0 var(--space-4);
+  padding: var(--space-4);
+  background-color: var(--color-surface);
+}
+
+.meeting-summary__content > :last-child {
+  margin-bottom: 0;
+}
+
+/* The mark, then the model and the date (UC-04's record), on one line where there
+   is room and wrapping where there is not. */
+.meeting-summary__provenance {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  margin: 0 0 var(--space-3);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.meeting-summary__note,
+.meeting-summary__hint {
+  max-width: var(--measure-text);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.meeting-summary__note {
+  margin: 0 0 var(--space-3);
+}
+
+/* One paragraph, its sentences in order, each followed by its passage markers. */
+.meeting-summary__narrative {
+  margin: 0 0 var(--space-3);
+  word-break: break-word;
+}
+
+.meeting-summary__subheading {
+  margin: var(--space-4) 0 var(--space-2);
+  font-size: var(--text-base);
+}
+
+.meeting-summary__list {
+  margin: 0 0 var(--space-3);
+  padding-left: var(--space-5);
+}
+
+.meeting-summary__list > li {
+  margin-bottom: var(--space-2);
+}
+
+.meeting-summary__element {
+  margin: 0;
+  word-break: break-word;
+}
+
+.meeting-summary__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-3);
+}

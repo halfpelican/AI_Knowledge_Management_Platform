@@ -7,7 +7,7 @@
  * the 401 are the server's and are tested in pytest; nothing here stands in for
  * them, and the screen filters nothing itself.
  */
-import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { useLayoutEffect } from 'react'
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
@@ -588,5 +588,124 @@ describe('FR-14 / D-77: a question asked in a thread links to that thread', () =
     expect(href).toBe('/ask?c=a+b%26c%3Dd%23e')
     // And the Ask screen reads exactly that id back out of it (D-77).
     expect(threadInSearch(href.slice(href.indexOf('?')))).toBe(id)
+  })
+})
+
+describe('FR-14 / FR-19: the knowledge-gap panel, for a payload that carries it and no other (D-69, closed by D-107)', () => {
+  /** Two Open entries as `knowledge_gaps.top` carries them, in the list's order. */
+  const STIPEND_GAP = {
+    gap_id: '7d0c3f8a-0000-4000-8000-000000000001',
+    subject: 'What is the WFH stipend policy?',
+    occurrence_count: 6,
+    status: 'Open',
+    first_seen_at: '2026-11-02T09:14:00+11:00',
+    last_seen_at: '2026-11-09T09:25:00+11:00',
+  }
+  const HOSTILE_GAP = {
+    gap_id: '7d0c3f8a-0000-4000-8000-000000000002',
+    // A question a user typed, holding markup.
+    subject: 'Is <b>this</b> covered?<img src="x" onerror="window.__fr14GapInjected = true">',
+    occurrence_count: 1,
+    status: 'Open',
+    first_seen_at: '2026-11-05T10:00:00+11:00',
+    last_seen_at: '2026-11-05T10:00:00+11:00',
+  }
+
+  function withGaps(overrides = {}) {
+    return dashboardPayload({ knowledge_gaps: { open_count: 7, top: [STIPEND_GAP, HOSTILE_GAP] }, ...overrides })
+  }
+
+  it('shows the open count and the top entries with their counts, in the order sent, after the four panels, and links its heading to the log', async () => {
+    serveApi({ 'GET /api/dashboard': { body: withGaps() } })
+    renderDashboard()
+    await screen.findByText(STIPEND_GAP.subject)
+
+    const gaps = panel(TEXT.gapsHeading)
+    expect(within(gaps).getByRole('link', { name: TEXT.gapsHeading }).getAttribute('href')).toBe('/admin/knowledge-gaps')
+    // The count the server sent, not the length of `top`.
+    expect(figures(gaps)).toEqual({ [TEXT.dashboardGapsOpen]: '7' })
+    const items = within(gaps)
+      .getAllByRole('listitem')
+      .map((item) => Array.from(item.querySelectorAll('p')).map((paragraph) => paragraph.textContent))
+    expect(items).toEqual([
+      [STIPEND_GAP.subject, TEXT.gapOccurrences(6)],
+      [HOSTILE_GAP.subject, TEXT.gapOccurrences(1)],
+    ])
+    // The subject is text: no element is made from it.
+    expect(gaps.querySelectorAll('b, img')).toHaveLength(0)
+    expect(window.__fr14GapInjected).toBeUndefined()
+    // It says the filters do not narrow it.
+    expect(within(gaps).getByText(TEXT.dashboardGapsNote)).toBeTruthy()
+    // FR-19's addition comes after the proposal's four, in the DOM and so in the tab order.
+    const headings = screen.getAllByRole('region').map((region) => region.querySelector('h2').textContent)
+    expect(headings).toEqual([...PANELS.map(([heading]) => heading), TEXT.gapsHeading])
+  })
+
+  it('shows the panel loading while a filtered reply is awaited, as the other panels do', async () => {
+    let gate = Promise.resolve()
+    let release
+    serveApi({
+      'GET /api/dashboard': async (url) => {
+        await gate
+        return { body: { ...echoingDashboard(url).body, knowledge_gaps: { open_count: 1, top: [STIPEND_GAP] } } }
+      },
+    })
+    renderDashboard()
+    await screen.findByText(STIPEND_GAP.subject)
+
+    gate = new Promise((resolve) => {
+      release = resolve
+    })
+    fireEvent.change(screen.getByLabelText(TEXT.dashboardDepartment), { target: { value: 'Finance' } })
+    fireEvent.click(screen.getByRole('button', { name: TEXT.dashboardApplyFilters }))
+
+    await waitFor(() =>
+      expect(within(panel(TEXT.gapsHeading)).getByRole('status').textContent).toBe(TEXT.dashboardLoadingGaps),
+    )
+    expect(screen.queryByText(STIPEND_GAP.subject)).toBeNull()
+
+    release()
+    expect(await screen.findByText(STIPEND_GAP.subject)).toBeTruthy()
+    expect(within(panel(TEXT.gapsHeading)).queryByRole('status')).toBeNull()
+  })
+
+  it('renders no panel, no heading and no placeholder for a payload without knowledge_gaps, nor before any reply has arrived', async () => {
+    let release
+    const gate = new Promise((resolve) => {
+      release = resolve
+    })
+    serveApi({
+      'GET /api/dashboard': async () => {
+        await gate
+        return { body: dashboardPayload() }
+      },
+    })
+    renderDashboard()
+
+    // Before the reply: the four panels loading, and nothing standing in for a fifth.
+    for (const [heading, loadingText] of PANELS) {
+      expect(within(panel(heading)).getByRole('status').textContent).toBe(loadingText)
+    }
+    expect(screen.queryByRole('region', { name: TEXT.gapsHeading })).toBeNull()
+    expect(screen.queryByText(TEXT.dashboardLoadingGaps)).toBeNull()
+
+    release()
+    await screen.findByText(DOCUMENT.title)
+    expect(screen.queryByRole('region', { name: TEXT.gapsHeading })).toBeNull()
+    expect(screen.getAllByRole('region')).toHaveLength(PANELS.length)
+    expect(document.body.textContent).not.toMatch(/knowledge.gap/i)
+  })
+
+  it("leaves no trace of the log anywhere on an Employee's page: no panel, no link, no words", async () => {
+    serveApi({
+      'GET /api/auth/me': { body: EMPLOYEE },
+      'GET /api/dashboard': { body: dashboardPayload() },
+    })
+    renderApp('/dashboard')
+    await screen.findByText(DOCUMENT.title)
+
+    expect(screen.queryByRole('region', { name: TEXT.gapsHeading })).toBeNull()
+    expect(screen.queryByRole('link', { name: TEXT.gapsHeading })).toBeNull()
+    expect(document.body.textContent).not.toMatch(/knowledge.gap/i)
   })
 })

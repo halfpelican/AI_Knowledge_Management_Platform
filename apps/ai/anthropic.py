@@ -6,8 +6,11 @@ retry policy (apps/ai/generation.py) with the FLM provider — so "provider inde
 means the same prompt answered by a different model, not a second implementation.
 Embeddings go to Voyage, whose /embeddings endpoint speaks the OpenAI wire format,
 through the same openai client shape FLM uses (docs/ai-provider.md section 3).
-Kept working so the proposal's section 9.2 remains true; not used day to day, and never
-called live in the suite (D-35: no external AI spend).
+Dormant under D-35 until D-113 (10 November 2026) brought it into use: the Max plan's
+monthly Claude API credits fund it. FLM stays implemented and available, and which
+provider is the default is decided by measurement (D-113). The suite never calls it
+live: tests inject fake clients, and conftest.py points every provider at an
+unroutable address (docs/ai-provider.md section 6).
 """
 
 from typing import Callable
@@ -18,25 +21,61 @@ from typing import Callable
 import anthropic as anthropic_sdk
 from django.conf import settings
 
-from apps.ai import _openai_compat
-from apps.ai.base import EmbeddingResult, Passage, ProviderHealth, ProviderUnavailable, StatementList
+from apps.ai import _openai_compat, transcription
+from apps.ai._status import error_for_status
+from apps.ai.base import (
+    DocumentClassification,
+    EmbeddingResult,
+    InputType,
+    MeetingSummaryDraft,
+    Passage,
+    ProviderHealth,
+    ProviderUnavailable,
+    StatementList,
+    TagScheme,
+    Transcription,
+)
+from apps.ai.classification import (
+    CLASSIFICATION_SYSTEM_PROMPT,
+    CLASSIFICATION_TIMEOUT_SECONDS,
+    build_classification_user_prompt,
+    classification_input,
+    run_classification_attempts,
+)
 from apps.ai.generation import (
-    GENERATION_MAX_TOKENS,
     GENERATION_TIMEOUT_SECONDS,
     ChatReply,
     GenerationAttempt,
     run_generation_attempts,
 )
 from apps.ai.prompting import SYSTEM_PROMPT, build_user_prompt
+from apps.ai.summarisation import (
+    SUMMARY_SYSTEM_PROMPT,
+    SUMMARY_TIMEOUT_SECONDS,
+    build_summary_user_prompt,
+    run_summary_attempts,
+)
+
+# Claude's own token ceiling, not FLM's GENERATION_MAX_TOKENS (800). Current Claude
+# models think before they answer and the thinking counts against max_tokens, so a
+# ceiling sized for the JSON reply alone cuts the reply off mid-object: three schema
+# failures, then the 503. It is a ceiling, not a target; the bill is for the tokens used.
+CLAUDE_MAX_TOKENS = 16000
+# How much the model thinks before answering. Low, because the task is extraction from
+# passages already supplied, not open reasoning, and every thinking token is paid for.
+# A starting value, not a measured one: tune it once the path has run live (D-115).
+CLAUDE_EFFORT = "low"
 
 
 class AnthropicService:
-    def __init__(self, embedding_client=None, anthropic_client=None):
-        # Both clients are injected by tests. Production builds them lazily: the
+    def __init__(self, embedding_client=None, anthropic_client=None, transcription_client=None):
+        # The clients are injected by tests. Production builds them lazily: the
         # openai client refuses an empty key, and the keys are blank unless the
-        # anthropic path is actually in use (docs/decisions.md D-04).
+        # anthropic path is actually in use (docs/decisions.md D-04). The third is FLM's,
+        # for recording transcription, which Claude and Voyage cannot do (D-123).
         self._embedding_client = embedding_client
         self._anthropic_client = anthropic_client
+        self._transcription_client = transcription_client
 
     def _voyage(self):
         if self._embedding_client is None:
@@ -56,11 +95,27 @@ class AnthropicService:
             )
         return self._anthropic_client
 
-    def embed(self, texts: list[str]) -> EmbeddingResult:
+    def embed(self, texts: list[str], *, input_type: InputType | None = None) -> EmbeddingResult:
+        """Voyage embeddings, at voyage-4's default 1024 dimensions.
+
+        ``input_type`` goes on the request (D-116). Voyage puts a different instruction
+        in front of a question and a passage, and Voyage says retrieval improves with
+        it. None sends nothing, which is Voyage's default. The texts arrive unprefixed:
+        apps/ai/prefixes.py adds EmbeddingGemma's prefixes and nothing for Voyage.
+
+        No ``output_dimension`` is sent, so the width is the model's default. The
+        startup check and ``reindex`` compare it with EMBEDDING_DIMENSION, which follows
+        AI_PROVIDER and is 1024 for this provider. A database set up for FLM, at 768, is
+        refused: a database keeps the provider it was set up with (D-131).
+        """
         if not texts:
             raise ValueError("embed() needs at least one text")
         return _openai_compat.embed(
-            self._voyage(), settings.VOYAGE_MODEL, texts, endpoint=settings.VOYAGE_BASE_URL
+            self._voyage(),
+            settings.VOYAGE_MODEL,
+            texts,
+            endpoint=settings.VOYAGE_BASE_URL,
+            extra_body={"input_type": input_type} if input_type else None,
         )
 
     def generate_statements(
@@ -77,16 +132,18 @@ class AnthropicService:
         the 503 from apps/ai/generation.py. Only the transport differs, which is what
         keeps the proposal's section 9.2 claim of provider independence true.
 
-        Not exercised against the live API, by decision: D-35 rules out external AI
-        spend, so this path is tested against mocked SDK responses exactly as the Voyage
-        embedding path is. That is a real limitation and it is stated rather than
-        implied — the wire shape is taken from the SDK's documented types, and the first
-        live call will be the first live call.
+        Not yet exercised against the live API: the path was dormant under D-35 until
+        D-113 funded it. The suite tests it against mocked SDK responses, as it does the
+        Voyage embedding path, and binds every request against the real SDK's signature.
+        That is a real limitation and it is stated rather than implied: the wire shape is
+        taken from the SDK's documented types, and the first live call will be the first
+        live call.
         """
         if not passages:
             raise ValueError("generate_statements() needs at least one passage")
-        # One value for the request and for the attempt log's record of it.
-        max_tokens = GENERATION_MAX_TOKENS
+        # One value for the request and for the attempt log's record of it, and the
+        # shared loop's ceiling-hit test reads it too (apps/ai/generation.py).
+        max_tokens = CLAUDE_MAX_TOKENS
         # Built per attempt, because each attempt's prompt states the statement cap the
         # loop asks it for (apps/ai/generation.py).
         return run_generation_attempts(
@@ -99,33 +156,49 @@ class AnthropicService:
             max_tokens=max_tokens,
         )
 
-    def _claude_once(self, user_prompt: str, *, max_tokens: int) -> ChatReply:
+    def _claude_once(
+        self,
+        user_prompt: str,
+        *,
+        max_tokens: int,
+        system: str = SYSTEM_PROMPT,
+        timeout: int = GENERATION_TIMEOUT_SECONDS,
+    ) -> ChatReply:
         """One messages.create call. Returns the reply text and what Claude reported about it.
 
         The system prompt goes in the SDK's own ``system`` parameter rather than as a
         message, which is this API's shape; the string is the one FLM receives as its
-        system message. Transport failures become ProviderUnavailable and 4xx surfaces
-        unchanged, the same division the embed path makes. ``stop_reason`` and the usage
-        counts are read for the attempt log only (apps/ai/attempt_log.py), and None where
-        the reply leaves them out.
+        system message — generation's unless the caller passes its own, as classification
+        does with CLASSIFICATION_SYSTEM_PROMPT and CLASSIFICATION_TIMEOUT_SECONDS (FR-10).
+        Every failed call becomes ProviderUnavailable, as on the embed path
+        (apps/ai/_status.py, D-118). A transport failure, a 5xx, or a 429 under load is
+        retried by the caller. Any other 4xx, the 400 Anthropic sends once the monthly
+        credit has run out included, is ProviderRefused, which the caller does not retry.
+        Both are logged first with their status and body, for generation and
+        classification alike. ``stop_reason`` and the usage counts are read for the
+        attempt log only (apps/ai/attempt_log.py), and None where the reply leaves them out.
+
+        No ``temperature``, unlike FLM's call: the pinned SDK has no sampling parameters
+        and current Claude models refuse them, so this path is not deterministic run to
+        run. ``thinking`` is left at the model's default, because disabling it is a 400 on
+        Sonnet 5.5 and Opus 5.5; ``effort`` is what keeps it short. ``output_tokens`` includes the
+        thinking, so the attempt log's completion count does too.
         """
         try:
             response = self._anthropic().messages.create(
                 model=settings.ANTHROPIC_MODEL,
                 max_tokens=max_tokens,
-                temperature=0.0,
-                system=SYSTEM_PROMPT,
+                output_config={"effort": CLAUDE_EFFORT},
+                system=system,
                 messages=[{"role": "user", "content": user_prompt}],
-                timeout=GENERATION_TIMEOUT_SECONDS,
+                timeout=timeout,
             )
         except (anthropic_sdk.APITimeoutError, anthropic_sdk.APIConnectionError) as exc:
             raise ProviderUnavailable(f"Anthropic API unreachable: {exc}") from exc
         except anthropic_sdk.APIStatusError as exc:
-            if exc.status_code >= 500:
-                raise ProviderUnavailable(
-                    f"Anthropic API returned HTTP {exc.status_code}: {exc}"
-                ) from exc
-            raise  # 4xx, including a 429, is not an outage and consumes no retries
+            # D-118: a rate limit is retried; an exhausted credit or a bad key is refused at
+            # once. Either way it ends in the NFR-19 503, with the cause in the log.
+            raise error_for_status("Anthropic API", exc.status_code, str(exc)) from exc
         # Claude replies in content blocks; only the text ones carry the JSON object.
         usage = getattr(response, "usage", None)
         return ChatReply(
@@ -138,6 +211,83 @@ class AnthropicService:
             completion_tokens=getattr(usage, "output_tokens", None),
             prompt_tokens=getattr(usage, "input_tokens", None),
         )
+
+    def classify_document(
+        self, title: str, text: str, scheme: TagScheme
+    ) -> DocumentClassification:
+        """FR-10 classification through Claude (D-104): the same prompt, schema and loop as FLM.
+
+        Not yet exercised against the live API, like generation: the path was dormant under
+        D-35 until D-113 funded it, and the suite tests it against mocked SDK responses.
+        ``_claude_once`` carries the classification system prompt in the SDK's own parameter
+        and the classification timeout; everything else is apps/ai/classification.py's,
+        shared with the FLM provider, which is what keeps the two symmetrical.
+
+        **The ceiling is Claude's, not FLM's.** CLASSIFICATION_MAX_TOKENS (400) is sized for
+        gemma3:4b's short reply. Claude's thinking counts against ``max_tokens`` (D-115), so
+        the same 400 would cut a reply off before its JSON; classification takes
+        CLAUDE_MAX_TOKENS, generation's Claude ceiling, for the same reason generation does.
+        """
+        body, truncated = classification_input(text)
+        user_prompt = build_classification_user_prompt(title, body, scheme)
+        # One value for the request and for the attempt log's record of it. Claude's ceiling,
+        # because thinking counts against it (see the docstring).
+        max_tokens = CLAUDE_MAX_TOKENS
+        return run_classification_attempts(
+            lambda: self._claude_once(
+                user_prompt,
+                max_tokens=max_tokens,
+                system=CLASSIFICATION_SYSTEM_PROMPT,
+                timeout=CLASSIFICATION_TIMEOUT_SECONDS,
+            ),
+            scheme=scheme,
+            label=f"Claude ({settings.ANTHROPIC_MODEL})",
+            model=settings.ANTHROPIC_MODEL,
+            input_truncated=truncated,
+            max_tokens=max_tokens,
+        )
+
+    def summarise_meeting(self, title: str, passages: list[str]) -> MeetingSummaryDraft:
+        """FR-16's summary through Claude (D-125): the same prompt, schema and loop as FLM.
+
+        ``_claude_once`` carries SUMMARY_SYSTEM_PROMPT in the SDK's own parameter and the summary
+        timeout; everything else is apps/ai/summarisation.py's, shared with the FLM provider. The
+        ceiling is CLAUDE_MAX_TOKENS rather than SUMMARY_MAX_TOKENS, because Claude's thinking
+        counts against it (D-115), as classification's does.
+        """
+        user_prompt = build_summary_user_prompt(title, passages)
+        # One value for the request and for the attempt log's record of it.
+        max_tokens = CLAUDE_MAX_TOKENS
+        return run_summary_attempts(
+            lambda: self._claude_once(
+                user_prompt,
+                max_tokens=max_tokens,
+                system=SUMMARY_SYSTEM_PROMPT,
+                timeout=SUMMARY_TIMEOUT_SECONDS,
+            ),
+            label=f"Claude ({settings.ANTHROPIC_MODEL})",
+            model=settings.ANTHROPIC_MODEL,
+            max_tokens=max_tokens,
+        )
+
+    def _flm_for_transcription(self):
+        if self._transcription_client is None:
+            self._transcription_client = transcription.build_client()
+        return self._transcription_client
+
+    def transcribe(self, audio: bytes, *, filename: str = "segment.wav") -> Transcription:
+        """One recording segment's text, through Whisper on FLM, not through Claude (D-123).
+
+        Claude and Voyage have no speech-to-text, so this provider sends the segment where the
+        FLM provider does: FLM's ``/v1/audio/transcriptions`` at FLM_BASE_URL, with the shared
+        call and attempt policy in apps/ai/transcription.py. TRANSCRIPTION_PROVIDER, not
+        AI_PROVIDER, decides whether it runs: with ``none`` it raises TranscriptionDisabled
+        before any client is built.
+        """
+        return transcription.transcribe(self._flm_for_transcription, audio, filename=filename)
+
+    def transcription_health(self) -> ProviderHealth:
+        return transcription.health(self._flm_for_transcription)
 
     def health(self) -> ProviderHealth:
         # A report, not a call path: this never raises.

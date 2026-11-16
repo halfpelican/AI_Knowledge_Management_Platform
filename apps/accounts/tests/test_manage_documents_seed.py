@@ -18,6 +18,9 @@ from apps.core.constants import (
     MANAGE_DOCUMENTS_PERMISSION,
     MANAGE_MEETINGS_PERMISSION,
     MANAGE_ROLES_PERMISSION,
+    MANAGE_TAGS_PERMISSION,
+    RELEASE_ACCOUNT_LOCKS_PERMISSION,
+    REVIEW_KNOWLEDGE_GAPS_PERMISSION,
 )
 
 pytestmark = pytest.mark.django_db
@@ -45,12 +48,16 @@ def test_manage_documents_is_held_by_administrator_only(employee_role, administr
     assert MANAGE_DOCUMENTS_PERMISSION not in permission_names(employee_role)
 
 
-def test_the_seeded_permissions_are_exactly_the_four_codes(employee_role, administrator_role):
-    """Every seed so far, together: what each role holds after 0003, 0004, 0005 and 0006.
-    Three codes until 0006 added ``manage_meetings`` (D-99), Administrator's alone."""
+def test_the_seeded_permissions_are_exactly_the_seven_codes(employee_role, administrator_role):
+    """Every seed so far, together: what each role holds after 0003 to 0010.
+    Three codes until 0006 added ``manage_meetings`` (D-99), four until 0007 added
+    ``review_knowledge_gaps`` (D-107), five until 0008 added ``manage_tags`` (D-119
+    finding 5), and six until 0010 added ``release_account_locks`` (FR-03, D-130), each
+    Administrator's alone."""
     assert permission_names(administrator_role) == {
         MANAGE_ROLES_PERMISSION, CONTRIBUTE_CONTENT_PERMISSION, MANAGE_DOCUMENTS_PERMISSION,
-        MANAGE_MEETINGS_PERMISSION,
+        MANAGE_MEETINGS_PERMISSION, REVIEW_KNOWLEDGE_GAPS_PERMISSION, MANAGE_TAGS_PERMISSION,
+        RELEASE_ACCOUNT_LOCKS_PERMISSION,
     }
     assert permission_names(employee_role) == {CONTRIBUTE_CONTENT_PERMISSION}
 
@@ -72,9 +79,11 @@ def test_seed_is_reversible(employee_role, administrator_role):
     assert not RolePermission.objects.filter(
         permission__permission_name=MANAGE_DOCUMENTS_PERMISSION
     ).exists()
-    # 0003's, 0004's and 0006's seeds are untouched: unseeding one migration must not undo another.
+    # 0003's, 0004's, 0006's, 0007's, 0008's and 0010's seeds are untouched: unseeding one
+    # migration must not undo another.
     assert permission_names(administrator_role) == {
         MANAGE_ROLES_PERMISSION, CONTRIBUTE_CONTENT_PERMISSION, MANAGE_MEETINGS_PERMISSION,
+        REVIEW_KNOWLEDGE_GAPS_PERMISSION, MANAGE_TAGS_PERMISSION, RELEASE_ACCOUNT_LOCKS_PERMISSION,
     }
     assert permission_names(employee_role) == {CONTRIBUTE_CONTENT_PERMISSION}
     assert Role.objects.count() == 2  # the roles themselves are 0002's

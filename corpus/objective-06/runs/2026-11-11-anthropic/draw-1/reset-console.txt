@@ -1,0 +1,4 @@
+database kmp_obj0506_anthropic_20261110: {'gaps': 4, 'items': 11, 'cycles': 1, 'seeded_asks_found': 21, 'seeded_searches_found': 9, 'query_logs': 21, 'search_logs': 59}
+exported 21 asks, 9 searches, 4 gaps and 1 cycle(s) to corpus\objective-06\runs\2026-11-11-anthropic\draw-1\export.json
+cleared: 11 item, 4 gap and 1 cycle row(s); 30 QueryLog-and-citation row(s); 9 SearchLog row(s)
+after: gaps 0, items 0, cycles 0, query logs 0, search logs 50

@@ -19,6 +19,12 @@ FR-12 on. Produced by `scripts/citation_harness.py`.
 > shipped assistant on a second or later turn. The history block's effect on generation is
 > measured separately in "25 September 2026 — FR-13's history block" below; FR-13 end to
 > end, where the composed question also changes what is retrieved, remains unmeasured.
+>
+> **Dated note, 12 November 2026.** "Remains unmeasured" was true when written. FR-13 end to
+> end has been measured since 3 November, on the frozen thread set (D-86). Its results are in
+> D-91's note, D-103, D-111, and D-112 with its notes. On FLM, every with-history run
+> conformed to the schema on its first attempt. With history, 1 of 9 follow-ups matched on
+> 3 November, 2 of 9 on 8 November, and 3 and 2 of 9 on 9 November.
 
 | | |
 |---|---|
@@ -615,6 +621,10 @@ join that FR-13 actually embeds — which changes the query vector and therefore
 — is untested. Given that the empty-answer differences here are already inside the noise
 D-40 describes, that is the half likeliest to move answers, and it needs a real
 question-then-follow-up set, which does not exist.
+
+> **Dated note, 12 November 2026.** The set exists: `corpus/objective-02/threads.json`, frozen
+> on 1 November (D-86). FR-13 end to end has been measured on it since 3 November, as the
+> second note at the head of this document says.
 
 ## The duplication is over — item 5 landed on 23 September 2026
 

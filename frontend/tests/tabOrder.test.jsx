@@ -19,7 +19,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 import App from '../src/App.jsx'
 import { ROLES, TEXT } from '../src/constants.js'
-import { serveApi } from './fakeApi.js'
+import { actionItem, readySummary, serveApi, summaryRoute, summaryState } from './fakeApi.js'
 import { pressTab, stopName, tabThrough } from './keyboard.js'
 import { hidingCauses } from './stylesheets.js'
 
@@ -261,6 +261,51 @@ describe('tab order, screen by screen', () => {
   })
 })
 
+describe('FR-16: the meeting page with its Summary and Action Items panels', () => {
+  it('reaches the regenerate button, every passage reference and every item control, in reading order', async () => {
+    const meeting = {
+      meeting_id: 'meeting-2',
+      title: 'Finance Quarterly Budget Review',
+      meeting_date: '2026-10-14',
+      status: 'Indexed',
+      created_at: '2026-11-11T10:00:00+11:00',
+      visible_to_roles: [ROLES.employee, ROLES.administrator],
+      attendees: [],
+      transcript_text: 'Ravi: Thanks, everyone. This is the first-quarter review.',
+      can_delete: false,
+    }
+    const item = actionItem()
+    signedIn({
+      [`GET /api/meetings/${meeting.meeting_id}`]: { body: meeting },
+      [`GET /api/meetings/${meeting.meeting_id}/summary`]: summaryRoute(
+        summaryState({ status: 'Ready', summary: readySummary(), action_items: [item], can_edit: true }),
+      ),
+      'GET /api/users/directory': { body: [] },
+    })
+    renderApp(`/meetings/${meeting.meeting_id}`)
+    const regenerate = await screen.findByRole('button', { name: TEXT.summaryRegenerate })
+    const edit = await screen.findByRole('button', { name: TEXT.actionItemEditLabel(item.description) })
+    const remove = screen.getByRole('button', { name: TEXT.actionItemDeleteLabel(item.description) })
+    const add = screen.getByRole('button', { name: TEXT.actionItemAdd })
+
+    const stops = walk()
+
+    // Every control of the two panels is a tab stop, and none is reached out of reading order:
+    // the summary and its button first, then the item's own controls, then adding another.
+    for (const control of [regenerate, edit, remove, add]) {
+      expect(stops, `"${stopName(control)}" is not a tab stop`).toContain(control)
+    }
+    expectOrder(stops, [regenerate, edit, remove, add])
+    // UC-04's passage references are real buttons the keyboard reaches: the summary's five
+    // (two sentences naming three passages between them, a decision, a highlight) and the item's one.
+    const references = stops.filter((stop) => stop.matches('button[aria-expanded]') && /passage/i.test(stopName(stop)))
+    expect(references.length).toBe(6)
+    // The item's reference sits with the item, between the summary's button and the item's Edit.
+    const itemReference = references[references.length - 1]
+    expectOrder(stops, [regenerate, itemReference, edit])
+  })
+})
+
 describe('the confirmation dialogue holds Tab inside itself, and only itself', () => {
   it('cycles confirm and cancel both ways while open', async () => {
     const meeting = {
@@ -274,7 +319,11 @@ describe('the confirmation dialogue holds Tab inside itself, and only itself', (
       transcript_text: 'Ada: the dates hold.',
       can_delete: true,
     }
-    signedIn({ [`GET /api/meetings/${meeting.meeting_id}`]: { body: meeting } })
+    signedIn({
+      [`GET /api/meetings/${meeting.meeting_id}`]: { body: meeting },
+      // The page's own second read since FR-16: no summary, nothing offered.
+      [`GET /api/meetings/${meeting.meeting_id}/summary`]: summaryRoute(summaryState()),
+    })
     renderApp(`/meetings/${meeting.meeting_id}`)
 
     const open = await screen.findByRole('button', { name: TEXT.meetingDelete })

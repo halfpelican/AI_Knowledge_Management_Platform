@@ -1,0 +1,23 @@
+ENERGY USAGE REPORT, FINANCIAL YEAR 2026
+
+Summary
+This report records the electricity and gas consumed across the organisation's three buildings in the 2026 financial year, compares it with the previous year and identifies where the change came from. Total consumption fell by seven percent and cost rose by four percent, because tariffs increased by twelve percent in January.
+
+Consumption by quarter
+Quarter | Electricity (MWh) | Gas (GJ) | Cost
+Q1 | 412 | 1,180 | $118,400
+Q2 | 388 | 940 | $112,900
+Q3 | 455 | 1,620 | $139,700
+Q4 | 430 | 1,410 | $131,200
+Year | 1,685 | 5,150 | $502,200
+
+Findings
+Electricity use fell by nine percent, almost entirely at the Harbourside building, where the Larkspur lighting upgrade replaced fluorescent fittings with sensors and light-emitting diodes in April. Gas use fell by three percent, with the warm winter accounting for most of the change. The data centre room at the Northgate building used twenty-two percent of all electricity, up from nineteen percent, as more servers were added.
+
+Comparison with 2025
+Consumption per square metre fell from 118 to 110 kilowatt hours. Consumption per employee fell from 2.9 to 2.6 megawatt hours, as headcount rose by four percent while use fell.
+
+Recommendations
+Extend the lighting upgrade to the Northgate and Riverside buildings in 2027, at an estimated cost of $86,000 and an estimated saving of $31,000 a year. Review the data centre cooling set point, which has not changed since 2021. Install sub-meters on each floor so that the next report can attribute use by team.
+
+Prepared by the facilities team, 28 July 2026.

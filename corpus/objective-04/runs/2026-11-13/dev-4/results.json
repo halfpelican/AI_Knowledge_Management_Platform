@@ -1,0 +1,125 @@
+{
+  "reference_items": 39,
+  "matched_reference_items": 39,
+  "recall": 1.0,
+  "recall_met": true,
+  "extracted_items": 44,
+  "extras": 5,
+  "extras_rate": 0.11363636363636363,
+  "extras_met": false,
+  "items_with_a_named_owner": 43,
+  "wrong_owner": [],
+  "attribution_met": true,
+  "met": false,
+  "transcripts_without_a_ready_summary": [],
+  "missed": [],
+  "extra_items": [
+    {
+      "where": "T01 row 2",
+      "description": "Take on-call cover for Sunday of the Opal Junction cutover weekend"
+    },
+    {
+      "where": "T01 row 3",
+      "description": "Take on-call cover for Saturday of the Opal Junction cutover weekend"
+    },
+    {
+      "where": "T01 row 8",
+      "description": "Create the new starter's account"
+    },
+    {
+      "where": "T06 row 2",
+      "description": "Send a reminder to staff about the cups change"
+    },
+    {
+      "where": "T06 row 5",
+      "description": "Install water refill stations on every floor"
+    }
+  ],
+  "due_dates": {
+    "compared": 19,
+    "agree": 19,
+    "differ": []
+  },
+  "per_transcript": [
+    {
+      "transcript": "X01",
+      "status": "Ready",
+      "reference_items": 4,
+      "matched": 4,
+      "extracted_items": 4,
+      "extras": 0,
+      "reference_decisions": 2,
+      "extracted_decisions": 2
+    },
+    {
+      "transcript": "X02",
+      "status": "Ready",
+      "reference_items": 5,
+      "matched": 5,
+      "extracted_items": 5,
+      "extras": 0,
+      "reference_decisions": 3,
+      "extracted_decisions": 4
+    },
+    {
+      "transcript": "T01",
+      "status": "Ready",
+      "reference_items": 5,
+      "matched": 5,
+      "extracted_items": 8,
+      "extras": 3,
+      "reference_decisions": 1,
+      "extracted_decisions": 2
+    },
+    {
+      "transcript": "T02",
+      "status": "Ready",
+      "reference_items": 5,
+      "matched": 5,
+      "extracted_items": 5,
+      "extras": 0,
+      "reference_decisions": 2,
+      "extracted_decisions": 2
+    },
+    {
+      "transcript": "T03",
+      "status": "Ready",
+      "reference_items": 7,
+      "matched": 7,
+      "extracted_items": 7,
+      "extras": 0,
+      "reference_decisions": 2,
+      "extracted_decisions": 3
+    },
+    {
+      "transcript": "T04",
+      "status": "Ready",
+      "reference_items": 6,
+      "matched": 6,
+      "extracted_items": 6,
+      "extras": 0,
+      "reference_decisions": 2,
+      "extracted_decisions": 2
+    },
+    {
+      "transcript": "T05",
+      "status": "Ready",
+      "reference_items": 3,
+      "matched": 3,
+      "extracted_items": 3,
+      "extras": 0,
+      "reference_decisions": 1,
+      "extracted_decisions": 2
+    },
+    {
+      "transcript": "T06",
+      "status": "Ready",
+      "reference_items": 4,
+      "matched": 4,
+      "extracted_items": 6,
+      "extras": 2,
+      "reference_decisions": 2,
+      "extracted_decisions": 3
+    }
+  ]
+}

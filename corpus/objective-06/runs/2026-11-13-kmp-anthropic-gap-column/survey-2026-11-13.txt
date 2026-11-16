@@ -1,0 +1,12 @@
+Transcribed on 14 November 2026 from the session's tool output of survey.py, run read-only on 13 November 2026, before the alter. The console was not saved to a file at the time.
+kmp: chunks vector(768); no knowledge_gaps table (FR-19 not migrated)
+kmp_anthropic: chunks vector(1024), gaps vector(768); chunk models [('voyage-4', 1024, 46)]; gap entries none; items 0; cycles 1; unanswered questions 2
+kmp_demo_20261101: chunks vector(768); no knowledge_gaps table (FR-19 not migrated)
+kmp_demo_20261101_pre_d35: chunks vector(768); no knowledge_gaps table (FR-19 not migrated)
+kmp_demo_screen: chunks vector(768); no knowledge_gaps table (FR-19 not migrated)
+kmp_followups_20261112: chunks vector(1024), gaps vector(1024); chunk models [('voyage-4', 1024, 43)]; gap entries none; items 0; cycles 0; unanswered questions 0
+kmp_fr16: chunks vector(1024), gaps vector(1024); chunk models [('voyage-4', 1024, 16)]; gap entries none; items 0; cycles 0; unanswered questions 0
+kmp_obj02_20261101: chunks vector(768); no knowledge_gaps table (FR-19 not migrated)
+kmp_obj0506_20261101: chunks vector(768), gaps vector(768); chunk models [('embed-gemma', 768, 43)]; gap entries [('Open', 'embed-gemma', 4)]; items 12; cycles 1; unanswered questions 12
+kmp_obj05_d128_20261113: chunks vector(768), gaps vector(1024); chunk models [('embed-gemma', 768, 43)]; gap entries none; items 0; cycles 0; unanswered questions 0
+kmp_voyage_20261110: chunks vector(1024); no knowledge_gaps table (FR-19 not migrated)

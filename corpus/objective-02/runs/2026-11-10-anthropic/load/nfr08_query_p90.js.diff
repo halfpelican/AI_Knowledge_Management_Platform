@@ -1,0 +1,19 @@
+--- tests/load/nfr08_query_p90.js
++++ corpus/objective-02/runs/2026-11-10-anthropic/load/nfr08_query_p90.js
+@@ -1,3 +1,7 @@
++// THIS COPY (D-113): tests/load/nfr08_query_p90.js at bfe7207, for the anthropic provider,
++// changed only where FLM is named: the model recorded is the chat model the copied run.ps1
++// passes. It imports this folder's copied common.js. The single-user baseline below is FLM's,
++// reported as the original reports it, and is not measured on this provider.
+ // NFR-08: p90 of POST /api/ask under 5 concurrent Employees, over answered
+ // replies and 503s, each 503 a miss ranked slower than any answered reply.
+ // Objective 03's p90 is measured at 5 (D-84 decision 3). How to run it:
+@@ -237,7 +241,7 @@
+     role_checked_at_login: true,
+     accounts: `${accountEmail(ACCOUNTS[0])} to ${accountEmail(ACCOUNTS[ACCOUNTS.length - 1])}, one per VU`,
+     ai_provider: __ENV.AI_PROVIDER || 'not recorded',
+-    model: __ENV.FLM_CHAT_MODEL || 'not recorded',
++    model: __ENV.CHAT_MODEL || 'not recorded',  // this copy: the chat model, from the copied run.ps1
+     vus: VUS,
+     iterations: ITERATIONS,
+     iteration_floor_s: ITERATION_FLOOR_S,

@@ -13,10 +13,16 @@ The policy, exactly:
 - A transport failure — the provider unreachable, timed out, or answering 5xx — is also
   a failed attempt. The provider's ``call_once`` signals it by raising
   ProviderUnavailable.
-- A 4xx is NOT a failed attempt. It is a configuration or request error, it will fail
-  identically three times, and it surfaces unchanged so it is read as the bug it is
-  rather than as an outage. It therefore consumes no retries, which mirrors
-  ``_openai_compat.embed``.
+- A 4xx ends in NFR-19's 503 too, since D-118 (10 November 2026), and the provider logs
+  its status and body first (apps/ai/_status.py).
+  - **A 429 is a failed attempt,** a ProviderUnavailable, retried like an outage, because
+    a rate limit passes.
+  - **Any other 4xx is ProviderRefused,** which ends the loop on that attempt with no
+    retries. A bad key, an unknown model or an exhausted credit would be refused the same
+    way three times.
+  - Until D-118 a 4xx surfaced as the SDK's own exception, which the view does not catch,
+    so on the ``anthropic`` provider, where rate limits and an exhausted credit are
+    routine, it reached the user as a 500.
 - After the last attempt, ProviderUnavailable, which the view turns into the NFR-19 503.
 - An EMPTY statement list that parses is a successful attempt and is returned as-is. It
   is the model correctly reporting that the passages do not answer the question, and
@@ -58,7 +64,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 from apps.ai import attempt_log
-from apps.ai.base import ProviderUnavailable, StatementList
+from apps.ai.base import ProviderRefused, ProviderUnavailable, StatementList
 from apps.ai.schema import SchemaViolation, StatementCapExceeded, parse_statement_list
 from apps.core.constants import MAXIMUM_GENERATION_ATTEMPTS, MAXIMUM_STATEMENTS
 
@@ -141,8 +147,9 @@ def run_generation_attempts(
 
     ``call_once(max_statements)`` makes one provider call whose prompt asks for at most
     ``max_statements`` statements. It returns the model's reply, as a ChatReply or as bare
-    text, and raises ProviderUnavailable for a retryable transport failure; anything else it
-    raises propagates untouched. Bare text is a reply the provider reported nothing about:
+    text, and raises ProviderUnavailable for a failed call (a transport failure, or any
+    status error since D-118). That is retried, except ProviderRefused, which is re-raised
+    at once. Anything else it raises propagates untouched. Bare text is a reply the provider reported nothing about:
     both providers return a ChatReply, and the suite's scripted fakes return text.
     ``label`` names the provider and endpoint in the final message, so a 503 says which
     provider could not answer. ``max_tokens`` is the value the provider's request carries:
@@ -167,6 +174,10 @@ def run_generation_attempts(
                 attempt_log.cause_of(exc), str(exc),
                 reply=attempt_log.ReplyFacts(max_tokens=max_tokens, max_statements=max_statements),
             )
+            if isinstance(exc, ProviderRefused):
+                # D-118: refused for a reason a retry cannot fix, so the loop stops here. It
+                # is a ProviderUnavailable, so the view still answers its 503.
+                raise
             continue
         if not isinstance(reply, ChatReply):
             reply = ChatReply(text=reply)

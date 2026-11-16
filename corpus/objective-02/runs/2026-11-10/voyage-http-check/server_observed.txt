@@ -1,0 +1,6 @@
+Observed with Get-CimInstance Win32_Process at 2026-11-10T16:34:49+11:00, because scripts/server_record.py's Get-NetTCPConnection -State Listen lookup cannot see the listener's state from inside the agent's sandbox:
+
+launcher pid 21760, started 2026-11-10T16:33:43: "C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.venv\Scripts\waitress-serve.exe" --listen=127.0.0.1:8000 --threads=24 config.wsgi:application
+listener pid 44868 (child of 46812, itself a child of 21760), started 2026-11-10T16:33:43
+
+Waitress log: 2026-11-10 16:33:46,322 INFO waitress Serving on http://127.0.0.1:8000

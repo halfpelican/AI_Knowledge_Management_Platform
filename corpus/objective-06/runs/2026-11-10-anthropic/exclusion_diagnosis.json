@@ -1,0 +1,2491 @@
+{
+  "database": "kmp_obj0506_anthropic_20261110",
+  "draws": 3,
+  "jitter": 0.00047,
+  "rule": "D-108 as of 333be14: the top-ranked passage over the Administrator's scope decides",
+  "asks": [
+    {
+      "id": "U01",
+      "kind": "unanswerable",
+      "role": "Employee",
+      "question": "Will my salary rise with inflation?",
+      "no_answer_reason": "no_relevant_passage",
+      "in_gap_log": false,
+      "draws": [
+        {
+          "left_out": true,
+          "top": [
+            {
+              "source": "Project Budget Tracker FY27",
+              "score": 0.197,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": false
+            },
+            {
+              "source": "Expense Claims Guide",
+              "score": 0.1875,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Health and Safety Induction Guide",
+              "score": 0.1746,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Procurement Guidelines",
+              "score": 0.171,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Asset Inventory Melbourne Office",
+              "score": 0.1657,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            }
+          ],
+          "best_readable": {
+            "source": "Expense Claims Guide",
+            "score": 0.1875,
+            "rank": 2
+          },
+          "margin_to_other_side": 0.0095
+        },
+        {
+          "left_out": true,
+          "top": [
+            {
+              "source": "Project Budget Tracker FY27",
+              "score": 0.197,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": false
+            },
+            {
+              "source": "Expense Claims Guide",
+              "score": 0.1875,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Health and Safety Induction Guide",
+              "score": 0.1746,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Procurement Guidelines",
+              "score": 0.171,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Asset Inventory Melbourne Office",
+              "score": 0.1657,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            }
+          ],
+          "best_readable": {
+            "source": "Expense Claims Guide",
+            "score": 0.1875,
+            "rank": 2
+          },
+          "margin_to_other_side": 0.0095
+        },
+        {
+          "left_out": true,
+          "top": [
+            {
+              "source": "Project Budget Tracker FY27",
+              "score": 0.197,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": false
+            },
+            {
+              "source": "Expense Claims Guide",
+              "score": 0.1875,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Health and Safety Induction Guide",
+              "score": 0.1746,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Procurement Guidelines",
+              "score": 0.171,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Asset Inventory Melbourne Office",
+              "score": 0.1657,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            }
+          ],
+          "best_readable": {
+            "source": "Expense Claims Guide",
+            "score": 0.1875,
+            "rank": 2
+          },
+          "margin_to_other_side": 0.0095
+        }
+      ],
+      "decision_stable_across_draws": true,
+      "margin_min": 0.0095,
+      "margin_wider_than_twice_jitter": true
+    },
+    {
+      "id": "U02",
+      "kind": "unanswerable",
+      "role": "Administrator",
+      "question": "Are salaries indexed to inflation?",
+      "no_answer_reason": "no_relevant_passage",
+      "in_gap_log": true,
+      "draws": [
+        {
+          "left_out": false,
+          "top": [
+            {
+              "source": "Project Budget Tracker FY27",
+              "score": 0.2075,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Records Management Handbook",
+              "score": 0.1882,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Asset Inventory Melbourne Office",
+              "score": 0.1873,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Health and Safety Induction Guide",
+              "score": 0.1828,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Expense Claims Guide",
+              "score": 0.1754,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            }
+          ],
+          "best_readable": {
+            "source": "Project Budget Tracker FY27",
+            "score": 0.2075,
+            "rank": 1
+          },
+          "margin_to_other_side": null
+        },
+        {
+          "left_out": false,
+          "top": [
+            {
+              "source": "Project Budget Tracker FY27",
+              "score": 0.2075,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Records Management Handbook",
+              "score": 0.1882,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Asset Inventory Melbourne Office",
+              "score": 0.1873,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Health and Safety Induction Guide",
+              "score": 0.1828,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Expense Claims Guide",
+              "score": 0.1754,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            }
+          ],
+          "best_readable": {
+            "source": "Project Budget Tracker FY27",
+            "score": 0.2075,
+            "rank": 1
+          },
+          "margin_to_other_side": null
+        },
+        {
+          "left_out": false,
+          "top": [
+            {
+              "source": "Project Budget Tracker FY27",
+              "score": 0.2075,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Records Management Handbook",
+              "score": 0.1882,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Asset Inventory Melbourne Office",
+              "score": 0.1873,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Health and Safety Induction Guide",
+              "score": 0.1828,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Expense Claims Guide",
+              "score": 0.1754,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            }
+          ],
+          "best_readable": {
+            "source": "Project Budget Tracker FY27",
+            "score": 0.2075,
+            "rank": 1
+          },
+          "margin_to_other_side": null
+        }
+      ],
+      "decision_stable_across_draws": true,
+      "margin_min": null,
+      "margin_wider_than_twice_jitter": false
+    },
+    {
+      "id": "U04",
+      "kind": "unanswerable",
+      "role": "Employee",
+      "question": "Is there a corporate credit card I can be issued with?",
+      "no_answer_reason": "no_statement_verified",
+      "in_gap_log": true,
+      "draws": [
+        {
+          "left_out": false,
+          "top": [
+            {
+              "source": "Fleet Vehicle Usage Notes",
+              "score": 0.289,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Expense Claims Guide",
+              "score": 0.2633,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Vendor Register 2026",
+              "score": 0.2352,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "IT Acceptable Use Policy",
+              "score": 0.2281,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Procurement Guidelines",
+              "score": 0.2102,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            }
+          ],
+          "best_readable": {
+            "source": "Fleet Vehicle Usage Notes",
+            "score": 0.289,
+            "rank": 1
+          },
+          "margin_to_other_side": 0.1239
+        },
+        {
+          "left_out": false,
+          "top": [
+            {
+              "source": "Fleet Vehicle Usage Notes",
+              "score": 0.289,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Expense Claims Guide",
+              "score": 0.2633,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Vendor Register 2026",
+              "score": 0.2352,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "IT Acceptable Use Policy",
+              "score": 0.2281,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Procurement Guidelines",
+              "score": 0.2102,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            }
+          ],
+          "best_readable": {
+            "source": "Fleet Vehicle Usage Notes",
+            "score": 0.289,
+            "rank": 1
+          },
+          "margin_to_other_side": 0.1239
+        },
+        {
+          "left_out": false,
+          "top": [
+            {
+              "source": "Fleet Vehicle Usage Notes",
+              "score": 0.289,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Expense Claims Guide",
+              "score": 0.2633,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Vendor Register 2026",
+              "score": 0.2352,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "IT Acceptable Use Policy",
+              "score": 0.2281,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Procurement Guidelines",
+              "score": 0.2102,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            }
+          ],
+          "best_readable": {
+            "source": "Fleet Vehicle Usage Notes",
+            "score": 0.289,
+            "rank": 1
+          },
+          "margin_to_other_side": 0.1239
+        }
+      ],
+      "decision_stable_across_draws": true,
+      "margin_min": 0.1239,
+      "margin_wider_than_twice_jitter": true
+    },
+    {
+      "id": "U05",
+      "kind": "unanswerable",
+      "role": "Administrator",
+      "question": "Is there a corporate credit card program?",
+      "no_answer_reason": "no_statement_verified",
+      "in_gap_log": true,
+      "draws": [
+        {
+          "left_out": false,
+          "top": [
+            {
+              "source": "Fleet Vehicle Usage Notes",
+              "score": 0.293,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Expense Claims Guide",
+              "score": 0.2677,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Vendor Register 2026",
+              "score": 0.2356,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Project Budget Tracker FY27",
+              "score": 0.2276,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Onboarding Checklist for New Starters",
+              "score": 0.2224,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            }
+          ],
+          "best_readable": {
+            "source": "Fleet Vehicle Usage Notes",
+            "score": 0.293,
+            "rank": 1
+          },
+          "margin_to_other_side": null
+        },
+        {
+          "left_out": false,
+          "top": [
+            {
+              "source": "Fleet Vehicle Usage Notes",
+              "score": 0.293,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Expense Claims Guide",
+              "score": 0.2677,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Vendor Register 2026",
+              "score": 0.2356,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Project Budget Tracker FY27",
+              "score": 0.2276,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Onboarding Checklist for New Starters",
+              "score": 0.2224,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            }
+          ],
+          "best_readable": {
+            "source": "Fleet Vehicle Usage Notes",
+            "score": 0.293,
+            "rank": 1
+          },
+          "margin_to_other_side": null
+        },
+        {
+          "left_out": false,
+          "top": [
+            {
+              "source": "Fleet Vehicle Usage Notes",
+              "score": 0.293,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Expense Claims Guide",
+              "score": 0.2677,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Vendor Register 2026",
+              "score": 0.2356,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Project Budget Tracker FY27",
+              "score": 0.2276,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Onboarding Checklist for New Starters",
+              "score": 0.2224,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            }
+          ],
+          "best_readable": {
+            "source": "Fleet Vehicle Usage Notes",
+            "score": 0.293,
+            "rank": 1
+          },
+          "margin_to_other_side": null
+        }
+      ],
+      "decision_stable_across_draws": true,
+      "margin_min": null,
+      "margin_wider_than_twice_jitter": false
+    },
+    {
+      "id": "U07",
+      "kind": "unanswerable",
+      "role": "Employee",
+      "question": "Does everything stop over Christmas?",
+      "no_answer_reason": "no_relevant_passage",
+      "in_gap_log": true,
+      "draws": [
+        {
+          "left_out": false,
+          "top": [
+            {
+              "source": "Employee Leave Policy 2026",
+              "score": 0.2479,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Office Relocation Announcement",
+              "score": 0.2381,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Weekly Operations Standup",
+              "score": 0.188,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Fleet Vehicle Usage Notes",
+              "score": 0.1726,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Records Management Handbook",
+              "score": 0.1666,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            }
+          ],
+          "best_readable": {
+            "source": "Employee Leave Policy 2026",
+            "score": 0.2479,
+            "rank": 1
+          },
+          "margin_to_other_side": null
+        },
+        {
+          "left_out": false,
+          "top": [
+            {
+              "source": "Employee Leave Policy 2026",
+              "score": 0.2479,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Office Relocation Announcement",
+              "score": 0.2381,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Weekly Operations Standup",
+              "score": 0.188,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Fleet Vehicle Usage Notes",
+              "score": 0.1726,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Records Management Handbook",
+              "score": 0.1666,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            }
+          ],
+          "best_readable": {
+            "source": "Employee Leave Policy 2026",
+            "score": 0.2479,
+            "rank": 1
+          },
+          "margin_to_other_side": null
+        },
+        {
+          "left_out": false,
+          "top": [
+            {
+              "source": "Employee Leave Policy 2026",
+              "score": 0.2475,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Office Relocation Announcement",
+              "score": 0.2382,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Weekly Operations Standup",
+              "score": 0.1878,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Fleet Vehicle Usage Notes",
+              "score": 0.1726,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Records Management Handbook",
+              "score": 0.1665,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            }
+          ],
+          "best_readable": {
+            "source": "Employee Leave Policy 2026",
+            "score": 0.2475,
+            "rank": 1
+          },
+          "margin_to_other_side": null
+        }
+      ],
+      "decision_stable_across_draws": true,
+      "margin_min": null,
+      "margin_wider_than_twice_jitter": false
+    },
+    {
+      "id": "U08",
+      "kind": "unanswerable",
+      "role": "Administrator",
+      "question": "What stops running over the Christmas period?",
+      "no_answer_reason": "no_relevant_passage",
+      "in_gap_log": true,
+      "draws": [
+        {
+          "left_out": false,
+          "top": [
+            {
+              "source": "Employee Leave Policy 2026",
+              "score": 0.2478,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Weekly Operations Standup",
+              "score": 0.2162,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Fleet Vehicle Usage Notes",
+              "score": 0.2107,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Office Relocation Announcement",
+              "score": 0.2043,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Records Management Handbook",
+              "score": 0.1833,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            }
+          ],
+          "best_readable": {
+            "source": "Employee Leave Policy 2026",
+            "score": 0.2478,
+            "rank": 1
+          },
+          "margin_to_other_side": null
+        },
+        {
+          "left_out": false,
+          "top": [
+            {
+              "source": "Employee Leave Policy 2026",
+              "score": 0.2478,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Weekly Operations Standup",
+              "score": 0.2162,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Fleet Vehicle Usage Notes",
+              "score": 0.2109,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Office Relocation Announcement",
+              "score": 0.2045,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Records Management Handbook",
+              "score": 0.1834,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            }
+          ],
+          "best_readable": {
+            "source": "Employee Leave Policy 2026",
+            "score": 0.2478,
+            "rank": 1
+          },
+          "margin_to_other_side": null
+        },
+        {
+          "left_out": false,
+          "top": [
+            {
+              "source": "Employee Leave Policy 2026",
+              "score": 0.2478,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Weekly Operations Standup",
+              "score": 0.2162,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Fleet Vehicle Usage Notes",
+              "score": 0.2107,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Office Relocation Announcement",
+              "score": 0.2043,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Records Management Handbook",
+              "score": 0.1833,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            }
+          ],
+          "best_readable": {
+            "source": "Employee Leave Policy 2026",
+            "score": 0.2478,
+            "rank": 1
+          },
+          "margin_to_other_side": null
+        }
+      ],
+      "decision_stable_across_draws": true,
+      "margin_min": null,
+      "margin_wider_than_twice_jitter": false
+    },
+    {
+      "id": "U10",
+      "kind": "unanswerable",
+      "role": "Employee",
+      "question": "Is jury duty paid?",
+      "no_answer_reason": "no_relevant_passage",
+      "in_gap_log": true,
+      "draws": [
+        {
+          "left_out": false,
+          "top": [
+            {
+              "source": "Expense Claims Guide",
+              "score": 0.2312,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Employee Leave Policy 2026",
+              "score": 0.1851,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Project Budget Tracker FY27",
+              "score": 0.167,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": false
+            },
+            {
+              "source": "Fleet Vehicle Usage Notes",
+              "score": 0.1525,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Health and Safety Induction Guide",
+              "score": 0.1481,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            }
+          ],
+          "best_readable": {
+            "source": "Expense Claims Guide",
+            "score": 0.2312,
+            "rank": 1
+          },
+          "margin_to_other_side": 0.0641
+        },
+        {
+          "left_out": false,
+          "top": [
+            {
+              "source": "Expense Claims Guide",
+              "score": 0.2312,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Employee Leave Policy 2026",
+              "score": 0.1851,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Project Budget Tracker FY27",
+              "score": 0.167,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": false
+            },
+            {
+              "source": "Fleet Vehicle Usage Notes",
+              "score": 0.1525,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Health and Safety Induction Guide",
+              "score": 0.1481,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            }
+          ],
+          "best_readable": {
+            "source": "Expense Claims Guide",
+            "score": 0.2312,
+            "rank": 1
+          },
+          "margin_to_other_side": 0.0641
+        },
+        {
+          "left_out": false,
+          "top": [
+            {
+              "source": "Expense Claims Guide",
+              "score": 0.2312,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Employee Leave Policy 2026",
+              "score": 0.1849,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Project Budget Tracker FY27",
+              "score": 0.167,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": false
+            },
+            {
+              "source": "Fleet Vehicle Usage Notes",
+              "score": 0.152,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Health and Safety Induction Guide",
+              "score": 0.1479,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            }
+          ],
+          "best_readable": {
+            "source": "Expense Claims Guide",
+            "score": 0.2312,
+            "rank": 1
+          },
+          "margin_to_other_side": 0.0642
+        }
+      ],
+      "decision_stable_across_draws": true,
+      "margin_min": 0.0641,
+      "margin_wider_than_twice_jitter": true
+    },
+    {
+      "id": "U11",
+      "kind": "unanswerable",
+      "role": "Administrator",
+      "question": "What happens if someone is summoned for jury service?",
+      "no_answer_reason": "no_relevant_passage",
+      "in_gap_log": true,
+      "draws": [
+        {
+          "left_out": false,
+          "top": [
+            {
+              "source": "Data Privacy Notice",
+              "score": 0.1278,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Weekly Operations Standup",
+              "score": 0.0953,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Office Relocation Announcement",
+              "score": 0.0858,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Health and Safety Induction Guide",
+              "score": 0.0818,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "IT Helpdesk Frequently Asked Questions",
+              "score": 0.0794,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            }
+          ],
+          "best_readable": {
+            "source": "Data Privacy Notice",
+            "score": 0.1278,
+            "rank": 1
+          },
+          "margin_to_other_side": null
+        },
+        {
+          "left_out": false,
+          "top": [
+            {
+              "source": "Data Privacy Notice",
+              "score": 0.1278,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Weekly Operations Standup",
+              "score": 0.0953,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Office Relocation Announcement",
+              "score": 0.0858,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Health and Safety Induction Guide",
+              "score": 0.0818,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "IT Helpdesk Frequently Asked Questions",
+              "score": 0.0794,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            }
+          ],
+          "best_readable": {
+            "source": "Data Privacy Notice",
+            "score": 0.1278,
+            "rank": 1
+          },
+          "margin_to_other_side": null
+        },
+        {
+          "left_out": false,
+          "top": [
+            {
+              "source": "Data Privacy Notice",
+              "score": 0.1278,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Weekly Operations Standup",
+              "score": 0.0953,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Office Relocation Announcement",
+              "score": 0.0858,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Health and Safety Induction Guide",
+              "score": 0.0818,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "IT Helpdesk Frequently Asked Questions",
+              "score": 0.0794,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            }
+          ],
+          "best_readable": {
+            "source": "Data Privacy Notice",
+            "score": 0.1278,
+            "rank": 1
+          },
+          "margin_to_other_side": null
+        }
+      ],
+      "decision_stable_across_draws": true,
+      "margin_min": null,
+      "margin_wider_than_twice_jitter": false
+    },
+    {
+      "id": "P01",
+      "kind": "permission-only",
+      "role": "Employee",
+      "question": "Who is the project manager for Project Atlas?",
+      "no_answer_reason": "no_relevant_passage",
+      "in_gap_log": false,
+      "draws": [
+        {
+          "left_out": true,
+          "top": [
+            {
+              "source": "Project Atlas Kickoff Brief",
+              "score": 0.4854,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": false
+            },
+            {
+              "source": "Team Roster and Skills Matrix",
+              "score": 0.3345,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": false
+            },
+            {
+              "source": "Project Budget Tracker FY27",
+              "score": 0.317,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": false
+            },
+            {
+              "source": "Records Management Handbook",
+              "score": 0.2454,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Records Management Handbook",
+              "score": 0.2324,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            }
+          ],
+          "best_readable": {
+            "source": "Records Management Handbook",
+            "score": 0.2454,
+            "rank": 4
+          },
+          "margin_to_other_side": 0.24
+        },
+        {
+          "left_out": true,
+          "top": [
+            {
+              "source": "Project Atlas Kickoff Brief",
+              "score": 0.4854,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": false
+            },
+            {
+              "source": "Team Roster and Skills Matrix",
+              "score": 0.3345,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": false
+            },
+            {
+              "source": "Project Budget Tracker FY27",
+              "score": 0.317,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": false
+            },
+            {
+              "source": "Records Management Handbook",
+              "score": 0.2454,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Records Management Handbook",
+              "score": 0.2324,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            }
+          ],
+          "best_readable": {
+            "source": "Records Management Handbook",
+            "score": 0.2454,
+            "rank": 4
+          },
+          "margin_to_other_side": 0.24
+        },
+        {
+          "left_out": true,
+          "top": [
+            {
+              "source": "Project Atlas Kickoff Brief",
+              "score": 0.4854,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": false
+            },
+            {
+              "source": "Team Roster and Skills Matrix",
+              "score": 0.3345,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": false
+            },
+            {
+              "source": "Project Budget Tracker FY27",
+              "score": 0.317,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": false
+            },
+            {
+              "source": "Records Management Handbook",
+              "score": 0.2454,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Records Management Handbook",
+              "score": 0.2324,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            }
+          ],
+          "best_readable": {
+            "source": "Records Management Handbook",
+            "score": 0.2454,
+            "rank": 4
+          },
+          "margin_to_other_side": 0.24
+        }
+      ],
+      "decision_stable_across_draws": true,
+      "margin_min": 0.24,
+      "margin_wider_than_twice_jitter": true
+    },
+    {
+      "id": "P02",
+      "kind": "permission-only",
+      "role": "Employee",
+      "question": "What gets decided at the Quartz Harbour milestone gate?",
+      "no_answer_reason": "no_relevant_passage",
+      "in_gap_log": false,
+      "draws": [
+        {
+          "left_out": true,
+          "top": [
+            {
+              "source": "Project Atlas Kickoff Brief",
+              "score": 0.2812,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": false
+            },
+            {
+              "source": "Product Planning Workshop",
+              "score": 0.2364,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Weekly Operations Standup",
+              "score": 0.1948,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Project Budget Tracker FY27",
+              "score": 0.1833,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": false
+            },
+            {
+              "source": "Training Schedule Q4",
+              "score": 0.16,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            }
+          ],
+          "best_readable": {
+            "source": "Product Planning Workshop",
+            "score": 0.2364,
+            "rank": 2
+          },
+          "margin_to_other_side": 0.0448
+        },
+        {
+          "left_out": true,
+          "top": [
+            {
+              "source": "Project Atlas Kickoff Brief",
+              "score": 0.2812,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": false
+            },
+            {
+              "source": "Product Planning Workshop",
+              "score": 0.2364,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Weekly Operations Standup",
+              "score": 0.1948,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Project Budget Tracker FY27",
+              "score": 0.1833,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": false
+            },
+            {
+              "source": "Training Schedule Q4",
+              "score": 0.16,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            }
+          ],
+          "best_readable": {
+            "source": "Product Planning Workshop",
+            "score": 0.2364,
+            "rank": 2
+          },
+          "margin_to_other_side": 0.0448
+        },
+        {
+          "left_out": true,
+          "top": [
+            {
+              "source": "Project Atlas Kickoff Brief",
+              "score": 0.2812,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": false
+            },
+            {
+              "source": "Product Planning Workshop",
+              "score": 0.2364,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Weekly Operations Standup",
+              "score": 0.1948,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Project Budget Tracker FY27",
+              "score": 0.1833,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": false
+            },
+            {
+              "source": "Training Schedule Q4",
+              "score": 0.16,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            }
+          ],
+          "best_readable": {
+            "source": "Product Planning Workshop",
+            "score": 0.2364,
+            "rank": 2
+          },
+          "margin_to_other_side": 0.0448
+        }
+      ],
+      "decision_stable_across_draws": true,
+      "margin_min": 0.0448,
+      "margin_wider_than_twice_jitter": true
+    },
+    {
+      "id": "P04",
+      "kind": "permission-only",
+      "role": "Employee",
+      "question": "Who on the team is rated four in project management?",
+      "no_answer_reason": "no_relevant_passage",
+      "in_gap_log": false,
+      "draws": [
+        {
+          "left_out": true,
+          "top": [
+            {
+              "source": "Team Roster and Skills Matrix",
+              "score": 0.5026,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": false
+            },
+            {
+              "source": "Project Atlas Kickoff Brief",
+              "score": 0.3173,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": false
+            },
+            {
+              "source": "Weekly Operations Standup",
+              "score": 0.2456,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Training Schedule Q4",
+              "score": 0.2397,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Project Budget Tracker FY27",
+              "score": 0.2393,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": false
+            }
+          ],
+          "best_readable": {
+            "source": "Weekly Operations Standup",
+            "score": 0.2456,
+            "rank": 3
+          },
+          "margin_to_other_side": 0.2571
+        },
+        {
+          "left_out": true,
+          "top": [
+            {
+              "source": "Team Roster and Skills Matrix",
+              "score": 0.5026,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": false
+            },
+            {
+              "source": "Project Atlas Kickoff Brief",
+              "score": 0.3173,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": false
+            },
+            {
+              "source": "Weekly Operations Standup",
+              "score": 0.2456,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Training Schedule Q4",
+              "score": 0.2397,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Project Budget Tracker FY27",
+              "score": 0.2393,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": false
+            }
+          ],
+          "best_readable": {
+            "source": "Weekly Operations Standup",
+            "score": 0.2456,
+            "rank": 3
+          },
+          "margin_to_other_side": 0.2571
+        },
+        {
+          "left_out": true,
+          "top": [
+            {
+              "source": "Team Roster and Skills Matrix",
+              "score": 0.5026,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": false
+            },
+            {
+              "source": "Project Atlas Kickoff Brief",
+              "score": 0.3173,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": false
+            },
+            {
+              "source": "Weekly Operations Standup",
+              "score": 0.2456,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Training Schedule Q4",
+              "score": 0.2397,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Project Budget Tracker FY27",
+              "score": 0.2393,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": false
+            }
+          ],
+          "best_readable": {
+            "source": "Weekly Operations Standup",
+            "score": 0.2456,
+            "rank": 3
+          },
+          "margin_to_other_side": 0.2571
+        }
+      ],
+      "decision_stable_across_draws": true,
+      "margin_min": 0.2571,
+      "margin_wider_than_twice_jitter": true
+    },
+    {
+      "id": "P06",
+      "kind": "permission-only",
+      "role": "Employee",
+      "question": "How much is in the Fernwood contingency reserve?",
+      "no_answer_reason": "no_relevant_passage",
+      "in_gap_log": false,
+      "draws": [
+        {
+          "left_out": true,
+          "top": [
+            {
+              "source": "Board Risk Committee Meeting",
+              "score": 0.4361,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": false
+            },
+            {
+              "source": "Project Budget Tracker FY27",
+              "score": 0.2766,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": false
+            },
+            {
+              "source": "Asset Inventory Melbourne Office",
+              "score": 0.2116,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Vendor Register 2026",
+              "score": 0.2077,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Weekly Operations Standup",
+              "score": 0.1593,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            }
+          ],
+          "best_readable": {
+            "source": "Asset Inventory Melbourne Office",
+            "score": 0.2116,
+            "rank": 3
+          },
+          "margin_to_other_side": 0.2244
+        },
+        {
+          "left_out": true,
+          "top": [
+            {
+              "source": "Board Risk Committee Meeting",
+              "score": 0.4361,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": false
+            },
+            {
+              "source": "Project Budget Tracker FY27",
+              "score": 0.2766,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": false
+            },
+            {
+              "source": "Asset Inventory Melbourne Office",
+              "score": 0.2116,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Vendor Register 2026",
+              "score": 0.2077,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Weekly Operations Standup",
+              "score": 0.1593,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            }
+          ],
+          "best_readable": {
+            "source": "Asset Inventory Melbourne Office",
+            "score": 0.2116,
+            "rank": 3
+          },
+          "margin_to_other_side": 0.2244
+        },
+        {
+          "left_out": true,
+          "top": [
+            {
+              "source": "Board Risk Committee Meeting",
+              "score": 0.4361,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": false
+            },
+            {
+              "source": "Project Budget Tracker FY27",
+              "score": 0.2766,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": false
+            },
+            {
+              "source": "Asset Inventory Melbourne Office",
+              "score": 0.2116,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Vendor Register 2026",
+              "score": 0.2077,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Weekly Operations Standup",
+              "score": 0.1593,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            }
+          ],
+          "best_readable": {
+            "source": "Asset Inventory Melbourne Office",
+            "score": 0.2116,
+            "rank": 3
+          },
+          "margin_to_other_side": 0.2244
+        }
+      ],
+      "decision_stable_across_draws": true,
+      "margin_min": 0.2244,
+      "margin_wider_than_twice_jitter": true
+    },
+    {
+      "id": "P07",
+      "kind": "permission-only",
+      "role": "Employee",
+      "question": "What did the risk committee decide to do about supplier concentration?",
+      "no_answer_reason": "no_statement_verified",
+      "in_gap_log": false,
+      "draws": [
+        {
+          "left_out": true,
+          "top": [
+            {
+              "source": "Board Risk Committee Meeting",
+              "score": 0.5046,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": false
+            },
+            {
+              "source": "Vendor Register 2026",
+              "score": 0.3067,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Procurement Guidelines",
+              "score": 0.2945,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Records Management Handbook",
+              "score": 0.2309,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Records Management Handbook",
+              "score": 0.2195,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            }
+          ],
+          "best_readable": {
+            "source": "Vendor Register 2026",
+            "score": 0.3067,
+            "rank": 2
+          },
+          "margin_to_other_side": 0.1979
+        },
+        {
+          "left_out": true,
+          "top": [
+            {
+              "source": "Board Risk Committee Meeting",
+              "score": 0.5046,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": false
+            },
+            {
+              "source": "Vendor Register 2026",
+              "score": 0.3067,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Procurement Guidelines",
+              "score": 0.2945,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Records Management Handbook",
+              "score": 0.2309,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Records Management Handbook",
+              "score": 0.2195,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            }
+          ],
+          "best_readable": {
+            "source": "Vendor Register 2026",
+            "score": 0.3067,
+            "rank": 2
+          },
+          "margin_to_other_side": 0.1979
+        },
+        {
+          "left_out": true,
+          "top": [
+            {
+              "source": "Board Risk Committee Meeting",
+              "score": 0.5044,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": false
+            },
+            {
+              "source": "Vendor Register 2026",
+              "score": 0.3071,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Procurement Guidelines",
+              "score": 0.2944,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Records Management Handbook",
+              "score": 0.2309,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Records Management Handbook",
+              "score": 0.2195,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            }
+          ],
+          "best_readable": {
+            "source": "Vendor Register 2026",
+            "score": 0.3071,
+            "rank": 2
+          },
+          "margin_to_other_side": 0.1973
+        }
+      ],
+      "decision_stable_across_draws": true,
+      "margin_min": 0.1973,
+      "margin_wider_than_twice_jitter": true
+    },
+    {
+      "id": "P08",
+      "kind": "permission-only",
+      "role": "Employee",
+      "question": "How many people reported the Cobalt Reef phishing email to the service desk?",
+      "no_answer_reason": "no_statement_verified",
+      "in_gap_log": false,
+      "draws": [
+        {
+          "left_out": true,
+          "top": [
+            {
+              "source": "Security Incident Debrief",
+              "score": 0.5476,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": false
+            },
+            {
+              "source": "IT Acceptable Use Policy",
+              "score": 0.3016,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Board Risk Committee Meeting",
+              "score": 0.2738,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": false
+            },
+            {
+              "source": "Customer Complaints Procedure",
+              "score": 0.2486,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "IT Helpdesk Frequently Asked Questions",
+              "score": 0.2472,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            }
+          ],
+          "best_readable": {
+            "source": "IT Acceptable Use Policy",
+            "score": 0.3016,
+            "rank": 2
+          },
+          "margin_to_other_side": 0.2461
+        },
+        {
+          "left_out": true,
+          "top": [
+            {
+              "source": "Security Incident Debrief",
+              "score": 0.5485,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": false
+            },
+            {
+              "source": "IT Acceptable Use Policy",
+              "score": 0.3022,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Board Risk Committee Meeting",
+              "score": 0.2744,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": false
+            },
+            {
+              "source": "Customer Complaints Procedure",
+              "score": 0.249,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "IT Helpdesk Frequently Asked Questions",
+              "score": 0.2478,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            }
+          ],
+          "best_readable": {
+            "source": "IT Acceptable Use Policy",
+            "score": 0.3022,
+            "rank": 2
+          },
+          "margin_to_other_side": 0.2463
+        },
+        {
+          "left_out": true,
+          "top": [
+            {
+              "source": "Security Incident Debrief",
+              "score": 0.5474,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": false
+            },
+            {
+              "source": "IT Acceptable Use Policy",
+              "score": 0.3022,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "Board Risk Committee Meeting",
+              "score": 0.2739,
+              "visible_to_roles": [
+                "Administrator"
+              ],
+              "readable_by_asker": false
+            },
+            {
+              "source": "Customer Complaints Procedure",
+              "score": 0.2492,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            },
+            {
+              "source": "IT Helpdesk Frequently Asked Questions",
+              "score": 0.2479,
+              "visible_to_roles": [
+                "Employee",
+                "Administrator"
+              ],
+              "readable_by_asker": true
+            }
+          ],
+          "best_readable": {
+            "source": "IT Acceptable Use Policy",
+            "score": 0.3022,
+            "rank": 2
+          },
+          "margin_to_other_side": 0.2452
+        }
+      ],
+      "decision_stable_across_draws": true,
+      "margin_min": 0.2452,
+      "margin_wider_than_twice_jitter": true
+    }
+  ]
+}

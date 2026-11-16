@@ -1,0 +1,15 @@
+port 8772, platform win32, python 3.12.13, commit 011d342
+--- 1. nothing on the port, the query as it now is ---
+  PowerShell exit code: 0; printed: []
+  read as: owners []; unread: no
+started child pid 58948: still running. (A venv's python.exe is a launcher, so the process that listens can be its child.)
+--- 2. one listener, the query as it now is ---
+  PowerShell exit code: 0; printed: [{"pid":59356,"command":"\"C:\\Users\\mozza\\AppData\\Roaming\\uv\\python\\cpython-3.12-windows-x86_64-none\\python.exe\"  -m http.server 8772 --bind 127.0.0.1"
+  read as: owners [(59356, '2')]; unread: no
+listeners stopped
+--- 3. a query that fails inside PowerShell (class MSFT_NoSuchClassForThisCheck), the query as it now is ---
+  PowerShell exit code: 3; printed: (nothing)
+  read as: owners []; unread: the port's socket rows could not be read (the query exited 3)
+--- 4. the same failing query, the query as it was at bbbda8c ---
+  PowerShell exit code: 0; printed: []
+  read as: owners []; unread: no

@@ -1,0 +1,78 @@
+--- corpus/objective-02/runs/2026-11-10/voyage-frozen/citation_harness_voyage.py
++++ corpus/objective-02/runs/2026-11-10/haiku/citation_harness_haiku.py
+@@ -1,4 +1,17 @@
+-"""D-113 (10 November 2026): the citation harness, on the Voyage-indexed copy with Claude.
++"""The Haiku round, step 2 (10 November 2026): the frozen sets on claude-haiku-5-5.
++
++A copy of runs/2026-11-10/voyage-frozen/citation_harness_voyage.py at cfcae92, the harness #75 ran on
++Sonnet 5.5, changed only where the Claude model was named:
++
++- ANTHROPIC_MODEL is set to claude-haiku-5-5 before Django starts, and the provider gate requires it.
++- The spend estimate uses Haiku 5.5's $0.10 / $0.50 per million tokens.
++- The server record names this copy.
++
++Everything else is #75's: Voyage voyage-4, D-120's values, the gates, the scoring and the record. The
++bar this run is judged against is in haiku-round.md, committed before any Haiku call. The #75 copy's
++docstring follows.
++
++D-113 (10 November 2026): the citation harness, on the Voyage-indexed copy with Claude.
+ 
+ A copy of scripts/citation_harness.py at 8ecb2c6, changed only where FLM was named, so that the
+ frozen thirty (corpus/objective-02/questions.json) and the nine threads
+@@ -165,13 +178,13 @@
+ VOYAGE_DATABASE = "kmp_voyage_20261110"
+ EXPECTED_SETTINGS = {
+     "AI_PROVIDER": "anthropic",
+-    "ANTHROPIC_MODEL": "claude-sonnet-5-5",  # D-115
++    "ANTHROPIC_MODEL": "claude-haiku-5-5",  # this copy: the Haiku round (D-115 is Sonnet)
+     "VOYAGE_MODEL": "voyage-4",
+     "EMBEDDING_DIMENSION": 1024,
+ }
+ EXPECTED_THRESHOLD = 0.2687  # D-120, RELEVANCE_THRESHOLD_BY_MODEL["voyage-4"]
+ EXPECTED_FLOOR = 0.2468  # D-120, PARTIAL_MATCH_FLOOR_BY_MODEL["voyage-4"]
+-SONNET_PRICE_PER_MILLION = {"input": 2.0, "output": 10.0}  # D-115, US dollars
++PRICE_PER_MILLION = {"input": 0.10, "output": 0.50}  # this copy: Haiku 5.5, US dollars
+ 
+ 
+ def voyage_database_url() -> str:
+@@ -189,6 +202,7 @@
+ os.environ["DATABASE_URL"] = voyage_database_url()
+ os.environ["AI_PROVIDER"] = "anthropic"
+ os.environ["EMBEDDING_DIMENSION"] = "1024"
++os.environ["ANTHROPIC_MODEL"] = "claude-haiku-5-5"  # this copy: the Haiku round
+ for _name, _file in (("ERROR_LOG_PATH", "errors.log"), ("AUDIT_LOG_PATH", "audit.log"),
+                      ("WAITRESS_LOG_PATH", "waitress.log"), ("ATTEMPTS_LOG_PATH", "attempts.log")):
+     os.environ[_name] = str(LOGS / _file)
+@@ -288,18 +302,18 @@
+ 
+ 
+ def usage_record() -> dict:
+-    """The tally, with an estimate at D-115's prices. The Console's figure governs."""
+-    estimate = (CLAUDE_USAGE["input_tokens"] * SONNET_PRICE_PER_MILLION["input"]
+-                + CLAUDE_USAGE["output_tokens"] * SONNET_PRICE_PER_MILLION["output"]) / 1_000_000
++    """The tally, with an estimate at Haiku 5.5's prices. The Console's figure governs."""
++    estimate = (CLAUDE_USAGE["input_tokens"] * PRICE_PER_MILLION["input"]
++                + CLAUDE_USAGE["output_tokens"] * PRICE_PER_MILLION["output"]) / 1_000_000
+     return {**CLAUDE_USAGE, "estimated_usd": round(estimate, 4),
+-            "prices_per_million_usd": dict(SONNET_PRICE_PER_MILLION)}
++            "prices_per_million_usd": dict(PRICE_PER_MILLION)}
+ 
+ 
+ def print_usage() -> None:
+     usage = usage_record()
+     print(f"Claude usage    : {usage['calls']} call(s), {usage['input_tokens']} input and "
+           f"{usage['output_tokens']} output tokens, about US${usage['estimated_usd']:.4f} "
+-          f"at D-115's prices ({usage['calls_without_counts']} call(s) without counts)")
++          f"at Haiku 5.5's prices ({usage['calls_without_counts']} call(s) without counts)")
+ 
+ 
+ def provider_problems(database: str) -> list[str]:
+@@ -1529,7 +1543,7 @@
+             return refuse([f"the run cannot be recorded: {exc}"])
+         record = {"commit_sha": None, "error": str(exc), "flm_version": None}
+     record["provider_record"] = provider_record()
+-    record.update({"recorded": recorded, "server": server_record.in_process("corpus/objective-02/runs/2026-11-10/voyage-frozen/citation_harness_voyage.py")})
++    record.update({"recorded": recorded, "server": server_record.in_process("corpus/objective-02/runs/2026-11-10/haiku/citation_harness_haiku.py")})
+     if arguments.threads:
+         record.update({
+             "thread_set": str(set_path),

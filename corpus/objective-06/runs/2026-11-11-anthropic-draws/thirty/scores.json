@@ -1,0 +1,1183 @@
+{
+  "draws": [
+    {
+      "draw": 1,
+      "seed": {
+        "commit": "a773333",
+        "path": "corpus/objective-06/runs/2026-11-10-anthropic/seed/seed.json",
+        "sha256": "955bddb97b0584249949e521cd7ae97c21e14a068276dc1a48b2e99db9832aa9"
+      },
+      "export": {
+        "commit": "854abda",
+        "path": "corpus/objective-06/runs/2026-11-11-anthropic/draw-1/export.json",
+        "sha256": "7f2839a93b2a12526f3374da4ea65df0c16d4e8eb50cb96253af6a49078afeb4",
+        "seed_hash_form": "LF, as committed"
+      },
+      "seeded_at": "c3ac5b017a08255a62aa3011322690a4e62e19e6",
+      "uncommitted_tracked_changes": false,
+      "started_at": "2026-11-10T23:03:59+11:00",
+      "database": "kmp_obj0506_anthropic_20261110",
+      "dump_sha256": "3bf98403354dbabceb54052b99b45a25f5f39d4fd685cca1e07233aa1e166f59",
+      "query_set_sha256": "e40a589c91893be6cca1ccd77d175571df8090d51d9ebdcaadade95be4dc1462",
+      "configuration": {
+        "ai_provider": "anthropic",
+        "chat_model": "claude-haiku-5-5",
+        "embedding_model": "voyage-4"
+      },
+      "claude_usage": {
+        "calls": 11,
+        "input_tokens": 34403,
+        "output_tokens": 932,
+        "replies_without_usage": 0,
+        "estimated_usd": 0.0039
+      },
+      "asks": [
+        {
+          "id": "A01",
+          "kind": "answerable",
+          "role": "Employee",
+          "outcome": "answered",
+          "no_answer_reason": null,
+          "rejected_count": 0,
+          "retrieved": 4,
+          "verified_statements": 1,
+          "passed": true
+        },
+        {
+          "id": "A02",
+          "kind": "answerable",
+          "role": "Employee",
+          "outcome": "answered",
+          "no_answer_reason": null,
+          "rejected_count": 0,
+          "retrieved": 6,
+          "verified_statements": 1,
+          "passed": true
+        },
+        {
+          "id": "A03",
+          "kind": "answerable",
+          "role": "Employee",
+          "outcome": "answered",
+          "no_answer_reason": null,
+          "rejected_count": 0,
+          "retrieved": 2,
+          "verified_statements": 2,
+          "passed": true
+        },
+        {
+          "id": "A04",
+          "kind": "answerable",
+          "role": "Employee",
+          "outcome": "answered",
+          "no_answer_reason": null,
+          "rejected_count": 0,
+          "retrieved": 7,
+          "verified_statements": 1,
+          "passed": true
+        },
+        {
+          "id": "A05",
+          "kind": "answerable",
+          "role": "Administrator",
+          "outcome": "answered",
+          "no_answer_reason": null,
+          "rejected_count": 0,
+          "retrieved": 2,
+          "verified_statements": 1,
+          "passed": true
+        },
+        {
+          "id": "A06",
+          "kind": "answerable",
+          "role": "Administrator",
+          "outcome": "answered",
+          "no_answer_reason": null,
+          "rejected_count": 0,
+          "retrieved": 5,
+          "verified_statements": 1,
+          "passed": true
+        },
+        {
+          "id": "A07",
+          "kind": "answerable",
+          "role": "Employee",
+          "outcome": "answered",
+          "no_answer_reason": null,
+          "rejected_count": 0,
+          "retrieved": 3,
+          "verified_statements": 2,
+          "passed": true
+        },
+        {
+          "id": "U01",
+          "kind": "unanswerable",
+          "role": "Employee",
+          "outcome": "A",
+          "no_answer_reason": "no_relevant_passage",
+          "rejected_count": null,
+          "retrieved": 0,
+          "verified_statements": 0,
+          "passed": true
+        },
+        {
+          "id": "U02",
+          "kind": "unanswerable",
+          "role": "Administrator",
+          "outcome": "A",
+          "no_answer_reason": "no_relevant_passage",
+          "rejected_count": null,
+          "retrieved": 0,
+          "verified_statements": 0,
+          "passed": true
+        },
+        {
+          "id": "U04",
+          "kind": "unanswerable",
+          "role": "Employee",
+          "outcome": "B, none proposed",
+          "no_answer_reason": "no_statement_verified",
+          "rejected_count": 0,
+          "retrieved": 1,
+          "verified_statements": 0,
+          "passed": true
+        },
+        {
+          "id": "U05",
+          "kind": "unanswerable",
+          "role": "Administrator",
+          "outcome": "B, none proposed",
+          "no_answer_reason": "no_statement_verified",
+          "rejected_count": 0,
+          "retrieved": 1,
+          "verified_statements": 0,
+          "passed": true
+        },
+        {
+          "id": "U07",
+          "kind": "unanswerable",
+          "role": "Employee",
+          "outcome": "A",
+          "no_answer_reason": "no_relevant_passage",
+          "rejected_count": null,
+          "retrieved": 0,
+          "verified_statements": 0,
+          "passed": true
+        },
+        {
+          "id": "U08",
+          "kind": "unanswerable",
+          "role": "Administrator",
+          "outcome": "A",
+          "no_answer_reason": "no_relevant_passage",
+          "rejected_count": null,
+          "retrieved": 0,
+          "verified_statements": 0,
+          "passed": true
+        },
+        {
+          "id": "U10",
+          "kind": "unanswerable",
+          "role": "Employee",
+          "outcome": "A",
+          "no_answer_reason": "no_relevant_passage",
+          "rejected_count": null,
+          "retrieved": 0,
+          "verified_statements": 0,
+          "passed": true
+        },
+        {
+          "id": "U11",
+          "kind": "unanswerable",
+          "role": "Administrator",
+          "outcome": "A",
+          "no_answer_reason": "no_relevant_passage",
+          "rejected_count": null,
+          "retrieved": 0,
+          "verified_statements": 0,
+          "passed": true
+        },
+        {
+          "id": "P01",
+          "kind": "permission-only",
+          "role": "Employee",
+          "outcome": "A",
+          "no_answer_reason": "no_relevant_passage",
+          "rejected_count": null,
+          "retrieved": 0,
+          "verified_statements": 0,
+          "passed": true
+        },
+        {
+          "id": "P02",
+          "kind": "permission-only",
+          "role": "Employee",
+          "outcome": "A",
+          "no_answer_reason": "no_relevant_passage",
+          "rejected_count": null,
+          "retrieved": 0,
+          "verified_statements": 0,
+          "passed": true
+        },
+        {
+          "id": "P04",
+          "kind": "permission-only",
+          "role": "Employee",
+          "outcome": "A",
+          "no_answer_reason": "no_relevant_passage",
+          "rejected_count": null,
+          "retrieved": 0,
+          "verified_statements": 0,
+          "passed": true
+        },
+        {
+          "id": "P06",
+          "kind": "permission-only",
+          "role": "Employee",
+          "outcome": "A",
+          "no_answer_reason": "no_relevant_passage",
+          "rejected_count": null,
+          "retrieved": 0,
+          "verified_statements": 0,
+          "passed": true
+        },
+        {
+          "id": "P07",
+          "kind": "permission-only",
+          "role": "Employee",
+          "outcome": "B, none proposed",
+          "no_answer_reason": "no_statement_verified",
+          "rejected_count": 0,
+          "retrieved": 2,
+          "verified_statements": 0,
+          "passed": true
+        },
+        {
+          "id": "P08",
+          "kind": "permission-only",
+          "role": "Employee",
+          "outcome": "B, none proposed",
+          "no_answer_reason": "no_statement_verified",
+          "rejected_count": 0,
+          "retrieved": 1,
+          "verified_statements": 0,
+          "passed": true
+        }
+      ],
+      "searches": [
+        {
+          "id": "A08",
+          "kind": "answerable",
+          "role": "Employee",
+          "result_count": 1,
+          "passed": true
+        },
+        {
+          "id": "A09",
+          "kind": "answerable",
+          "role": "Administrator",
+          "result_count": 1,
+          "passed": true
+        },
+        {
+          "id": "A10",
+          "kind": "answerable",
+          "role": "Employee",
+          "result_count": 1,
+          "passed": true
+        },
+        {
+          "id": "U03",
+          "kind": "unanswerable",
+          "role": "Administrator",
+          "result_count": 0,
+          "passed": true
+        },
+        {
+          "id": "U06",
+          "kind": "unanswerable",
+          "role": "Employee",
+          "result_count": 0,
+          "passed": true
+        },
+        {
+          "id": "U09",
+          "kind": "unanswerable",
+          "role": "Employee",
+          "result_count": 0,
+          "passed": true
+        },
+        {
+          "id": "U12",
+          "kind": "unanswerable",
+          "role": "Employee",
+          "result_count": 0,
+          "passed": true
+        },
+        {
+          "id": "P03",
+          "kind": "permission-only",
+          "role": "Employee",
+          "result_count": 0,
+          "passed": true
+        },
+        {
+          "id": "P05",
+          "kind": "permission-only",
+          "role": "Employee",
+          "result_count": 0,
+          "passed": true
+        }
+      ],
+      "summary": {
+        "answerable": {
+          "asks": 7,
+          "passed": 7,
+          "answered": 7,
+          "path_a": 0,
+          "path_b_none_proposed": 0,
+          "path_b_all_rejected": 0,
+          "rejected_total": 0,
+          "searches": 3,
+          "searches_passed": 3
+        },
+        "unanswerable": {
+          "asks": 8,
+          "passed": 8,
+          "answered": 0,
+          "path_a": 6,
+          "path_b_none_proposed": 2,
+          "path_b_all_rejected": 0,
+          "rejected_total": 0,
+          "searches": 4,
+          "searches_passed": 4
+        },
+        "permission-only": {
+          "asks": 6,
+          "passed": 6,
+          "answered": 0,
+          "path_a": 4,
+          "path_b_none_proposed": 2,
+          "path_b_all_rejected": 0,
+          "rejected_total": 0,
+          "searches": 2,
+          "searches_passed": 2
+        }
+      }
+    },
+    {
+      "draw": 2,
+      "seed": {
+        "commit": "854abda",
+        "path": "corpus/objective-06/runs/2026-11-11-anthropic/draw-2/seed/seed.json",
+        "sha256": "0ece3b5c9a53df3040decbc1c6203c93317d3e2fa12caddd52b8dfb9d56fedf9"
+      },
+      "export": {
+        "commit": "854abda",
+        "path": "corpus/objective-06/runs/2026-11-11-anthropic/draw-2/export.json",
+        "sha256": "63877e0d0346f9ed10c5a6b0abd1239d1be24023d26427a813ead7658203b266",
+        "seed_hash_form": "CRLF, as written on Windows"
+      },
+      "seeded_at": "462e8e9296d65af6dd8eaf9c587ac40bddb6a6a2",
+      "uncommitted_tracked_changes": false,
+      "started_at": "2026-11-11T14:04:31+11:00",
+      "database": "kmp_obj0506_anthropic_20261110",
+      "dump_sha256": "3bf98403354dbabceb54052b99b45a25f5f39d4fd685cca1e07233aa1e166f59",
+      "query_set_sha256": "e40a589c91893be6cca1ccd77d175571df8090d51d9ebdcaadade95be4dc1462",
+      "configuration": {
+        "ai_provider": "anthropic",
+        "chat_model": "claude-haiku-5-5",
+        "embedding_model": "voyage-4"
+      },
+      "claude_usage": {
+        "calls": 11,
+        "input_tokens": 34403,
+        "output_tokens": 795,
+        "replies_without_usage": 0,
+        "estimated_usd": 0.0038
+      },
+      "asks": [
+        {
+          "id": "A01",
+          "kind": "answerable",
+          "role": "Employee",
+          "outcome": "answered",
+          "no_answer_reason": null,
+          "rejected_count": 0,
+          "retrieved": 4,
+          "verified_statements": 1,
+          "passed": true
+        },
+        {
+          "id": "A02",
+          "kind": "answerable",
+          "role": "Employee",
+          "outcome": "answered",
+          "no_answer_reason": null,
+          "rejected_count": 0,
+          "retrieved": 6,
+          "verified_statements": 1,
+          "passed": true
+        },
+        {
+          "id": "A03",
+          "kind": "answerable",
+          "role": "Employee",
+          "outcome": "answered",
+          "no_answer_reason": null,
+          "rejected_count": 0,
+          "retrieved": 2,
+          "verified_statements": 1,
+          "passed": true
+        },
+        {
+          "id": "A04",
+          "kind": "answerable",
+          "role": "Employee",
+          "outcome": "answered",
+          "no_answer_reason": null,
+          "rejected_count": 0,
+          "retrieved": 7,
+          "verified_statements": 1,
+          "passed": true
+        },
+        {
+          "id": "A05",
+          "kind": "answerable",
+          "role": "Administrator",
+          "outcome": "answered",
+          "no_answer_reason": null,
+          "rejected_count": 0,
+          "retrieved": 2,
+          "verified_statements": 1,
+          "passed": true
+        },
+        {
+          "id": "A06",
+          "kind": "answerable",
+          "role": "Administrator",
+          "outcome": "answered",
+          "no_answer_reason": null,
+          "rejected_count": 0,
+          "retrieved": 5,
+          "verified_statements": 1,
+          "passed": true
+        },
+        {
+          "id": "A07",
+          "kind": "answerable",
+          "role": "Employee",
+          "outcome": "answered",
+          "no_answer_reason": null,
+          "rejected_count": 0,
+          "retrieved": 3,
+          "verified_statements": 2,
+          "passed": true
+        },
+        {
+          "id": "U01",
+          "kind": "unanswerable",
+          "role": "Employee",
+          "outcome": "A",
+          "no_answer_reason": "no_relevant_passage",
+          "rejected_count": null,
+          "retrieved": 0,
+          "verified_statements": 0,
+          "passed": true
+        },
+        {
+          "id": "U02",
+          "kind": "unanswerable",
+          "role": "Administrator",
+          "outcome": "A",
+          "no_answer_reason": "no_relevant_passage",
+          "rejected_count": null,
+          "retrieved": 0,
+          "verified_statements": 0,
+          "passed": true
+        },
+        {
+          "id": "U04",
+          "kind": "unanswerable",
+          "role": "Employee",
+          "outcome": "B, none proposed",
+          "no_answer_reason": "no_statement_verified",
+          "rejected_count": 0,
+          "retrieved": 1,
+          "verified_statements": 0,
+          "passed": true
+        },
+        {
+          "id": "U05",
+          "kind": "unanswerable",
+          "role": "Administrator",
+          "outcome": "B, none proposed",
+          "no_answer_reason": "no_statement_verified",
+          "rejected_count": 0,
+          "retrieved": 1,
+          "verified_statements": 0,
+          "passed": true
+        },
+        {
+          "id": "U07",
+          "kind": "unanswerable",
+          "role": "Employee",
+          "outcome": "A",
+          "no_answer_reason": "no_relevant_passage",
+          "rejected_count": null,
+          "retrieved": 0,
+          "verified_statements": 0,
+          "passed": true
+        },
+        {
+          "id": "U08",
+          "kind": "unanswerable",
+          "role": "Administrator",
+          "outcome": "A",
+          "no_answer_reason": "no_relevant_passage",
+          "rejected_count": null,
+          "retrieved": 0,
+          "verified_statements": 0,
+          "passed": true
+        },
+        {
+          "id": "U10",
+          "kind": "unanswerable",
+          "role": "Employee",
+          "outcome": "A",
+          "no_answer_reason": "no_relevant_passage",
+          "rejected_count": null,
+          "retrieved": 0,
+          "verified_statements": 0,
+          "passed": true
+        },
+        {
+          "id": "U11",
+          "kind": "unanswerable",
+          "role": "Administrator",
+          "outcome": "A",
+          "no_answer_reason": "no_relevant_passage",
+          "rejected_count": null,
+          "retrieved": 0,
+          "verified_statements": 0,
+          "passed": true
+        },
+        {
+          "id": "P01",
+          "kind": "permission-only",
+          "role": "Employee",
+          "outcome": "A",
+          "no_answer_reason": "no_relevant_passage",
+          "rejected_count": null,
+          "retrieved": 0,
+          "verified_statements": 0,
+          "passed": true
+        },
+        {
+          "id": "P02",
+          "kind": "permission-only",
+          "role": "Employee",
+          "outcome": "A",
+          "no_answer_reason": "no_relevant_passage",
+          "rejected_count": null,
+          "retrieved": 0,
+          "verified_statements": 0,
+          "passed": true
+        },
+        {
+          "id": "P04",
+          "kind": "permission-only",
+          "role": "Employee",
+          "outcome": "A",
+          "no_answer_reason": "no_relevant_passage",
+          "rejected_count": null,
+          "retrieved": 0,
+          "verified_statements": 0,
+          "passed": true
+        },
+        {
+          "id": "P06",
+          "kind": "permission-only",
+          "role": "Employee",
+          "outcome": "A",
+          "no_answer_reason": "no_relevant_passage",
+          "rejected_count": null,
+          "retrieved": 0,
+          "verified_statements": 0,
+          "passed": true
+        },
+        {
+          "id": "P07",
+          "kind": "permission-only",
+          "role": "Employee",
+          "outcome": "B, none proposed",
+          "no_answer_reason": "no_statement_verified",
+          "rejected_count": 0,
+          "retrieved": 2,
+          "verified_statements": 0,
+          "passed": true
+        },
+        {
+          "id": "P08",
+          "kind": "permission-only",
+          "role": "Employee",
+          "outcome": "B, none proposed",
+          "no_answer_reason": "no_statement_verified",
+          "rejected_count": 0,
+          "retrieved": 1,
+          "verified_statements": 0,
+          "passed": true
+        }
+      ],
+      "searches": [
+        {
+          "id": "A08",
+          "kind": "answerable",
+          "role": "Employee",
+          "result_count": 1,
+          "passed": true
+        },
+        {
+          "id": "A09",
+          "kind": "answerable",
+          "role": "Administrator",
+          "result_count": 1,
+          "passed": true
+        },
+        {
+          "id": "A10",
+          "kind": "answerable",
+          "role": "Employee",
+          "result_count": 1,
+          "passed": true
+        },
+        {
+          "id": "U03",
+          "kind": "unanswerable",
+          "role": "Administrator",
+          "result_count": 0,
+          "passed": true
+        },
+        {
+          "id": "U06",
+          "kind": "unanswerable",
+          "role": "Employee",
+          "result_count": 0,
+          "passed": true
+        },
+        {
+          "id": "U09",
+          "kind": "unanswerable",
+          "role": "Employee",
+          "result_count": 0,
+          "passed": true
+        },
+        {
+          "id": "U12",
+          "kind": "unanswerable",
+          "role": "Employee",
+          "result_count": 0,
+          "passed": true
+        },
+        {
+          "id": "P03",
+          "kind": "permission-only",
+          "role": "Employee",
+          "result_count": 0,
+          "passed": true
+        },
+        {
+          "id": "P05",
+          "kind": "permission-only",
+          "role": "Employee",
+          "result_count": 0,
+          "passed": true
+        }
+      ],
+      "summary": {
+        "answerable": {
+          "asks": 7,
+          "passed": 7,
+          "answered": 7,
+          "path_a": 0,
+          "path_b_none_proposed": 0,
+          "path_b_all_rejected": 0,
+          "rejected_total": 0,
+          "searches": 3,
+          "searches_passed": 3
+        },
+        "unanswerable": {
+          "asks": 8,
+          "passed": 8,
+          "answered": 0,
+          "path_a": 6,
+          "path_b_none_proposed": 2,
+          "path_b_all_rejected": 0,
+          "rejected_total": 0,
+          "searches": 4,
+          "searches_passed": 4
+        },
+        "permission-only": {
+          "asks": 6,
+          "passed": 6,
+          "answered": 0,
+          "path_a": 4,
+          "path_b_none_proposed": 2,
+          "path_b_all_rejected": 0,
+          "rejected_total": 0,
+          "searches": 2,
+          "searches_passed": 2
+        }
+      }
+    },
+    {
+      "draw": 3,
+      "seed": {
+        "commit": "854abda",
+        "path": "corpus/objective-06/runs/2026-11-11-anthropic/draw-3/seed/seed.json",
+        "sha256": "adc62429605255c14608e0543c28cee88c732218945023a7f61016384c81e1c4"
+      },
+      "export": {
+        "commit": "854abda",
+        "path": "corpus/objective-06/runs/2026-11-11-anthropic/draw-3/export.json",
+        "sha256": "b81261e32dbbec48ca36865474511d9a72f7f4022039369797ff76d11e1da7d0",
+        "seed_hash_form": "CRLF, as written on Windows"
+      },
+      "seeded_at": "462e8e9296d65af6dd8eaf9c587ac40bddb6a6a2",
+      "uncommitted_tracked_changes": false,
+      "started_at": "2026-11-11T14:05:59+11:00",
+      "database": "kmp_obj0506_anthropic_20261110",
+      "dump_sha256": "3bf98403354dbabceb54052b99b45a25f5f39d4fd685cca1e07233aa1e166f59",
+      "query_set_sha256": "e40a589c91893be6cca1ccd77d175571df8090d51d9ebdcaadade95be4dc1462",
+      "configuration": {
+        "ai_provider": "anthropic",
+        "chat_model": "claude-haiku-5-5",
+        "embedding_model": "voyage-4"
+      },
+      "claude_usage": {
+        "calls": 11,
+        "input_tokens": 34403,
+        "output_tokens": 860,
+        "replies_without_usage": 0,
+        "estimated_usd": 0.0039
+      },
+      "asks": [
+        {
+          "id": "A01",
+          "kind": "answerable",
+          "role": "Employee",
+          "outcome": "answered",
+          "no_answer_reason": null,
+          "rejected_count": 0,
+          "retrieved": 4,
+          "verified_statements": 1,
+          "passed": true
+        },
+        {
+          "id": "A02",
+          "kind": "answerable",
+          "role": "Employee",
+          "outcome": "answered",
+          "no_answer_reason": null,
+          "rejected_count": 0,
+          "retrieved": 6,
+          "verified_statements": 1,
+          "passed": true
+        },
+        {
+          "id": "A03",
+          "kind": "answerable",
+          "role": "Employee",
+          "outcome": "answered",
+          "no_answer_reason": null,
+          "rejected_count": 0,
+          "retrieved": 2,
+          "verified_statements": 1,
+          "passed": true
+        },
+        {
+          "id": "A04",
+          "kind": "answerable",
+          "role": "Employee",
+          "outcome": "answered",
+          "no_answer_reason": null,
+          "rejected_count": 0,
+          "retrieved": 7,
+          "verified_statements": 1,
+          "passed": true
+        },
+        {
+          "id": "A05",
+          "kind": "answerable",
+          "role": "Administrator",
+          "outcome": "answered",
+          "no_answer_reason": null,
+          "rejected_count": 0,
+          "retrieved": 2,
+          "verified_statements": 1,
+          "passed": true
+        },
+        {
+          "id": "A06",
+          "kind": "answerable",
+          "role": "Administrator",
+          "outcome": "answered",
+          "no_answer_reason": null,
+          "rejected_count": 0,
+          "retrieved": 5,
+          "verified_statements": 1,
+          "passed": true
+        },
+        {
+          "id": "A07",
+          "kind": "answerable",
+          "role": "Employee",
+          "outcome": "answered",
+          "no_answer_reason": null,
+          "rejected_count": 0,
+          "retrieved": 3,
+          "verified_statements": 2,
+          "passed": true
+        },
+        {
+          "id": "U01",
+          "kind": "unanswerable",
+          "role": "Employee",
+          "outcome": "A",
+          "no_answer_reason": "no_relevant_passage",
+          "rejected_count": null,
+          "retrieved": 0,
+          "verified_statements": 0,
+          "passed": true
+        },
+        {
+          "id": "U02",
+          "kind": "unanswerable",
+          "role": "Administrator",
+          "outcome": "A",
+          "no_answer_reason": "no_relevant_passage",
+          "rejected_count": null,
+          "retrieved": 0,
+          "verified_statements": 0,
+          "passed": true
+        },
+        {
+          "id": "U04",
+          "kind": "unanswerable",
+          "role": "Employee",
+          "outcome": "B, none proposed",
+          "no_answer_reason": "no_statement_verified",
+          "rejected_count": 0,
+          "retrieved": 1,
+          "verified_statements": 0,
+          "passed": true
+        },
+        {
+          "id": "U05",
+          "kind": "unanswerable",
+          "role": "Administrator",
+          "outcome": "B, none proposed",
+          "no_answer_reason": "no_statement_verified",
+          "rejected_count": 0,
+          "retrieved": 1,
+          "verified_statements": 0,
+          "passed": true
+        },
+        {
+          "id": "U07",
+          "kind": "unanswerable",
+          "role": "Employee",
+          "outcome": "A",
+          "no_answer_reason": "no_relevant_passage",
+          "rejected_count": null,
+          "retrieved": 0,
+          "verified_statements": 0,
+          "passed": true
+        },
+        {
+          "id": "U08",
+          "kind": "unanswerable",
+          "role": "Administrator",
+          "outcome": "A",
+          "no_answer_reason": "no_relevant_passage",
+          "rejected_count": null,
+          "retrieved": 0,
+          "verified_statements": 0,
+          "passed": true
+        },
+        {
+          "id": "U10",
+          "kind": "unanswerable",
+          "role": "Employee",
+          "outcome": "A",
+          "no_answer_reason": "no_relevant_passage",
+          "rejected_count": null,
+          "retrieved": 0,
+          "verified_statements": 0,
+          "passed": true
+        },
+        {
+          "id": "U11",
+          "kind": "unanswerable",
+          "role": "Administrator",
+          "outcome": "A",
+          "no_answer_reason": "no_relevant_passage",
+          "rejected_count": null,
+          "retrieved": 0,
+          "verified_statements": 0,
+          "passed": true
+        },
+        {
+          "id": "P01",
+          "kind": "permission-only",
+          "role": "Employee",
+          "outcome": "A",
+          "no_answer_reason": "no_relevant_passage",
+          "rejected_count": null,
+          "retrieved": 0,
+          "verified_statements": 0,
+          "passed": true
+        },
+        {
+          "id": "P02",
+          "kind": "permission-only",
+          "role": "Employee",
+          "outcome": "A",
+          "no_answer_reason": "no_relevant_passage",
+          "rejected_count": null,
+          "retrieved": 0,
+          "verified_statements": 0,
+          "passed": true
+        },
+        {
+          "id": "P04",
+          "kind": "permission-only",
+          "role": "Employee",
+          "outcome": "A",
+          "no_answer_reason": "no_relevant_passage",
+          "rejected_count": null,
+          "retrieved": 0,
+          "verified_statements": 0,
+          "passed": true
+        },
+        {
+          "id": "P06",
+          "kind": "permission-only",
+          "role": "Employee",
+          "outcome": "A",
+          "no_answer_reason": "no_relevant_passage",
+          "rejected_count": null,
+          "retrieved": 0,
+          "verified_statements": 0,
+          "passed": true
+        },
+        {
+          "id": "P07",
+          "kind": "permission-only",
+          "role": "Employee",
+          "outcome": "B, none proposed",
+          "no_answer_reason": "no_statement_verified",
+          "rejected_count": 0,
+          "retrieved": 2,
+          "verified_statements": 0,
+          "passed": true
+        },
+        {
+          "id": "P08",
+          "kind": "permission-only",
+          "role": "Employee",
+          "outcome": "B, none proposed",
+          "no_answer_reason": "no_statement_verified",
+          "rejected_count": 0,
+          "retrieved": 1,
+          "verified_statements": 0,
+          "passed": true
+        }
+      ],
+      "searches": [
+        {
+          "id": "A08",
+          "kind": "answerable",
+          "role": "Employee",
+          "result_count": 1,
+          "passed": true
+        },
+        {
+          "id": "A09",
+          "kind": "answerable",
+          "role": "Administrator",
+          "result_count": 1,
+          "passed": true
+        },
+        {
+          "id": "A10",
+          "kind": "answerable",
+          "role": "Employee",
+          "result_count": 1,
+          "passed": true
+        },
+        {
+          "id": "U03",
+          "kind": "unanswerable",
+          "role": "Administrator",
+          "result_count": 0,
+          "passed": true
+        },
+        {
+          "id": "U06",
+          "kind": "unanswerable",
+          "role": "Employee",
+          "result_count": 0,
+          "passed": true
+        },
+        {
+          "id": "U09",
+          "kind": "unanswerable",
+          "role": "Employee",
+          "result_count": 0,
+          "passed": true
+        },
+        {
+          "id": "U12",
+          "kind": "unanswerable",
+          "role": "Employee",
+          "result_count": 0,
+          "passed": true
+        },
+        {
+          "id": "P03",
+          "kind": "permission-only",
+          "role": "Employee",
+          "result_count": 0,
+          "passed": true
+        },
+        {
+          "id": "P05",
+          "kind": "permission-only",
+          "role": "Employee",
+          "result_count": 0,
+          "passed": true
+        }
+      ],
+      "summary": {
+        "answerable": {
+          "asks": 7,
+          "passed": 7,
+          "answered": 7,
+          "path_a": 0,
+          "path_b_none_proposed": 0,
+          "path_b_all_rejected": 0,
+          "rejected_total": 0,
+          "searches": 3,
+          "searches_passed": 3
+        },
+        "unanswerable": {
+          "asks": 8,
+          "passed": 8,
+          "answered": 0,
+          "path_a": 6,
+          "path_b_none_proposed": 2,
+          "path_b_all_rejected": 0,
+          "rejected_total": 0,
+          "searches": 4,
+          "searches_passed": 4
+        },
+        "permission-only": {
+          "asks": 6,
+          "passed": 6,
+          "answered": 0,
+          "path_a": 4,
+          "path_b_none_proposed": 2,
+          "path_b_all_rejected": 0,
+          "rejected_total": 0,
+          "searches": 2,
+          "searches_passed": 2
+        }
+      }
+    }
+  ],
+  "flm_seeding": {
+    "seed": {
+      "commit": "45d5c25",
+      "path": "corpus/objective-06/runs/2026-11-10/seed/seed.json",
+      "sha256": "3e774f8a85314d1eac48413cb9ee29f8817b34e3280cd2492c52c022246e1733"
+    },
+    "seeded_at": "ce886e752e316326d06828ca47c70ad855a0f396",
+    "answered": {
+      "A01": true,
+      "A02": true,
+      "A03": true,
+      "A04": true,
+      "A05": true,
+      "A06": true,
+      "A07": true,
+      "U01": false,
+      "U02": false,
+      "U04": false,
+      "U05": false,
+      "U07": false,
+      "U08": false,
+      "U10": false,
+      "U11": false,
+      "P01": false,
+      "P02": false,
+      "P04": true,
+      "P06": false,
+      "P07": true,
+      "P08": false
+    },
+    "searches": {
+      "A08": 1,
+      "A09": 1,
+      "A10": 1,
+      "U03": 0,
+      "U06": 0,
+      "U09": 0,
+      "U12": 0,
+      "P03": 0,
+      "P05": 0
+    }
+  },
+  "totals": {
+    "answerable": {
+      "asks": 21,
+      "passed": 21,
+      "answered": 21,
+      "path_a": 0,
+      "path_b_none_proposed": 0,
+      "path_b_all_rejected": 0,
+      "rejected_total": 0,
+      "searches": 9,
+      "searches_passed": 9
+    },
+    "unanswerable": {
+      "asks": 24,
+      "passed": 24,
+      "answered": 0,
+      "path_a": 18,
+      "path_b_none_proposed": 6,
+      "path_b_all_rejected": 0,
+      "rejected_total": 0,
+      "searches": 12,
+      "searches_passed": 12
+    },
+    "permission-only": {
+      "asks": 18,
+      "passed": 18,
+      "answered": 0,
+      "path_a": 12,
+      "path_b_none_proposed": 6,
+      "path_b_all_rejected": 0,
+      "rejected_total": 0,
+      "searches": 6,
+      "searches_passed": 6
+    }
+  },
+  "claude_usage_total": {
+    "calls": 33,
+    "input_tokens": 103209,
+    "output_tokens": 2587,
+    "estimated_usd": 0.0116
+  },
+  "problems": []
+}

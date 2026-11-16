@@ -1,0 +1,14 @@
+kmp_voyage_20261110, read at 2026-11-11T19:25:03+11:00
+
+documents        : 23
+meetings         : 5
+content chunks   : 43  43 as voyage-4 at 1024
+conversations    : 6
+query log rows   : 12
+                   6 answered on 2026-11-10 (local date)
+                   6 answered on 2026-11-11 (local date)
+answer citations : 21
+sessions         : 6
+accounts         : 23
+                   corpus.admin@example.com: password-hash mark 172b9d9a0732, usable True, last login 2026-11-11T19:23:40+11:00
+                   corpus.employee@example.com: password-hash mark b501bad5f3d2, usable True, last login 2026-11-11T19:23:40+11:00

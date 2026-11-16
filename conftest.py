@@ -45,7 +45,14 @@ import logging.config
 
 import apps.ai
 from apps.ai.testing import UNROUTABLE_PROVIDER_HOST, UNROUTABLE_PROVIDER_URL, StubAIService
-from apps.core.constants import ADMINISTRATOR_ROLE_NAME, EMPLOYEE_ROLE_NAME, ROLE_NAMES, SOURCE_TYPES
+from apps.core.constants import (
+    ADMINISTRATOR_ROLE_NAME,
+    EMPLOYEE_ROLE_NAME,
+    LOCKOUT_DURATION,
+    LOCKOUT_THRESHOLD,
+    ROLE_NAMES,
+    SOURCE_TYPES,
+)
 from apps.core.logging_config import ERROR_FILE_HANDLER, platform_logging
 
 # The suite's one password. It satisfies FR-01's complexity rules (min 8 characters,
@@ -59,8 +66,10 @@ PASSWORD = "Correct-Horse-9-Battery"
 def reset_request_throttles():
     """Clear the throttle counters and the in-flight slots between tests.
 
-    Registration and login are rate limited per client address (D-26), and asks, ingestion
-    and thread creation per user (D-79). DRF keeps those counts in the cache, which outlives
+    Registration and login are rate limited per client address (D-26), and asks, ingestion,
+    thread creation, keyword search and a person applying a tag per user (D-79 and its notes of
+    10 November 2026). ``cache.clear()`` empties every scope at once, so a new scope needs nothing
+    here. DRF keeps those counts in the cache, which outlives
     a test, and so do each user's in-flight ask slot (apps/api/ask_slot.py) and in-flight
     ingestion slot (apps/api/ingestion_slot.py, D-85). Without this,
     a test that signs in a few times would 429 the next test rather than failing on its own
@@ -82,6 +91,15 @@ def stub_ai_service(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def lockout_policy_defaults(settings):
+    # FR-03's policy at its defaults, whatever a developer's .env tightens it to (D-130 decision 7;
+    # the final security review, L4). The tests are written against the default five and 15
+    # minutes, and a test that needs another policy sets it on `settings` itself.
+    settings.LOCKOUT_THRESHOLD = LOCKOUT_THRESHOLD
+    settings.LOCKOUT_DURATION = LOCKOUT_DURATION
+
+
+@pytest.fixture(autouse=True)
 def no_live_provider(monkeypatch):
     # config/settings.py has no ANTHROPIC_BASE_URL; the anthropic SDK reads this
     # environment variable instead, so it gets the same closed port.
@@ -91,8 +109,25 @@ def no_live_provider(monkeypatch):
         VOYAGE_BASE_URL=UNROUTABLE_PROVIDER_URL,
         ANTHROPIC_API_KEY="",  # nothing in a developer's .env can reach a metered API
         VOYAGE_API_KEY="",
+        # Recording transcription is off, as it is by default (D-123), whatever a
+        # developer's .env says: a test that needs it on says so with override_settings.
+        TRANSCRIPTION_PROVIDER="none",
     ):
         yield
+
+
+@pytest.fixture(autouse=True)
+def summaries_run_inline(settings):
+    """FR-16's summary runs in the caller's thread, never in a background one (D-125).
+
+    The server starts each run in a thread after the requesting transaction commits
+    (apps/meetings/summary_runner.py). A thread would outlive the test that started it and write
+    through its own database connection, outside the test's transaction. Inline, a test that
+    executes the commit callbacks (``django_capture_on_commit_callbacks(execute=True)``) sees the
+    finished summary, and one that does not sees the run still Processing, which is the state the
+    202 reports. The thread path has its own tests, which override this.
+    """
+    settings.SUMMARY_RUNNER = "inline"
 
 
 @dataclass

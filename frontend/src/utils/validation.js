@@ -1,7 +1,10 @@
 import {
+  DEPARTMENT_NAME_MAXIMUM_LENGTH,
   QUESTION_MAXIMUM_LENGTH,
   QUESTION_MINIMUM_LENGTH,
+  SEARCH_MAXIMUM_LENGTH,
   SEARCH_MINIMUM_LENGTH,
+  TAG_NAME_MAXIMUM_LENGTH,
   TRANSCRIPT_SOURCE,
   VALIDATION,
 } from '../constants.js'
@@ -56,12 +59,28 @@ export function validateLogin(values) {
  * the chunker uses (D-31), which is not something the browser can reproduce, so
  * the server owns it and answers 400.
  */
-export function validateMeetingIngestion({ title, meetingDate, transcriptText, source, file }) {
+export function validateMeetingIngestion({
+  title,
+  meetingDate,
+  transcriptText,
+  source,
+  file,
+  reviewed = false,
+  transcribing = false,
+}) {
   const errors = {}
   if (!title.trim()) errors.title = VALIDATION.meetingTitleRequired
   if (!meetingDate) errors.meeting_date = VALIDATION.meetingDateRequired
   else if (meetingDate > todayIsoDate()) errors.meeting_date = VALIDATION.meetingDateFuture
-  if (source === TRANSCRIPT_SOURCE.file) {
+  if (source === TRANSCRIPT_SOURCE.recording) {
+    // `source` is TRANSCRIPT_SOURCE's: pasted text, a transcript file, or a recording's draft.
+  // D-123: a recording's draft is added only when the run has ended, the
+    // draft holds something, and a person has said they reviewed it. The last is
+    // this screen's to enforce: the server cannot tell it from pasted text.
+    if (transcribing) errors.transcript_text = VALIDATION.transcriptStillTranscribing
+    else if (!transcriptText.trim()) errors.transcript_text = VALIDATION.transcriptDraftRequired
+    else if (!reviewed) errors.reviewed = VALIDATION.transcriptReviewRequired
+  } else if (source === TRANSCRIPT_SOURCE.file) {
     if (!file) errors.file = VALIDATION.transcriptFileRequired
     else {
       // The same pre-transfer screening the document upload does: FR-09's file
@@ -93,6 +112,8 @@ export function searchTermError(term) {
   const value = term ?? ''
   if (value.length === 0) return VALIDATION.searchTermRequired
   if (value.length < SEARCH_MINIMUM_LENGTH) return VALIDATION.searchTermTooShort
+  // The upper bound (D-79's note of 10 November 2026), refused before any request.
+  if (value.length > SEARCH_MAXIMUM_LENGTH) return VALIDATION.searchTermTooLong
   return null
 }
 
@@ -114,5 +135,61 @@ export function questionError(question) {
   if (value.length === 0) return VALIDATION.questionRequired
   if (value.length < QUESTION_MINIMUM_LENGTH) return VALIDATION.questionTooShort
   if (value.length > QUESTION_MAXIMUM_LENGTH) return VALIDATION.questionTooLong
+  return null
+}
+
+/**
+ * FR-10's new tag name as it is sent, a person's new Topic or an Administrator's new
+ * value (D-128): trimmed, and each run of whitespace one space. The server matches a
+ * name after trimming, single-spacing and lower-casing it (docs/api-contract.md,
+ * NIT3004 FR-10); the case is left to the server.
+ *
+ * Sent in this form because the server measures `tag_name` against its column after
+ * trimming but before single-spacing (DRF's `CharField`, then `normalise_tag_name`),
+ * so a name sent single-spaced is measured exactly as `tagNameError` measured it.
+ *
+ * A department added to the department list (D-129) is sent the same way, for the same
+ * reason, and measured by `departmentNameError`; its case is kept by the server too.
+ *
+ * @param {string} value As typed.
+ * @returns {string}
+ */
+export function spacedTagName(value) {
+  return (value ?? '').trim().split(/\s+/).join(' ')
+}
+
+/**
+ * FR-10's client-side check of a new tag name, already spaced by `spacedTagName`:
+ * required, and at most TAG_NAME_MAXIMUM_LENGTH characters. Counted in characters
+ * (code points), as the server's `len()` counts them, not in UTF-16 units, so a name
+ * of emoji is not refused here sooner than there. The server answers 400
+ * `{"tag_name": [...]}` regardless (CLAUDE.md §6, invariant 4).
+ *
+ * The messages default to the new Topic's on the document detail; the tags page
+ * passes its own, for a value of any dimension (D-128).
+ *
+ * @param {string} name
+ * @param {{required?: string, tooLong?: string}} [messages]
+ * @returns {string | null} The message to show beside the field, or null.
+ */
+export function tagNameError(name, { required = VALIDATION.tagNameRequired, tooLong = VALIDATION.tagNameTooLong } = {}) {
+  if (name.length === 0) return required
+  if ([...name].length > TAG_NAME_MAXIMUM_LENGTH) return tooLong
+  return null
+}
+
+/**
+ * FR-10's client-side check of a department name an Administrator adds to the department
+ * list (D-129), already spaced by `spacedTagName`, which is how it is sent: required, and
+ * at most DEPARTMENT_NAME_MAXIMUM_LENGTH characters, counted in code points as
+ * `tagNameError` counts them. The server trims the name and single-spaces it, keeps its
+ * case, and answers 400 `{"name": [...]}` regardless (CLAUDE.md §6, invariant 4).
+ *
+ * @param {string} name
+ * @returns {string | null} The message to show beside the field, or null.
+ */
+export function departmentNameError(name) {
+  if (name.length === 0) return VALIDATION.departmentNameRequired
+  if ([...name].length > DEPARTMENT_NAME_MAXIMUM_LENGTH) return VALIDATION.departmentNameTooLong
   return null
 }

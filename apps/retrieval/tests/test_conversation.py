@@ -32,6 +32,7 @@ what the prompt contains and what verification does with what comes back; they c
 assert that gemma3:4b's schema conformance survives a history block.
 """
 
+from datetime import UTC, datetime, timedelta
 from math import sqrt
 from uuid import uuid4
 
@@ -69,6 +70,7 @@ from apps.retrieval.conversation import (
     ConversationContext,
     conversation_context,
     prior_questions,
+    prior_questions_before,
 )
 from apps.retrieval.models import Conversation, QueryLog
 from apps.retrieval.pipeline import QuestionLengthOutOfRange, answer_question
@@ -130,15 +132,30 @@ def make_conversation(user, title="Leave policy questions") -> Conversation:
     return Conversation.objects.create(user=user, title=title)
 
 
-def make_turn(conversation, user, question, *, answer_text=None) -> QueryLog:
+# When the turns ``make_turn`` writes were asked: THREAD_START plus the minutes each call
+# states. Fixed, and in the past, so that a turn the code under test writes afterwards, at
+# the real time, is always the newest in its thread.
+THREAD_START = datetime(2026, 9, 1, 9, 0, tzinfo=UTC)
+
+
+def make_turn(conversation, user, question, *, minute, answer_text=None) -> QueryLog:
     """A turn already in the log, as a real earlier turn would have left it.
 
     Written directly rather than by calling ``answer_question`` so that the history under
     test is a premise of the test rather than an output of the code under test. Where
     ``answer_text`` is given the turn was answered; where it is not, the turn is one of the
     no-answer paths — and it still counts as a turn.
+
+    **``minute`` is when the turn was asked, in minutes after THREAD_START, and every call
+    states one.** The history is read in ``answered_at`` order with the random UUID primary
+    key as the tie-break, and rows written back to back can share an ``answered_at``: on
+    Windows the clock steps at anything from about 0.3 ms to about 15.6 ms (D-107's note),
+    and a tie is then ordered by the UUIDs, arbitrarily. Real turns are seconds apart, so the
+    reading code is right and only a test's premise can be wrong; here the gap is stated
+    instead of left to the clock. ``answered_at`` is ``auto_now_add``, which overwrites a
+    value given to ``create()``, so the UPDATE afterwards is what sets it.
     """
-    return QueryLog.objects.create(
+    row = QueryLog.objects.create(
         user=user,
         conversation=conversation,
         question=question,
@@ -148,6 +165,25 @@ def make_turn(conversation, user, question, *, answer_text=None) -> QueryLog:
         no_answer_reason=None if answer_text is not None else NO_RELEVANT_PASSAGE,
         rejected_count=None,
     )
+    QueryLog.objects.filter(pk=row.pk).update(
+        answered_at=THREAD_START + timedelta(minutes=minute)
+    )
+    row.refresh_from_db(fields=["answered_at"])
+    return row
+
+
+def touched_at_thread_start(conversation):
+    """Set ``conversation.last_updated_at`` back to THREAD_START, and return it as stored.
+
+    For a test asserting that a turn moves the timestamp forward, or that a refused question
+    leaves it alone. Measured from a timestamp the clock has only just written, a turn of a
+    few milliseconds can land in the same step of the clock (``make_turn``), so "moved" would
+    read as "equal" and a wrongful touch would go unseen. ``last_updated_at`` is ``auto_now``,
+    which a save() would overwrite, so an UPDATE sets it.
+    """
+    Conversation.objects.filter(pk=conversation.pk).update(last_updated_at=THREAD_START)
+    conversation.refresh_from_db()
+    return conversation.last_updated_at
 
 
 # --- The double ------------------------------------------------------------------------
@@ -169,7 +205,7 @@ class ControlledService:
         self.embed_calls: list[list[str]] = []
         self.generate_calls: list[tuple] = []
 
-    def embed(self, texts: list[str]) -> EmbeddingResult:
+    def embed(self, texts: list[str], *, input_type=None) -> EmbeddingResult:
         self.embed_calls.append(list(texts))
         return EmbeddingResult(
             vectors=[list(self.vector)],
@@ -298,8 +334,8 @@ def test_the_retrieval_string_is_a_plain_join_oldest_first(employee):
     needs from its predecessors is their nouns.
     """
     conversation = make_conversation(employee)
-    make_turn(conversation, employee, FIRST, answer_text=PRIOR_ANSWER)
-    make_turn(conversation, employee, SECOND)
+    make_turn(conversation, employee, FIRST, minute=1, answer_text=PRIOR_ANSWER)
+    make_turn(conversation, employee, SECOND, minute=2)
 
     context = conversation_context(
         question=FOLLOW_UP, conversation=conversation, user=employee
@@ -321,8 +357,8 @@ def test_the_prompt_string_labels_the_earlier_questions_as_uncitable(employee):
     they are not passages, carry no chunk_id and may not be cited.
     """
     conversation = make_conversation(employee)
-    make_turn(conversation, employee, FIRST)
-    make_turn(conversation, employee, SECOND)
+    make_turn(conversation, employee, FIRST, minute=1)
+    make_turn(conversation, employee, SECOND, minute=2)
 
     context = conversation_context(
         question=FOLLOW_UP, conversation=conversation, user=employee
@@ -356,7 +392,7 @@ def test_the_labelled_block_sits_after_the_passages_in_the_built_prompt(employee
     from apps.ai.base import Passage
 
     conversation = make_conversation(employee)
-    make_turn(conversation, employee, FIRST)
+    make_turn(conversation, employee, FIRST, minute=1)
     passage = Passage(chunk_id=str(uuid4()), text="Twenty days.")
 
     context = conversation_context(
@@ -378,8 +414,9 @@ def test_the_history_reads_chronologically_in_the_prompt(employee):
     against the wrong antecedent.
     """
     conversation = make_conversation(employee)
-    for question in (FIRST, SECOND, THIRD):
-        make_turn(conversation, employee, question)
+    # A minute apart, in the order asked: stated, not left to the clock (make_turn).
+    for minute, question in enumerate((FIRST, SECOND, THIRD), start=1):
+        make_turn(conversation, employee, question, minute=minute)
 
     context = conversation_context(
         question=FOLLOW_UP, conversation=conversation, user=employee
@@ -405,7 +442,7 @@ def test_a_prior_answer_never_reaches_the_prompt_or_the_query(document, service)
     """
     employee = document.uploaded_by
     conversation = make_conversation(employee)
-    make_turn(conversation, employee, FIRST, answer_text=PRIOR_ANSWER)
+    make_turn(conversation, employee, FIRST, minute=1, answer_text=PRIOR_ANSWER)
     make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=ABOVE, text="Twenty days.")
 
     answer_question(question=FOLLOW_UP, user=employee, conversation=conversation)
@@ -427,7 +464,7 @@ def test_an_unanswered_turn_is_still_a_turn(employee):
     most likely to be shortening: a user whose question was not answered rephrases it.
     """
     conversation = make_conversation(employee)
-    make_turn(conversation, employee, FIRST)  # unanswered: answer_text is NULL
+    make_turn(conversation, employee, FIRST, minute=1)  # unanswered: answer_text is NULL
 
     assert prior_questions(conversation=conversation, user=employee) == (FIRST,)
 
@@ -447,8 +484,8 @@ def test_the_history_is_truncated_to_the_most_recent_turns(employee):
         f"Question number {index} about the leave policy?"
         for index in range(MAXIMUM_CONVERSATION_TURNS + 1)
     ]
-    for question in asked:
-        make_turn(conversation, employee, question)
+    for minute, question in enumerate(asked, start=1):
+        make_turn(conversation, employee, question, minute=minute)
 
     context = conversation_context(
         question=FOLLOW_UP, conversation=conversation, user=employee
@@ -473,8 +510,8 @@ def test_another_users_conversation_yields_no_history(employee, administrator):
     thread. The turn is simply answered as a one-off.
     """
     theirs = make_conversation(administrator, title="Their private thread")
-    make_turn(theirs, administrator, "What is the redundancy payout schedule?")
-    make_turn(theirs, administrator, SECOND)
+    make_turn(theirs, administrator, "What is the redundancy payout schedule?", minute=1)
+    make_turn(theirs, administrator, SECOND, minute=2)
 
     assert prior_questions(conversation=theirs, user=employee) == ()
 
@@ -496,7 +533,7 @@ def test_another_users_questions_never_reach_the_provider(document, administrato
     """
     employee = document.uploaded_by
     theirs = make_conversation(administrator, title="Their private thread")
-    make_turn(theirs, administrator, "What is the redundancy payout schedule?")
+    make_turn(theirs, administrator, "What is the redundancy payout schedule?", minute=1)
     make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=ABOVE, text="Twenty days.")
 
     answer_question(question=FOLLOW_UP, user=employee, conversation=theirs)
@@ -646,7 +683,7 @@ def test_an_identifier_seen_only_among_the_earlier_questions_is_rejected(
     )
 
     conversation = make_conversation(employee)
-    make_turn(conversation, employee, f"What does {restricted.id} say about leave?")
+    make_turn(conversation, employee, f"What does {restricted.id} say about leave?", minute=1)
 
     double = service_with(
         statements=[
@@ -688,7 +725,7 @@ def test_the_row_carries_the_conversation_and_the_question_as_asked(document, se
     """
     employee = document.uploaded_by
     conversation = make_conversation(employee)
-    make_turn(conversation, employee, FIRST, answer_text=PRIOR_ANSWER)
+    make_turn(conversation, employee, FIRST, minute=1, answer_text=PRIOR_ANSWER)
     chunk = make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=ABOVE, text="Twenty days.")
 
     outcome = answer_question(question=FOLLOW_UP, user=employee, conversation=conversation)
@@ -711,25 +748,27 @@ def test_every_turn_moves_the_conversations_last_updated_at(document, service):
 
     Touched by the pipeline, inside the record's transaction, because that is the code that
     knows a turn happened. Asserted on an ANSWERED turn and on a no-answer turn: a question
-    that could not be answered is still activity in the thread.
+    that could not be answered is still activity in the thread. Each turn starts from the
+    timestamp set back to THREAD_START (``touched_at_thread_start``), so that "moved" cannot
+    read as "equal".
     """
     employee = document.uploaded_by
     conversation = make_conversation(employee)
     make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=ABOVE, text="Twenty days.")
-    created_at = conversation.last_updated_at
+    before_answer = touched_at_thread_start(conversation)
 
     answer_question(question=FIRST, user=employee, conversation=conversation)
     conversation.refresh_from_db()
-    after_answer = conversation.last_updated_at
-    assert after_answer > created_at
+    assert conversation.last_updated_at > before_answer
 
     # A no-answer turn. The corpus is emptied, so nothing clears the threshold: path A.
     ContentChunk.objects.all().delete()
+    before_no_answer = touched_at_thread_start(conversation)
     outcome = answer_question(question=FOLLOW_UP, user=employee, conversation=conversation)
     conversation.refresh_from_db()
 
     assert outcome.no_answer_reason == NO_RELEVANT_PASSAGE
-    assert conversation.last_updated_at > after_answer
+    assert conversation.last_updated_at > before_no_answer
 
 
 @pytest.mark.django_db
@@ -741,7 +780,9 @@ def test_a_rejected_question_leaves_the_thread_exactly_as_it_was(employee, servi
     otherwise claim activity that left no evidence.
     """
     conversation = make_conversation(employee)
-    before = conversation.last_updated_at
+    # Set back first, so that a touch landing in the same step of the clock as the create
+    # could not pass for no touch at all (touched_at_thread_start).
+    before = touched_at_thread_start(conversation)
 
     with pytest.raises(QuestionLengthOutOfRange):
         answer_question(
@@ -778,7 +819,7 @@ def test_a_conversation_turn_works_from_both_roles(session_client, administrator
     )
     chunk = make_chunk(document, list(ROLE_PAIR), index=1, cosine=ABOVE, text="Twenty days.")
     conversation = make_conversation(user)
-    make_turn(conversation, user, FIRST, answer_text=PRIOR_ANSWER)
+    make_turn(conversation, user, FIRST, minute=1, answer_text=PRIOR_ANSWER)
 
     outcome = answer_question(question=FOLLOW_UP, user=user, conversation=conversation)
 
@@ -791,3 +832,68 @@ def test_a_conversation_turn_works_from_both_roles(session_client, administrator
     row = QueryLog.objects.get(question=FOLLOW_UP)
     assert row.conversation == conversation
     assert row.user == user
+
+
+# --- The history of a row already logged (D-127) ----------------------------------------------
+# FR-19's aggregation cycle rebuilds the string retrieval ranked for a follow-up, after the fact.
+# ``prior_questions_before`` has to return what ``prior_questions`` returned when the row was asked.
+
+
+@pytest.mark.django_db
+def test_the_history_of_a_logged_turn_is_the_history_it_was_asked_with(employee):
+    """For every turn of a thread longer than the limit: what ``prior_questions`` returned just
+    before the turn was logged is what ``prior_questions_before`` returns for it afterwards,
+    with later turns in the thread by then."""
+    conversation = make_conversation(employee)
+    asked_with, turns = [], []
+    for minute in range(1, MAXIMUM_CONVERSATION_TURNS + 4):
+        asked_with.append(prior_questions(conversation=conversation, user=employee))
+        turns.append(make_turn(conversation, employee, f"Question number {minute}?", minute=minute))
+
+    assert [prior_questions_before(turn) for turn in turns] == asked_with
+    # The premise: the thread outgrew the limit, so the limit and the order were both exercised.
+    assert asked_with[0] == () and len(asked_with[-1]) == MAXIMUM_CONVERSATION_TURNS
+    assert asked_with[-1][-1] == turns[-2].question
+
+
+@pytest.mark.django_db
+def test_a_logged_one_off_has_no_history(employee):
+    """A one-off question is never composed: not with a conversation's turns, and not with the
+    user's earlier one-off questions, which share its empty conversation."""
+    conversation = make_conversation(employee)
+    make_turn(conversation, employee, FIRST, minute=1)
+    make_turn(None, employee, "An earlier one-off question?", minute=2)
+    one_off = make_turn(None, employee, FOLLOW_UP, minute=3)
+
+    assert prior_questions_before(one_off) == ()
+
+
+@pytest.mark.django_db
+def test_a_logged_turns_history_is_its_own_conversations_and_its_own_users(employee, administrator):
+    """Both predicates, always, as in ``prior_questions``: a row of another conversation, and a
+    row another user wrote into this one, are not this turn's history."""
+    conversation = make_conversation(employee)
+    elsewhere = make_conversation(employee, title="Another thread")
+    make_turn(conversation, employee, FIRST, minute=1)
+    make_turn(elsewhere, employee, "A question in another thread?", minute=2)
+    make_turn(conversation, administrator, "A row another user wrote here?", minute=3)
+    turn = make_turn(conversation, employee, FOLLOW_UP, minute=4)
+
+    assert prior_questions_before(turn) == (FIRST,)
+
+
+@pytest.mark.django_db
+def test_two_turns_at_one_instant_are_ordered_as_the_ask_path_orders_them(employee):
+    """A tie on ``answered_at`` is decided by the primary key, in ``prior_questions`` and here
+    alike, so exactly one of the two rows has the other in its history."""
+    conversation = make_conversation(employee)
+    one = make_turn(conversation, employee, "One of two at the same instant?", minute=1)
+    other = make_turn(conversation, employee, "The other of the two?", minute=1)
+    assert one.answered_at == other.answered_at  # the premise
+
+    first, second = sorted([one, other], key=lambda row: str(row.pk).replace("-", ""))
+
+    assert prior_questions_before(first) == ()
+    assert prior_questions_before(second) == (first.question,)
+    # The ask path reads the same order: its newest row is the one that has the other before it.
+    assert prior_questions(conversation=conversation, user=employee) == (first.question, second.question)

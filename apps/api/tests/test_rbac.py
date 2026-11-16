@@ -29,10 +29,14 @@ from apps.api.permissions import HasRolePermission
 from apps.api.tests.dual_role_matrix import enumerate_endpoints
 from apps.core.constants import (
     ADMINISTRATOR_ROLE_NAME,
+    CONTRIBUTE_CONTENT_PERMISSION,
     EMPLOYEE_ROLE_NAME,
     MANAGE_DOCUMENTS_PERMISSION,
     MANAGE_MEETINGS_PERMISSION,
     MANAGE_ROLES_PERMISSION,
+    MANAGE_TAGS_PERMISSION,
+    RELEASE_ACCOUNT_LOCKS_PERMISSION,
+    REVIEW_KNOWLEDGE_GAPS_PERMISSION,
 )
 from conftest import PASSWORD
 
@@ -40,11 +44,15 @@ User = get_user_model()
 
 pytestmark = pytest.mark.django_db
 
-# What docs/api-contract.md says: the two routes D-21 lets an anonymous client reach,
-# and every protected URL name. The tests below check the URL conf's own permission
+# What docs/api-contract.md says: the routes an anonymous client may reach, the two D-21
+# lets through and, since D-130 decision 7, FR-03's lockout policy, and every protected URL
+# name. The tests below check the URL conf's own permission
 # classes against these names; the dual-role matrix (dual_role_matrix.py) then
 # reports, per protected endpoint, whether a passing test reached it from each role.
-OPEN_ROUTES = {"auth-register", "auth-login"}
+OPEN_ROUTES = {"auth-register", "auth-login", "auth-lockout-policy"}
+# What each opt-out answers an anonymous empty request with. Registration and login validate the
+# empty body (400). The policy reads no body and answers every caller alike (200).
+OPEN_ROUTE_STATUS = {"auth-register": 400, "auth-login": 400, "auth-lockout-policy": 200}
 PROTECTED_ROUTES = {"api-root", "auth-logout", "auth-me", "role-list", "user-list", "user-role",
                     "user-directory",  # FR-09 attendee selection (D-34)
                     "document-list", "document-reprocess",  # Stage 3: FR-08 (D-32)
@@ -55,7 +63,39 @@ PROTECTED_ROUTES = {"api-root", "auth-logout", "auth-me", "role-list", "user-lis
                     "conversation-list", "conversation-detail",  # Stage 4: FR-13
                     "dashboard",  # Stage 5 item 3: FR-14
                     "document-browse",  # Stage 5 item 2: FR-15 (D-72); its DELETE is document-detail's
-                    "document-download"}  # Stage 5 item 2a: FR-15's download link (D-75)
+                    "document-download",  # Stage 5 item 2a: FR-15's download link (D-75)
+                    # NIT3004: FR-10's classification routes (D-104, D-105). contribute_content is
+                    # checked inside each method, after the scoped lookup, as the deletes check
+                    # theirs; apps/api/tests/test_document_classification.py proves the 404
+                    # before the 403 on every one of them.
+                    "document-classify", "document-classification", "document-tag-confirm",
+                    "document-tag",
+                    # D-128: in Project, Process or Topic; they replaced proposed-topics/confirm
+                    # and /reject
+                    "document-proposed-tag-confirm", "document-proposed-tag-reject",
+                    # A person applies a tag (D-105's dated note of 10 November 2026, night):
+                    # contribute_content inside the method too, after the scoped lookup.
+                    "document-tags",
+                    # NIT3004: FR-19's knowledge-gap log, every route behind a permission (D-107)
+                    "knowledge-gap-list", "knowledge-gap-cycles", "knowledge-gap-detail",
+                    # NIT3004: FR-10's tag administration, both routes behind manage_tags (D-119
+                    # finding 5; D-105's dated note of 10 November 2026, night); tag-list's POST,
+                    # an Administrator adding a value, is D-128's
+                    "tag-list", "tag-detail",
+                    # NIT3004: FR-10's department list (D-129), both routes behind manage_tags
+                    "department-list", "department-detail",
+                    # Recording transcription, both routes behind contribute_content
+                    # (D-123)
+                    "transcription-status", "transcription-list",
+                    # NIT3004: FR-16's summary and action items (D-125). The summary's GET needs
+                    # only a session; its POST and the action-item writes check
+                    # contribute_content inside the method, after the scoped lookup, as FR-10's
+                    # routes do. apps/api/tests/test_meeting_summary.py and
+                    # test_meeting_action_items.py prove the 404 before the 403 on each.
+                    "meeting-summary", "meeting-action-items", "meeting-action-item",
+                    # NIT3004: FR-03's administrator release, behind release_account_locks
+                    # (D-130)
+                    "user-unlock"}
 # Routes that need more than a session, with the permission code they check.
 # document-list is absent on purpose: its GET needs only a session, and the
 # contribute permission its POST needs is returned by get_permissions() per method
@@ -67,11 +107,38 @@ PROTECTED_ROUTES = {"api-root", "auth-logout", "auth-me", "role-list", "user-lis
 # (D-73). apps/api/tests/test_document_delete.py proves the 403 and the 404 before it.
 # meeting-detail is absent for the same reason: its DELETE checks manage_meetings inside the
 # method, after the scoped lookup (D-99). apps/api/tests/test_meeting_delete.py proves both.
-PERMISSIONED_ROUTES = {"user-list": MANAGE_ROLES_PERMISSION, "user-role": MANAGE_ROLES_PERMISSION}
+PERMISSIONED_ROUTES = {
+    "user-list": MANAGE_ROLES_PERMISSION,
+    "user-role": MANAGE_ROLES_PERMISSION,
+    # D-32: reprocess declares contribute_content on the class. Listed on 9 November 2026, when
+    # test_each_permissioned_route_checks_its_own_code began reading every route's classes and
+    # found it absent from this table, though the route has checked the code since Stage 3.
+    "document-reprocess": CONTRIBUTE_CONTENT_PERMISSION,
+    # FR-19 (D-107): review_knowledge_gaps, a permission_classes entry on all three.
+    "knowledge-gap-list": REVIEW_KNOWLEDGE_GAPS_PERMISSION,
+    "knowledge-gap-cycles": REVIEW_KNOWLEDGE_GAPS_PERMISSION,
+    "knowledge-gap-detail": REVIEW_KNOWLEDGE_GAPS_PERMISSION,
+    # FR-10's tag administration (D-119 finding 5): manage_tags, a permission_classes entry on both.
+    "tag-list": MANAGE_TAGS_PERMISSION,
+    "tag-detail": MANAGE_TAGS_PERMISSION,
+    # FR-10's department list (D-129): the same code, a permission_classes entry on both.
+    "department-list": MANAGE_TAGS_PERMISSION,
+    "department-detail": MANAGE_TAGS_PERMISSION,
+    # Recording transcription (D-123): contribute_content, a permission_classes entry on
+    # both, so the 403 comes before the body is read. Nothing on either route is scoped.
+    "transcription-status": CONTRIBUTE_CONTENT_PERMISSION,
+    "transcription-list": CONTRIBUTE_CONTENT_PERMISSION,
+    # FR-03's release (D-130): release_account_locks, a permission_classes entry, so the 403
+    # comes before the lookup and an Employee cannot probe user ids.
+    "user-unlock": RELEASE_ACCOUNT_LOCKS_PERMISSION,
+}
 # Codes checked inside a view rather than declared on it, so the seed test below covers them.
 IN_VIEW_PERMISSION_CODES = {
     MANAGE_DOCUMENTS_PERMISSION,  # DocumentDetailView.delete (D-73)
     MANAGE_MEETINGS_PERMISSION,  # MeetingDetailView.delete (D-99)
+    # FR-10's seven document routes (D-105 and its dated notes), and FR-16's four meeting writes:
+    # the summary's POST and the action items' POST, PATCH and DELETE (D-125)
+    CONTRIBUTE_CONTENT_PERMISSION,
 }
 
 USERS = reverse("user-list")
@@ -101,6 +168,20 @@ def test_the_url_conf_is_exactly_the_contract():
             assert endpoint.permission_classes[0] is IsAuthenticated, endpoint
 
 
+def test_each_permissioned_route_checks_its_own_code():
+    """The code each route's permission classes check is the one PERMISSIONED_ROUTES names, and
+    every other protected route checks none, so a code cannot be dropped from or added to a route
+    without this table changing with it."""
+    for endpoint in enumerate_endpoints():
+        codes = {
+            permission.permission_name
+            for permission in endpoint.permission_classes
+            if isinstance(permission, type) and issubclass(permission, HasRolePermission)
+        }
+        expected = {PERMISSIONED_ROUTES[endpoint.name]} if endpoint.name in PERMISSIONED_ROUTES else set()
+        assert codes == expected, endpoint
+
+
 def test_every_endpoint_has_a_method_and_a_drf_view():
     for endpoint in enumerate_endpoints():
         assert endpoint.method != "?", f"{endpoint.path} is not a DRF view"
@@ -117,17 +198,18 @@ def _walk(client, expected_for):
     assert not failures, failures
 
 
-def test_every_route_but_the_two_opt_outs_is_401_anonymously(api_client):
+def test_every_route_but_the_opt_outs_is_401_anonymously(api_client):
     def expected(name):
-        # The two opt-outs run their validation on the empty body: 400, not 401.
-        return 400 if name in OPEN_ROUTES else 401
+        # The opt-outs answer for themselves: 400 where they validate the empty body, 200 for the
+        # policy, which reads none (D-130 decision 7).
+        return OPEN_ROUTE_STATUS.get(name, 401)
 
     _walk(api_client, expected)
 
 
-def test_every_route_but_the_two_opt_outs_is_401_with_a_forged_session(api_client):
+def test_every_route_but_the_opt_outs_is_401_with_a_forged_session(api_client):
     api_client.cookies[settings.SESSION_COOKIE_NAME] = "forged-session-key"
-    _walk(api_client, lambda name: 400 if name in OPEN_ROUTES else 401)
+    _walk(api_client, lambda name: OPEN_ROUTE_STATUS.get(name, 401))
 
 
 def test_every_protected_route_names_401_as_the_scheme(api_client):
@@ -321,3 +403,10 @@ def test_every_permission_code_in_use_is_seeded():
     assert Role.objects.filter(role_name=ADMINISTRATOR_ROLE_NAME, permissions__permission_name=MANAGE_ROLES_PERMISSION).exists()
     assert Role.objects.filter(role_name=ADMINISTRATOR_ROLE_NAME, permissions__permission_name=MANAGE_DOCUMENTS_PERMISSION).exists()
     assert Role.objects.filter(role_name=ADMINISTRATOR_ROLE_NAME, permissions__permission_name=MANAGE_MEETINGS_PERMISSION).exists()
+    assert Role.objects.filter(role_name=ADMINISTRATOR_ROLE_NAME, permissions__permission_name=REVIEW_KNOWLEDGE_GAPS_PERMISSION).exists()
+    assert not Role.objects.filter(role_name=EMPLOYEE_ROLE_NAME, permissions__permission_name=REVIEW_KNOWLEDGE_GAPS_PERMISSION).exists()
+    assert Role.objects.filter(role_name=ADMINISTRATOR_ROLE_NAME, permissions__permission_name=MANAGE_TAGS_PERMISSION).exists()
+    assert not Role.objects.filter(role_name=EMPLOYEE_ROLE_NAME, permissions__permission_name=MANAGE_TAGS_PERMISSION).exists()
+    # FR-03's release (D-130): Administrator only, seeded by accounts 0010.
+    assert Role.objects.filter(role_name=ADMINISTRATOR_ROLE_NAME, permissions__permission_name=RELEASE_ACCOUNT_LOCKS_PERMISSION).exists()
+    assert not Role.objects.filter(role_name=EMPLOYEE_ROLE_NAME, permissions__permission_name=RELEASE_ACCOUNT_LOCKS_PERMISSION).exists()

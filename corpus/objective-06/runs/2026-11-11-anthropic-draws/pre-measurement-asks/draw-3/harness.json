@@ -1,0 +1,1067 @@
+{
+  "record": {
+    "recorded_at": "2026-11-11T14:05:30+11:00",
+    "commit_sha": "3cd0726883eac7af7d9703586d2b3d9cb5565bcf",
+    "uncommitted_tracked_changes": false,
+    "uncommitted_tracked_files": [],
+    "dump_sha256": "8e79cb377965075dd322d2fb098780cc0d45bc4fdfb5eb5f05d6c59628765a70",
+    "database": "kmp_fr12_declines_20261111",
+    "flm_version": null,
+    "provider_record": {
+      "provider": "anthropic",
+      "chat_model": "claude-haiku-5-5",
+      "embed_model": "voyage-4",
+      "embedding_dimension": 1024,
+      "voyage_base_url": "https://api.voyageai.com/v1",
+      "threshold": 0.2687,
+      "partial_match_floor": 0.2468
+    },
+    "recorded": true,
+    "server": {
+      "via": "in-process",
+      "server": null,
+      "version": null,
+      "threads": null,
+      "note": "corpus/objective-06/runs/2026-11-11-anthropic-draws/pre-measurement-asks/citation_harness_fr12_declines.py calls the pipeline's functions in its own process; no HTTP server is involved"
+    },
+    "question_set": "corpus\\objective-06\\pre-measurement-asks.json",
+    "question_set_sha256": "db8b1d73bd4aa4f4f8bf422ee9b6edfd326bd481853c10bb5ec9b0ee9b969202",
+    "question_set_status": "DEVELOPMENT MATERIAL, 8 November 2026. The 8 unanswerable and 6 permission-only asks of the draft thirty (objective-06 queries.json), in scripts/citation_harness.py's question-set shape so the shipped pipeline measures them with nothing written. Run three times before the thirty are frozen, as the lead decided on 8 November. Not a frozen set; not tuned against.",
+    "corpus_problems": []
+  },
+  "mode": "full",
+  "constants": {
+    "TOP_K": 25,
+    "RELEVANCE_THRESHOLD": 0.3,
+    "RELEVANCE_THRESHOLD_BY_MODEL": {
+      "voyage-4": 0.2687
+    },
+    "threshold_used": "the embedding model's own (D-120)",
+    "voyage_threshold": 0.2687,
+    "voyage_partial_match_floor": 0.2468,
+    "MAXIMUM_CONTEXT_TOKENS": 4000,
+    "MAXIMUM_GENERATION_ATTEMPTS": 3
+  },
+  "provider": "anthropic",
+  "chat_model": "claude-haiku-5-5",
+  "embed_model": "voyage-4",
+  "embedding_dimension": 1024,
+  "claude_usage": {
+    "calls": 9,
+    "input_tokens": 33268,
+    "output_tokens": 147,
+    "calls_without_counts": 0,
+    "estimated_usd": 0.0034,
+    "prices_per_million_usd": {
+      "input": 0.1,
+      "output": 0.5
+    }
+  },
+  "question_set": "corpus\\objective-06\\pre-measurement-asks.json",
+  "with_history": false,
+  "canned_prior_questions": [],
+  "elapsed_seconds": 17.084608100005426,
+  "summary": {
+    "questions": 14,
+    "responses": 9,
+    "schema_conformance": [
+      9,
+      9
+    ],
+    "first_attempt_conformance": [
+      9,
+      9
+    ],
+    "fabricated_identifiers": [
+      0,
+      0
+    ],
+    "statements_verified": 0,
+    "empty_answer_ordinary": [
+      0,
+      0
+    ],
+    "scoped_empty": [
+      6,
+      6
+    ],
+    "scoped_answered": [
+      0,
+      0
+    ],
+    "scoping_shown": [
+      0,
+      0
+    ],
+    "no_answer_empty": [
+      8,
+      8
+    ],
+    "expected_answer_match": [
+      0,
+      0
+    ],
+    "expected_answer_match_scoped": [
+      0,
+      0
+    ],
+    "path_a": 5,
+    "call_failures": 0,
+    "leaks": 0,
+    "timing_seconds": {
+      "per_attempt": {
+        "n": 9,
+        "min": 0.8,
+        "median": 0.9,
+        "mean": 0.9333333333333333,
+        "p90": 1.1,
+        "max": 1.1
+      },
+      "per_question": {
+        "n": 14,
+        "min": 0.3985441999975592,
+        "median": 1.2421568999998271,
+        "mean": 1.2201900785709898,
+        "p90": 1.9644833000202198,
+        "max": 2.7354882000072394
+      },
+      "per_answered_question": {
+        "n": 0
+      }
+    }
+  },
+  "misses": [],
+  "results": [
+    {
+      "id": "U01",
+      "base_id": "U01",
+      "kind": "no-answer",
+      "role": "Employee",
+      "expects_answer": false,
+      "source": null,
+      "question": "When are salaries reviewed each year?",
+      "prompt_question": "When are salaries reviewed each year?",
+      "top_score": 0.4052152940135611,
+      "source_rank": null,
+      "source_score": null,
+      "threshold": 0.2687,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.4052152940135611
+        },
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.332840781485435
+        },
+        {
+          "source_type": "document",
+          "source_id": "9b5631b9-6175-4830-a353-56b2d0abb817",
+          "item": "D08",
+          "score": 0.33174566804761163
+        },
+        {
+          "source_type": "document",
+          "source_id": "9862c3e2-bd78-4061-a535-2e6f8649d008",
+          "item": "D03",
+          "score": 0.3022039064742758
+        },
+        {
+          "source_type": "document",
+          "source_id": "6971af02-ec47-4a5f-b3ac-cd481571abdd",
+          "item": "D12",
+          "score": 0.29551976017993054
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "b661cabc-eb9b-4f38-8e3f-e04954f7f8b6",
+          "score": 0.4052152940135611,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "b75fd0e9-9382-4320-a635-7e44fb98f8ad",
+          "score": 0.38144169711702863,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "c2bab4c2-c466-4139-8780-e7b8f316cd1a",
+          "score": 0.3802273784362239,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "f1b614a1-f386-4d0d-8344-6eeaea74be6a",
+          "score": 0.3609754861717934,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "9ca8c5f5-dbe6-4c18-8c8d-e7e84e8962b5",
+          "score": 0.3602506577056268,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "386536d7-52a2-4414-9a46-d5d8438190a2",
+          "score": 0.3502820670105319,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "c64b812b-925a-46d7-9bf6-4711d1d1015d",
+          "score": 0.33514186161819026,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "52edd5b9-5e7f-4f66-b28a-3fb77b2cb0ae",
+          "score": 0.332840781485435,
+          "item": "D05"
+        },
+        {
+          "chunk_id": "0e0a0c8f-6d08-4db6-bcfa-dba1fb10c81b",
+          "score": 0.33174566804761163,
+          "item": "D08"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 1.0,
+          "raw": "{\"statements\": []}",
+          "statements": 0
+        }
+      ],
+      "parsed": true,
+      "statements": [],
+      "verified_statements": [],
+      "answered": false,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": null,
+      "accepted": [],
+      "expected_answer_form": null,
+      "expected_answer_found": null,
+      "error": null,
+      "seconds": 2.7354882000072394
+    },
+    {
+      "id": "U02",
+      "base_id": "U02",
+      "kind": "no-answer",
+      "role": "Employee",
+      "expects_answer": false,
+      "source": null,
+      "question": "How do I ask for a pay rise?",
+      "prompt_question": "How do I ask for a pay rise?",
+      "top_score": 0.3139201594825992,
+      "source_rank": null,
+      "source_score": null,
+      "threshold": 0.2687,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.3139201594825992
+        },
+        {
+          "source_type": "document",
+          "source_id": "f9621aa3-d664-44af-a25e-94734780119e",
+          "item": "D10",
+          "score": 0.30859886348639815
+        },
+        {
+          "source_type": "document",
+          "source_id": "9b5631b9-6175-4830-a353-56b2d0abb817",
+          "item": "D08",
+          "score": 0.27923181410661546
+        },
+        {
+          "source_type": "document",
+          "source_id": "910d0241-38de-4305-b901-a10bf40b8781",
+          "item": "D01",
+          "score": 0.2682930921343649
+        },
+        {
+          "source_type": "document",
+          "source_id": "9862c3e2-bd78-4061-a535-2e6f8649d008",
+          "item": "D03",
+          "score": 0.2617045404655222
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "52edd5b9-5e7f-4f66-b28a-3fb77b2cb0ae",
+          "score": 0.3139201594825992,
+          "item": "D05"
+        },
+        {
+          "chunk_id": "2cfdb96a-53fb-47ad-b86c-40bbf159b4e1",
+          "score": 0.30859886348639815,
+          "item": "D10"
+        },
+        {
+          "chunk_id": "0e0a0c8f-6d08-4db6-bcfa-dba1fb10c81b",
+          "score": 0.27923181410661546,
+          "item": "D08"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 0.9,
+          "raw": "{\"statements\": []}",
+          "statements": 0
+        }
+      ],
+      "parsed": true,
+      "statements": [],
+      "verified_statements": [],
+      "answered": false,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": null,
+      "accepted": [],
+      "expected_answer_form": null,
+      "expected_answer_found": null,
+      "error": null,
+      "seconds": 1.8345081000006758
+    },
+    {
+      "id": "U04",
+      "base_id": "U04",
+      "kind": "no-answer",
+      "role": "Employee",
+      "expects_answer": false,
+      "source": null,
+      "question": "Can I get a corporate credit card for work purchases?",
+      "prompt_question": "Can I get a corporate credit card for work purchases?",
+      "top_score": 0.3625501989681722,
+      "source_rank": null,
+      "source_score": null,
+      "threshold": 0.2687,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "f9621aa3-d664-44af-a25e-94734780119e",
+          "item": "D10",
+          "score": 0.3625501989681722
+        },
+        {
+          "source_type": "document",
+          "source_id": "49c56238-3aa7-465c-a426-de0bbc739a7d",
+          "item": "D19",
+          "score": 0.34483732508623544
+        },
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.3222318170001435
+        },
+        {
+          "source_type": "document",
+          "source_id": "e65ad9ac-df6b-4a48-9d41-9b11af281c3f",
+          "item": "D02",
+          "score": 0.281156566141889
+        },
+        {
+          "source_type": "document",
+          "source_id": "3899e26b-b3dd-4478-9845-093046a99ab8",
+          "item": "D07",
+          "score": 0.2756195618113378
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "2cfdb96a-53fb-47ad-b86c-40bbf159b4e1",
+          "score": 0.3625501989681722,
+          "item": "D10"
+        },
+        {
+          "chunk_id": "271e0513-3a68-4ca8-a40e-8b8f11f2fb26",
+          "score": 0.34483732508623544,
+          "item": "D19"
+        },
+        {
+          "chunk_id": "52edd5b9-5e7f-4f66-b28a-3fb77b2cb0ae",
+          "score": 0.3222318170001435,
+          "item": "D05"
+        },
+        {
+          "chunk_id": "b413413d-4b4c-4408-b67b-cdfeb1950473",
+          "score": 0.281156566141889,
+          "item": "D02"
+        },
+        {
+          "chunk_id": "10201834-f7af-4499-b2a3-749ab0891c2b",
+          "score": 0.2756195618113378,
+          "item": "D07"
+        },
+        {
+          "chunk_id": "f30565eb-a557-4fe1-a050-04330628f22d",
+          "score": 0.27035879623580894,
+          "item": "D14"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 0.9,
+          "raw": "{\"statements\": []}",
+          "statements": 0
+        }
+      ],
+      "parsed": true,
+      "statements": [],
+      "verified_statements": [],
+      "answered": false,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": null,
+      "accepted": [],
+      "expected_answer_form": null,
+      "expected_answer_found": null,
+      "error": null,
+      "seconds": 1.29827369999839
+    },
+    {
+      "id": "U05",
+      "base_id": "U05",
+      "kind": "no-answer",
+      "role": "Administrator",
+      "expects_answer": false,
+      "source": null,
+      "question": "Who is allowed to hold a company credit card?",
+      "prompt_question": "Who is allowed to hold a company credit card?",
+      "top_score": 0.38943777394911966,
+      "source_rank": null,
+      "source_score": null,
+      "threshold": 0.2687,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "49c56238-3aa7-465c-a426-de0bbc739a7d",
+          "item": "D19",
+          "score": 0.38943777394911966
+        },
+        {
+          "source_type": "document",
+          "source_id": "e65ad9ac-df6b-4a48-9d41-9b11af281c3f",
+          "item": "D02",
+          "score": 0.3428399484575996
+        },
+        {
+          "source_type": "document",
+          "source_id": "f9621aa3-d664-44af-a25e-94734780119e",
+          "item": "D10",
+          "score": 0.31714332398141765
+        },
+        {
+          "source_type": "document",
+          "source_id": "3899e26b-b3dd-4478-9845-093046a99ab8",
+          "item": "D07",
+          "score": 0.29830688962222146
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.296445394512359
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "271e0513-3a68-4ca8-a40e-8b8f11f2fb26",
+          "score": 0.38943777394911966,
+          "item": "D19"
+        },
+        {
+          "chunk_id": "b413413d-4b4c-4408-b67b-cdfeb1950473",
+          "score": 0.3428399484575996,
+          "item": "D02"
+        },
+        {
+          "chunk_id": "2cfdb96a-53fb-47ad-b86c-40bbf159b4e1",
+          "score": 0.31714332398141765,
+          "item": "D10"
+        },
+        {
+          "chunk_id": "10201834-f7af-4499-b2a3-749ab0891c2b",
+          "score": 0.29830688962222146,
+          "item": "D07"
+        },
+        {
+          "chunk_id": "f1b614a1-f386-4d0d-8344-6eeaea74be6a",
+          "score": 0.296445394512359,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "52edd5b9-5e7f-4f66-b28a-3fb77b2cb0ae",
+          "score": 0.2882045226546362,
+          "item": "D05"
+        },
+        {
+          "chunk_id": "c2bab4c2-c466-4139-8780-e7b8f316cd1a",
+          "score": 0.2845480556992762,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "6ebada06-d76d-470c-bb0e-17a8a090d41b",
+          "score": 0.27961876083953163,
+          "item": "D16"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 1.1,
+          "raw": "{\"statements\": []}",
+          "statements": 0
+        }
+      ],
+      "parsed": true,
+      "statements": [],
+      "verified_statements": [],
+      "answered": false,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": null,
+      "accepted": [],
+      "expected_answer_form": null,
+      "expected_answer_found": null,
+      "error": null,
+      "seconds": 1.9644833000202198
+    },
+    {
+      "id": "U07",
+      "base_id": "U07",
+      "kind": "no-answer",
+      "role": "Employee",
+      "expects_answer": false,
+      "source": null,
+      "question": "Is the office closed between Christmas and New Year?",
+      "prompt_question": "Is the office closed between Christmas and New Year?",
+      "top_score": 0.3833546280409086,
+      "source_rank": null,
+      "source_score": null,
+      "threshold": 0.2687,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "483170de-7f0f-4750-b259-3fb2f5c22c2b",
+          "item": "D20",
+          "score": 0.3833546280409086
+        },
+        {
+          "source_type": "document",
+          "source_id": "910d0241-38de-4305-b901-a10bf40b8781",
+          "item": "D01",
+          "score": 0.37559347032601703
+        },
+        {
+          "source_type": "document",
+          "source_id": "a3aee338-142e-4f4e-ba38-2d1b7408cb29",
+          "item": "D18",
+          "score": 0.3050466729718131
+        },
+        {
+          "source_type": "document",
+          "source_id": "2e101ba3-2d3f-4d92-82b9-53f4da8f2fae",
+          "item": "D17",
+          "score": 0.2964657901567427
+        },
+        {
+          "source_type": "document",
+          "source_id": "3899e26b-b3dd-4478-9845-093046a99ab8",
+          "item": "D07",
+          "score": 0.27947589521973026
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "5c000741-5f43-42a0-b252-ec47dc61959f",
+          "score": 0.3833546280409086,
+          "item": "D20"
+        },
+        {
+          "chunk_id": "a2aceadb-ac21-40c1-99f8-fc79f73fb5c9",
+          "score": 0.37559347032601703,
+          "item": "D01"
+        },
+        {
+          "chunk_id": "8121d762-eb85-40bd-a086-a7277dec7e66",
+          "score": 0.3050466729718131,
+          "item": "D18"
+        },
+        {
+          "chunk_id": "de45dc94-95e8-473e-987f-9ea143df58da",
+          "score": 0.2964657901567427,
+          "item": "D17"
+        },
+        {
+          "chunk_id": "10201834-f7af-4499-b2a3-749ab0891c2b",
+          "score": 0.27947589521973026,
+          "item": "D07"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 0.9,
+          "raw": "{\"statements\": []}",
+          "statements": 0
+        }
+      ],
+      "parsed": true,
+      "statements": [],
+      "verified_statements": [],
+      "answered": false,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": null,
+      "accepted": [],
+      "expected_answer_form": null,
+      "expected_answer_found": null,
+      "error": null,
+      "seconds": 1.8444360000139568
+    },
+    {
+      "id": "U08",
+      "base_id": "U08",
+      "kind": "no-answer",
+      "role": "Administrator",
+      "expects_answer": false,
+      "source": null,
+      "question": "Do we have a shutdown period over the Christmas holidays?",
+      "prompt_question": "Do we have a shutdown period over the Christmas holidays?",
+      "top_score": 0.33818475092420375,
+      "source_rank": null,
+      "source_score": null,
+      "threshold": 0.2687,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "910d0241-38de-4305-b901-a10bf40b8781",
+          "item": "D01",
+          "score": 0.33818475092420375
+        },
+        {
+          "source_type": "document",
+          "source_id": "483170de-7f0f-4750-b259-3fb2f5c22c2b",
+          "item": "D20",
+          "score": 0.3021466497435698
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "d02cbde1-72b7-47f0-8c01-62a8dfa50fe2",
+          "item": "T01",
+          "score": 0.25880713949525985
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "a2aceadb-ac21-40c1-99f8-fc79f73fb5c9",
+          "score": 0.33818475092420375,
+          "item": "D01"
+        },
+        {
+          "chunk_id": "5c000741-5f43-42a0-b252-ec47dc61959f",
+          "score": 0.3021466497435698,
+          "item": "D20"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 0.8,
+          "raw": "{\"statements\": []}",
+          "statements": 0
+        }
+      ],
+      "parsed": true,
+      "statements": [],
+      "verified_statements": [],
+      "answered": false,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": null,
+      "accepted": [],
+      "expected_answer_form": null,
+      "expected_answer_found": null,
+      "error": null,
+      "seconds": 1.2041682999988552
+    },
+    {
+      "id": "U10",
+      "base_id": "U10",
+      "kind": "no-answer",
+      "role": "Employee",
+      "expects_answer": false,
+      "source": null,
+      "question": "Do I still get paid if I'm called up for jury duty?",
+      "prompt_question": "Do I still get paid if I'm called up for jury duty?",
+      "top_score": 0.21719145309962318,
+      "source_rank": null,
+      "source_score": null,
+      "threshold": 0.2687,
+      "partial_matches": [],
+      "retrieved": [],
+      "generation_called": false,
+      "attempts": [],
+      "parsed": false,
+      "statements": [],
+      "verified_statements": [],
+      "answered": false,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": null,
+      "accepted": [],
+      "expected_answer_form": null,
+      "expected_answer_found": null,
+      "error": null,
+      "seconds": 0.46513349999440834
+    },
+    {
+      "id": "U11",
+      "base_id": "U11",
+      "kind": "no-answer",
+      "role": "Administrator",
+      "expects_answer": false,
+      "source": null,
+      "question": "How much notice does someone need to give before taking jury service leave?",
+      "prompt_question": "How much notice does someone need to give before taking jury service leave?",
+      "top_score": 0.3871702341939374,
+      "source_rank": null,
+      "source_score": null,
+      "threshold": 0.2687,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "910d0241-38de-4305-b901-a10bf40b8781",
+          "item": "D01",
+          "score": 0.3871702341939374
+        },
+        {
+          "source_type": "document",
+          "source_id": "483170de-7f0f-4750-b259-3fb2f5c22c2b",
+          "item": "D20",
+          "score": 0.26048052237785035
+        },
+        {
+          "source_type": "document",
+          "source_id": "ab0dcd1f-0bbf-43d4-8241-58e175a7336b",
+          "item": "D11",
+          "score": 0.2598596644056408
+        },
+        {
+          "source_type": "document",
+          "source_id": "2e101ba3-2d3f-4d92-82b9-53f4da8f2fae",
+          "item": "D17",
+          "score": 0.2579360905484089
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "d02cbde1-72b7-47f0-8c01-62a8dfa50fe2",
+          "item": "T01",
+          "score": 0.256657899491031
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "a2aceadb-ac21-40c1-99f8-fc79f73fb5c9",
+          "score": 0.3871702341939374,
+          "item": "D01"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 1.0,
+          "raw": "{\"statements\": []}",
+          "statements": 0
+        }
+      ],
+      "parsed": true,
+      "statements": [],
+      "verified_statements": [],
+      "answered": false,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": null,
+      "accepted": [],
+      "expected_answer_form": null,
+      "expected_answer_found": null,
+      "error": null,
+      "seconds": 1.4264064000162762
+    },
+    {
+      "id": "P01",
+      "base_id": "P01",
+      "kind": "scoped",
+      "role": "Employee",
+      "expects_answer": false,
+      "source": "D09",
+      "question": "Who is the project manager for Project Atlas?",
+      "prompt_question": "Who is the project manager for Project Atlas?",
+      "top_score": 0.24536112468642848,
+      "source_rank": null,
+      "source_score": null,
+      "threshold": 0.2687,
+      "partial_matches": [],
+      "retrieved": [],
+      "generation_called": false,
+      "attempts": [],
+      "parsed": false,
+      "statements": [],
+      "verified_statements": [],
+      "answered": false,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": "head of digital services",
+      "accepted": [],
+      "expected_answer_form": null,
+      "expected_answer_found": false,
+      "error": null,
+      "seconds": 0.46011609997367486
+    },
+    {
+      "id": "P02",
+      "base_id": "P02",
+      "kind": "scoped",
+      "role": "Employee",
+      "expects_answer": false,
+      "source": "D09",
+      "question": "What gets decided at the Quartz Harbour milestone gate?",
+      "prompt_question": "What gets decided at the Quartz Harbour milestone gate?",
+      "top_score": 0.2363834547597514,
+      "source_rank": null,
+      "source_score": null,
+      "threshold": 0.2687,
+      "partial_matches": [],
+      "retrieved": [],
+      "generation_called": false,
+      "attempts": [],
+      "parsed": false,
+      "statements": [],
+      "verified_statements": [],
+      "answered": false,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": "steering group",
+      "accepted": [],
+      "expected_answer_form": null,
+      "expected_answer_found": false,
+      "error": null,
+      "seconds": 0.3985441999975592
+    },
+    {
+      "id": "P04",
+      "base_id": "P04",
+      "kind": "scoped",
+      "role": "Employee",
+      "expects_answer": false,
+      "source": "D16",
+      "question": "Who on the team is rated four in project management?",
+      "prompt_question": "Who on the team is rated four in project management?",
+      "top_score": 0.24559076098730803,
+      "source_rank": null,
+      "source_score": null,
+      "threshold": 0.2687,
+      "partial_matches": [],
+      "retrieved": [],
+      "generation_called": false,
+      "attempts": [],
+      "parsed": false,
+      "statements": [],
+      "verified_statements": [],
+      "answered": false,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": "Ben Carter",
+      "accepted": [
+        "Grace Tan"
+      ],
+      "expected_answer_form": null,
+      "expected_answer_found": false,
+      "error": null,
+      "seconds": 0.43871359998593107
+    },
+    {
+      "id": "P06",
+      "base_id": "P06",
+      "kind": "scoped",
+      "role": "Employee",
+      "expects_answer": false,
+      "source": "T02",
+      "question": "How much is in the Fernwood contingency reserve?",
+      "prompt_question": "How much is in the Fernwood contingency reserve?",
+      "top_score": 0.21222718583272898,
+      "source_rank": null,
+      "source_score": null,
+      "threshold": 0.2687,
+      "partial_matches": [],
+      "retrieved": [],
+      "generation_called": false,
+      "attempts": [],
+      "parsed": false,
+      "statements": [],
+      "verified_statements": [],
+      "answered": false,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": "two million",
+      "accepted": [
+        "2 million",
+        "$2m",
+        "2,000,000"
+      ],
+      "expected_answer_form": null,
+      "expected_answer_found": false,
+      "error": null,
+      "seconds": 0.40810090000741184
+    },
+    {
+      "id": "P07",
+      "base_id": "P07",
+      "kind": "scoped",
+      "role": "Employee",
+      "expects_answer": false,
+      "source": "T02",
+      "question": "What did the risk committee decide to do about supplier concentration?",
+      "prompt_question": "What did the risk committee decide to do about supplier concentration?",
+      "top_score": 0.3066862768481547,
+      "source_rank": null,
+      "source_score": null,
+      "threshold": 0.2687,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "6971af02-ec47-4a5f-b3ac-cd481571abdd",
+          "item": "D12",
+          "score": 0.3066862768481547
+        },
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.2944647256068171
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "98e84a3b-d34e-4ce1-9490-4012f2cb2680",
+          "score": 0.3066862768481547,
+          "item": "D12"
+        },
+        {
+          "chunk_id": "52edd5b9-5e7f-4f66-b28a-3fb77b2cb0ae",
+          "score": 0.2944647256068171,
+          "item": "D05"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 0.9,
+          "raw": "{\"statements\": []}",
+          "statements": 0
+        }
+      ],
+      "parsed": true,
+      "statements": [],
+      "verified_statements": [],
+      "answered": false,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": "alternatives",
+      "accepted": [],
+      "expected_answer_form": null,
+      "expected_answer_found": false,
+      "error": null,
+      "seconds": 1.2421568999998271
+    },
+    {
+      "id": "P08",
+      "base_id": "P08",
+      "kind": "scoped",
+      "role": "Employee",
+      "expects_answer": false,
+      "source": "T05",
+      "question": "How many people reported the Cobalt Reef phishing email to the service desk?",
+      "prompt_question": "How many people reported the Cobalt Reef phishing email to the service desk?",
+      "top_score": 0.3021937628503964,
+      "source_rank": null,
+      "source_score": null,
+      "threshold": 0.2687,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "e65ad9ac-df6b-4a48-9d41-9b11af281c3f",
+          "item": "D02",
+          "score": 0.3021937628503964
+        },
+        {
+          "source_type": "document",
+          "source_id": "46f78870-1670-45fb-8a00-1d1b53f2cba1",
+          "item": "D06",
+          "score": 0.24915247643705937
+        },
+        {
+          "source_type": "document",
+          "source_id": "a3aee338-142e-4f4e-ba38-2d1b7408cb29",
+          "item": "D18",
+          "score": 0.24790805640938274
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "b413413d-4b4c-4408-b67b-cdfeb1950473",
+          "score": 0.3021937628503964,
+          "item": "D02"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 0.9,
+          "raw": "{\"statements\": []}",
+          "statements": 0
+        }
+      ],
+      "parsed": true,
+      "statements": [],
+      "verified_statements": [],
+      "answered": false,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": "ninety",
+      "accepted": [
+        "90"
+      ],
+      "expected_answer_form": null,
+      "expected_answer_found": false,
+      "error": null,
+      "seconds": 1.3621318999794312
+    }
+  ]
+}

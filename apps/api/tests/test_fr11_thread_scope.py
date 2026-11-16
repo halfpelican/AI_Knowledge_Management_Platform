@@ -87,7 +87,9 @@ TURN_FIELDS = {"question", "answered", "asked_at", "message", "statements", "sou
 CONVERSATION_FIELDS = {"conversation_id", "title", "last_updated_at"}
 # The live reply's Sources panel entry and passage (D-44), exactly.
 SOURCE_FIELDS = {"source_type", "source_id", "title", "date", "passages"}
-PASSAGE_FIELDS = {"chunk_id", "text"}
+# ``ai_generated`` since D-125: whether the passage is from a meeting's AI-generated summary. It is
+# a property of the passage shown, so it says nothing about a passage that is not.
+PASSAGE_FIELDS = {"chunk_id", "text", "ai_generated"}
 
 # The table every chunk read hits, as it appears in captured SQL.
 CHUNK_TABLE = '"content_chunks"'
@@ -764,8 +766,14 @@ MEETING_PASSAGE = "The group agreed the leave embargo ends in March."
 
 def order_after(earlier, later):
     """Force ``later``'s timestamp past ``earlier``'s: ``timezone.now()`` is about 15.6 ms
-    granular on this platform, and the read orders turns by it."""
+    granular on this platform, and the read orders turns by it.
+
+    ``later`` is refreshed, so that a chain — ``order_after(a, b)`` then ``order_after(b, c)``
+    — puts each turn a second past the one before. Without the refresh, ``c`` was put a second
+    past ``b``'s creation time, still in memory after ``b``'s UPDATE, so ``b`` and ``c`` tied
+    whenever ``a`` and ``b`` had been created in one step of the clock."""
     QueryLog.objects.filter(pk=later.pk).update(answered_at=earlier.answered_at + timedelta(seconds=1))
+    later.refresh_from_db(fields=["answered_at"])
 
 
 def path_b_turn(user, conversation, *, question, consulted):

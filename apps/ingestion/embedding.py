@@ -22,7 +22,10 @@ Three things every row carries, and each is an invariant rather than a convenien
 Two failure classes, deliberately not the same thing:
 
 - A provider that is unavailable, or answers unusably, fails the CHUNK. It is
-  retried to MAXIMUM_EMBED_ATTEMPTS, then counted and skipped. The document still
+  retried to MAXIMUM_EMBED_ATTEMPTS, then counted and skipped, a rate limit (429)
+  included since D-118. A refusal, any other 4xx (ProviderRefused), fails the chunk on
+  its first attempt, because a retry would be refused the same way. The provider logs
+  every 4xx (apps/ai/_status.py), since nothing here logs attempts. The document still
   commits, carrying the status that says so (CLAUDE.md invariant 8, NFR-20).
 - Anything else propagates. An unexpected exception is not an outcome the pipeline
   decided, so it rolls the caller's transaction back and leaves nothing behind
@@ -32,7 +35,7 @@ Two failure classes, deliberately not the same thing:
 from django.conf import settings
 
 import apps.ai
-from apps.ai.base import EmbeddingResult, ProviderUnavailable
+from apps.ai.base import INPUT_TYPE_DOCUMENT, EmbeddingResult, ProviderRefused, ProviderUnavailable
 from apps.ai.prefixes import document_text
 from apps.core.constants import MAXIMUM_EMBED_ATTEMPTS, SOURCE_TYPES
 from apps.documents.models import ContentChunk
@@ -43,7 +46,13 @@ DOCUMENT_SOURCE_TYPE, MEETING_SOURCE_TYPE = SOURCE_TYPES
 
 
 def embed_and_store_chunks(
-    *, chunks, source_type: str, source_id, visible_to_roles, title: str | None = None
+    *,
+    chunks,
+    source_type: str,
+    source_id,
+    visible_to_roles,
+    title: str | None = None,
+    ai_generated: bool = False,
 ) -> int:
     """Embed each chunk and write its ContentChunk row. Returns failed_chunk_count.
 
@@ -54,6 +63,12 @@ def embed_and_store_chunks(
     ``title`` is the owning Document's or Meeting's title, and it goes into the
     document task prefix the embedding model is sent (apps/ai/prefixes.py). The
     prefixed string is what the provider receives; ``chunk.text`` is what is stored.
+    Each request also says it is a passage (``input_type=INPUT_TYPE_DOCUMENT``,
+    D-116), which is how Voyage learns what EmbeddingGemma reads from the prefix.
+
+    ``ai_generated`` marks every row written as a passage of a meeting's AI-generated
+    summary (FR-16, D-125). Its one caller that passes True is apps/meetings/summaries.py;
+    every transcript and document chunk is written False.
 
     A chunk that exhausts MAXIMUM_EMBED_ATTEMPTS, or that the provider answers
     unusably for, is counted and gets no row. Every other chunk gets one. The caller
@@ -86,6 +101,7 @@ def embed_and_store_chunks(
             embedding_dimension=result.dimension,
             # Stamped from the source, so FR-11 filters before ranking (D-17).
             visible_to_roles=list(visible_to_roles),
+            ai_generated=ai_generated,
         )
     return failed_chunk_count
 
@@ -100,9 +116,13 @@ def _embed_one(service, text: str) -> EmbeddingResult | None:
     """
     for _attempt in range(MAXIMUM_EMBED_ATTEMPTS):
         try:
-            result = service.embed([text])
+            result = service.embed([text], input_type=INPUT_TYPE_DOCUMENT)
+        except ProviderRefused:
+            # A bad key or an exhausted quota (D-118): a retry would be refused the same
+            # way, so the chunk fails now. The provider has logged the cause.
+            return None
         except ProviderUnavailable:
-            # A transient outage. Retry; the loop bound is the whole policy.
+            # A transient outage, or a rate limit. Retry; the loop bound is the whole policy.
             continue
         if _is_usable(result):
             return result
@@ -120,8 +140,8 @@ def _is_usable(result) -> bool:
     enforceable point. pgvector would refuse a vector of the wrong width anyway, but
     as an opaque database error part-way through a transaction that also holds the
     document row; failing the chunk deliberately keeps the reason legible and lets
-    the rest of the document index. Switching providers is a full re-index event
-    (``manage.py reindex``), never a mixed table.
+    the rest of the document index. A database keeps the provider it was set up with
+    (D-131), so its table never mixes widths.
     """
     if not result.vectors or len(result.vectors) != 1:
         return False

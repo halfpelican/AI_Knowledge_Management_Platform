@@ -4,7 +4,8 @@
  * This is the only place in the frontend that calls `fetch` or constructs an
  * `XMLHttpRequest`. Components and hooks import the endpoint helpers
  * (src/api/auth.js, src/api/users.js, src/api/documents.js, src/api/meetings.js)
- * or `get`, `post`, `patch`, `del`, `request` and `upload` from here; they never talk to
+ * or `get`, `post`, `patch`, `del`, `request`, `requestWithStatus` and `upload` from
+ * here; they never talk to
  * the network themselves. `apiUrl` builds an address under the API base without
  * requesting it, for the one route the browser follows itself as a plain link:
  * FR-15's download (D-75).
@@ -231,7 +232,25 @@ function abortError() {
  * @returns {Promise<unknown>} Parsed JSON body, or null for an empty response.
  * @throws {ApiError} For any non-2xx response or network failure.
  */
-export async function request(path, { method = 'GET', body, signal } = {}) {
+export async function request(path, options = {}) {
+  const { data } = await requestWithStatus(path, options)
+  return data
+}
+
+/**
+ * `request()` with the response's status beside its body, for a route whose
+ * success codes mean different things: FR-10's tag apply answers 201 for a new
+ * link and 200 for a tag already on the document, and its tag delete 200 for a
+ * tag deactivated and 204 for one deleted (docs/api-contract.md, NIT3004 FR-10).
+ * Every guarantee above holds, because `request()` is this with the status
+ * dropped. A failure still throws the same `ApiError`.
+ *
+ * @param {string} path Path relative to the API base.
+ * @param {object} [options] As `request()` takes them.
+ * @returns {Promise<{status: number, data: unknown}>}
+ * @throws {ApiError} For any non-2xx response or network failure.
+ */
+export async function requestWithStatus(path, { method = 'GET', body, signal } = {}) {
   const headers = { Accept: 'application/json' }
   if (body !== undefined) headers['Content-Type'] = 'application/json'
 
@@ -264,7 +283,7 @@ export async function request(path, { method = 'GET', body, signal } = {}) {
     throw errorForResponse(response.status, path, data, response.headers.get('Retry-After'))
   }
 
-  return data
+  return { status: response.status, data }
 }
 
 export function get(path, options = {}) {

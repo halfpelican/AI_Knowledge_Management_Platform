@@ -434,7 +434,7 @@ def test_an_answered_turn_carries_neither_the_field_nor_the_message(session_clie
     assert rendered["message"] is None
     assert [statement["text"] for statement in rendered["statements"]] == [STATEMENT]
     assert [(source["source_id"], source["passages"]) for source in rendered["sources"]] == [
-        (str(document.id), [{"chunk_id": str(chunk.id), "text": PASSAGE_TEXT}])
+        (str(document.id), [{"chunk_id": str(chunk.id), "text": PASSAGE_TEXT, "ai_generated": False}])
     ]
     raw = response.content.decode()
     assert PROVENANCE_REMOVED_FIELD not in raw

@@ -220,7 +220,9 @@ def supplied_ids(text: str, role: str) -> list[str]:
 
     embedding = embed_question(text)
     candidates = candidate_chunks(role_name=role, embedding_model=embedding.model)
-    return [p.chunk_id for p in truncate_to_context(admit(rank(candidates, embedding.vectors[0])))]
+    ranked = rank(candidates, embedding.vectors[0])
+    # The embedding model's own threshold, as the pipeline uses (D-120).
+    return [p.chunk_id for p in truncate_to_context(admit(ranked, embedding_model=embedding.model))]
 
 
 def summarise_reply(body) -> dict:

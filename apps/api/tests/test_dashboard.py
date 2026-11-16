@@ -131,6 +131,14 @@ def titles(items):
 # --- Shape and authentication ------------------------------------------------------------------
 
 
+def administrators_extra_keys(session_client):
+    """FR-19's panel (D-107): ``knowledge_gaps`` is in the payload of a role holding
+    ``review_knowledge_gaps``, the Administrator, and of no other. Added on 9 November 2026 to the
+    two tests below that assert the whole payload from both roles; the panel itself is tested in
+    test_knowledge_gaps.py."""
+    return {"knowledge_gaps"} if session_client.role_name == ADMINISTRATOR_ROLE_NAME else set()
+
+
 def test_the_payload_has_exactly_the_contracts_keys(session_client):
     user = session_client.user
     document = add_document("Leave policy", uploader=user, roles=BOTH_ROLES, department="People")
@@ -139,7 +147,7 @@ def test_the_payload_has_exactly_the_contracts_keys(session_client):
 
     body = dashboard(session_client.client).json()
 
-    assert set(body) == TOP_LEVEL_KEYS
+    assert set(body) == TOP_LEVEL_KEYS | administrators_extra_keys(session_client)
     assert body["filters"] == {"date_from": None, "date_to": None, "department": None}
     assert set(body["indexed_totals"]) == TOTAL_KEYS
     assert body["departments"] == ["People"]
@@ -162,7 +170,7 @@ def test_the_payload_has_exactly_the_contracts_keys(session_client):
 
 def test_an_empty_dashboard_is_200_with_empty_lists_and_zero_counts(session_client):
     body = dashboard(session_client.client).json()
-    assert body == {
+    expected = {
         "filters": {"date_from": None, "date_to": None, "department": None},
         "departments": [],
         "indexed_totals": {"documents": 0, "meetings": 0, "total": 0},
@@ -170,6 +178,9 @@ def test_an_empty_dashboard_is_200_with_empty_lists_and_zero_counts(session_clie
         "recent_meetings": [],
         "recent_questions": [],
     }
+    if administrators_extra_keys(session_client):
+        expected["knowledge_gaps"] = {"open_count": 0, "top": []}
+    assert body == expected
 
 
 def test_an_anonymous_request_is_401(api_client, document):

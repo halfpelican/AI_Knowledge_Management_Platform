@@ -1,0 +1,5365 @@
+{
+  "record": {
+    "recorded_at": "2026-11-09T21:46:48+11:00",
+    "commit_sha": "4a1ed3dc370716bcc955b81feaf55666b1942eae",
+    "uncommitted_tracked_changes": false,
+    "uncommitted_tracked_files": [],
+    "dump_sha256": null,
+    "database": "none: nothing is read from or written to a database",
+    "flm_version": {
+      "cli": "v0.9.39",
+      "cli_output": "FLM v0.9.39",
+      "server": "v0.9.39",
+      "required": "v0.9.39",
+      "notes": []
+    },
+    "kind": "Objective 06 development sweep for GAP_GROUPING_THRESHOLD (D-109)",
+    "dev_set": "corpus\\objective-06\\dev-paraphrases.json",
+    "dev_set_sha256": "a0f719be5949c315fab5c1fe2ff8334a02a99342bde872993be5db77335d7552",
+    "embedding_model": "embed-gemma",
+    "items": 36,
+    "positive_pairs": 36,
+    "negative_pairs": 594,
+    "finished_at": "2026-11-09T21:46:49+11:00"
+  },
+  "summary": {
+    "choice": {
+      "rule": "best pairwise F1",
+      "threshold": 0.5256477401766503,
+      "f1": 0.972972972972973,
+      "precision": 0.9473684210526315,
+      "recall": 1.0,
+      "true_positives": 36,
+      "false_positives": 2,
+      "false_negatives": 0,
+      "separates": false,
+      "lowest_positive": 0.5321728620857406,
+      "highest_negative": 0.5876408292910367,
+      "gap": -0.05546796720529612,
+      "drift": 0.003,
+      "gap_exceeds_twice_drift": false,
+      "threshold_rounded": 0.5256
+    },
+    "hard_negatives": [
+      {
+        "a": "g01",
+        "b": "g02",
+        "why": "the same document, D01, two subjects",
+        "max_similarity": 0.458884,
+        "above_threshold": false
+      },
+      {
+        "a": "g03",
+        "b": "g04",
+        "why": "both about passwords, different documents and subjects",
+        "max_similarity": 0.587641,
+        "above_threshold": true
+      },
+      {
+        "a": "g04",
+        "b": "g07",
+        "why": "the same document, D18, two subjects",
+        "max_similarity": 0.356484,
+        "above_threshold": false
+      },
+      {
+        "a": "g11",
+        "b": "g12",
+        "why": "the same document, D04, two subjects",
+        "max_similarity": 0.578803,
+        "above_threshold": true
+      },
+      {
+        "a": "g06",
+        "b": "g11",
+        "why": "finance vocabulary, different subjects",
+        "max_similarity": 0.268024,
+        "above_threshold": false
+      },
+      {
+        "a": "g08",
+        "b": "g09",
+        "why": "both about using shared facilities, different subjects",
+        "max_similarity": 0.260589,
+        "above_threshold": false
+      }
+    ],
+    "lowest_positive_pairs": [
+      {
+        "a": "For how many years must finance records be retained?",
+        "b": "When can old accounting paperwork be destroyed?",
+        "a_subject": "g11",
+        "b_subject": "g11",
+        "same_subject": true,
+        "similarity": 0.532173
+      },
+      {
+        "a": "What has to be written in the logbook when I use a pool car?",
+        "b": "Which details does the fleet logbook record for every trip?",
+        "a_subject": "g09",
+        "b_subject": "g09",
+        "same_subject": true,
+        "similarity": 0.537685
+      },
+      {
+        "a": "When can old accounting paperwork be destroyed?",
+        "b": "financial records retention",
+        "a_subject": "g11",
+        "b_subject": "g11",
+        "same_subject": true,
+        "similarity": 0.540135
+      },
+      {
+        "a": "How do I set up printing from my laptop?",
+        "b": "What do I do at the printer to release my print job?",
+        "a_subject": "g07",
+        "b_subject": "g07",
+        "same_subject": true,
+        "similarity": 0.568665
+      },
+      {
+        "a": "How far from the main office must copies of vital records be stored?",
+        "b": "Where are the backups of our most important records kept?",
+        "a_subject": "g12",
+        "b_subject": "g12",
+        "same_subject": true,
+        "similarity": 0.589845
+      }
+    ],
+    "highest_negative_pairs": [
+      {
+        "a": "password length",
+        "b": "password reset window",
+        "a_subject": "g03",
+        "b_subject": "g04",
+        "same_subject": false,
+        "similarity": 0.587641
+      },
+      {
+        "a": "financial records retention",
+        "b": "Where are the backups of our most important records kept?",
+        "a_subject": "g11",
+        "b_subject": "g12",
+        "same_subject": false,
+        "similarity": 0.578803
+      },
+      {
+        "a": "What is the minimum number of characters for a password?",
+        "b": "password reset window",
+        "a_subject": "g03",
+        "b_subject": "g04",
+        "same_subject": false,
+        "similarity": 0.519123
+      },
+      {
+        "a": "financial records retention",
+        "b": "vital records backup",
+        "a_subject": "g11",
+        "b_subject": "g12",
+        "same_subject": false,
+        "similarity": 0.513542
+      },
+      {
+        "a": "For how many years must finance records be retained?",
+        "b": "Where are the backups of our most important records kept?",
+        "a_subject": "g11",
+        "b_subject": "g12",
+        "same_subject": false,
+        "similarity": 0.502632
+      }
+    ],
+    "simulation_at_threshold": {
+      "entries": [
+        {
+          "subject": "How quickly does annual leave build up for someone working full time?",
+          "count": 3,
+          "subjects": [
+            "g01"
+          ],
+          "members": [
+            "How quickly does annual leave build up for someone working full time?",
+            "What is the monthly accrual rate for annual leave?",
+            "annual leave accrual"
+          ]
+        },
+        {
+          "subject": "After how many days off sick do I have to produce a doctor's certificate?",
+          "count": 3,
+          "subjects": [
+            "g02"
+          ],
+          "members": [
+            "After how many days off sick do I have to produce a doctor's certificate?",
+            "Is a medical certificate required for a single day of personal leave?",
+            "medical certificate"
+          ]
+        },
+        {
+          "subject": "What is the minimum number of characters for a password?",
+          "count": 3,
+          "subjects": [
+            "g03"
+          ],
+          "members": [
+            "What is the minimum number of characters for a password?",
+            "Is there a rule about how long passwords have to be?",
+            "password length"
+          ]
+        },
+        {
+          "subject": "During which hours can I reset my password on the self-service page?",
+          "count": 3,
+          "subjects": [
+            "g04"
+          ],
+          "members": [
+            "During which hours can I reset my password on the self-service page?",
+            "Is the password reset page available at night?",
+            "password reset window"
+          ]
+        },
+        {
+          "subject": "Who does an unresolved customer complaint go to next?",
+          "count": 3,
+          "subjects": [
+            "g05"
+          ],
+          "members": [
+            "Who does an unresolved customer complaint go to next?",
+            "What are the steps for escalating a complaint I cannot resolve?",
+            "complaint escalation"
+          ]
+        },
+        {
+          "subject": "How much can I claim for meals per day on a work trip?",
+          "count": 3,
+          "subjects": [
+            "g06"
+          ],
+          "members": [
+            "How much can I claim for meals per day on a work trip?",
+            "Is there a cap on what I spend on food while travelling for work?",
+            "meal allowance"
+          ]
+        },
+        {
+          "subject": "How do I set up printing from my laptop?",
+          "count": 3,
+          "subjects": [
+            "g07"
+          ],
+          "members": [
+            "How do I set up printing from my laptop?",
+            "What do I do at the printer to release my print job?",
+            "printer setup"
+          ]
+        },
+        {
+          "subject": "Who has to approve a meeting room booking for a large group?",
+          "count": 3,
+          "subjects": [
+            "g08"
+          ],
+          "members": [
+            "Who has to approve a meeting room booking for a large group?",
+            "Can I book a room for an evening event with thirty guests without asking anyone?",
+            "large event room booking"
+          ]
+        },
+        {
+          "subject": "What has to be written in the logbook when I use a pool car?",
+          "count": 3,
+          "subjects": [
+            "g09"
+          ],
+          "members": [
+            "What has to be written in the logbook when I use a pool car?",
+            "Which details does the fleet logbook record for every trip?",
+            "vehicle logbook"
+          ]
+        },
+        {
+          "subject": "Is every new employee given a buddy?",
+          "count": 3,
+          "subjects": [
+            "g10"
+          ],
+          "members": [
+            "Is every new employee given a buddy?",
+            "What does the buddy program do for someone in their first week?",
+            "buddy program"
+          ]
+        },
+        {
+          "subject": "For how many years must finance records be retained?",
+          "count": 3,
+          "subjects": [
+            "g11"
+          ],
+          "members": [
+            "For how many years must finance records be retained?",
+            "When can old accounting paperwork be destroyed?",
+            "financial records retention"
+          ]
+        },
+        {
+          "subject": "How far from the main office must copies of vital records be stored?",
+          "count": 3,
+          "subjects": [
+            "g12"
+          ],
+          "members": [
+            "How far from the main office must copies of vital records be stored?",
+            "Where are the backups of our most important records kept?",
+            "vital records backup"
+          ]
+        }
+      ],
+      "expected_entries": 12,
+      "mixed_entries": 0,
+      "subjects_not_in_one_entry_of_three": []
+    }
+  },
+  "pairs": [
+    {
+      "a": "How quickly does annual leave build up for someone working full time?",
+      "b": "What is the monthly accrual rate for annual leave?",
+      "a_subject": "g01",
+      "b_subject": "g01",
+      "same_subject": true,
+      "similarity": 0.655089
+    },
+    {
+      "a": "How quickly does annual leave build up for someone working full time?",
+      "b": "annual leave accrual",
+      "a_subject": "g01",
+      "b_subject": "g01",
+      "same_subject": true,
+      "similarity": 0.731214
+    },
+    {
+      "a": "How quickly does annual leave build up for someone working full time?",
+      "b": "After how many days off sick do I have to produce a doctor's certificate?",
+      "a_subject": "g01",
+      "b_subject": "g02",
+      "same_subject": false,
+      "similarity": 0.428109
+    },
+    {
+      "a": "How quickly does annual leave build up for someone working full time?",
+      "b": "Is a medical certificate required for a single day of personal leave?",
+      "a_subject": "g01",
+      "b_subject": "g02",
+      "same_subject": false,
+      "similarity": 0.393219
+    },
+    {
+      "a": "How quickly does annual leave build up for someone working full time?",
+      "b": "medical certificate",
+      "a_subject": "g01",
+      "b_subject": "g02",
+      "same_subject": false,
+      "similarity": 0.216074
+    },
+    {
+      "a": "How quickly does annual leave build up for someone working full time?",
+      "b": "What is the minimum number of characters for a password?",
+      "a_subject": "g01",
+      "b_subject": "g03",
+      "same_subject": false,
+      "similarity": 0.20261
+    },
+    {
+      "a": "How quickly does annual leave build up for someone working full time?",
+      "b": "Is there a rule about how long passwords have to be?",
+      "a_subject": "g01",
+      "b_subject": "g03",
+      "same_subject": false,
+      "similarity": 0.246706
+    },
+    {
+      "a": "How quickly does annual leave build up for someone working full time?",
+      "b": "password length",
+      "a_subject": "g01",
+      "b_subject": "g03",
+      "same_subject": false,
+      "similarity": 0.261475
+    },
+    {
+      "a": "How quickly does annual leave build up for someone working full time?",
+      "b": "During which hours can I reset my password on the self-service page?",
+      "a_subject": "g01",
+      "b_subject": "g04",
+      "same_subject": false,
+      "similarity": 0.196011
+    },
+    {
+      "a": "How quickly does annual leave build up for someone working full time?",
+      "b": "Is the password reset page available at night?",
+      "a_subject": "g01",
+      "b_subject": "g04",
+      "same_subject": false,
+      "similarity": 0.147336
+    },
+    {
+      "a": "How quickly does annual leave build up for someone working full time?",
+      "b": "password reset window",
+      "a_subject": "g01",
+      "b_subject": "g04",
+      "same_subject": false,
+      "similarity": 0.151657
+    },
+    {
+      "a": "How quickly does annual leave build up for someone working full time?",
+      "b": "Who does an unresolved customer complaint go to next?",
+      "a_subject": "g01",
+      "b_subject": "g05",
+      "same_subject": false,
+      "similarity": 0.216701
+    },
+    {
+      "a": "How quickly does annual leave build up for someone working full time?",
+      "b": "What are the steps for escalating a complaint I cannot resolve?",
+      "a_subject": "g01",
+      "b_subject": "g05",
+      "same_subject": false,
+      "similarity": 0.216092
+    },
+    {
+      "a": "How quickly does annual leave build up for someone working full time?",
+      "b": "complaint escalation",
+      "a_subject": "g01",
+      "b_subject": "g05",
+      "same_subject": false,
+      "similarity": 0.2622
+    },
+    {
+      "a": "How quickly does annual leave build up for someone working full time?",
+      "b": "How much can I claim for meals per day on a work trip?",
+      "a_subject": "g01",
+      "b_subject": "g06",
+      "same_subject": false,
+      "similarity": 0.3703
+    },
+    {
+      "a": "How quickly does annual leave build up for someone working full time?",
+      "b": "Is there a cap on what I spend on food while travelling for work?",
+      "a_subject": "g01",
+      "b_subject": "g06",
+      "same_subject": false,
+      "similarity": 0.361535
+    },
+    {
+      "a": "How quickly does annual leave build up for someone working full time?",
+      "b": "meal allowance",
+      "a_subject": "g01",
+      "b_subject": "g06",
+      "same_subject": false,
+      "similarity": 0.332464
+    },
+    {
+      "a": "How quickly does annual leave build up for someone working full time?",
+      "b": "How do I set up printing from my laptop?",
+      "a_subject": "g01",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.14434
+    },
+    {
+      "a": "How quickly does annual leave build up for someone working full time?",
+      "b": "What do I do at the printer to release my print job?",
+      "a_subject": "g01",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.246869
+    },
+    {
+      "a": "How quickly does annual leave build up for someone working full time?",
+      "b": "printer setup",
+      "a_subject": "g01",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.190834
+    },
+    {
+      "a": "How quickly does annual leave build up for someone working full time?",
+      "b": "Who has to approve a meeting room booking for a large group?",
+      "a_subject": "g01",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.223881
+    },
+    {
+      "a": "How quickly does annual leave build up for someone working full time?",
+      "b": "Can I book a room for an evening event with thirty guests without asking anyone?",
+      "a_subject": "g01",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.162549
+    },
+    {
+      "a": "How quickly does annual leave build up for someone working full time?",
+      "b": "large event room booking",
+      "a_subject": "g01",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.216917
+    },
+    {
+      "a": "How quickly does annual leave build up for someone working full time?",
+      "b": "What has to be written in the logbook when I use a pool car?",
+      "a_subject": "g01",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.164644
+    },
+    {
+      "a": "How quickly does annual leave build up for someone working full time?",
+      "b": "Which details does the fleet logbook record for every trip?",
+      "a_subject": "g01",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.223528
+    },
+    {
+      "a": "How quickly does annual leave build up for someone working full time?",
+      "b": "vehicle logbook",
+      "a_subject": "g01",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.173521
+    },
+    {
+      "a": "How quickly does annual leave build up for someone working full time?",
+      "b": "Is every new employee given a buddy?",
+      "a_subject": "g01",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.335689
+    },
+    {
+      "a": "How quickly does annual leave build up for someone working full time?",
+      "b": "What does the buddy program do for someone in their first week?",
+      "a_subject": "g01",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.322641
+    },
+    {
+      "a": "How quickly does annual leave build up for someone working full time?",
+      "b": "buddy program",
+      "a_subject": "g01",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.222639
+    },
+    {
+      "a": "How quickly does annual leave build up for someone working full time?",
+      "b": "For how many years must finance records be retained?",
+      "a_subject": "g01",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.353238
+    },
+    {
+      "a": "How quickly does annual leave build up for someone working full time?",
+      "b": "When can old accounting paperwork be destroyed?",
+      "a_subject": "g01",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.22441
+    },
+    {
+      "a": "How quickly does annual leave build up for someone working full time?",
+      "b": "financial records retention",
+      "a_subject": "g01",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.285798
+    },
+    {
+      "a": "How quickly does annual leave build up for someone working full time?",
+      "b": "How far from the main office must copies of vital records be stored?",
+      "a_subject": "g01",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.235776
+    },
+    {
+      "a": "How quickly does annual leave build up for someone working full time?",
+      "b": "Where are the backups of our most important records kept?",
+      "a_subject": "g01",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.208884
+    },
+    {
+      "a": "How quickly does annual leave build up for someone working full time?",
+      "b": "vital records backup",
+      "a_subject": "g01",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.224663
+    },
+    {
+      "a": "What is the monthly accrual rate for annual leave?",
+      "b": "annual leave accrual",
+      "a_subject": "g01",
+      "b_subject": "g01",
+      "same_subject": true,
+      "similarity": 0.849724
+    },
+    {
+      "a": "What is the monthly accrual rate for annual leave?",
+      "b": "After how many days off sick do I have to produce a doctor's certificate?",
+      "a_subject": "g01",
+      "b_subject": "g02",
+      "same_subject": false,
+      "similarity": 0.372062
+    },
+    {
+      "a": "What is the monthly accrual rate for annual leave?",
+      "b": "Is a medical certificate required for a single day of personal leave?",
+      "a_subject": "g01",
+      "b_subject": "g02",
+      "same_subject": false,
+      "similarity": 0.384263
+    },
+    {
+      "a": "What is the monthly accrual rate for annual leave?",
+      "b": "medical certificate",
+      "a_subject": "g01",
+      "b_subject": "g02",
+      "same_subject": false,
+      "similarity": 0.254234
+    },
+    {
+      "a": "What is the monthly accrual rate for annual leave?",
+      "b": "What is the minimum number of characters for a password?",
+      "a_subject": "g01",
+      "b_subject": "g03",
+      "same_subject": false,
+      "similarity": 0.197303
+    },
+    {
+      "a": "What is the monthly accrual rate for annual leave?",
+      "b": "Is there a rule about how long passwords have to be?",
+      "a_subject": "g01",
+      "b_subject": "g03",
+      "same_subject": false,
+      "similarity": 0.22487
+    },
+    {
+      "a": "What is the monthly accrual rate for annual leave?",
+      "b": "password length",
+      "a_subject": "g01",
+      "b_subject": "g03",
+      "same_subject": false,
+      "similarity": 0.257042
+    },
+    {
+      "a": "What is the monthly accrual rate for annual leave?",
+      "b": "During which hours can I reset my password on the self-service page?",
+      "a_subject": "g01",
+      "b_subject": "g04",
+      "same_subject": false,
+      "similarity": 0.186609
+    },
+    {
+      "a": "What is the monthly accrual rate for annual leave?",
+      "b": "Is the password reset page available at night?",
+      "a_subject": "g01",
+      "b_subject": "g04",
+      "same_subject": false,
+      "similarity": 0.159733
+    },
+    {
+      "a": "What is the monthly accrual rate for annual leave?",
+      "b": "password reset window",
+      "a_subject": "g01",
+      "b_subject": "g04",
+      "same_subject": false,
+      "similarity": 0.185177
+    },
+    {
+      "a": "What is the monthly accrual rate for annual leave?",
+      "b": "Who does an unresolved customer complaint go to next?",
+      "a_subject": "g01",
+      "b_subject": "g05",
+      "same_subject": false,
+      "similarity": 0.154704
+    },
+    {
+      "a": "What is the monthly accrual rate for annual leave?",
+      "b": "What are the steps for escalating a complaint I cannot resolve?",
+      "a_subject": "g01",
+      "b_subject": "g05",
+      "same_subject": false,
+      "similarity": 0.208045
+    },
+    {
+      "a": "What is the monthly accrual rate for annual leave?",
+      "b": "complaint escalation",
+      "a_subject": "g01",
+      "b_subject": "g05",
+      "same_subject": false,
+      "similarity": 0.268094
+    },
+    {
+      "a": "What is the monthly accrual rate for annual leave?",
+      "b": "How much can I claim for meals per day on a work trip?",
+      "a_subject": "g01",
+      "b_subject": "g06",
+      "same_subject": false,
+      "similarity": 0.380395
+    },
+    {
+      "a": "What is the monthly accrual rate for annual leave?",
+      "b": "Is there a cap on what I spend on food while travelling for work?",
+      "a_subject": "g01",
+      "b_subject": "g06",
+      "same_subject": false,
+      "similarity": 0.359215
+    },
+    {
+      "a": "What is the monthly accrual rate for annual leave?",
+      "b": "meal allowance",
+      "a_subject": "g01",
+      "b_subject": "g06",
+      "same_subject": false,
+      "similarity": 0.422819
+    },
+    {
+      "a": "What is the monthly accrual rate for annual leave?",
+      "b": "How do I set up printing from my laptop?",
+      "a_subject": "g01",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.16027
+    },
+    {
+      "a": "What is the monthly accrual rate for annual leave?",
+      "b": "What do I do at the printer to release my print job?",
+      "a_subject": "g01",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.196464
+    },
+    {
+      "a": "What is the monthly accrual rate for annual leave?",
+      "b": "printer setup",
+      "a_subject": "g01",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.219653
+    },
+    {
+      "a": "What is the monthly accrual rate for annual leave?",
+      "b": "Who has to approve a meeting room booking for a large group?",
+      "a_subject": "g01",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.218561
+    },
+    {
+      "a": "What is the monthly accrual rate for annual leave?",
+      "b": "Can I book a room for an evening event with thirty guests without asking anyone?",
+      "a_subject": "g01",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.174111
+    },
+    {
+      "a": "What is the monthly accrual rate for annual leave?",
+      "b": "large event room booking",
+      "a_subject": "g01",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.220831
+    },
+    {
+      "a": "What is the monthly accrual rate for annual leave?",
+      "b": "What has to be written in the logbook when I use a pool car?",
+      "a_subject": "g01",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.22003
+    },
+    {
+      "a": "What is the monthly accrual rate for annual leave?",
+      "b": "Which details does the fleet logbook record for every trip?",
+      "a_subject": "g01",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.254352
+    },
+    {
+      "a": "What is the monthly accrual rate for annual leave?",
+      "b": "vehicle logbook",
+      "a_subject": "g01",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.228836
+    },
+    {
+      "a": "What is the monthly accrual rate for annual leave?",
+      "b": "Is every new employee given a buddy?",
+      "a_subject": "g01",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.307392
+    },
+    {
+      "a": "What is the monthly accrual rate for annual leave?",
+      "b": "What does the buddy program do for someone in their first week?",
+      "a_subject": "g01",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.219447
+    },
+    {
+      "a": "What is the monthly accrual rate for annual leave?",
+      "b": "buddy program",
+      "a_subject": "g01",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.225533
+    },
+    {
+      "a": "What is the monthly accrual rate for annual leave?",
+      "b": "For how many years must finance records be retained?",
+      "a_subject": "g01",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.315682
+    },
+    {
+      "a": "What is the monthly accrual rate for annual leave?",
+      "b": "When can old accounting paperwork be destroyed?",
+      "a_subject": "g01",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.234779
+    },
+    {
+      "a": "What is the monthly accrual rate for annual leave?",
+      "b": "financial records retention",
+      "a_subject": "g01",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.304103
+    },
+    {
+      "a": "What is the monthly accrual rate for annual leave?",
+      "b": "How far from the main office must copies of vital records be stored?",
+      "a_subject": "g01",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.193633
+    },
+    {
+      "a": "What is the monthly accrual rate for annual leave?",
+      "b": "Where are the backups of our most important records kept?",
+      "a_subject": "g01",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.21911
+    },
+    {
+      "a": "What is the monthly accrual rate for annual leave?",
+      "b": "vital records backup",
+      "a_subject": "g01",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.223774
+    },
+    {
+      "a": "annual leave accrual",
+      "b": "After how many days off sick do I have to produce a doctor's certificate?",
+      "a_subject": "g01",
+      "b_subject": "g02",
+      "same_subject": false,
+      "similarity": 0.428824
+    },
+    {
+      "a": "annual leave accrual",
+      "b": "Is a medical certificate required for a single day of personal leave?",
+      "a_subject": "g01",
+      "b_subject": "g02",
+      "same_subject": false,
+      "similarity": 0.458884
+    },
+    {
+      "a": "annual leave accrual",
+      "b": "medical certificate",
+      "a_subject": "g01",
+      "b_subject": "g02",
+      "same_subject": false,
+      "similarity": 0.332263
+    },
+    {
+      "a": "annual leave accrual",
+      "b": "What is the minimum number of characters for a password?",
+      "a_subject": "g01",
+      "b_subject": "g03",
+      "same_subject": false,
+      "similarity": 0.185386
+    },
+    {
+      "a": "annual leave accrual",
+      "b": "Is there a rule about how long passwords have to be?",
+      "a_subject": "g01",
+      "b_subject": "g03",
+      "same_subject": false,
+      "similarity": 0.235727
+    },
+    {
+      "a": "annual leave accrual",
+      "b": "password length",
+      "a_subject": "g01",
+      "b_subject": "g03",
+      "same_subject": false,
+      "similarity": 0.278089
+    },
+    {
+      "a": "annual leave accrual",
+      "b": "During which hours can I reset my password on the self-service page?",
+      "a_subject": "g01",
+      "b_subject": "g04",
+      "same_subject": false,
+      "similarity": 0.205821
+    },
+    {
+      "a": "annual leave accrual",
+      "b": "Is the password reset page available at night?",
+      "a_subject": "g01",
+      "b_subject": "g04",
+      "same_subject": false,
+      "similarity": 0.17239
+    },
+    {
+      "a": "annual leave accrual",
+      "b": "password reset window",
+      "a_subject": "g01",
+      "b_subject": "g04",
+      "same_subject": false,
+      "similarity": 0.247593
+    },
+    {
+      "a": "annual leave accrual",
+      "b": "Who does an unresolved customer complaint go to next?",
+      "a_subject": "g01",
+      "b_subject": "g05",
+      "same_subject": false,
+      "similarity": 0.239088
+    },
+    {
+      "a": "annual leave accrual",
+      "b": "What are the steps for escalating a complaint I cannot resolve?",
+      "a_subject": "g01",
+      "b_subject": "g05",
+      "same_subject": false,
+      "similarity": 0.269572
+    },
+    {
+      "a": "annual leave accrual",
+      "b": "complaint escalation",
+      "a_subject": "g01",
+      "b_subject": "g05",
+      "same_subject": false,
+      "similarity": 0.356213
+    },
+    {
+      "a": "annual leave accrual",
+      "b": "How much can I claim for meals per day on a work trip?",
+      "a_subject": "g01",
+      "b_subject": "g06",
+      "same_subject": false,
+      "similarity": 0.370198
+    },
+    {
+      "a": "annual leave accrual",
+      "b": "Is there a cap on what I spend on food while travelling for work?",
+      "a_subject": "g01",
+      "b_subject": "g06",
+      "same_subject": false,
+      "similarity": 0.353167
+    },
+    {
+      "a": "annual leave accrual",
+      "b": "meal allowance",
+      "a_subject": "g01",
+      "b_subject": "g06",
+      "same_subject": false,
+      "similarity": 0.456297
+    },
+    {
+      "a": "annual leave accrual",
+      "b": "How do I set up printing from my laptop?",
+      "a_subject": "g01",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.197056
+    },
+    {
+      "a": "annual leave accrual",
+      "b": "What do I do at the printer to release my print job?",
+      "a_subject": "g01",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.254689
+    },
+    {
+      "a": "annual leave accrual",
+      "b": "printer setup",
+      "a_subject": "g01",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.288288
+    },
+    {
+      "a": "annual leave accrual",
+      "b": "Who has to approve a meeting room booking for a large group?",
+      "a_subject": "g01",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.251794
+    },
+    {
+      "a": "annual leave accrual",
+      "b": "Can I book a room for an evening event with thirty guests without asking anyone?",
+      "a_subject": "g01",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.190478
+    },
+    {
+      "a": "annual leave accrual",
+      "b": "large event room booking",
+      "a_subject": "g01",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.285299
+    },
+    {
+      "a": "annual leave accrual",
+      "b": "What has to be written in the logbook when I use a pool car?",
+      "a_subject": "g01",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.204937
+    },
+    {
+      "a": "annual leave accrual",
+      "b": "Which details does the fleet logbook record for every trip?",
+      "a_subject": "g01",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.252496
+    },
+    {
+      "a": "annual leave accrual",
+      "b": "vehicle logbook",
+      "a_subject": "g01",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.286758
+    },
+    {
+      "a": "annual leave accrual",
+      "b": "Is every new employee given a buddy?",
+      "a_subject": "g01",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.332604
+    },
+    {
+      "a": "annual leave accrual",
+      "b": "What does the buddy program do for someone in their first week?",
+      "a_subject": "g01",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.248883
+    },
+    {
+      "a": "annual leave accrual",
+      "b": "buddy program",
+      "a_subject": "g01",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.290395
+    },
+    {
+      "a": "annual leave accrual",
+      "b": "For how many years must finance records be retained?",
+      "a_subject": "g01",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.385527
+    },
+    {
+      "a": "annual leave accrual",
+      "b": "When can old accounting paperwork be destroyed?",
+      "a_subject": "g01",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.305695
+    },
+    {
+      "a": "annual leave accrual",
+      "b": "financial records retention",
+      "a_subject": "g01",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.381307
+    },
+    {
+      "a": "annual leave accrual",
+      "b": "How far from the main office must copies of vital records be stored?",
+      "a_subject": "g01",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.237477
+    },
+    {
+      "a": "annual leave accrual",
+      "b": "Where are the backups of our most important records kept?",
+      "a_subject": "g01",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.257942
+    },
+    {
+      "a": "annual leave accrual",
+      "b": "vital records backup",
+      "a_subject": "g01",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.28927
+    },
+    {
+      "a": "After how many days off sick do I have to produce a doctor's certificate?",
+      "b": "Is a medical certificate required for a single day of personal leave?",
+      "a_subject": "g02",
+      "b_subject": "g02",
+      "same_subject": true,
+      "similarity": 0.718854
+    },
+    {
+      "a": "After how many days off sick do I have to produce a doctor's certificate?",
+      "b": "medical certificate",
+      "a_subject": "g02",
+      "b_subject": "g02",
+      "same_subject": true,
+      "similarity": 0.63119
+    },
+    {
+      "a": "After how many days off sick do I have to produce a doctor's certificate?",
+      "b": "What is the minimum number of characters for a password?",
+      "a_subject": "g02",
+      "b_subject": "g03",
+      "same_subject": false,
+      "similarity": 0.221497
+    },
+    {
+      "a": "After how many days off sick do I have to produce a doctor's certificate?",
+      "b": "Is there a rule about how long passwords have to be?",
+      "a_subject": "g02",
+      "b_subject": "g03",
+      "same_subject": false,
+      "similarity": 0.270706
+    },
+    {
+      "a": "After how many days off sick do I have to produce a doctor's certificate?",
+      "b": "password length",
+      "a_subject": "g02",
+      "b_subject": "g03",
+      "same_subject": false,
+      "similarity": 0.234599
+    },
+    {
+      "a": "After how many days off sick do I have to produce a doctor's certificate?",
+      "b": "During which hours can I reset my password on the self-service page?",
+      "a_subject": "g02",
+      "b_subject": "g04",
+      "same_subject": false,
+      "similarity": 0.267861
+    },
+    {
+      "a": "After how many days off sick do I have to produce a doctor's certificate?",
+      "b": "Is the password reset page available at night?",
+      "a_subject": "g02",
+      "b_subject": "g04",
+      "same_subject": false,
+      "similarity": 0.208103
+    },
+    {
+      "a": "After how many days off sick do I have to produce a doctor's certificate?",
+      "b": "password reset window",
+      "a_subject": "g02",
+      "b_subject": "g04",
+      "same_subject": false,
+      "similarity": 0.208153
+    },
+    {
+      "a": "After how many days off sick do I have to produce a doctor's certificate?",
+      "b": "Who does an unresolved customer complaint go to next?",
+      "a_subject": "g02",
+      "b_subject": "g05",
+      "same_subject": false,
+      "similarity": 0.204944
+    },
+    {
+      "a": "After how many days off sick do I have to produce a doctor's certificate?",
+      "b": "What are the steps for escalating a complaint I cannot resolve?",
+      "a_subject": "g02",
+      "b_subject": "g05",
+      "same_subject": false,
+      "similarity": 0.211005
+    },
+    {
+      "a": "After how many days off sick do I have to produce a doctor's certificate?",
+      "b": "complaint escalation",
+      "a_subject": "g02",
+      "b_subject": "g05",
+      "same_subject": false,
+      "similarity": 0.209911
+    },
+    {
+      "a": "After how many days off sick do I have to produce a doctor's certificate?",
+      "b": "How much can I claim for meals per day on a work trip?",
+      "a_subject": "g02",
+      "b_subject": "g06",
+      "same_subject": false,
+      "similarity": 0.396095
+    },
+    {
+      "a": "After how many days off sick do I have to produce a doctor's certificate?",
+      "b": "Is there a cap on what I spend on food while travelling for work?",
+      "a_subject": "g02",
+      "b_subject": "g06",
+      "same_subject": false,
+      "similarity": 0.332505
+    },
+    {
+      "a": "After how many days off sick do I have to produce a doctor's certificate?",
+      "b": "meal allowance",
+      "a_subject": "g02",
+      "b_subject": "g06",
+      "same_subject": false,
+      "similarity": 0.302371
+    },
+    {
+      "a": "After how many days off sick do I have to produce a doctor's certificate?",
+      "b": "How do I set up printing from my laptop?",
+      "a_subject": "g02",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.226292
+    },
+    {
+      "a": "After how many days off sick do I have to produce a doctor's certificate?",
+      "b": "What do I do at the printer to release my print job?",
+      "a_subject": "g02",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.282402
+    },
+    {
+      "a": "After how many days off sick do I have to produce a doctor's certificate?",
+      "b": "printer setup",
+      "a_subject": "g02",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.246626
+    },
+    {
+      "a": "After how many days off sick do I have to produce a doctor's certificate?",
+      "b": "Who has to approve a meeting room booking for a large group?",
+      "a_subject": "g02",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.236088
+    },
+    {
+      "a": "After how many days off sick do I have to produce a doctor's certificate?",
+      "b": "Can I book a room for an evening event with thirty guests without asking anyone?",
+      "a_subject": "g02",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.171444
+    },
+    {
+      "a": "After how many days off sick do I have to produce a doctor's certificate?",
+      "b": "large event room booking",
+      "a_subject": "g02",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.171547
+    },
+    {
+      "a": "After how many days off sick do I have to produce a doctor's certificate?",
+      "b": "What has to be written in the logbook when I use a pool car?",
+      "a_subject": "g02",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.247184
+    },
+    {
+      "a": "After how many days off sick do I have to produce a doctor's certificate?",
+      "b": "Which details does the fleet logbook record for every trip?",
+      "a_subject": "g02",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.20897
+    },
+    {
+      "a": "After how many days off sick do I have to produce a doctor's certificate?",
+      "b": "vehicle logbook",
+      "a_subject": "g02",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.227405
+    },
+    {
+      "a": "After how many days off sick do I have to produce a doctor's certificate?",
+      "b": "Is every new employee given a buddy?",
+      "a_subject": "g02",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.293675
+    },
+    {
+      "a": "After how many days off sick do I have to produce a doctor's certificate?",
+      "b": "What does the buddy program do for someone in their first week?",
+      "a_subject": "g02",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.23873
+    },
+    {
+      "a": "After how many days off sick do I have to produce a doctor's certificate?",
+      "b": "buddy program",
+      "a_subject": "g02",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.205703
+    },
+    {
+      "a": "After how many days off sick do I have to produce a doctor's certificate?",
+      "b": "For how many years must finance records be retained?",
+      "a_subject": "g02",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.286497
+    },
+    {
+      "a": "After how many days off sick do I have to produce a doctor's certificate?",
+      "b": "When can old accounting paperwork be destroyed?",
+      "a_subject": "g02",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.256
+    },
+    {
+      "a": "After how many days off sick do I have to produce a doctor's certificate?",
+      "b": "financial records retention",
+      "a_subject": "g02",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.232913
+    },
+    {
+      "a": "After how many days off sick do I have to produce a doctor's certificate?",
+      "b": "How far from the main office must copies of vital records be stored?",
+      "a_subject": "g02",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.320002
+    },
+    {
+      "a": "After how many days off sick do I have to produce a doctor's certificate?",
+      "b": "Where are the backups of our most important records kept?",
+      "a_subject": "g02",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.224195
+    },
+    {
+      "a": "After how many days off sick do I have to produce a doctor's certificate?",
+      "b": "vital records backup",
+      "a_subject": "g02",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.26123
+    },
+    {
+      "a": "Is a medical certificate required for a single day of personal leave?",
+      "b": "medical certificate",
+      "a_subject": "g02",
+      "b_subject": "g02",
+      "same_subject": true,
+      "similarity": 0.633435
+    },
+    {
+      "a": "Is a medical certificate required for a single day of personal leave?",
+      "b": "What is the minimum number of characters for a password?",
+      "a_subject": "g02",
+      "b_subject": "g03",
+      "same_subject": false,
+      "similarity": 0.174066
+    },
+    {
+      "a": "Is a medical certificate required for a single day of personal leave?",
+      "b": "Is there a rule about how long passwords have to be?",
+      "a_subject": "g02",
+      "b_subject": "g03",
+      "same_subject": false,
+      "similarity": 0.202679
+    },
+    {
+      "a": "Is a medical certificate required for a single day of personal leave?",
+      "b": "password length",
+      "a_subject": "g02",
+      "b_subject": "g03",
+      "same_subject": false,
+      "similarity": 0.17349
+    },
+    {
+      "a": "Is a medical certificate required for a single day of personal leave?",
+      "b": "During which hours can I reset my password on the self-service page?",
+      "a_subject": "g02",
+      "b_subject": "g04",
+      "same_subject": false,
+      "similarity": 0.225487
+    },
+    {
+      "a": "Is a medical certificate required for a single day of personal leave?",
+      "b": "Is the password reset page available at night?",
+      "a_subject": "g02",
+      "b_subject": "g04",
+      "same_subject": false,
+      "similarity": 0.198986
+    },
+    {
+      "a": "Is a medical certificate required for a single day of personal leave?",
+      "b": "password reset window",
+      "a_subject": "g02",
+      "b_subject": "g04",
+      "same_subject": false,
+      "similarity": 0.188139
+    },
+    {
+      "a": "Is a medical certificate required for a single day of personal leave?",
+      "b": "Who does an unresolved customer complaint go to next?",
+      "a_subject": "g02",
+      "b_subject": "g05",
+      "same_subject": false,
+      "similarity": 0.140337
+    },
+    {
+      "a": "Is a medical certificate required for a single day of personal leave?",
+      "b": "What are the steps for escalating a complaint I cannot resolve?",
+      "a_subject": "g02",
+      "b_subject": "g05",
+      "same_subject": false,
+      "similarity": 0.170614
+    },
+    {
+      "a": "Is a medical certificate required for a single day of personal leave?",
+      "b": "complaint escalation",
+      "a_subject": "g02",
+      "b_subject": "g05",
+      "same_subject": false,
+      "similarity": 0.191139
+    },
+    {
+      "a": "Is a medical certificate required for a single day of personal leave?",
+      "b": "How much can I claim for meals per day on a work trip?",
+      "a_subject": "g02",
+      "b_subject": "g06",
+      "same_subject": false,
+      "similarity": 0.404718
+    },
+    {
+      "a": "Is a medical certificate required for a single day of personal leave?",
+      "b": "Is there a cap on what I spend on food while travelling for work?",
+      "a_subject": "g02",
+      "b_subject": "g06",
+      "same_subject": false,
+      "similarity": 0.321591
+    },
+    {
+      "a": "Is a medical certificate required for a single day of personal leave?",
+      "b": "meal allowance",
+      "a_subject": "g02",
+      "b_subject": "g06",
+      "same_subject": false,
+      "similarity": 0.339219
+    },
+    {
+      "a": "Is a medical certificate required for a single day of personal leave?",
+      "b": "How do I set up printing from my laptop?",
+      "a_subject": "g02",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.176931
+    },
+    {
+      "a": "Is a medical certificate required for a single day of personal leave?",
+      "b": "What do I do at the printer to release my print job?",
+      "a_subject": "g02",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.203458
+    },
+    {
+      "a": "Is a medical certificate required for a single day of personal leave?",
+      "b": "printer setup",
+      "a_subject": "g02",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.201301
+    },
+    {
+      "a": "Is a medical certificate required for a single day of personal leave?",
+      "b": "Who has to approve a meeting room booking for a large group?",
+      "a_subject": "g02",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.259939
+    },
+    {
+      "a": "Is a medical certificate required for a single day of personal leave?",
+      "b": "Can I book a room for an evening event with thirty guests without asking anyone?",
+      "a_subject": "g02",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.207199
+    },
+    {
+      "a": "Is a medical certificate required for a single day of personal leave?",
+      "b": "large event room booking",
+      "a_subject": "g02",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.181672
+    },
+    {
+      "a": "Is a medical certificate required for a single day of personal leave?",
+      "b": "What has to be written in the logbook when I use a pool car?",
+      "a_subject": "g02",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.256918
+    },
+    {
+      "a": "Is a medical certificate required for a single day of personal leave?",
+      "b": "Which details does the fleet logbook record for every trip?",
+      "a_subject": "g02",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.21431
+    },
+    {
+      "a": "Is a medical certificate required for a single day of personal leave?",
+      "b": "vehicle logbook",
+      "a_subject": "g02",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.219774
+    },
+    {
+      "a": "Is a medical certificate required for a single day of personal leave?",
+      "b": "Is every new employee given a buddy?",
+      "a_subject": "g02",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.287671
+    },
+    {
+      "a": "Is a medical certificate required for a single day of personal leave?",
+      "b": "What does the buddy program do for someone in their first week?",
+      "a_subject": "g02",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.184301
+    },
+    {
+      "a": "Is a medical certificate required for a single day of personal leave?",
+      "b": "buddy program",
+      "a_subject": "g02",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.183114
+    },
+    {
+      "a": "Is a medical certificate required for a single day of personal leave?",
+      "b": "For how many years must finance records be retained?",
+      "a_subject": "g02",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.231221
+    },
+    {
+      "a": "Is a medical certificate required for a single day of personal leave?",
+      "b": "When can old accounting paperwork be destroyed?",
+      "a_subject": "g02",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.231927
+    },
+    {
+      "a": "Is a medical certificate required for a single day of personal leave?",
+      "b": "financial records retention",
+      "a_subject": "g02",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.250785
+    },
+    {
+      "a": "Is a medical certificate required for a single day of personal leave?",
+      "b": "How far from the main office must copies of vital records be stored?",
+      "a_subject": "g02",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.30012
+    },
+    {
+      "a": "Is a medical certificate required for a single day of personal leave?",
+      "b": "Where are the backups of our most important records kept?",
+      "a_subject": "g02",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.2055
+    },
+    {
+      "a": "Is a medical certificate required for a single day of personal leave?",
+      "b": "vital records backup",
+      "a_subject": "g02",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.296281
+    },
+    {
+      "a": "medical certificate",
+      "b": "What is the minimum number of characters for a password?",
+      "a_subject": "g02",
+      "b_subject": "g03",
+      "same_subject": false,
+      "similarity": 0.268183
+    },
+    {
+      "a": "medical certificate",
+      "b": "Is there a rule about how long passwords have to be?",
+      "a_subject": "g02",
+      "b_subject": "g03",
+      "same_subject": false,
+      "similarity": 0.272132
+    },
+    {
+      "a": "medical certificate",
+      "b": "password length",
+      "a_subject": "g02",
+      "b_subject": "g03",
+      "same_subject": false,
+      "similarity": 0.312844
+    },
+    {
+      "a": "medical certificate",
+      "b": "During which hours can I reset my password on the self-service page?",
+      "a_subject": "g02",
+      "b_subject": "g04",
+      "same_subject": false,
+      "similarity": 0.193546
+    },
+    {
+      "a": "medical certificate",
+      "b": "Is the password reset page available at night?",
+      "a_subject": "g02",
+      "b_subject": "g04",
+      "same_subject": false,
+      "similarity": 0.145574
+    },
+    {
+      "a": "medical certificate",
+      "b": "password reset window",
+      "a_subject": "g02",
+      "b_subject": "g04",
+      "same_subject": false,
+      "similarity": 0.292606
+    },
+    {
+      "a": "medical certificate",
+      "b": "Who does an unresolved customer complaint go to next?",
+      "a_subject": "g02",
+      "b_subject": "g05",
+      "same_subject": false,
+      "similarity": 0.212877
+    },
+    {
+      "a": "medical certificate",
+      "b": "What are the steps for escalating a complaint I cannot resolve?",
+      "a_subject": "g02",
+      "b_subject": "g05",
+      "same_subject": false,
+      "similarity": 0.23875
+    },
+    {
+      "a": "medical certificate",
+      "b": "complaint escalation",
+      "a_subject": "g02",
+      "b_subject": "g05",
+      "same_subject": false,
+      "similarity": 0.278979
+    },
+    {
+      "a": "medical certificate",
+      "b": "How much can I claim for meals per day on a work trip?",
+      "a_subject": "g02",
+      "b_subject": "g06",
+      "same_subject": false,
+      "similarity": 0.276315
+    },
+    {
+      "a": "medical certificate",
+      "b": "Is there a cap on what I spend on food while travelling for work?",
+      "a_subject": "g02",
+      "b_subject": "g06",
+      "same_subject": false,
+      "similarity": 0.232326
+    },
+    {
+      "a": "medical certificate",
+      "b": "meal allowance",
+      "a_subject": "g02",
+      "b_subject": "g06",
+      "same_subject": false,
+      "similarity": 0.387472
+    },
+    {
+      "a": "medical certificate",
+      "b": "How do I set up printing from my laptop?",
+      "a_subject": "g02",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.251173
+    },
+    {
+      "a": "medical certificate",
+      "b": "What do I do at the printer to release my print job?",
+      "a_subject": "g02",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.222376
+    },
+    {
+      "a": "medical certificate",
+      "b": "printer setup",
+      "a_subject": "g02",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.344365
+    },
+    {
+      "a": "medical certificate",
+      "b": "Who has to approve a meeting room booking for a large group?",
+      "a_subject": "g02",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.244694
+    },
+    {
+      "a": "medical certificate",
+      "b": "Can I book a room for an evening event with thirty guests without asking anyone?",
+      "a_subject": "g02",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.136363
+    },
+    {
+      "a": "medical certificate",
+      "b": "large event room booking",
+      "a_subject": "g02",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.249014
+    },
+    {
+      "a": "medical certificate",
+      "b": "What has to be written in the logbook when I use a pool car?",
+      "a_subject": "g02",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.248788
+    },
+    {
+      "a": "medical certificate",
+      "b": "Which details does the fleet logbook record for every trip?",
+      "a_subject": "g02",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.192761
+    },
+    {
+      "a": "medical certificate",
+      "b": "vehicle logbook",
+      "a_subject": "g02",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.368115
+    },
+    {
+      "a": "medical certificate",
+      "b": "Is every new employee given a buddy?",
+      "a_subject": "g02",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.217075
+    },
+    {
+      "a": "medical certificate",
+      "b": "What does the buddy program do for someone in their first week?",
+      "a_subject": "g02",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.169534
+    },
+    {
+      "a": "medical certificate",
+      "b": "buddy program",
+      "a_subject": "g02",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.279762
+    },
+    {
+      "a": "medical certificate",
+      "b": "For how many years must finance records be retained?",
+      "a_subject": "g02",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.245074
+    },
+    {
+      "a": "medical certificate",
+      "b": "When can old accounting paperwork be destroyed?",
+      "a_subject": "g02",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.24892
+    },
+    {
+      "a": "medical certificate",
+      "b": "financial records retention",
+      "a_subject": "g02",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.289647
+    },
+    {
+      "a": "medical certificate",
+      "b": "How far from the main office must copies of vital records be stored?",
+      "a_subject": "g02",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.277953
+    },
+    {
+      "a": "medical certificate",
+      "b": "Where are the backups of our most important records kept?",
+      "a_subject": "g02",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.244525
+    },
+    {
+      "a": "medical certificate",
+      "b": "vital records backup",
+      "a_subject": "g02",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.417271
+    },
+    {
+      "a": "What is the minimum number of characters for a password?",
+      "b": "Is there a rule about how long passwords have to be?",
+      "a_subject": "g03",
+      "b_subject": "g03",
+      "same_subject": true,
+      "similarity": 0.836919
+    },
+    {
+      "a": "What is the minimum number of characters for a password?",
+      "b": "password length",
+      "a_subject": "g03",
+      "b_subject": "g03",
+      "same_subject": true,
+      "similarity": 0.858269
+    },
+    {
+      "a": "What is the minimum number of characters for a password?",
+      "b": "During which hours can I reset my password on the self-service page?",
+      "a_subject": "g03",
+      "b_subject": "g04",
+      "same_subject": false,
+      "similarity": 0.368062
+    },
+    {
+      "a": "What is the minimum number of characters for a password?",
+      "b": "Is the password reset page available at night?",
+      "a_subject": "g03",
+      "b_subject": "g04",
+      "same_subject": false,
+      "similarity": 0.365958
+    },
+    {
+      "a": "What is the minimum number of characters for a password?",
+      "b": "password reset window",
+      "a_subject": "g03",
+      "b_subject": "g04",
+      "same_subject": false,
+      "similarity": 0.519123
+    },
+    {
+      "a": "What is the minimum number of characters for a password?",
+      "b": "Who does an unresolved customer complaint go to next?",
+      "a_subject": "g03",
+      "b_subject": "g05",
+      "same_subject": false,
+      "similarity": 0.115303
+    },
+    {
+      "a": "What is the minimum number of characters for a password?",
+      "b": "What are the steps for escalating a complaint I cannot resolve?",
+      "a_subject": "g03",
+      "b_subject": "g05",
+      "same_subject": false,
+      "similarity": 0.168881
+    },
+    {
+      "a": "What is the minimum number of characters for a password?",
+      "b": "complaint escalation",
+      "a_subject": "g03",
+      "b_subject": "g05",
+      "same_subject": false,
+      "similarity": 0.178151
+    },
+    {
+      "a": "What is the minimum number of characters for a password?",
+      "b": "How much can I claim for meals per day on a work trip?",
+      "a_subject": "g03",
+      "b_subject": "g06",
+      "same_subject": false,
+      "similarity": 0.142373
+    },
+    {
+      "a": "What is the minimum number of characters for a password?",
+      "b": "Is there a cap on what I spend on food while travelling for work?",
+      "a_subject": "g03",
+      "b_subject": "g06",
+      "same_subject": false,
+      "similarity": 0.198206
+    },
+    {
+      "a": "What is the minimum number of characters for a password?",
+      "b": "meal allowance",
+      "a_subject": "g03",
+      "b_subject": "g06",
+      "same_subject": false,
+      "similarity": 0.184374
+    },
+    {
+      "a": "What is the minimum number of characters for a password?",
+      "b": "How do I set up printing from my laptop?",
+      "a_subject": "g03",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.215245
+    },
+    {
+      "a": "What is the minimum number of characters for a password?",
+      "b": "What do I do at the printer to release my print job?",
+      "a_subject": "g03",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.185142
+    },
+    {
+      "a": "What is the minimum number of characters for a password?",
+      "b": "printer setup",
+      "a_subject": "g03",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.305232
+    },
+    {
+      "a": "What is the minimum number of characters for a password?",
+      "b": "Who has to approve a meeting room booking for a large group?",
+      "a_subject": "g03",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.17819
+    },
+    {
+      "a": "What is the minimum number of characters for a password?",
+      "b": "Can I book a room for an evening event with thirty guests without asking anyone?",
+      "a_subject": "g03",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.175518
+    },
+    {
+      "a": "What is the minimum number of characters for a password?",
+      "b": "large event room booking",
+      "a_subject": "g03",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.168444
+    },
+    {
+      "a": "What is the minimum number of characters for a password?",
+      "b": "What has to be written in the logbook when I use a pool car?",
+      "a_subject": "g03",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.14321
+    },
+    {
+      "a": "What is the minimum number of characters for a password?",
+      "b": "Which details does the fleet logbook record for every trip?",
+      "a_subject": "g03",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.086448
+    },
+    {
+      "a": "What is the minimum number of characters for a password?",
+      "b": "vehicle logbook",
+      "a_subject": "g03",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.184918
+    },
+    {
+      "a": "What is the minimum number of characters for a password?",
+      "b": "Is every new employee given a buddy?",
+      "a_subject": "g03",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.23133
+    },
+    {
+      "a": "What is the minimum number of characters for a password?",
+      "b": "What does the buddy program do for someone in their first week?",
+      "a_subject": "g03",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.1471
+    },
+    {
+      "a": "What is the minimum number of characters for a password?",
+      "b": "buddy program",
+      "a_subject": "g03",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.207826
+    },
+    {
+      "a": "What is the minimum number of characters for a password?",
+      "b": "For how many years must finance records be retained?",
+      "a_subject": "g03",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.241857
+    },
+    {
+      "a": "What is the minimum number of characters for a password?",
+      "b": "When can old accounting paperwork be destroyed?",
+      "a_subject": "g03",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.181803
+    },
+    {
+      "a": "What is the minimum number of characters for a password?",
+      "b": "financial records retention",
+      "a_subject": "g03",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.223995
+    },
+    {
+      "a": "What is the minimum number of characters for a password?",
+      "b": "How far from the main office must copies of vital records be stored?",
+      "a_subject": "g03",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.210757
+    },
+    {
+      "a": "What is the minimum number of characters for a password?",
+      "b": "Where are the backups of our most important records kept?",
+      "a_subject": "g03",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.159734
+    },
+    {
+      "a": "What is the minimum number of characters for a password?",
+      "b": "vital records backup",
+      "a_subject": "g03",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.221395
+    },
+    {
+      "a": "Is there a rule about how long passwords have to be?",
+      "b": "password length",
+      "a_subject": "g03",
+      "b_subject": "g03",
+      "same_subject": true,
+      "similarity": 0.900567
+    },
+    {
+      "a": "Is there a rule about how long passwords have to be?",
+      "b": "During which hours can I reset my password on the self-service page?",
+      "a_subject": "g03",
+      "b_subject": "g04",
+      "same_subject": false,
+      "similarity": 0.397481
+    },
+    {
+      "a": "Is there a rule about how long passwords have to be?",
+      "b": "Is the password reset page available at night?",
+      "a_subject": "g03",
+      "b_subject": "g04",
+      "same_subject": false,
+      "similarity": 0.383372
+    },
+    {
+      "a": "Is there a rule about how long passwords have to be?",
+      "b": "password reset window",
+      "a_subject": "g03",
+      "b_subject": "g04",
+      "same_subject": false,
+      "similarity": 0.497352
+    },
+    {
+      "a": "Is there a rule about how long passwords have to be?",
+      "b": "Who does an unresolved customer complaint go to next?",
+      "a_subject": "g03",
+      "b_subject": "g05",
+      "same_subject": false,
+      "similarity": 0.14808
+    },
+    {
+      "a": "Is there a rule about how long passwords have to be?",
+      "b": "What are the steps for escalating a complaint I cannot resolve?",
+      "a_subject": "g03",
+      "b_subject": "g05",
+      "same_subject": false,
+      "similarity": 0.186655
+    },
+    {
+      "a": "Is there a rule about how long passwords have to be?",
+      "b": "complaint escalation",
+      "a_subject": "g03",
+      "b_subject": "g05",
+      "same_subject": false,
+      "similarity": 0.189946
+    },
+    {
+      "a": "Is there a rule about how long passwords have to be?",
+      "b": "How much can I claim for meals per day on a work trip?",
+      "a_subject": "g03",
+      "b_subject": "g06",
+      "same_subject": false,
+      "similarity": 0.183927
+    },
+    {
+      "a": "Is there a rule about how long passwords have to be?",
+      "b": "Is there a cap on what I spend on food while travelling for work?",
+      "a_subject": "g03",
+      "b_subject": "g06",
+      "same_subject": false,
+      "similarity": 0.256522
+    },
+    {
+      "a": "Is there a rule about how long passwords have to be?",
+      "b": "meal allowance",
+      "a_subject": "g03",
+      "b_subject": "g06",
+      "same_subject": false,
+      "similarity": 0.223072
+    },
+    {
+      "a": "Is there a rule about how long passwords have to be?",
+      "b": "How do I set up printing from my laptop?",
+      "a_subject": "g03",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.173587
+    },
+    {
+      "a": "Is there a rule about how long passwords have to be?",
+      "b": "What do I do at the printer to release my print job?",
+      "a_subject": "g03",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.162146
+    },
+    {
+      "a": "Is there a rule about how long passwords have to be?",
+      "b": "printer setup",
+      "a_subject": "g03",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.246867
+    },
+    {
+      "a": "Is there a rule about how long passwords have to be?",
+      "b": "Who has to approve a meeting room booking for a large group?",
+      "a_subject": "g03",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.227368
+    },
+    {
+      "a": "Is there a rule about how long passwords have to be?",
+      "b": "Can I book a room for an evening event with thirty guests without asking anyone?",
+      "a_subject": "g03",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.20952
+    },
+    {
+      "a": "Is there a rule about how long passwords have to be?",
+      "b": "large event room booking",
+      "a_subject": "g03",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.206973
+    },
+    {
+      "a": "Is there a rule about how long passwords have to be?",
+      "b": "What has to be written in the logbook when I use a pool car?",
+      "a_subject": "g03",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.189457
+    },
+    {
+      "a": "Is there a rule about how long passwords have to be?",
+      "b": "Which details does the fleet logbook record for every trip?",
+      "a_subject": "g03",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.133288
+    },
+    {
+      "a": "Is there a rule about how long passwords have to be?",
+      "b": "vehicle logbook",
+      "a_subject": "g03",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.196554
+    },
+    {
+      "a": "Is there a rule about how long passwords have to be?",
+      "b": "Is every new employee given a buddy?",
+      "a_subject": "g03",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.235256
+    },
+    {
+      "a": "Is there a rule about how long passwords have to be?",
+      "b": "What does the buddy program do for someone in their first week?",
+      "a_subject": "g03",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.150247
+    },
+    {
+      "a": "Is there a rule about how long passwords have to be?",
+      "b": "buddy program",
+      "a_subject": "g03",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.192194
+    },
+    {
+      "a": "Is there a rule about how long passwords have to be?",
+      "b": "For how many years must finance records be retained?",
+      "a_subject": "g03",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.332704
+    },
+    {
+      "a": "Is there a rule about how long passwords have to be?",
+      "b": "When can old accounting paperwork be destroyed?",
+      "a_subject": "g03",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.247071
+    },
+    {
+      "a": "Is there a rule about how long passwords have to be?",
+      "b": "financial records retention",
+      "a_subject": "g03",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.265014
+    },
+    {
+      "a": "Is there a rule about how long passwords have to be?",
+      "b": "How far from the main office must copies of vital records be stored?",
+      "a_subject": "g03",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.276793
+    },
+    {
+      "a": "Is there a rule about how long passwords have to be?",
+      "b": "Where are the backups of our most important records kept?",
+      "a_subject": "g03",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.200479
+    },
+    {
+      "a": "Is there a rule about how long passwords have to be?",
+      "b": "vital records backup",
+      "a_subject": "g03",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.232638
+    },
+    {
+      "a": "password length",
+      "b": "During which hours can I reset my password on the self-service page?",
+      "a_subject": "g03",
+      "b_subject": "g04",
+      "same_subject": false,
+      "similarity": 0.42007
+    },
+    {
+      "a": "password length",
+      "b": "Is the password reset page available at night?",
+      "a_subject": "g03",
+      "b_subject": "g04",
+      "same_subject": false,
+      "similarity": 0.404171
+    },
+    {
+      "a": "password length",
+      "b": "password reset window",
+      "a_subject": "g03",
+      "b_subject": "g04",
+      "same_subject": false,
+      "similarity": 0.587641
+    },
+    {
+      "a": "password length",
+      "b": "Who does an unresolved customer complaint go to next?",
+      "a_subject": "g03",
+      "b_subject": "g05",
+      "same_subject": false,
+      "similarity": 0.139917
+    },
+    {
+      "a": "password length",
+      "b": "What are the steps for escalating a complaint I cannot resolve?",
+      "a_subject": "g03",
+      "b_subject": "g05",
+      "same_subject": false,
+      "similarity": 0.202168
+    },
+    {
+      "a": "password length",
+      "b": "complaint escalation",
+      "a_subject": "g03",
+      "b_subject": "g05",
+      "same_subject": false,
+      "similarity": 0.222059
+    },
+    {
+      "a": "password length",
+      "b": "How much can I claim for meals per day on a work trip?",
+      "a_subject": "g03",
+      "b_subject": "g06",
+      "same_subject": false,
+      "similarity": 0.152602
+    },
+    {
+      "a": "password length",
+      "b": "Is there a cap on what I spend on food while travelling for work?",
+      "a_subject": "g03",
+      "b_subject": "g06",
+      "same_subject": false,
+      "similarity": 0.197571
+    },
+    {
+      "a": "password length",
+      "b": "meal allowance",
+      "a_subject": "g03",
+      "b_subject": "g06",
+      "same_subject": false,
+      "similarity": 0.257897
+    },
+    {
+      "a": "password length",
+      "b": "How do I set up printing from my laptop?",
+      "a_subject": "g03",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.222137
+    },
+    {
+      "a": "password length",
+      "b": "What do I do at the printer to release my print job?",
+      "a_subject": "g03",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.207941
+    },
+    {
+      "a": "password length",
+      "b": "printer setup",
+      "a_subject": "g03",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.337826
+    },
+    {
+      "a": "password length",
+      "b": "Who has to approve a meeting room booking for a large group?",
+      "a_subject": "g03",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.187386
+    },
+    {
+      "a": "password length",
+      "b": "Can I book a room for an evening event with thirty guests without asking anyone?",
+      "a_subject": "g03",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.168205
+    },
+    {
+      "a": "password length",
+      "b": "large event room booking",
+      "a_subject": "g03",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.255328
+    },
+    {
+      "a": "password length",
+      "b": "What has to be written in the logbook when I use a pool car?",
+      "a_subject": "g03",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.168839
+    },
+    {
+      "a": "password length",
+      "b": "Which details does the fleet logbook record for every trip?",
+      "a_subject": "g03",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.162761
+    },
+    {
+      "a": "password length",
+      "b": "vehicle logbook",
+      "a_subject": "g03",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.255948
+    },
+    {
+      "a": "password length",
+      "b": "Is every new employee given a buddy?",
+      "a_subject": "g03",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.21975
+    },
+    {
+      "a": "password length",
+      "b": "What does the buddy program do for someone in their first week?",
+      "a_subject": "g03",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.16252
+    },
+    {
+      "a": "password length",
+      "b": "buddy program",
+      "a_subject": "g03",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.248843
+    },
+    {
+      "a": "password length",
+      "b": "For how many years must finance records be retained?",
+      "a_subject": "g03",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.27036
+    },
+    {
+      "a": "password length",
+      "b": "When can old accounting paperwork be destroyed?",
+      "a_subject": "g03",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.205644
+    },
+    {
+      "a": "password length",
+      "b": "financial records retention",
+      "a_subject": "g03",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.24931
+    },
+    {
+      "a": "password length",
+      "b": "How far from the main office must copies of vital records be stored?",
+      "a_subject": "g03",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.218427
+    },
+    {
+      "a": "password length",
+      "b": "Where are the backups of our most important records kept?",
+      "a_subject": "g03",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.210465
+    },
+    {
+      "a": "password length",
+      "b": "vital records backup",
+      "a_subject": "g03",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.260399
+    },
+    {
+      "a": "During which hours can I reset my password on the self-service page?",
+      "b": "Is the password reset page available at night?",
+      "a_subject": "g04",
+      "b_subject": "g04",
+      "same_subject": true,
+      "similarity": 0.730951
+    },
+    {
+      "a": "During which hours can I reset my password on the self-service page?",
+      "b": "password reset window",
+      "a_subject": "g04",
+      "b_subject": "g04",
+      "same_subject": true,
+      "similarity": 0.628976
+    },
+    {
+      "a": "During which hours can I reset my password on the self-service page?",
+      "b": "Who does an unresolved customer complaint go to next?",
+      "a_subject": "g04",
+      "b_subject": "g05",
+      "same_subject": false,
+      "similarity": 0.267603
+    },
+    {
+      "a": "During which hours can I reset my password on the self-service page?",
+      "b": "What are the steps for escalating a complaint I cannot resolve?",
+      "a_subject": "g04",
+      "b_subject": "g05",
+      "same_subject": false,
+      "similarity": 0.305357
+    },
+    {
+      "a": "During which hours can I reset my password on the self-service page?",
+      "b": "complaint escalation",
+      "a_subject": "g04",
+      "b_subject": "g05",
+      "same_subject": false,
+      "similarity": 0.246465
+    },
+    {
+      "a": "During which hours can I reset my password on the self-service page?",
+      "b": "How much can I claim for meals per day on a work trip?",
+      "a_subject": "g04",
+      "b_subject": "g06",
+      "same_subject": false,
+      "similarity": 0.143543
+    },
+    {
+      "a": "During which hours can I reset my password on the self-service page?",
+      "b": "Is there a cap on what I spend on food while travelling for work?",
+      "a_subject": "g04",
+      "b_subject": "g06",
+      "same_subject": false,
+      "similarity": 0.144084
+    },
+    {
+      "a": "During which hours can I reset my password on the self-service page?",
+      "b": "meal allowance",
+      "a_subject": "g04",
+      "b_subject": "g06",
+      "same_subject": false,
+      "similarity": 0.150115
+    },
+    {
+      "a": "During which hours can I reset my password on the self-service page?",
+      "b": "How do I set up printing from my laptop?",
+      "a_subject": "g04",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.186113
+    },
+    {
+      "a": "During which hours can I reset my password on the self-service page?",
+      "b": "What do I do at the printer to release my print job?",
+      "a_subject": "g04",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.254535
+    },
+    {
+      "a": "During which hours can I reset my password on the self-service page?",
+      "b": "printer setup",
+      "a_subject": "g04",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.218211
+    },
+    {
+      "a": "During which hours can I reset my password on the self-service page?",
+      "b": "Who has to approve a meeting room booking for a large group?",
+      "a_subject": "g04",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.194489
+    },
+    {
+      "a": "During which hours can I reset my password on the self-service page?",
+      "b": "Can I book a room for an evening event with thirty guests without asking anyone?",
+      "a_subject": "g04",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.202668
+    },
+    {
+      "a": "During which hours can I reset my password on the self-service page?",
+      "b": "large event room booking",
+      "a_subject": "g04",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.182914
+    },
+    {
+      "a": "During which hours can I reset my password on the self-service page?",
+      "b": "What has to be written in the logbook when I use a pool car?",
+      "a_subject": "g04",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.170805
+    },
+    {
+      "a": "During which hours can I reset my password on the self-service page?",
+      "b": "Which details does the fleet logbook record for every trip?",
+      "a_subject": "g04",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.142372
+    },
+    {
+      "a": "During which hours can I reset my password on the self-service page?",
+      "b": "vehicle logbook",
+      "a_subject": "g04",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.202448
+    },
+    {
+      "a": "During which hours can I reset my password on the self-service page?",
+      "b": "Is every new employee given a buddy?",
+      "a_subject": "g04",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.175097
+    },
+    {
+      "a": "During which hours can I reset my password on the self-service page?",
+      "b": "What does the buddy program do for someone in their first week?",
+      "a_subject": "g04",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.177429
+    },
+    {
+      "a": "During which hours can I reset my password on the self-service page?",
+      "b": "buddy program",
+      "a_subject": "g04",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.206885
+    },
+    {
+      "a": "During which hours can I reset my password on the self-service page?",
+      "b": "For how many years must finance records be retained?",
+      "a_subject": "g04",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.231411
+    },
+    {
+      "a": "During which hours can I reset my password on the self-service page?",
+      "b": "When can old accounting paperwork be destroyed?",
+      "a_subject": "g04",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.269378
+    },
+    {
+      "a": "During which hours can I reset my password on the self-service page?",
+      "b": "financial records retention",
+      "a_subject": "g04",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.197448
+    },
+    {
+      "a": "During which hours can I reset my password on the self-service page?",
+      "b": "How far from the main office must copies of vital records be stored?",
+      "a_subject": "g04",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.211116
+    },
+    {
+      "a": "During which hours can I reset my password on the self-service page?",
+      "b": "Where are the backups of our most important records kept?",
+      "a_subject": "g04",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.245666
+    },
+    {
+      "a": "During which hours can I reset my password on the self-service page?",
+      "b": "vital records backup",
+      "a_subject": "g04",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.191122
+    },
+    {
+      "a": "Is the password reset page available at night?",
+      "b": "password reset window",
+      "a_subject": "g04",
+      "b_subject": "g04",
+      "same_subject": true,
+      "similarity": 0.649766
+    },
+    {
+      "a": "Is the password reset page available at night?",
+      "b": "Who does an unresolved customer complaint go to next?",
+      "a_subject": "g04",
+      "b_subject": "g05",
+      "same_subject": false,
+      "similarity": 0.249079
+    },
+    {
+      "a": "Is the password reset page available at night?",
+      "b": "What are the steps for escalating a complaint I cannot resolve?",
+      "a_subject": "g04",
+      "b_subject": "g05",
+      "same_subject": false,
+      "similarity": 0.273991
+    },
+    {
+      "a": "Is the password reset page available at night?",
+      "b": "complaint escalation",
+      "a_subject": "g04",
+      "b_subject": "g05",
+      "same_subject": false,
+      "similarity": 0.249151
+    },
+    {
+      "a": "Is the password reset page available at night?",
+      "b": "How much can I claim for meals per day on a work trip?",
+      "a_subject": "g04",
+      "b_subject": "g06",
+      "same_subject": false,
+      "similarity": 0.112182
+    },
+    {
+      "a": "Is the password reset page available at night?",
+      "b": "Is there a cap on what I spend on food while travelling for work?",
+      "a_subject": "g04",
+      "b_subject": "g06",
+      "same_subject": false,
+      "similarity": 0.123063
+    },
+    {
+      "a": "Is the password reset page available at night?",
+      "b": "meal allowance",
+      "a_subject": "g04",
+      "b_subject": "g06",
+      "same_subject": false,
+      "similarity": 0.142022
+    },
+    {
+      "a": "Is the password reset page available at night?",
+      "b": "How do I set up printing from my laptop?",
+      "a_subject": "g04",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.201838
+    },
+    {
+      "a": "Is the password reset page available at night?",
+      "b": "What do I do at the printer to release my print job?",
+      "a_subject": "g04",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.260302
+    },
+    {
+      "a": "Is the password reset page available at night?",
+      "b": "printer setup",
+      "a_subject": "g04",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.223497
+    },
+    {
+      "a": "Is the password reset page available at night?",
+      "b": "Who has to approve a meeting room booking for a large group?",
+      "a_subject": "g04",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.164166
+    },
+    {
+      "a": "Is the password reset page available at night?",
+      "b": "Can I book a room for an evening event with thirty guests without asking anyone?",
+      "a_subject": "g04",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.277024
+    },
+    {
+      "a": "Is the password reset page available at night?",
+      "b": "large event room booking",
+      "a_subject": "g04",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.154922
+    },
+    {
+      "a": "Is the password reset page available at night?",
+      "b": "What has to be written in the logbook when I use a pool car?",
+      "a_subject": "g04",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.150779
+    },
+    {
+      "a": "Is the password reset page available at night?",
+      "b": "Which details does the fleet logbook record for every trip?",
+      "a_subject": "g04",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.127593
+    },
+    {
+      "a": "Is the password reset page available at night?",
+      "b": "vehicle logbook",
+      "a_subject": "g04",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.173962
+    },
+    {
+      "a": "Is the password reset page available at night?",
+      "b": "Is every new employee given a buddy?",
+      "a_subject": "g04",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.169129
+    },
+    {
+      "a": "Is the password reset page available at night?",
+      "b": "What does the buddy program do for someone in their first week?",
+      "a_subject": "g04",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.177228
+    },
+    {
+      "a": "Is the password reset page available at night?",
+      "b": "buddy program",
+      "a_subject": "g04",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.201218
+    },
+    {
+      "a": "Is the password reset page available at night?",
+      "b": "For how many years must finance records be retained?",
+      "a_subject": "g04",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.169178
+    },
+    {
+      "a": "Is the password reset page available at night?",
+      "b": "When can old accounting paperwork be destroyed?",
+      "a_subject": "g04",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.272955
+    },
+    {
+      "a": "Is the password reset page available at night?",
+      "b": "financial records retention",
+      "a_subject": "g04",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.194233
+    },
+    {
+      "a": "Is the password reset page available at night?",
+      "b": "How far from the main office must copies of vital records be stored?",
+      "a_subject": "g04",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.171655
+    },
+    {
+      "a": "Is the password reset page available at night?",
+      "b": "Where are the backups of our most important records kept?",
+      "a_subject": "g04",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.252297
+    },
+    {
+      "a": "Is the password reset page available at night?",
+      "b": "vital records backup",
+      "a_subject": "g04",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.195159
+    },
+    {
+      "a": "password reset window",
+      "b": "Who does an unresolved customer complaint go to next?",
+      "a_subject": "g04",
+      "b_subject": "g05",
+      "same_subject": false,
+      "similarity": 0.270861
+    },
+    {
+      "a": "password reset window",
+      "b": "What are the steps for escalating a complaint I cannot resolve?",
+      "a_subject": "g04",
+      "b_subject": "g05",
+      "same_subject": false,
+      "similarity": 0.297322
+    },
+    {
+      "a": "password reset window",
+      "b": "complaint escalation",
+      "a_subject": "g04",
+      "b_subject": "g05",
+      "same_subject": false,
+      "similarity": 0.306999
+    },
+    {
+      "a": "password reset window",
+      "b": "How much can I claim for meals per day on a work trip?",
+      "a_subject": "g04",
+      "b_subject": "g06",
+      "same_subject": false,
+      "similarity": 0.101712
+    },
+    {
+      "a": "password reset window",
+      "b": "Is there a cap on what I spend on food while travelling for work?",
+      "a_subject": "g04",
+      "b_subject": "g06",
+      "same_subject": false,
+      "similarity": 0.13039
+    },
+    {
+      "a": "password reset window",
+      "b": "meal allowance",
+      "a_subject": "g04",
+      "b_subject": "g06",
+      "same_subject": false,
+      "similarity": 0.223628
+    },
+    {
+      "a": "password reset window",
+      "b": "How do I set up printing from my laptop?",
+      "a_subject": "g04",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.293453
+    },
+    {
+      "a": "password reset window",
+      "b": "What do I do at the printer to release my print job?",
+      "a_subject": "g04",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.310964
+    },
+    {
+      "a": "password reset window",
+      "b": "printer setup",
+      "a_subject": "g04",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.356484
+    },
+    {
+      "a": "password reset window",
+      "b": "Who has to approve a meeting room booking for a large group?",
+      "a_subject": "g04",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.187085
+    },
+    {
+      "a": "password reset window",
+      "b": "Can I book a room for an evening event with thirty guests without asking anyone?",
+      "a_subject": "g04",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.152201
+    },
+    {
+      "a": "password reset window",
+      "b": "large event room booking",
+      "a_subject": "g04",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.215959
+    },
+    {
+      "a": "password reset window",
+      "b": "What has to be written in the logbook when I use a pool car?",
+      "a_subject": "g04",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.157485
+    },
+    {
+      "a": "password reset window",
+      "b": "Which details does the fleet logbook record for every trip?",
+      "a_subject": "g04",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.126149
+    },
+    {
+      "a": "password reset window",
+      "b": "vehicle logbook",
+      "a_subject": "g04",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.27713
+    },
+    {
+      "a": "password reset window",
+      "b": "Is every new employee given a buddy?",
+      "a_subject": "g04",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.207541
+    },
+    {
+      "a": "password reset window",
+      "b": "What does the buddy program do for someone in their first week?",
+      "a_subject": "g04",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.219511
+    },
+    {
+      "a": "password reset window",
+      "b": "buddy program",
+      "a_subject": "g04",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.3112
+    },
+    {
+      "a": "password reset window",
+      "b": "For how many years must finance records be retained?",
+      "a_subject": "g04",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.2186
+    },
+    {
+      "a": "password reset window",
+      "b": "When can old accounting paperwork be destroyed?",
+      "a_subject": "g04",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.272999
+    },
+    {
+      "a": "password reset window",
+      "b": "financial records retention",
+      "a_subject": "g04",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.264303
+    },
+    {
+      "a": "password reset window",
+      "b": "How far from the main office must copies of vital records be stored?",
+      "a_subject": "g04",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.157018
+    },
+    {
+      "a": "password reset window",
+      "b": "Where are the backups of our most important records kept?",
+      "a_subject": "g04",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.246843
+    },
+    {
+      "a": "password reset window",
+      "b": "vital records backup",
+      "a_subject": "g04",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.265486
+    },
+    {
+      "a": "Who does an unresolved customer complaint go to next?",
+      "b": "What are the steps for escalating a complaint I cannot resolve?",
+      "a_subject": "g05",
+      "b_subject": "g05",
+      "same_subject": true,
+      "similarity": 0.776443
+    },
+    {
+      "a": "Who does an unresolved customer complaint go to next?",
+      "b": "complaint escalation",
+      "a_subject": "g05",
+      "b_subject": "g05",
+      "same_subject": true,
+      "similarity": 0.683736
+    },
+    {
+      "a": "Who does an unresolved customer complaint go to next?",
+      "b": "How much can I claim for meals per day on a work trip?",
+      "a_subject": "g05",
+      "b_subject": "g06",
+      "same_subject": false,
+      "similarity": 0.167612
+    },
+    {
+      "a": "Who does an unresolved customer complaint go to next?",
+      "b": "Is there a cap on what I spend on food while travelling for work?",
+      "a_subject": "g05",
+      "b_subject": "g06",
+      "same_subject": false,
+      "similarity": 0.169937
+    },
+    {
+      "a": "Who does an unresolved customer complaint go to next?",
+      "b": "meal allowance",
+      "a_subject": "g05",
+      "b_subject": "g06",
+      "same_subject": false,
+      "similarity": 0.152648
+    },
+    {
+      "a": "Who does an unresolved customer complaint go to next?",
+      "b": "How do I set up printing from my laptop?",
+      "a_subject": "g05",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.138133
+    },
+    {
+      "a": "Who does an unresolved customer complaint go to next?",
+      "b": "What do I do at the printer to release my print job?",
+      "a_subject": "g05",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.272433
+    },
+    {
+      "a": "Who does an unresolved customer complaint go to next?",
+      "b": "printer setup",
+      "a_subject": "g05",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.20514
+    },
+    {
+      "a": "Who does an unresolved customer complaint go to next?",
+      "b": "Who has to approve a meeting room booking for a large group?",
+      "a_subject": "g05",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.26952
+    },
+    {
+      "a": "Who does an unresolved customer complaint go to next?",
+      "b": "Can I book a room for an evening event with thirty guests without asking anyone?",
+      "a_subject": "g05",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.169016
+    },
+    {
+      "a": "Who does an unresolved customer complaint go to next?",
+      "b": "large event room booking",
+      "a_subject": "g05",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.194125
+    },
+    {
+      "a": "Who does an unresolved customer complaint go to next?",
+      "b": "What has to be written in the logbook when I use a pool car?",
+      "a_subject": "g05",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.108734
+    },
+    {
+      "a": "Who does an unresolved customer complaint go to next?",
+      "b": "Which details does the fleet logbook record for every trip?",
+      "a_subject": "g05",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.140446
+    },
+    {
+      "a": "Who does an unresolved customer complaint go to next?",
+      "b": "vehicle logbook",
+      "a_subject": "g05",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.217286
+    },
+    {
+      "a": "Who does an unresolved customer complaint go to next?",
+      "b": "Is every new employee given a buddy?",
+      "a_subject": "g05",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.205951
+    },
+    {
+      "a": "Who does an unresolved customer complaint go to next?",
+      "b": "What does the buddy program do for someone in their first week?",
+      "a_subject": "g05",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.180508
+    },
+    {
+      "a": "Who does an unresolved customer complaint go to next?",
+      "b": "buddy program",
+      "a_subject": "g05",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.2035
+    },
+    {
+      "a": "Who does an unresolved customer complaint go to next?",
+      "b": "For how many years must finance records be retained?",
+      "a_subject": "g05",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.183893
+    },
+    {
+      "a": "Who does an unresolved customer complaint go to next?",
+      "b": "When can old accounting paperwork be destroyed?",
+      "a_subject": "g05",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.225768
+    },
+    {
+      "a": "Who does an unresolved customer complaint go to next?",
+      "b": "financial records retention",
+      "a_subject": "g05",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.18376
+    },
+    {
+      "a": "Who does an unresolved customer complaint go to next?",
+      "b": "How far from the main office must copies of vital records be stored?",
+      "a_subject": "g05",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.191564
+    },
+    {
+      "a": "Who does an unresolved customer complaint go to next?",
+      "b": "Where are the backups of our most important records kept?",
+      "a_subject": "g05",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.202833
+    },
+    {
+      "a": "Who does an unresolved customer complaint go to next?",
+      "b": "vital records backup",
+      "a_subject": "g05",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.166264
+    },
+    {
+      "a": "What are the steps for escalating a complaint I cannot resolve?",
+      "b": "complaint escalation",
+      "a_subject": "g05",
+      "b_subject": "g05",
+      "same_subject": true,
+      "similarity": 0.827036
+    },
+    {
+      "a": "What are the steps for escalating a complaint I cannot resolve?",
+      "b": "How much can I claim for meals per day on a work trip?",
+      "a_subject": "g05",
+      "b_subject": "g06",
+      "same_subject": false,
+      "similarity": 0.231969
+    },
+    {
+      "a": "What are the steps for escalating a complaint I cannot resolve?",
+      "b": "Is there a cap on what I spend on food while travelling for work?",
+      "a_subject": "g05",
+      "b_subject": "g06",
+      "same_subject": false,
+      "similarity": 0.206119
+    },
+    {
+      "a": "What are the steps for escalating a complaint I cannot resolve?",
+      "b": "meal allowance",
+      "a_subject": "g05",
+      "b_subject": "g06",
+      "same_subject": false,
+      "similarity": 0.215514
+    },
+    {
+      "a": "What are the steps for escalating a complaint I cannot resolve?",
+      "b": "How do I set up printing from my laptop?",
+      "a_subject": "g05",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.194201
+    },
+    {
+      "a": "What are the steps for escalating a complaint I cannot resolve?",
+      "b": "What do I do at the printer to release my print job?",
+      "a_subject": "g05",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.242177
+    },
+    {
+      "a": "What are the steps for escalating a complaint I cannot resolve?",
+      "b": "printer setup",
+      "a_subject": "g05",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.246438
+    },
+    {
+      "a": "What are the steps for escalating a complaint I cannot resolve?",
+      "b": "Who has to approve a meeting room booking for a large group?",
+      "a_subject": "g05",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.259877
+    },
+    {
+      "a": "What are the steps for escalating a complaint I cannot resolve?",
+      "b": "Can I book a room for an evening event with thirty guests without asking anyone?",
+      "a_subject": "g05",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.199088
+    },
+    {
+      "a": "What are the steps for escalating a complaint I cannot resolve?",
+      "b": "large event room booking",
+      "a_subject": "g05",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.194475
+    },
+    {
+      "a": "What are the steps for escalating a complaint I cannot resolve?",
+      "b": "What has to be written in the logbook when I use a pool car?",
+      "a_subject": "g05",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.138162
+    },
+    {
+      "a": "What are the steps for escalating a complaint I cannot resolve?",
+      "b": "Which details does the fleet logbook record for every trip?",
+      "a_subject": "g05",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.157099
+    },
+    {
+      "a": "What are the steps for escalating a complaint I cannot resolve?",
+      "b": "vehicle logbook",
+      "a_subject": "g05",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.225246
+    },
+    {
+      "a": "What are the steps for escalating a complaint I cannot resolve?",
+      "b": "Is every new employee given a buddy?",
+      "a_subject": "g05",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.176758
+    },
+    {
+      "a": "What are the steps for escalating a complaint I cannot resolve?",
+      "b": "What does the buddy program do for someone in their first week?",
+      "a_subject": "g05",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.171816
+    },
+    {
+      "a": "What are the steps for escalating a complaint I cannot resolve?",
+      "b": "buddy program",
+      "a_subject": "g05",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.214926
+    },
+    {
+      "a": "What are the steps for escalating a complaint I cannot resolve?",
+      "b": "For how many years must finance records be retained?",
+      "a_subject": "g05",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.142652
+    },
+    {
+      "a": "What are the steps for escalating a complaint I cannot resolve?",
+      "b": "When can old accounting paperwork be destroyed?",
+      "a_subject": "g05",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.203811
+    },
+    {
+      "a": "What are the steps for escalating a complaint I cannot resolve?",
+      "b": "financial records retention",
+      "a_subject": "g05",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.149007
+    },
+    {
+      "a": "What are the steps for escalating a complaint I cannot resolve?",
+      "b": "How far from the main office must copies of vital records be stored?",
+      "a_subject": "g05",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.180481
+    },
+    {
+      "a": "What are the steps for escalating a complaint I cannot resolve?",
+      "b": "Where are the backups of our most important records kept?",
+      "a_subject": "g05",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.181384
+    },
+    {
+      "a": "What are the steps for escalating a complaint I cannot resolve?",
+      "b": "vital records backup",
+      "a_subject": "g05",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.18355
+    },
+    {
+      "a": "complaint escalation",
+      "b": "How much can I claim for meals per day on a work trip?",
+      "a_subject": "g05",
+      "b_subject": "g06",
+      "same_subject": false,
+      "similarity": 0.239588
+    },
+    {
+      "a": "complaint escalation",
+      "b": "Is there a cap on what I spend on food while travelling for work?",
+      "a_subject": "g05",
+      "b_subject": "g06",
+      "same_subject": false,
+      "similarity": 0.224275
+    },
+    {
+      "a": "complaint escalation",
+      "b": "meal allowance",
+      "a_subject": "g05",
+      "b_subject": "g06",
+      "same_subject": false,
+      "similarity": 0.279515
+    },
+    {
+      "a": "complaint escalation",
+      "b": "How do I set up printing from my laptop?",
+      "a_subject": "g05",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.148565
+    },
+    {
+      "a": "complaint escalation",
+      "b": "What do I do at the printer to release my print job?",
+      "a_subject": "g05",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.204102
+    },
+    {
+      "a": "complaint escalation",
+      "b": "printer setup",
+      "a_subject": "g05",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.25503
+    },
+    {
+      "a": "complaint escalation",
+      "b": "Who has to approve a meeting room booking for a large group?",
+      "a_subject": "g05",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.268438
+    },
+    {
+      "a": "complaint escalation",
+      "b": "Can I book a room for an evening event with thirty guests without asking anyone?",
+      "a_subject": "g05",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.191824
+    },
+    {
+      "a": "complaint escalation",
+      "b": "large event room booking",
+      "a_subject": "g05",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.227497
+    },
+    {
+      "a": "complaint escalation",
+      "b": "What has to be written in the logbook when I use a pool car?",
+      "a_subject": "g05",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.139959
+    },
+    {
+      "a": "complaint escalation",
+      "b": "Which details does the fleet logbook record for every trip?",
+      "a_subject": "g05",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.201755
+    },
+    {
+      "a": "complaint escalation",
+      "b": "vehicle logbook",
+      "a_subject": "g05",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.25884
+    },
+    {
+      "a": "complaint escalation",
+      "b": "Is every new employee given a buddy?",
+      "a_subject": "g05",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.224985
+    },
+    {
+      "a": "complaint escalation",
+      "b": "What does the buddy program do for someone in their first week?",
+      "a_subject": "g05",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.195224
+    },
+    {
+      "a": "complaint escalation",
+      "b": "buddy program",
+      "a_subject": "g05",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.265556
+    },
+    {
+      "a": "complaint escalation",
+      "b": "For how many years must finance records be retained?",
+      "a_subject": "g05",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.133301
+    },
+    {
+      "a": "complaint escalation",
+      "b": "When can old accounting paperwork be destroyed?",
+      "a_subject": "g05",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.194518
+    },
+    {
+      "a": "complaint escalation",
+      "b": "financial records retention",
+      "a_subject": "g05",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.175885
+    },
+    {
+      "a": "complaint escalation",
+      "b": "How far from the main office must copies of vital records be stored?",
+      "a_subject": "g05",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.181789
+    },
+    {
+      "a": "complaint escalation",
+      "b": "Where are the backups of our most important records kept?",
+      "a_subject": "g05",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.194065
+    },
+    {
+      "a": "complaint escalation",
+      "b": "vital records backup",
+      "a_subject": "g05",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.219258
+    },
+    {
+      "a": "How much can I claim for meals per day on a work trip?",
+      "b": "Is there a cap on what I spend on food while travelling for work?",
+      "a_subject": "g06",
+      "b_subject": "g06",
+      "same_subject": true,
+      "similarity": 0.827969
+    },
+    {
+      "a": "How much can I claim for meals per day on a work trip?",
+      "b": "meal allowance",
+      "a_subject": "g06",
+      "b_subject": "g06",
+      "same_subject": true,
+      "similarity": 0.646416
+    },
+    {
+      "a": "How much can I claim for meals per day on a work trip?",
+      "b": "How do I set up printing from my laptop?",
+      "a_subject": "g06",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.187417
+    },
+    {
+      "a": "How much can I claim for meals per day on a work trip?",
+      "b": "What do I do at the printer to release my print job?",
+      "a_subject": "g06",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.139477
+    },
+    {
+      "a": "How much can I claim for meals per day on a work trip?",
+      "b": "printer setup",
+      "a_subject": "g06",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.181056
+    },
+    {
+      "a": "How much can I claim for meals per day on a work trip?",
+      "b": "Who has to approve a meeting room booking for a large group?",
+      "a_subject": "g06",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.228815
+    },
+    {
+      "a": "How much can I claim for meals per day on a work trip?",
+      "b": "Can I book a room for an evening event with thirty guests without asking anyone?",
+      "a_subject": "g06",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.201526
+    },
+    {
+      "a": "How much can I claim for meals per day on a work trip?",
+      "b": "large event room booking",
+      "a_subject": "g06",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.187291
+    },
+    {
+      "a": "How much can I claim for meals per day on a work trip?",
+      "b": "What has to be written in the logbook when I use a pool car?",
+      "a_subject": "g06",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.244345
+    },
+    {
+      "a": "How much can I claim for meals per day on a work trip?",
+      "b": "Which details does the fleet logbook record for every trip?",
+      "a_subject": "g06",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.303859
+    },
+    {
+      "a": "How much can I claim for meals per day on a work trip?",
+      "b": "vehicle logbook",
+      "a_subject": "g06",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.211706
+    },
+    {
+      "a": "How much can I claim for meals per day on a work trip?",
+      "b": "Is every new employee given a buddy?",
+      "a_subject": "g06",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.260206
+    },
+    {
+      "a": "How much can I claim for meals per day on a work trip?",
+      "b": "What does the buddy program do for someone in their first week?",
+      "a_subject": "g06",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.243172
+    },
+    {
+      "a": "How much can I claim for meals per day on a work trip?",
+      "b": "buddy program",
+      "a_subject": "g06",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.237546
+    },
+    {
+      "a": "How much can I claim for meals per day on a work trip?",
+      "b": "For how many years must finance records be retained?",
+      "a_subject": "g06",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.224959
+    },
+    {
+      "a": "How much can I claim for meals per day on a work trip?",
+      "b": "When can old accounting paperwork be destroyed?",
+      "a_subject": "g06",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.196668
+    },
+    {
+      "a": "How much can I claim for meals per day on a work trip?",
+      "b": "financial records retention",
+      "a_subject": "g06",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.225265
+    },
+    {
+      "a": "How much can I claim for meals per day on a work trip?",
+      "b": "How far from the main office must copies of vital records be stored?",
+      "a_subject": "g06",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.17345
+    },
+    {
+      "a": "How much can I claim for meals per day on a work trip?",
+      "b": "Where are the backups of our most important records kept?",
+      "a_subject": "g06",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.174501
+    },
+    {
+      "a": "How much can I claim for meals per day on a work trip?",
+      "b": "vital records backup",
+      "a_subject": "g06",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.170508
+    },
+    {
+      "a": "Is there a cap on what I spend on food while travelling for work?",
+      "b": "meal allowance",
+      "a_subject": "g06",
+      "b_subject": "g06",
+      "same_subject": true,
+      "similarity": 0.601184
+    },
+    {
+      "a": "Is there a cap on what I spend on food while travelling for work?",
+      "b": "How do I set up printing from my laptop?",
+      "a_subject": "g06",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.159032
+    },
+    {
+      "a": "Is there a cap on what I spend on food while travelling for work?",
+      "b": "What do I do at the printer to release my print job?",
+      "a_subject": "g06",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.13516
+    },
+    {
+      "a": "Is there a cap on what I spend on food while travelling for work?",
+      "b": "printer setup",
+      "a_subject": "g06",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.184376
+    },
+    {
+      "a": "Is there a cap on what I spend on food while travelling for work?",
+      "b": "Who has to approve a meeting room booking for a large group?",
+      "a_subject": "g06",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.210251
+    },
+    {
+      "a": "Is there a cap on what I spend on food while travelling for work?",
+      "b": "Can I book a room for an evening event with thirty guests without asking anyone?",
+      "a_subject": "g06",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.200313
+    },
+    {
+      "a": "Is there a cap on what I spend on food while travelling for work?",
+      "b": "large event room booking",
+      "a_subject": "g06",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.170196
+    },
+    {
+      "a": "Is there a cap on what I spend on food while travelling for work?",
+      "b": "What has to be written in the logbook when I use a pool car?",
+      "a_subject": "g06",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.205692
+    },
+    {
+      "a": "Is there a cap on what I spend on food while travelling for work?",
+      "b": "Which details does the fleet logbook record for every trip?",
+      "a_subject": "g06",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.273515
+    },
+    {
+      "a": "Is there a cap on what I spend on food while travelling for work?",
+      "b": "vehicle logbook",
+      "a_subject": "g06",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.22205
+    },
+    {
+      "a": "Is there a cap on what I spend on food while travelling for work?",
+      "b": "Is every new employee given a buddy?",
+      "a_subject": "g06",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.254835
+    },
+    {
+      "a": "Is there a cap on what I spend on food while travelling for work?",
+      "b": "What does the buddy program do for someone in their first week?",
+      "a_subject": "g06",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.207814
+    },
+    {
+      "a": "Is there a cap on what I spend on food while travelling for work?",
+      "b": "buddy program",
+      "a_subject": "g06",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.218146
+    },
+    {
+      "a": "Is there a cap on what I spend on food while travelling for work?",
+      "b": "For how many years must finance records be retained?",
+      "a_subject": "g06",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.268024
+    },
+    {
+      "a": "Is there a cap on what I spend on food while travelling for work?",
+      "b": "When can old accounting paperwork be destroyed?",
+      "a_subject": "g06",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.201301
+    },
+    {
+      "a": "Is there a cap on what I spend on food while travelling for work?",
+      "b": "financial records retention",
+      "a_subject": "g06",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.267251
+    },
+    {
+      "a": "Is there a cap on what I spend on food while travelling for work?",
+      "b": "How far from the main office must copies of vital records be stored?",
+      "a_subject": "g06",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.203076
+    },
+    {
+      "a": "Is there a cap on what I spend on food while travelling for work?",
+      "b": "Where are the backups of our most important records kept?",
+      "a_subject": "g06",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.196049
+    },
+    {
+      "a": "Is there a cap on what I spend on food while travelling for work?",
+      "b": "vital records backup",
+      "a_subject": "g06",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.158047
+    },
+    {
+      "a": "meal allowance",
+      "b": "How do I set up printing from my laptop?",
+      "a_subject": "g06",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.152981
+    },
+    {
+      "a": "meal allowance",
+      "b": "What do I do at the printer to release my print job?",
+      "a_subject": "g06",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.162179
+    },
+    {
+      "a": "meal allowance",
+      "b": "printer setup",
+      "a_subject": "g06",
+      "b_subject": "g07",
+      "same_subject": false,
+      "similarity": 0.259556
+    },
+    {
+      "a": "meal allowance",
+      "b": "Who has to approve a meeting room booking for a large group?",
+      "a_subject": "g06",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.236357
+    },
+    {
+      "a": "meal allowance",
+      "b": "Can I book a room for an evening event with thirty guests without asking anyone?",
+      "a_subject": "g06",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.186675
+    },
+    {
+      "a": "meal allowance",
+      "b": "large event room booking",
+      "a_subject": "g06",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.245466
+    },
+    {
+      "a": "meal allowance",
+      "b": "What has to be written in the logbook when I use a pool car?",
+      "a_subject": "g06",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.214109
+    },
+    {
+      "a": "meal allowance",
+      "b": "Which details does the fleet logbook record for every trip?",
+      "a_subject": "g06",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.23495
+    },
+    {
+      "a": "meal allowance",
+      "b": "vehicle logbook",
+      "a_subject": "g06",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.270829
+    },
+    {
+      "a": "meal allowance",
+      "b": "Is every new employee given a buddy?",
+      "a_subject": "g06",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.290861
+    },
+    {
+      "a": "meal allowance",
+      "b": "What does the buddy program do for someone in their first week?",
+      "a_subject": "g06",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.265136
+    },
+    {
+      "a": "meal allowance",
+      "b": "buddy program",
+      "a_subject": "g06",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.316535
+    },
+    {
+      "a": "meal allowance",
+      "b": "For how many years must finance records be retained?",
+      "a_subject": "g06",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.246732
+    },
+    {
+      "a": "meal allowance",
+      "b": "When can old accounting paperwork be destroyed?",
+      "a_subject": "g06",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.191252
+    },
+    {
+      "a": "meal allowance",
+      "b": "financial records retention",
+      "a_subject": "g06",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.267301
+    },
+    {
+      "a": "meal allowance",
+      "b": "How far from the main office must copies of vital records be stored?",
+      "a_subject": "g06",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.150658
+    },
+    {
+      "a": "meal allowance",
+      "b": "Where are the backups of our most important records kept?",
+      "a_subject": "g06",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.164037
+    },
+    {
+      "a": "meal allowance",
+      "b": "vital records backup",
+      "a_subject": "g06",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.203558
+    },
+    {
+      "a": "How do I set up printing from my laptop?",
+      "b": "What do I do at the printer to release my print job?",
+      "a_subject": "g07",
+      "b_subject": "g07",
+      "same_subject": true,
+      "similarity": 0.568665
+    },
+    {
+      "a": "How do I set up printing from my laptop?",
+      "b": "printer setup",
+      "a_subject": "g07",
+      "b_subject": "g07",
+      "same_subject": true,
+      "similarity": 0.814061
+    },
+    {
+      "a": "How do I set up printing from my laptop?",
+      "b": "Who has to approve a meeting room booking for a large group?",
+      "a_subject": "g07",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.171683
+    },
+    {
+      "a": "How do I set up printing from my laptop?",
+      "b": "Can I book a room for an evening event with thirty guests without asking anyone?",
+      "a_subject": "g07",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.150458
+    },
+    {
+      "a": "How do I set up printing from my laptop?",
+      "b": "large event room booking",
+      "a_subject": "g07",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.180065
+    },
+    {
+      "a": "How do I set up printing from my laptop?",
+      "b": "What has to be written in the logbook when I use a pool car?",
+      "a_subject": "g07",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.154063
+    },
+    {
+      "a": "How do I set up printing from my laptop?",
+      "b": "Which details does the fleet logbook record for every trip?",
+      "a_subject": "g07",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.113126
+    },
+    {
+      "a": "How do I set up printing from my laptop?",
+      "b": "vehicle logbook",
+      "a_subject": "g07",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.220636
+    },
+    {
+      "a": "How do I set up printing from my laptop?",
+      "b": "Is every new employee given a buddy?",
+      "a_subject": "g07",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.152003
+    },
+    {
+      "a": "How do I set up printing from my laptop?",
+      "b": "What does the buddy program do for someone in their first week?",
+      "a_subject": "g07",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.181245
+    },
+    {
+      "a": "How do I set up printing from my laptop?",
+      "b": "buddy program",
+      "a_subject": "g07",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.212839
+    },
+    {
+      "a": "How do I set up printing from my laptop?",
+      "b": "For how many years must finance records be retained?",
+      "a_subject": "g07",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.120951
+    },
+    {
+      "a": "How do I set up printing from my laptop?",
+      "b": "When can old accounting paperwork be destroyed?",
+      "a_subject": "g07",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.194202
+    },
+    {
+      "a": "How do I set up printing from my laptop?",
+      "b": "financial records retention",
+      "a_subject": "g07",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.153295
+    },
+    {
+      "a": "How do I set up printing from my laptop?",
+      "b": "How far from the main office must copies of vital records be stored?",
+      "a_subject": "g07",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.27262
+    },
+    {
+      "a": "How do I set up printing from my laptop?",
+      "b": "Where are the backups of our most important records kept?",
+      "a_subject": "g07",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.206234
+    },
+    {
+      "a": "How do I set up printing from my laptop?",
+      "b": "vital records backup",
+      "a_subject": "g07",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.236699
+    },
+    {
+      "a": "What do I do at the printer to release my print job?",
+      "b": "printer setup",
+      "a_subject": "g07",
+      "b_subject": "g07",
+      "same_subject": true,
+      "similarity": 0.599288
+    },
+    {
+      "a": "What do I do at the printer to release my print job?",
+      "b": "Who has to approve a meeting room booking for a large group?",
+      "a_subject": "g07",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.204859
+    },
+    {
+      "a": "What do I do at the printer to release my print job?",
+      "b": "Can I book a room for an evening event with thirty guests without asking anyone?",
+      "a_subject": "g07",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.155154
+    },
+    {
+      "a": "What do I do at the printer to release my print job?",
+      "b": "large event room booking",
+      "a_subject": "g07",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.160594
+    },
+    {
+      "a": "What do I do at the printer to release my print job?",
+      "b": "What has to be written in the logbook when I use a pool car?",
+      "a_subject": "g07",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.170408
+    },
+    {
+      "a": "What do I do at the printer to release my print job?",
+      "b": "Which details does the fleet logbook record for every trip?",
+      "a_subject": "g07",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.173915
+    },
+    {
+      "a": "What do I do at the printer to release my print job?",
+      "b": "vehicle logbook",
+      "a_subject": "g07",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.211384
+    },
+    {
+      "a": "What do I do at the printer to release my print job?",
+      "b": "Is every new employee given a buddy?",
+      "a_subject": "g07",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.174394
+    },
+    {
+      "a": "What do I do at the printer to release my print job?",
+      "b": "What does the buddy program do for someone in their first week?",
+      "a_subject": "g07",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.188991
+    },
+    {
+      "a": "What do I do at the printer to release my print job?",
+      "b": "buddy program",
+      "a_subject": "g07",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.184848
+    },
+    {
+      "a": "What do I do at the printer to release my print job?",
+      "b": "For how many years must finance records be retained?",
+      "a_subject": "g07",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.234387
+    },
+    {
+      "a": "What do I do at the printer to release my print job?",
+      "b": "When can old accounting paperwork be destroyed?",
+      "a_subject": "g07",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.35376
+    },
+    {
+      "a": "What do I do at the printer to release my print job?",
+      "b": "financial records retention",
+      "a_subject": "g07",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.262642
+    },
+    {
+      "a": "What do I do at the printer to release my print job?",
+      "b": "How far from the main office must copies of vital records be stored?",
+      "a_subject": "g07",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.272876
+    },
+    {
+      "a": "What do I do at the printer to release my print job?",
+      "b": "Where are the backups of our most important records kept?",
+      "a_subject": "g07",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.25146
+    },
+    {
+      "a": "What do I do at the printer to release my print job?",
+      "b": "vital records backup",
+      "a_subject": "g07",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.237542
+    },
+    {
+      "a": "printer setup",
+      "b": "Who has to approve a meeting room booking for a large group?",
+      "a_subject": "g07",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.198706
+    },
+    {
+      "a": "printer setup",
+      "b": "Can I book a room for an evening event with thirty guests without asking anyone?",
+      "a_subject": "g07",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.157843
+    },
+    {
+      "a": "printer setup",
+      "b": "large event room booking",
+      "a_subject": "g07",
+      "b_subject": "g08",
+      "same_subject": false,
+      "similarity": 0.270647
+    },
+    {
+      "a": "printer setup",
+      "b": "What has to be written in the logbook when I use a pool car?",
+      "a_subject": "g07",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.17384
+    },
+    {
+      "a": "printer setup",
+      "b": "Which details does the fleet logbook record for every trip?",
+      "a_subject": "g07",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.143714
+    },
+    {
+      "a": "printer setup",
+      "b": "vehicle logbook",
+      "a_subject": "g07",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.288587
+    },
+    {
+      "a": "printer setup",
+      "b": "Is every new employee given a buddy?",
+      "a_subject": "g07",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.19473
+    },
+    {
+      "a": "printer setup",
+      "b": "What does the buddy program do for someone in their first week?",
+      "a_subject": "g07",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.205269
+    },
+    {
+      "a": "printer setup",
+      "b": "buddy program",
+      "a_subject": "g07",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.297649
+    },
+    {
+      "a": "printer setup",
+      "b": "For how many years must finance records be retained?",
+      "a_subject": "g07",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.168102
+    },
+    {
+      "a": "printer setup",
+      "b": "When can old accounting paperwork be destroyed?",
+      "a_subject": "g07",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.239759
+    },
+    {
+      "a": "printer setup",
+      "b": "financial records retention",
+      "a_subject": "g07",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.218678
+    },
+    {
+      "a": "printer setup",
+      "b": "How far from the main office must copies of vital records be stored?",
+      "a_subject": "g07",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.303307
+    },
+    {
+      "a": "printer setup",
+      "b": "Where are the backups of our most important records kept?",
+      "a_subject": "g07",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.265641
+    },
+    {
+      "a": "printer setup",
+      "b": "vital records backup",
+      "a_subject": "g07",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.294244
+    },
+    {
+      "a": "Who has to approve a meeting room booking for a large group?",
+      "b": "Can I book a room for an evening event with thirty guests without asking anyone?",
+      "a_subject": "g08",
+      "b_subject": "g08",
+      "same_subject": true,
+      "similarity": 0.595106
+    },
+    {
+      "a": "Who has to approve a meeting room booking for a large group?",
+      "b": "large event room booking",
+      "a_subject": "g08",
+      "b_subject": "g08",
+      "same_subject": true,
+      "similarity": 0.678425
+    },
+    {
+      "a": "Who has to approve a meeting room booking for a large group?",
+      "b": "What has to be written in the logbook when I use a pool car?",
+      "a_subject": "g08",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.258827
+    },
+    {
+      "a": "Who has to approve a meeting room booking for a large group?",
+      "b": "Which details does the fleet logbook record for every trip?",
+      "a_subject": "g08",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.220554
+    },
+    {
+      "a": "Who has to approve a meeting room booking for a large group?",
+      "b": "vehicle logbook",
+      "a_subject": "g08",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.206923
+    },
+    {
+      "a": "Who has to approve a meeting room booking for a large group?",
+      "b": "Is every new employee given a buddy?",
+      "a_subject": "g08",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.25747
+    },
+    {
+      "a": "Who has to approve a meeting room booking for a large group?",
+      "b": "What does the buddy program do for someone in their first week?",
+      "a_subject": "g08",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.194415
+    },
+    {
+      "a": "Who has to approve a meeting room booking for a large group?",
+      "b": "buddy program",
+      "a_subject": "g08",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.210375
+    },
+    {
+      "a": "Who has to approve a meeting room booking for a large group?",
+      "b": "For how many years must finance records be retained?",
+      "a_subject": "g08",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.203942
+    },
+    {
+      "a": "Who has to approve a meeting room booking for a large group?",
+      "b": "When can old accounting paperwork be destroyed?",
+      "a_subject": "g08",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.232771
+    },
+    {
+      "a": "Who has to approve a meeting room booking for a large group?",
+      "b": "financial records retention",
+      "a_subject": "g08",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.192411
+    },
+    {
+      "a": "Who has to approve a meeting room booking for a large group?",
+      "b": "How far from the main office must copies of vital records be stored?",
+      "a_subject": "g08",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.264502
+    },
+    {
+      "a": "Who has to approve a meeting room booking for a large group?",
+      "b": "Where are the backups of our most important records kept?",
+      "a_subject": "g08",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.247455
+    },
+    {
+      "a": "Who has to approve a meeting room booking for a large group?",
+      "b": "vital records backup",
+      "a_subject": "g08",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.186258
+    },
+    {
+      "a": "Can I book a room for an evening event with thirty guests without asking anyone?",
+      "b": "large event room booking",
+      "a_subject": "g08",
+      "b_subject": "g08",
+      "same_subject": true,
+      "similarity": 0.640623
+    },
+    {
+      "a": "Can I book a room for an evening event with thirty guests without asking anyone?",
+      "b": "What has to be written in the logbook when I use a pool car?",
+      "a_subject": "g08",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.213753
+    },
+    {
+      "a": "Can I book a room for an evening event with thirty guests without asking anyone?",
+      "b": "Which details does the fleet logbook record for every trip?",
+      "a_subject": "g08",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.110668
+    },
+    {
+      "a": "Can I book a room for an evening event with thirty guests without asking anyone?",
+      "b": "vehicle logbook",
+      "a_subject": "g08",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.163868
+    },
+    {
+      "a": "Can I book a room for an evening event with thirty guests without asking anyone?",
+      "b": "Is every new employee given a buddy?",
+      "a_subject": "g08",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.206616
+    },
+    {
+      "a": "Can I book a room for an evening event with thirty guests without asking anyone?",
+      "b": "What does the buddy program do for someone in their first week?",
+      "a_subject": "g08",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.159462
+    },
+    {
+      "a": "Can I book a room for an evening event with thirty guests without asking anyone?",
+      "b": "buddy program",
+      "a_subject": "g08",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.181879
+    },
+    {
+      "a": "Can I book a room for an evening event with thirty guests without asking anyone?",
+      "b": "For how many years must finance records be retained?",
+      "a_subject": "g08",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.137146
+    },
+    {
+      "a": "Can I book a room for an evening event with thirty guests without asking anyone?",
+      "b": "When can old accounting paperwork be destroyed?",
+      "a_subject": "g08",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.163516
+    },
+    {
+      "a": "Can I book a room for an evening event with thirty guests without asking anyone?",
+      "b": "financial records retention",
+      "a_subject": "g08",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.1133
+    },
+    {
+      "a": "Can I book a room for an evening event with thirty guests without asking anyone?",
+      "b": "How far from the main office must copies of vital records be stored?",
+      "a_subject": "g08",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.173555
+    },
+    {
+      "a": "Can I book a room for an evening event with thirty guests without asking anyone?",
+      "b": "Where are the backups of our most important records kept?",
+      "a_subject": "g08",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.107361
+    },
+    {
+      "a": "Can I book a room for an evening event with thirty guests without asking anyone?",
+      "b": "vital records backup",
+      "a_subject": "g08",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.100018
+    },
+    {
+      "a": "large event room booking",
+      "b": "What has to be written in the logbook when I use a pool car?",
+      "a_subject": "g08",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.175034
+    },
+    {
+      "a": "large event room booking",
+      "b": "Which details does the fleet logbook record for every trip?",
+      "a_subject": "g08",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.125169
+    },
+    {
+      "a": "large event room booking",
+      "b": "vehicle logbook",
+      "a_subject": "g08",
+      "b_subject": "g09",
+      "same_subject": false,
+      "similarity": 0.260589
+    },
+    {
+      "a": "large event room booking",
+      "b": "Is every new employee given a buddy?",
+      "a_subject": "g08",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.179421
+    },
+    {
+      "a": "large event room booking",
+      "b": "What does the buddy program do for someone in their first week?",
+      "a_subject": "g08",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.164187
+    },
+    {
+      "a": "large event room booking",
+      "b": "buddy program",
+      "a_subject": "g08",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.256041
+    },
+    {
+      "a": "large event room booking",
+      "b": "For how many years must finance records be retained?",
+      "a_subject": "g08",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.169943
+    },
+    {
+      "a": "large event room booking",
+      "b": "When can old accounting paperwork be destroyed?",
+      "a_subject": "g08",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.165564
+    },
+    {
+      "a": "large event room booking",
+      "b": "financial records retention",
+      "a_subject": "g08",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.177555
+    },
+    {
+      "a": "large event room booking",
+      "b": "How far from the main office must copies of vital records be stored?",
+      "a_subject": "g08",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.231646
+    },
+    {
+      "a": "large event room booking",
+      "b": "Where are the backups of our most important records kept?",
+      "a_subject": "g08",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.21264
+    },
+    {
+      "a": "large event room booking",
+      "b": "vital records backup",
+      "a_subject": "g08",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.189604
+    },
+    {
+      "a": "What has to be written in the logbook when I use a pool car?",
+      "b": "Which details does the fleet logbook record for every trip?",
+      "a_subject": "g09",
+      "b_subject": "g09",
+      "same_subject": true,
+      "similarity": 0.537685
+    },
+    {
+      "a": "What has to be written in the logbook when I use a pool car?",
+      "b": "vehicle logbook",
+      "a_subject": "g09",
+      "b_subject": "g09",
+      "same_subject": true,
+      "similarity": 0.602225
+    },
+    {
+      "a": "What has to be written in the logbook when I use a pool car?",
+      "b": "Is every new employee given a buddy?",
+      "a_subject": "g09",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.218637
+    },
+    {
+      "a": "What has to be written in the logbook when I use a pool car?",
+      "b": "What does the buddy program do for someone in their first week?",
+      "a_subject": "g09",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.220158
+    },
+    {
+      "a": "What has to be written in the logbook when I use a pool car?",
+      "b": "buddy program",
+      "a_subject": "g09",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.23037
+    },
+    {
+      "a": "What has to be written in the logbook when I use a pool car?",
+      "b": "For how many years must finance records be retained?",
+      "a_subject": "g09",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.2019
+    },
+    {
+      "a": "What has to be written in the logbook when I use a pool car?",
+      "b": "When can old accounting paperwork be destroyed?",
+      "a_subject": "g09",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.158941
+    },
+    {
+      "a": "What has to be written in the logbook when I use a pool car?",
+      "b": "financial records retention",
+      "a_subject": "g09",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.184165
+    },
+    {
+      "a": "What has to be written in the logbook when I use a pool car?",
+      "b": "How far from the main office must copies of vital records be stored?",
+      "a_subject": "g09",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.167141
+    },
+    {
+      "a": "What has to be written in the logbook when I use a pool car?",
+      "b": "Where are the backups of our most important records kept?",
+      "a_subject": "g09",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.217555
+    },
+    {
+      "a": "What has to be written in the logbook when I use a pool car?",
+      "b": "vital records backup",
+      "a_subject": "g09",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.185375
+    },
+    {
+      "a": "Which details does the fleet logbook record for every trip?",
+      "b": "vehicle logbook",
+      "a_subject": "g09",
+      "b_subject": "g09",
+      "same_subject": true,
+      "similarity": 0.636324
+    },
+    {
+      "a": "Which details does the fleet logbook record for every trip?",
+      "b": "Is every new employee given a buddy?",
+      "a_subject": "g09",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.180908
+    },
+    {
+      "a": "Which details does the fleet logbook record for every trip?",
+      "b": "What does the buddy program do for someone in their first week?",
+      "a_subject": "g09",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.192582
+    },
+    {
+      "a": "Which details does the fleet logbook record for every trip?",
+      "b": "buddy program",
+      "a_subject": "g09",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.182466
+    },
+    {
+      "a": "Which details does the fleet logbook record for every trip?",
+      "b": "For how many years must finance records be retained?",
+      "a_subject": "g09",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.296622
+    },
+    {
+      "a": "Which details does the fleet logbook record for every trip?",
+      "b": "When can old accounting paperwork be destroyed?",
+      "a_subject": "g09",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.16428
+    },
+    {
+      "a": "Which details does the fleet logbook record for every trip?",
+      "b": "financial records retention",
+      "a_subject": "g09",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.31201
+    },
+    {
+      "a": "Which details does the fleet logbook record for every trip?",
+      "b": "How far from the main office must copies of vital records be stored?",
+      "a_subject": "g09",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.202736
+    },
+    {
+      "a": "Which details does the fleet logbook record for every trip?",
+      "b": "Where are the backups of our most important records kept?",
+      "a_subject": "g09",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.340232
+    },
+    {
+      "a": "Which details does the fleet logbook record for every trip?",
+      "b": "vital records backup",
+      "a_subject": "g09",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.271501
+    },
+    {
+      "a": "vehicle logbook",
+      "b": "Is every new employee given a buddy?",
+      "a_subject": "g09",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.197982
+    },
+    {
+      "a": "vehicle logbook",
+      "b": "What does the buddy program do for someone in their first week?",
+      "a_subject": "g09",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.200417
+    },
+    {
+      "a": "vehicle logbook",
+      "b": "buddy program",
+      "a_subject": "g09",
+      "b_subject": "g10",
+      "same_subject": false,
+      "similarity": 0.312356
+    },
+    {
+      "a": "vehicle logbook",
+      "b": "For how many years must finance records be retained?",
+      "a_subject": "g09",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.341223
+    },
+    {
+      "a": "vehicle logbook",
+      "b": "When can old accounting paperwork be destroyed?",
+      "a_subject": "g09",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.254898
+    },
+    {
+      "a": "vehicle logbook",
+      "b": "financial records retention",
+      "a_subject": "g09",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.371108
+    },
+    {
+      "a": "vehicle logbook",
+      "b": "How far from the main office must copies of vital records be stored?",
+      "a_subject": "g09",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.240079
+    },
+    {
+      "a": "vehicle logbook",
+      "b": "Where are the backups of our most important records kept?",
+      "a_subject": "g09",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.357984
+    },
+    {
+      "a": "vehicle logbook",
+      "b": "vital records backup",
+      "a_subject": "g09",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.37553
+    },
+    {
+      "a": "Is every new employee given a buddy?",
+      "b": "What does the buddy program do for someone in their first week?",
+      "a_subject": "g10",
+      "b_subject": "g10",
+      "same_subject": true,
+      "similarity": 0.688892
+    },
+    {
+      "a": "Is every new employee given a buddy?",
+      "b": "buddy program",
+      "a_subject": "g10",
+      "b_subject": "g10",
+      "same_subject": true,
+      "similarity": 0.67885
+    },
+    {
+      "a": "Is every new employee given a buddy?",
+      "b": "For how many years must finance records be retained?",
+      "a_subject": "g10",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.196148
+    },
+    {
+      "a": "Is every new employee given a buddy?",
+      "b": "When can old accounting paperwork be destroyed?",
+      "a_subject": "g10",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.204659
+    },
+    {
+      "a": "Is every new employee given a buddy?",
+      "b": "financial records retention",
+      "a_subject": "g10",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.18735
+    },
+    {
+      "a": "Is every new employee given a buddy?",
+      "b": "How far from the main office must copies of vital records be stored?",
+      "a_subject": "g10",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.170369
+    },
+    {
+      "a": "Is every new employee given a buddy?",
+      "b": "Where are the backups of our most important records kept?",
+      "a_subject": "g10",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.19501
+    },
+    {
+      "a": "Is every new employee given a buddy?",
+      "b": "vital records backup",
+      "a_subject": "g10",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.178485
+    },
+    {
+      "a": "What does the buddy program do for someone in their first week?",
+      "b": "buddy program",
+      "a_subject": "g10",
+      "b_subject": "g10",
+      "same_subject": true,
+      "similarity": 0.796626
+    },
+    {
+      "a": "What does the buddy program do for someone in their first week?",
+      "b": "For how many years must finance records be retained?",
+      "a_subject": "g10",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.136603
+    },
+    {
+      "a": "What does the buddy program do for someone in their first week?",
+      "b": "When can old accounting paperwork be destroyed?",
+      "a_subject": "g10",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.167436
+    },
+    {
+      "a": "What does the buddy program do for someone in their first week?",
+      "b": "financial records retention",
+      "a_subject": "g10",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.154706
+    },
+    {
+      "a": "What does the buddy program do for someone in their first week?",
+      "b": "How far from the main office must copies of vital records be stored?",
+      "a_subject": "g10",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.108107
+    },
+    {
+      "a": "What does the buddy program do for someone in their first week?",
+      "b": "Where are the backups of our most important records kept?",
+      "a_subject": "g10",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.161339
+    },
+    {
+      "a": "What does the buddy program do for someone in their first week?",
+      "b": "vital records backup",
+      "a_subject": "g10",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.192331
+    },
+    {
+      "a": "buddy program",
+      "b": "For how many years must finance records be retained?",
+      "a_subject": "g10",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.164149
+    },
+    {
+      "a": "buddy program",
+      "b": "When can old accounting paperwork be destroyed?",
+      "a_subject": "g10",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.188847
+    },
+    {
+      "a": "buddy program",
+      "b": "financial records retention",
+      "a_subject": "g10",
+      "b_subject": "g11",
+      "same_subject": false,
+      "similarity": 0.194066
+    },
+    {
+      "a": "buddy program",
+      "b": "How far from the main office must copies of vital records be stored?",
+      "a_subject": "g10",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.117657
+    },
+    {
+      "a": "buddy program",
+      "b": "Where are the backups of our most important records kept?",
+      "a_subject": "g10",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.19394
+    },
+    {
+      "a": "buddy program",
+      "b": "vital records backup",
+      "a_subject": "g10",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.266662
+    },
+    {
+      "a": "For how many years must finance records be retained?",
+      "b": "When can old accounting paperwork be destroyed?",
+      "a_subject": "g11",
+      "b_subject": "g11",
+      "same_subject": true,
+      "similarity": 0.532173
+    },
+    {
+      "a": "For how many years must finance records be retained?",
+      "b": "financial records retention",
+      "a_subject": "g11",
+      "b_subject": "g11",
+      "same_subject": true,
+      "similarity": 0.86734
+    },
+    {
+      "a": "For how many years must finance records be retained?",
+      "b": "How far from the main office must copies of vital records be stored?",
+      "a_subject": "g11",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.42723
+    },
+    {
+      "a": "For how many years must finance records be retained?",
+      "b": "Where are the backups of our most important records kept?",
+      "a_subject": "g11",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.502632
+    },
+    {
+      "a": "For how many years must finance records be retained?",
+      "b": "vital records backup",
+      "a_subject": "g11",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.431328
+    },
+    {
+      "a": "When can old accounting paperwork be destroyed?",
+      "b": "financial records retention",
+      "a_subject": "g11",
+      "b_subject": "g11",
+      "same_subject": true,
+      "similarity": 0.540135
+    },
+    {
+      "a": "When can old accounting paperwork be destroyed?",
+      "b": "How far from the main office must copies of vital records be stored?",
+      "a_subject": "g11",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.369778
+    },
+    {
+      "a": "When can old accounting paperwork be destroyed?",
+      "b": "Where are the backups of our most important records kept?",
+      "a_subject": "g11",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.421087
+    },
+    {
+      "a": "When can old accounting paperwork be destroyed?",
+      "b": "vital records backup",
+      "a_subject": "g11",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.384818
+    },
+    {
+      "a": "financial records retention",
+      "b": "How far from the main office must copies of vital records be stored?",
+      "a_subject": "g11",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.406452
+    },
+    {
+      "a": "financial records retention",
+      "b": "Where are the backups of our most important records kept?",
+      "a_subject": "g11",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.578803
+    },
+    {
+      "a": "financial records retention",
+      "b": "vital records backup",
+      "a_subject": "g11",
+      "b_subject": "g12",
+      "same_subject": false,
+      "similarity": 0.513542
+    },
+    {
+      "a": "How far from the main office must copies of vital records be stored?",
+      "b": "Where are the backups of our most important records kept?",
+      "a_subject": "g12",
+      "b_subject": "g12",
+      "same_subject": true,
+      "similarity": 0.589845
+    },
+    {
+      "a": "How far from the main office must copies of vital records be stored?",
+      "b": "vital records backup",
+      "a_subject": "g12",
+      "b_subject": "g12",
+      "same_subject": true,
+      "similarity": 0.618323
+    },
+    {
+      "a": "Where are the backups of our most important records kept?",
+      "b": "vital records backup",
+      "a_subject": "g12",
+      "b_subject": "g12",
+      "same_subject": true,
+      "similarity": 0.718436
+    }
+  ]
+}

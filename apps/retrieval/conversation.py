@@ -68,18 +68,18 @@ cached between turns at all — not passages either, which is FR-13's "each turn
 fresh retrieval based on the resolved question rather than reusing the previous turn's
 passages".
 
-**THE MULTI-TURN PROMPT IS UNMEASURED.** docs/flm-baseline.md's 100% schema conformance
-and 0% fabricated identifiers were measured on a prompt of passages plus ONE question.
-scripts/citation_harness.py asks single questions, so re-running it does not cover the
-composed form and was not re-run for this item. What is known about the composed prompt is
-what the tests assert about its text, plus the fact that verification is indifferent to
-where in the prompt an identifier came from. What is NOT known is whether gemma3:4b's
-schema conformance holds with a history block in front of it. Measuring it needs a
-multi-turn question set the harness does not have.
+**The multi-turn prompt was unmeasured when this module was written** (Stage 4 item 9).
+docs/flm-baseline.md's 100% schema conformance and 0% fabricated identifiers were measured
+on a prompt of passages plus ONE question, and scripts/citation_harness.py then asked single
+questions only. What was not known is whether gemma3:4b's schema conformance holds with a
+history block in front of it. Verification is indifferent to where in the prompt an
+identifier came from, and the tests assert the composed prompt's text.
 
-(Stage 4 item 9a later measured the block in the prompt with retrieval held constant;
-D-42 records it. FR-13 end to end — the composed join changing what is retrieved — is
-D-86's, and ``compose`` below is what its harness mode calls.)
+It has been measured since. Stage 4 item 9a measured the block in the prompt with retrieval
+held constant (D-42). D-86's thread runs measure FR-13 end to end, the composed join
+changing what is retrieved, and ``compose`` below is what the harness's thread mode calls.
+In the thread runs of 3 to 11 November 2026, on FLM and on Claude, every with-history run
+conformed on its first attempt (D-42's note of 12 November 2026).
 
 **7. ``compose`` is the composition, and it is pure (D-86 decision 5).** It takes the
 question and the earlier questions and returns both strings, with no database and no
@@ -92,6 +92,8 @@ join or of the labelling, in either place, fails it.
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+
+from django.db.models import Q
 
 from apps.ai.prompting import build_conversational_question
 from apps.core.constants import MAXIMUM_CONVERSATION_TURNS
@@ -163,6 +165,43 @@ def prior_questions(*, conversation, user) -> tuple[str, ...]:
         return ()
     newest_first = (
         QueryLog.objects.filter(conversation=conversation, user=user)
+        .order_by("-answered_at", "-id")
+        .values_list("question", flat=True)[:MAXIMUM_CONVERSATION_TURNS]
+    )
+    return tuple(reversed(list(newest_first)))
+
+
+def prior_questions_before(row: QueryLog) -> tuple[str, ...]:
+    """The earlier questions ``row`` was composed with when it was asked, oldest first (D-127).
+
+    ``prior_questions`` is read at the moment of an ask, before that ask is logged, so it sees
+    every turn then in the conversation. This reads the same turns afterwards, for a row already
+    logged: the same conversation, the same user, the same order and the same limit, and only the
+    rows that sort before ``row``. FR-19's aggregation cycle uses it to rebuild the string
+    retrieval ranked for a follow-up (apps/retrieval/gaps.py).
+
+    A row with no conversation has no history. That is a one-off question, or a turn whose
+    conversation has since been deleted: ``QueryLog.conversation`` is SET_NULL, and its earlier
+    turns can then no longer be told from any other row.
+
+    It is the set ``prior_questions`` returned at the ask as long as all of these hold:
+
+    - no turn of the conversation has been deleted since;
+    - MAXIMUM_CONVERSATION_TURNS has not changed since;
+    - no other turn of the conversation shares the row's ``answered_at``. If one does, the
+      primary key decides which sorts first, as it does in ``prior_questions``, and it says
+      nothing about time;
+    - no turn of the conversation was logged while this one was being answered. ``answered_at``
+      is set when a row is written, after its history was read, so a turn logged in between
+      would sort before it here and not have been in its history then. One ask in flight per
+      user (D-79's ask slot) prevents that on the single-process server; a multi-process server,
+      or a slot that lapsed after its 45 minutes, would not.
+    """
+    if row.conversation_id is None:
+        return ()
+    newest_first = (
+        QueryLog.objects.filter(conversation_id=row.conversation_id, user_id=row.user_id)
+        .filter(Q(answered_at__lt=row.answered_at) | Q(answered_at=row.answered_at, id__lt=row.id))
         .order_by("-answered_at", "-id")
         .values_list("question", flat=True)[:MAXIMUM_CONVERSATION_TURNS]
     )

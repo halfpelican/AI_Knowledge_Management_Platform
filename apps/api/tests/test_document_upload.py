@@ -137,9 +137,14 @@ def test_a_file_over_the_ceiling_is_rejected(employee_client):
 def test_an_oversized_body_is_refused_before_it_is_parsed(employee_client, upload):
     """FR-08 wants the ceiling applied before the file is read into memory.
 
-    A declared Content-Length past the ceiling is refused without the body being
-    parsed at all, which is what stops a 50 MB transfer being buffered only to be
-    thrown away. The body here is small; the header is what is being tested.
+    A declared Content-Length past the ceiling is answered 413. The body here is small, and the
+    header is what is being tested. This client does not enforce CSRF, so this test cannot show
+    that the body went unread. ``test_request_body_bound.py`` sends the request as the SPA does,
+    with CSRF enforced, and counts the bytes read: none (D-124).
+
+    **Corrected 11 November 2026.** This docstring used to say the body was "refused without the
+    body being parsed at all". That held here only because CSRF was off. In a browser session
+    DRF's CSRF check parsed the body before the view ran.
     """
     response = employee_client.post(
         UPLOAD_URL,

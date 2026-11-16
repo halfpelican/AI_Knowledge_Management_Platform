@@ -1,0 +1,34 @@
+{
+  "name": "Objective 05 reference classifications",
+  "status": "FROZEN. Approved as drafted by the lead on 8 November 2026 (D-106); never tuned against (D-93).",
+  "corpus": "corpus/objective-02: the twenty indexed documents D01-D20",
+  "manifest": "corpus/objective-02/manifest.json supplies each document's reference department and its Project, Process and Topic tags; this file supplies only the document type",
+  "doc_types": ["Policy", "Procedure", "Report", "Meeting Paper"],
+  "notes": [
+    "The type was decided from each document's own text, and `evidence` quotes it.",
+    "`fit` is strong, fair or weak: weak means none of the four types fits well and `alternative` names the next-best. Four are weak: D07, D09, D13, D20.",
+    "The 75% match rate is computed over all twenty suggested types, provisional or not. Department is reported beside it but is not part of the 75%. Tags are reported for information only."
+  ],
+  "documents": [
+    {"id": "D01", "title": "Employee Leave Policy 2026", "doc_type": "Policy", "fit": "strong", "evidence": "This policy sets out the leave entitlements available to all permanent and fixed-term employees", "alternative": null},
+    {"id": "D02", "title": "IT Acceptable Use Policy", "doc_type": "Policy", "fit": "strong", "evidence": "This policy covers every computer, phone, tablet and network service provided by the organisation", "alternative": null},
+    {"id": "D03", "title": "Health and Safety Induction Guide", "doc_type": "Procedure", "fit": "fair", "evidence": "leave the building by the nearest exit and do not use the lifts; All injuries, however minor, must be entered in the incident register on the same day", "alternative": "Policy"},
+    {"id": "D04", "title": "Records Management Handbook", "doc_type": "Procedure", "fit": "fair", "evidence": "Staff who work with purpose and scope are expected to follow the procedures in this handbook; 24 chapters of how records are classified, filed, retained, disposed of and migrated", "alternative": "Policy"},
+    {"id": "D05", "title": "Procurement Guidelines", "doc_type": "Policy", "fit": "strong", "evidence": "Splitting a purchase to stay under a limit is a breach of this policy", "alternative": null},
+    {"id": "D06", "title": "Customer Complaints Procedure", "doc_type": "Procedure", "fit": "strong", "evidence": "Title; the Willow Bridge escalation ladder: team leader within two days, service manager within five days, and the customer experience director within ten days", "alternative": null},
+    {"id": "D07", "title": "Remote Work Agreement Template", "doc_type": "Policy", "fit": "weak", "evidence": "This template records the terms on which an employee may work from a location other than the office: eligibility, core hours, equipment rules, four weeks notice", "alternative": "Procedure"},
+    {"id": "D08", "title": "Onboarding Checklist for New Starters", "doc_type": "Procedure", "fit": "strong", "evidence": "Ordered steps: Before day one, First week, First month, Ninety-day review", "alternative": null},
+    {"id": "D09", "title": "Project Atlas Kickoff Brief", "doc_type": "Meeting Paper", "fit": "weak", "evidence": "A brief prepared for a project kickoff: Project summary, Objectives, Milestones, Risks", "alternative": "Report"},
+    {"id": "D10", "title": "Expense Claims Guide", "doc_type": "Procedure", "fit": "fair", "evidence": "How to claim: Submit the claim in the finance portal within thirty days of the expense, with an itemised receipt attached for every item", "alternative": "Policy"},
+    {"id": "D11", "title": "Data Privacy Notice", "doc_type": "Policy", "fit": "strong", "evidence": "The organisation collects personal information only where it is needed; consent is recorded in the Cedar Vault consent register; Requests are answered within thirty days", "alternative": null},
+    {"id": "D12", "title": "Vendor Register 2026", "doc_type": "Report", "fit": "fair", "evidence": "This register lists the approved suppliers for the 2026 financial year; a data sheet of vendors, contract ends and ratings", "alternative": null},
+    {"id": "D13", "title": "Training Schedule Q4", "doc_type": "Report", "fit": "weak", "evidence": "A schedule of sessions, dates, facilitators, rooms and places; a published listing", "alternative": null},
+    {"id": "D14", "title": "Asset Inventory Melbourne Office", "doc_type": "Report", "fit": "fair", "evidence": "This inventory records IT and furniture assets held at the Melbourne office; a data sheet of asset tags", "alternative": null},
+    {"id": "D15", "title": "Project Budget Tracker FY27", "doc_type": "Report", "fit": "strong", "evidence": "This workbook tracks budget against actual spending for projects in the 2027 financial year", "alternative": null},
+    {"id": "D16", "title": "Team Roster and Skills Matrix", "doc_type": "Report", "fit": "fair", "evidence": "It was compiled during the Ember Field skills audit and is refreshed every year; ratings per person", "alternative": null},
+    {"id": "D17", "title": "Meeting Room Booking Rules", "doc_type": "Policy", "fit": "strong", "evidence": "Rules: Bookings of more than twenty people or bookings that run past six in the evening must be approved by the facilities team", "alternative": null},
+    {"id": "D18", "title": "IT Helpdesk Frequently Asked Questions", "doc_type": "Procedure", "fit": "fair", "evidence": "Use the self-service page to reset it; Select the nearest printer from the list on your laptop and enter your staff card number", "alternative": null},
+    {"id": "D19", "title": "Fleet Vehicle Usage Notes", "doc_type": "Policy", "fit": "fair", "evidence": "Only employees with a current licence who have completed the driver induction may use a fleet vehicle; Fleet vehicles may not be used for private trips except where a written exception has been approved", "alternative": "Procedure"},
+    {"id": "D20", "title": "Office Relocation Announcement", "doc_type": "Report", "fit": "weak", "evidence": "The Melbourne office will relocate to a new building; the Driftwood Lane move weekend is scheduled for the second weekend of November", "alternative": "Procedure"}
+  ]
+}

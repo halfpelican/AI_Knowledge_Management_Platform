@@ -52,9 +52,10 @@ class ScriptedEmbedService(CountingService):
         self.error = error if error is not None else ProviderUnavailable("stub outage")
         self.attempts = Counter()
 
-    def embed(self, texts: list[str]) -> EmbeddingResult:
+    def embed(self, texts: list[str], *, input_type=None) -> EmbeddingResult:
         # Logged before any failure, so a test can count attempts that raised.
         self.embed_calls.append(list(texts))
+        self.embed_input_types.append(input_type)
         text = texts[0]
         self.attempts[text] += 1
         if self.should_fail(text) and self.attempts[text] <= self.failures:
@@ -73,8 +74,9 @@ class MisreportingEmbedService(CountingService):
     plausible on its own and only the pair is wrong.
     """
 
-    def embed(self, texts: list[str]) -> EmbeddingResult:
+    def embed(self, texts: list[str], *, input_type=None) -> EmbeddingResult:
         self.embed_calls.append(list(texts))
+        self.embed_input_types.append(input_type)
         return EmbeddingResult(
             vectors=[[0.0] * (self.dimension - 1) for _ in texts],
             model=STUB_EMBEDDING_MODEL,

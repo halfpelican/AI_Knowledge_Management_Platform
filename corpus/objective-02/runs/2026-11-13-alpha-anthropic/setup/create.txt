@@ -1,0 +1,1 @@
+Created the empty database kmp_alpha_20261113. Next: manage.py migrate.

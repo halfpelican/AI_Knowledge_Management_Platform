@@ -1,0 +1,25 @@
+voyage-4 threshold 0.2687
+SCOPED (should be left out):
+  u30  top 0.4588  readable False best readable 0.1857  margin 0.2731  rank-one OUT  threshold-first OUT  what's project atlas actually for?
+  u31  top 0.4331  readable False best readable 0.2156  margin 0.2176  rank-one OUT  threshold-first OUT  who in the team is strongest at crunching data?
+  u32  top 0.5583  readable False best readable 0.3102  margin 0.2481  rank-one OUT  threshold-first OUT  how did staff go in the last fake phishing test?
+  d11  top 0.4291  readable False best readable 0.2299  margin 0.1991  rank-one OUT  threshold-first OUT  What happened in the security incident debrief?
+  d21  top 0.4522  readable False best readable 0.3303  margin 0.1219  rank-one OUT  threshold-first OUT  Which team members are rated expert in customer service?
+  d22  top 0.4805  readable False best readable 0.2128  margin 0.2677  rank-one OUT  threshold-first OUT  What did the risk committee decide about the contingency reserve?
+NO-ANSWER (should be kept):
+  u33  top 0.3706  readable True  best readable 0.3706  margin None    rank-one kept threshold-first kept what's the guest wifi password?
+  u34  top 0.2407  readable True  best readable 0.2407  margin None    rank-one kept threshold-first kept do we get paid extra for working overtime?
+  u35  top 0.2875  readable True  best readable 0.2875  margin None    rank-one kept threshold-first kept is there a staff discount at the gym next door?
+  u36  top 0.2296  readable False best readable 0.2172  margin 0.0124  rank-one OUT  threshold-first kept how many people did we hire last year?
+  u37  top 0.4975  readable True  best readable 0.4975  margin None    rank-one kept threshold-first kept how do I apply for parental leave?
+  d24  top 0.3098  readable True  best readable 0.3098  margin None    rank-one kept threshold-first kept How much is the annual staff bonus?
+  d25  top 0.3885  readable True  best readable 0.3885  margin None    rank-one kept threshold-first kept Is there staff parking at the new office building?
+  d26  top 0.3596  readable True  best readable 0.3596  margin None    rank-one kept threshold-first kept What is the policy on smoking at work?
+  d27  top 0.238   readable False best readable 0.1721  margin 0.0659  rank-one OUT  threshold-first kept What salary does the head of digital services earn?
+
+scoped margins: min 0.1219 (all [0.1219, 0.1991, 0.2176, 0.2481, 0.2677, 0.2731])
+no-answer margins where the top is restricted: max 0.0659 (all [0.0124, 0.0659])
+they separate; midpoint m = 0.0939; gap 0.056
+margin rule at m=0.0939: scoped left out 6/6, no-answer kept 9/9, ordinary left out ['u07', 'u28', 'u29', 'd23']
+threshold-first: scoped left out 6/6, no-answer kept 9/9, ordinary left out ['u07', 'u28', 'u29', 'd23']
+ORDINARY left out by rank-one (for information): [('u07', 0.431, 0.1341), ('u28', 0.4816, 0.2288), ('u29', 0.3702, 0.1362), ('d23', 0.5471, 0.2509)]

@@ -1,0 +1,1974 @@
+{
+  "record": {
+    "kind": "Objective 05 development sweep for CLASSIFICATION_CONFIDENCE_THRESHOLD (D-106)",
+    "recorded_at": "2026-11-10T20:30:26+11:00",
+    "commit_sha": "ffdd5cb0a6071115e8952d1ee5ccb4ecffd6bfb9",
+    "uncommitted_tracked_changes": false,
+    "flm_version": null,
+    "chat_model": "claude-haiku-5-5",
+    "dev_manifest": "corpus\\objective-05\\dev-documents\\manifest.json",
+    "scheme": {
+      "doc_types": [
+        "Policy",
+        "Procedure",
+        "Report",
+        "Meeting Paper"
+      ],
+      "departments": [
+        "Finance",
+        "Human Resources",
+        "Information Technology",
+        "Legal and Compliance",
+        "Operations",
+        "Projects"
+      ],
+      "tags": {
+        "Project": [
+          "atlas",
+          "office move",
+          "policy refresh",
+          "supplier review"
+        ],
+        "Process": [
+          "onboarding",
+          "purchasing",
+          "records management",
+          "service desk"
+        ],
+        "Topic": [
+          "compliance",
+          "finance",
+          "people",
+          "safety",
+          "technology",
+          "workplace"
+        ]
+      }
+    },
+    "constants": {
+      "CLASSIFICATION_CONFIDENCE_THRESHOLD_before": 0.95,
+      "CLASSIFICATION_INPUT_TOKENS": 1500,
+      "MAXIMUM_CLASSIFY_ATTEMPTS": 3
+    },
+    "repetitions": 3,
+    "database": "none: nothing is read from or written to a database",
+    "configuration": {
+      "ai_provider": "anthropic",
+      "chat_model": "claude-haiku-5-5",
+      "embedding_model": "voyage-4"
+    },
+    "claude_usage": {
+      "calls": 57,
+      "input_tokens": 104271,
+      "output_tokens": 14382,
+      "estimated_usd": 0.0176
+    }
+  },
+  "observations": [
+    {
+      "id": "X01",
+      "title": "Gifts and Hospitality Policy",
+      "reference_type": "Policy",
+      "repetition": 1,
+      "words": 317,
+      "doc_type": "Policy",
+      "doc_type_confidence": 0.97,
+      "type_correct": true,
+      "department": "Legal and Compliance",
+      "department_confidence": 0.8,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Process",
+          "value": "records management",
+          "confidence": 0.5,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "compliance",
+          "confidence": 0.9,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 1.8
+    },
+    {
+      "id": "X01",
+      "title": "Gifts and Hospitality Policy",
+      "reference_type": "Policy",
+      "repetition": 2,
+      "words": 317,
+      "doc_type": "Policy",
+      "doc_type_confidence": 0.97,
+      "type_correct": true,
+      "department": "Legal and Compliance",
+      "department_confidence": 0.8,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Process",
+          "value": "records management",
+          "confidence": 0.5,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "compliance",
+          "confidence": 0.9,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 1.3
+    },
+    {
+      "id": "X01",
+      "title": "Gifts and Hospitality Policy",
+      "reference_type": "Policy",
+      "repetition": 3,
+      "words": 317,
+      "doc_type": "Policy",
+      "doc_type_confidence": 0.95,
+      "type_correct": true,
+      "department": "Legal and Compliance",
+      "department_confidence": 0.7,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Process",
+          "value": "records management",
+          "confidence": 0.5,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "compliance",
+          "confidence": 0.85,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 1.2
+    },
+    {
+      "id": "X02",
+      "title": "Social Media Policy",
+      "reference_type": "Policy",
+      "repetition": 1,
+      "words": 308,
+      "doc_type": "Policy",
+      "doc_type_confidence": 0.95,
+      "type_correct": true,
+      "department": "Legal and Compliance",
+      "department_confidence": 0.5,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Project",
+          "value": "policy refresh",
+          "confidence": 0.35,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Process",
+          "value": "service desk",
+          "confidence": 0.4,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "compliance",
+          "confidence": 0.7,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "technology",
+          "confidence": 0.5,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "people",
+          "confidence": 0.4,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 1.3
+    },
+    {
+      "id": "X02",
+      "title": "Social Media Policy",
+      "reference_type": "Policy",
+      "repetition": 2,
+      "words": 308,
+      "doc_type": "Policy",
+      "doc_type_confidence": 0.95,
+      "type_correct": true,
+      "department": "Legal and Compliance",
+      "department_confidence": 0.5,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Topic",
+          "value": "technology",
+          "confidence": 0.6,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "compliance",
+          "confidence": 0.5,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "people",
+          "confidence": 0.35,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 2.7
+    },
+    {
+      "id": "X02",
+      "title": "Social Media Policy",
+      "reference_type": "Policy",
+      "repetition": 3,
+      "words": 308,
+      "doc_type": "Policy",
+      "doc_type_confidence": 0.95,
+      "type_correct": true,
+      "department": "Legal and Compliance",
+      "department_confidence": 0.5,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Project",
+          "value": "policy refresh",
+          "confidence": 0.35,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Process",
+          "value": "service desk",
+          "confidence": 0.3,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "compliance",
+          "confidence": 0.7,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "technology",
+          "confidence": 0.45,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "people",
+          "confidence": 0.4,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 1.4
+    },
+    {
+      "id": "X03",
+      "title": "Workplace Visitors Policy",
+      "reference_type": "Policy",
+      "repetition": 1,
+      "words": 292,
+      "doc_type": "Policy",
+      "doc_type_confidence": 0.95,
+      "type_correct": true,
+      "department": "Operations",
+      "department_confidence": 0.6,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Topic",
+          "value": "safety",
+          "confidence": 0.8,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "workplace",
+          "confidence": 0.85,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Process",
+          "value": "onboarding",
+          "confidence": 0.3,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 1.1
+    },
+    {
+      "id": "X03",
+      "title": "Workplace Visitors Policy",
+      "reference_type": "Policy",
+      "repetition": 2,
+      "words": 292,
+      "doc_type": "Policy",
+      "doc_type_confidence": 0.96,
+      "type_correct": true,
+      "department": "Operations",
+      "department_confidence": 0.6,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Topic",
+          "value": "safety",
+          "confidence": 0.8,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "workplace",
+          "confidence": 0.85,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Process",
+          "value": "onboarding",
+          "confidence": 0.3,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "compliance",
+          "confidence": 0.45,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 1.4
+    },
+    {
+      "id": "X03",
+      "title": "Workplace Visitors Policy",
+      "reference_type": "Policy",
+      "repetition": 3,
+      "words": 292,
+      "doc_type": "Policy",
+      "doc_type_confidence": 0.95,
+      "type_correct": true,
+      "department": "Operations",
+      "department_confidence": 0.6,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Topic",
+          "value": "safety",
+          "confidence": 0.8,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "workplace",
+          "confidence": 0.85,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Process",
+          "value": "onboarding",
+          "confidence": 0.3,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 1.2
+    },
+    {
+      "id": "X04",
+      "title": "Access Card Replacement Procedure",
+      "reference_type": "Procedure",
+      "repetition": 1,
+      "words": 344,
+      "doc_type": "Procedure",
+      "doc_type_confidence": 0.95,
+      "type_correct": true,
+      "department": "Operations",
+      "department_confidence": 0.6,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Process",
+          "value": "service desk",
+          "confidence": 0.7,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "safety",
+          "confidence": 0.6,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "workplace",
+          "confidence": 0.5,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 1.9
+    },
+    {
+      "id": "X04",
+      "title": "Access Card Replacement Procedure",
+      "reference_type": "Procedure",
+      "repetition": 2,
+      "words": 344,
+      "doc_type": "Procedure",
+      "doc_type_confidence": 0.93,
+      "type_correct": true,
+      "department": "Operations",
+      "department_confidence": 0.6,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Process",
+          "value": "service desk",
+          "confidence": 0.7,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "safety",
+          "confidence": 0.6,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "workplace",
+          "confidence": 0.5,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 2.0
+    },
+    {
+      "id": "X04",
+      "title": "Access Card Replacement Procedure",
+      "reference_type": "Procedure",
+      "repetition": 3,
+      "words": 344,
+      "doc_type": "Procedure",
+      "doc_type_confidence": 0.93,
+      "type_correct": true,
+      "department": "Operations",
+      "department_confidence": 0.6,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Process",
+          "value": "service desk",
+          "confidence": 0.7,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "safety",
+          "confidence": 0.55,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "workplace",
+          "confidence": 0.5,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 1.9
+    },
+    {
+      "id": "X05",
+      "title": "Month-End Close Procedure",
+      "reference_type": "Procedure",
+      "repetition": 1,
+      "words": 310,
+      "doc_type": "Procedure",
+      "doc_type_confidence": 0.96,
+      "type_correct": true,
+      "department": "Finance",
+      "department_confidence": 0.9,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Process",
+          "value": "purchasing",
+          "confidence": 0.35,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "finance",
+          "confidence": 0.9,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "compliance",
+          "confidence": 0.4,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 1.4
+    },
+    {
+      "id": "X05",
+      "title": "Month-End Close Procedure",
+      "reference_type": "Procedure",
+      "repetition": 2,
+      "words": 310,
+      "doc_type": "Procedure",
+      "doc_type_confidence": 0.95,
+      "type_correct": true,
+      "department": "Finance",
+      "department_confidence": 0.9,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Process",
+          "value": "purchasing",
+          "confidence": 0.35,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "finance",
+          "confidence": 0.9,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "compliance",
+          "confidence": 0.4,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 1.2
+    },
+    {
+      "id": "X05",
+      "title": "Month-End Close Procedure",
+      "reference_type": "Procedure",
+      "repetition": 3,
+      "words": 310,
+      "doc_type": "Procedure",
+      "doc_type_confidence": 0.95,
+      "type_correct": true,
+      "department": "Finance",
+      "department_confidence": 0.9,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Process",
+          "value": "purchasing",
+          "confidence": 0.35,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "finance",
+          "confidence": 0.9,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "compliance",
+          "confidence": 0.4,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 1.2
+    },
+    {
+      "id": "D21",
+      "title": "Bicycle Parking and End-of-Trip Facilities Guide",
+      "reference_type": "Procedure",
+      "repetition": 1,
+      "words": 231,
+      "doc_type": "Procedure",
+      "doc_type_confidence": 0.8,
+      "type_correct": true,
+      "department": "Operations",
+      "department_confidence": 0.6,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Topic",
+          "value": "workplace",
+          "confidence": 0.85,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "safety",
+          "confidence": 0.6,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 2.3
+    },
+    {
+      "id": "D21",
+      "title": "Bicycle Parking and End-of-Trip Facilities Guide",
+      "reference_type": "Procedure",
+      "repetition": 2,
+      "words": 231,
+      "doc_type": "Procedure",
+      "doc_type_confidence": 0.8,
+      "type_correct": true,
+      "department": "Operations",
+      "department_confidence": 0.6,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Topic",
+          "value": "workplace",
+          "confidence": 0.85,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "safety",
+          "confidence": 0.6,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 2.6
+    },
+    {
+      "id": "D21",
+      "title": "Bicycle Parking and End-of-Trip Facilities Guide",
+      "reference_type": "Procedure",
+      "repetition": 3,
+      "words": 231,
+      "doc_type": "Procedure",
+      "doc_type_confidence": 0.8,
+      "type_correct": true,
+      "department": "Operations",
+      "department_confidence": 0.6,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Topic",
+          "value": "workplace",
+          "confidence": 0.85,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "safety",
+          "confidence": 0.6,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 2.5
+    },
+    {
+      "id": "X06",
+      "title": "Customer Satisfaction Report, Third Quarter 2026",
+      "reference_type": "Report",
+      "repetition": 1,
+      "words": 273,
+      "doc_type": "Report",
+      "doc_type_confidence": 0.95,
+      "type_correct": true,
+      "department": "Operations",
+      "department_confidence": 0.5,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Topic",
+          "value": "workplace",
+          "confidence": 0.1,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 1.0
+    },
+    {
+      "id": "X06",
+      "title": "Customer Satisfaction Report, Third Quarter 2026",
+      "reference_type": "Report",
+      "repetition": 2,
+      "words": 273,
+      "doc_type": "Report",
+      "doc_type_confidence": 0.95,
+      "type_correct": true,
+      "department": "Operations",
+      "department_confidence": 0.5,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Process",
+          "value": "service desk",
+          "confidence": 0.5,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "customer satisfaction",
+          "confidence": 0.9,
+          "in_scheme": false
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 3.0
+    },
+    {
+      "id": "X06",
+      "title": "Customer Satisfaction Report, Third Quarter 2026",
+      "reference_type": "Report",
+      "repetition": 3,
+      "words": 273,
+      "doc_type": "Report",
+      "doc_type_confidence": 0.95,
+      "type_correct": true,
+      "department": "Operations",
+      "department_confidence": 0.5,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Topic",
+          "value": "customer satisfaction",
+          "confidence": 0.85,
+          "in_scheme": false
+        },
+        {
+          "dimension": "Topic",
+          "value": "finance",
+          "confidence": 0.35,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "technology",
+          "confidence": 0.3,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 2.3
+    },
+    {
+      "id": "X07",
+      "title": "Energy Usage Report, Financial Year 2026",
+      "reference_type": "Report",
+      "repetition": 1,
+      "words": 268,
+      "doc_type": "Report",
+      "doc_type_confidence": 0.93,
+      "type_correct": true,
+      "department": "Operations",
+      "department_confidence": 0.6,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Topic",
+          "value": "energy use",
+          "confidence": 0.8,
+          "in_scheme": false
+        },
+        {
+          "dimension": "Topic",
+          "value": "finance",
+          "confidence": 0.5,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "workplace",
+          "confidence": 0.4,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 3.2
+    },
+    {
+      "id": "X07",
+      "title": "Energy Usage Report, Financial Year 2026",
+      "reference_type": "Report",
+      "repetition": 2,
+      "words": 268,
+      "doc_type": "Report",
+      "doc_type_confidence": 0.93,
+      "type_correct": true,
+      "department": "Operations",
+      "department_confidence": 0.6,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Topic",
+          "value": "finance",
+          "confidence": 0.6,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "workplace",
+          "confidence": 0.45,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "energy use",
+          "confidence": 0.8,
+          "in_scheme": false
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 2.5
+    },
+    {
+      "id": "X07",
+      "title": "Energy Usage Report, Financial Year 2026",
+      "reference_type": "Report",
+      "repetition": 3,
+      "words": 268,
+      "doc_type": "Report",
+      "doc_type_confidence": 0.93,
+      "type_correct": true,
+      "department": "Operations",
+      "department_confidence": 0.6,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Topic",
+          "value": "workplace",
+          "confidence": 0.7,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "finance",
+          "confidence": 0.6,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "technology",
+          "confidence": 0.35,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 2.1
+    },
+    {
+      "id": "X08",
+      "title": "Recruitment Activity Report, Third Quarter 2026",
+      "reference_type": "Report",
+      "repetition": 1,
+      "words": 276,
+      "doc_type": "Report",
+      "doc_type_confidence": 0.95,
+      "type_correct": true,
+      "department": "Human Resources",
+      "department_confidence": 0.85,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Process",
+          "value": "onboarding",
+          "confidence": 0.6,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "people",
+          "confidence": 0.8,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "finance",
+          "confidence": 0.35,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 1.6
+    },
+    {
+      "id": "X08",
+      "title": "Recruitment Activity Report, Third Quarter 2026",
+      "reference_type": "Report",
+      "repetition": 2,
+      "words": 276,
+      "doc_type": "Report",
+      "doc_type_confidence": 0.95,
+      "type_correct": true,
+      "department": "Human Resources",
+      "department_confidence": 0.85,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Process",
+          "value": "onboarding",
+          "confidence": 0.7,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "people",
+          "confidence": 0.8,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 1.2
+    },
+    {
+      "id": "X08",
+      "title": "Recruitment Activity Report, Third Quarter 2026",
+      "reference_type": "Report",
+      "repetition": 3,
+      "words": 276,
+      "doc_type": "Report",
+      "doc_type_confidence": 0.95,
+      "type_correct": true,
+      "department": "Human Resources",
+      "department_confidence": 0.85,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Process",
+          "value": "onboarding",
+          "confidence": 0.6,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "people",
+          "confidence": 0.8,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 1.1
+    },
+    {
+      "id": "X09",
+      "title": "Replacement of the Office Telephone System",
+      "reference_type": "Meeting Paper",
+      "repetition": 1,
+      "words": 311,
+      "doc_type": "Meeting Paper",
+      "doc_type_confidence": 0.96,
+      "type_correct": true,
+      "department": "Information Technology",
+      "department_confidence": 0.9,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Topic",
+          "value": "technology",
+          "confidence": 0.93,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "finance",
+          "confidence": 0.6,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 2.6
+    },
+    {
+      "id": "X09",
+      "title": "Replacement of the Office Telephone System",
+      "reference_type": "Meeting Paper",
+      "repetition": 2,
+      "words": 311,
+      "doc_type": "Meeting Paper",
+      "doc_type_confidence": 0.95,
+      "type_correct": true,
+      "department": "Information Technology",
+      "department_confidence": 0.9,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Topic",
+          "value": "technology",
+          "confidence": 0.95,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "finance",
+          "confidence": 0.7,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 2.6
+    },
+    {
+      "id": "X09",
+      "title": "Replacement of the Office Telephone System",
+      "reference_type": "Meeting Paper",
+      "repetition": 3,
+      "words": 311,
+      "doc_type": "Meeting Paper",
+      "doc_type_confidence": 0.95,
+      "type_correct": true,
+      "department": "Information Technology",
+      "department_confidence": 0.9,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Topic",
+          "value": "technology",
+          "confidence": 0.95,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "finance",
+          "confidence": 0.7,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 2.2
+    },
+    {
+      "id": "X10",
+      "title": "Internal Audit Plan for 2027",
+      "reference_type": "Meeting Paper",
+      "repetition": 1,
+      "words": 276,
+      "doc_type": "Meeting Paper",
+      "doc_type_confidence": 0.93,
+      "type_correct": true,
+      "department": "Legal and Compliance",
+      "department_confidence": 0.5,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Topic",
+          "value": "compliance",
+          "confidence": 0.7,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "finance",
+          "confidence": 0.55,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "technology",
+          "confidence": 0.4,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 2.7
+    },
+    {
+      "id": "X10",
+      "title": "Internal Audit Plan for 2027",
+      "reference_type": "Meeting Paper",
+      "repetition": 2,
+      "words": 276,
+      "doc_type": "Meeting Paper",
+      "doc_type_confidence": 0.93,
+      "type_correct": true,
+      "department": "Legal and Compliance",
+      "department_confidence": 0.55,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Topic",
+          "value": "compliance",
+          "confidence": 0.8,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "finance",
+          "confidence": 0.6,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "technology",
+          "confidence": 0.5,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 2.6
+    },
+    {
+      "id": "X10",
+      "title": "Internal Audit Plan for 2027",
+      "reference_type": "Meeting Paper",
+      "repetition": 3,
+      "words": 276,
+      "doc_type": "Meeting Paper",
+      "doc_type_confidence": 0.93,
+      "type_correct": true,
+      "department": "Legal and Compliance",
+      "department_confidence": 0.45,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Topic",
+          "value": "compliance",
+          "confidence": 0.6,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "finance",
+          "confidence": 0.4,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "technology",
+          "confidence": 0.3,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 3.1
+    },
+    {
+      "id": "X11",
+      "title": "Options for a New Payroll Provider",
+      "reference_type": "Meeting Paper",
+      "repetition": 1,
+      "words": 297,
+      "doc_type": "Meeting Paper",
+      "doc_type_confidence": 0.95,
+      "type_correct": true,
+      "department": "Finance",
+      "department_confidence": 0.9,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Project",
+          "value": "supplier review",
+          "confidence": 0.8,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Process",
+          "value": "purchasing",
+          "confidence": 0.8,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "finance",
+          "confidence": 0.85,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "people",
+          "confidence": 0.4,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 1.8
+    },
+    {
+      "id": "X11",
+      "title": "Options for a New Payroll Provider",
+      "reference_type": "Meeting Paper",
+      "repetition": 2,
+      "words": 297,
+      "doc_type": "Meeting Paper",
+      "doc_type_confidence": 0.93,
+      "type_correct": true,
+      "department": "Finance",
+      "department_confidence": 0.7,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Project",
+          "value": "supplier review",
+          "confidence": 0.8,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Process",
+          "value": "purchasing",
+          "confidence": 0.85,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "finance",
+          "confidence": 0.85,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "people",
+          "confidence": 0.4,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 1.9
+    },
+    {
+      "id": "X11",
+      "title": "Options for a New Payroll Provider",
+      "reference_type": "Meeting Paper",
+      "repetition": 3,
+      "words": 297,
+      "doc_type": "Meeting Paper",
+      "doc_type_confidence": 0.95,
+      "type_correct": true,
+      "department": "Finance",
+      "department_confidence": 0.85,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Project",
+          "value": "supplier review",
+          "confidence": 0.8,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Process",
+          "value": "purchasing",
+          "confidence": 0.85,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "finance",
+          "confidence": 0.9,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "people",
+          "confidence": 0.4,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 2.2
+    },
+    {
+      "id": "X12",
+      "title": "Software Licence Register 2026",
+      "reference_type": "Report",
+      "repetition": 1,
+      "words": 240,
+      "doc_type": "Report",
+      "doc_type_confidence": 0.85,
+      "type_correct": true,
+      "department": "Information Technology",
+      "department_confidence": 0.7,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Topic",
+          "value": "technology",
+          "confidence": 0.9,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "compliance",
+          "confidence": 0.6,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "finance",
+          "confidence": 0.45,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 2.4
+    },
+    {
+      "id": "X12",
+      "title": "Software Licence Register 2026",
+      "reference_type": "Report",
+      "repetition": 2,
+      "words": 240,
+      "doc_type": "Report",
+      "doc_type_confidence": 0.85,
+      "type_correct": true,
+      "department": "Information Technology",
+      "department_confidence": 0.7,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Topic",
+          "value": "technology",
+          "confidence": 0.9,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "finance",
+          "confidence": 0.5,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "compliance",
+          "confidence": 0.4,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 2.2
+    },
+    {
+      "id": "X12",
+      "title": "Software Licence Register 2026",
+      "reference_type": "Report",
+      "repetition": 3,
+      "words": 240,
+      "doc_type": "Report",
+      "doc_type_confidence": 0.9,
+      "type_correct": true,
+      "department": "Information Technology",
+      "department_confidence": 0.8,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Topic",
+          "value": "technology",
+          "confidence": 0.85,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "compliance",
+          "confidence": 0.5,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "finance",
+          "confidence": 0.4,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 1.8
+    },
+    {
+      "id": "X13",
+      "title": "Marketing Campaign Spend Tracker FY27",
+      "reference_type": "Report",
+      "repetition": 1,
+      "words": 228,
+      "doc_type": "Report",
+      "doc_type_confidence": 0.9,
+      "type_correct": true,
+      "department": "Finance",
+      "department_confidence": 0.6,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Process",
+          "value": "purchasing",
+          "confidence": 0.3,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "finance",
+          "confidence": 0.9,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 1.1
+    },
+    {
+      "id": "X13",
+      "title": "Marketing Campaign Spend Tracker FY27",
+      "reference_type": "Report",
+      "repetition": 2,
+      "words": 228,
+      "doc_type": "Report",
+      "doc_type_confidence": 0.85,
+      "type_correct": true,
+      "department": "Finance",
+      "department_confidence": 0.5,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Topic",
+          "value": "finance",
+          "confidence": 0.85,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 1.0
+    },
+    {
+      "id": "X13",
+      "title": "Marketing Campaign Spend Tracker FY27",
+      "reference_type": "Report",
+      "repetition": 3,
+      "words": 228,
+      "doc_type": "Report",
+      "doc_type_confidence": 0.9,
+      "type_correct": true,
+      "department": "Finance",
+      "department_confidence": 0.6,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Process",
+          "value": "purchasing",
+          "confidence": 0.3,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "finance",
+          "confidence": 0.9,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 1.1
+    },
+    {
+      "id": "X14",
+      "title": "Volunteer Day Roster 2026",
+      "reference_type": "Report",
+      "repetition": 1,
+      "words": 229,
+      "doc_type": "Report",
+      "doc_type_confidence": 0.85,
+      "type_correct": true,
+      "department": "Human Resources",
+      "department_confidence": 0.6,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Topic",
+          "value": "people",
+          "confidence": 0.6,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 2.5
+    },
+    {
+      "id": "X14",
+      "title": "Volunteer Day Roster 2026",
+      "reference_type": "Report",
+      "repetition": 2,
+      "words": 229,
+      "doc_type": "Report",
+      "doc_type_confidence": 0.8,
+      "type_correct": true,
+      "department": "Human Resources",
+      "department_confidence": 0.6,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Topic",
+          "value": "people",
+          "confidence": 0.7,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 2.1
+    },
+    {
+      "id": "X14",
+      "title": "Volunteer Day Roster 2026",
+      "reference_type": "Report",
+      "repetition": 3,
+      "words": 229,
+      "doc_type": "Report",
+      "doc_type_confidence": 0.85,
+      "type_correct": true,
+      "department": "Human Resources",
+      "department_confidence": 0.6,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Topic",
+          "value": "people",
+          "confidence": 0.6,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 1.8
+    },
+    {
+      "id": "X15",
+      "title": "Quarterly Customer Webinar Schedule",
+      "reference_type": "Report",
+      "repetition": 1,
+      "words": 218,
+      "doc_type": "Report",
+      "doc_type_confidence": 0.9,
+      "type_correct": true,
+      "department": "Operations",
+      "department_confidence": 0.3,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Topic",
+          "value": "technology",
+          "confidence": 0.35,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 2.1
+    },
+    {
+      "id": "X15",
+      "title": "Quarterly Customer Webinar Schedule",
+      "reference_type": "Report",
+      "repetition": 2,
+      "words": 218,
+      "doc_type": "Report",
+      "doc_type_confidence": 0.85,
+      "type_correct": true,
+      "department": "Operations",
+      "department_confidence": 0.3,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Topic",
+          "value": "technology",
+          "confidence": 0.4,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 1.8
+    },
+    {
+      "id": "X15",
+      "title": "Quarterly Customer Webinar Schedule",
+      "reference_type": "Report",
+      "repetition": 3,
+      "words": 218,
+      "doc_type": "Report",
+      "doc_type_confidence": 0.85,
+      "type_correct": true,
+      "department": "Operations",
+      "department_confidence": 0.4,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Topic",
+          "value": "technology",
+          "confidence": 0.35,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 1.8
+    },
+    {
+      "id": "X16",
+      "title": "Meeting-Free Friday Guidelines",
+      "reference_type": "Policy",
+      "repetition": 1,
+      "words": 227,
+      "doc_type": "Policy",
+      "doc_type_confidence": 0.9,
+      "type_correct": true,
+      "department": "Human Resources",
+      "department_confidence": 0.55,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Topic",
+          "value": "workplace",
+          "confidence": 0.8,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "people",
+          "confidence": 0.6,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 1.8
+    },
+    {
+      "id": "X16",
+      "title": "Meeting-Free Friday Guidelines",
+      "reference_type": "Policy",
+      "repetition": 2,
+      "words": 227,
+      "doc_type": "Policy",
+      "doc_type_confidence": 0.93,
+      "type_correct": true,
+      "department": "Operations",
+      "department_confidence": 0.45,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Topic",
+          "value": "workplace",
+          "confidence": 0.85,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "people",
+          "confidence": 0.5,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 2.1
+    },
+    {
+      "id": "X16",
+      "title": "Meeting-Free Friday Guidelines",
+      "reference_type": "Policy",
+      "repetition": 3,
+      "words": 227,
+      "doc_type": "Policy",
+      "doc_type_confidence": 0.93,
+      "type_correct": true,
+      "department": "Operations",
+      "department_confidence": 0.4,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Topic",
+          "value": "workplace",
+          "confidence": 0.7,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "people",
+          "confidence": 0.45,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 1.8
+    },
+    {
+      "id": "X17",
+      "title": "Car Park Resurfacing Announcement",
+      "reference_type": "Report",
+      "repetition": 1,
+      "words": 206,
+      "doc_type": "Report",
+      "doc_type_confidence": 0.8,
+      "type_correct": true,
+      "department": "Operations",
+      "department_confidence": 0.6,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Topic",
+          "value": "workplace",
+          "confidence": 0.8,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 1.7
+    },
+    {
+      "id": "X17",
+      "title": "Car Park Resurfacing Announcement",
+      "reference_type": "Report",
+      "repetition": 2,
+      "words": 206,
+      "doc_type": "Report",
+      "doc_type_confidence": 0.72,
+      "type_correct": true,
+      "department": "Operations",
+      "department_confidence": 0.6,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Topic",
+          "value": "workplace",
+          "confidence": 0.8,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 1.9
+    },
+    {
+      "id": "X17",
+      "title": "Car Park Resurfacing Announcement",
+      "reference_type": "Report",
+      "repetition": 3,
+      "words": 206,
+      "doc_type": "Report",
+      "doc_type_confidence": 0.8,
+      "type_correct": true,
+      "department": "Operations",
+      "department_confidence": 0.6,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Topic",
+          "value": "workplace",
+          "confidence": 0.85,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 2.4
+    },
+    {
+      "id": "X18",
+      "title": "Guide to Booking an Interpreter",
+      "reference_type": "Procedure",
+      "repetition": 1,
+      "words": 229,
+      "doc_type": "Procedure",
+      "doc_type_confidence": 0.93,
+      "type_correct": true,
+      "department": "Operations",
+      "department_confidence": 0.5,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Process",
+          "value": "purchasing",
+          "confidence": 0.45,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 2.1
+    },
+    {
+      "id": "X18",
+      "title": "Guide to Booking an Interpreter",
+      "reference_type": "Procedure",
+      "repetition": 2,
+      "words": 229,
+      "doc_type": "Procedure",
+      "doc_type_confidence": 0.93,
+      "type_correct": true,
+      "department": "Operations",
+      "department_confidence": 0.5,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Process",
+          "value": "purchasing",
+          "confidence": 0.4,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "people",
+          "confidence": 0.35,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 2.2
+    },
+    {
+      "id": "X18",
+      "title": "Guide to Booking an Interpreter",
+      "reference_type": "Procedure",
+      "repetition": 3,
+      "words": 229,
+      "doc_type": "Procedure",
+      "doc_type_confidence": 0.93,
+      "type_correct": true,
+      "department": "Operations",
+      "department_confidence": 0.5,
+      "department_in_scheme": true,
+      "tags": [
+        {
+          "dimension": "Process",
+          "value": "purchasing",
+          "confidence": 0.45,
+          "in_scheme": true
+        },
+        {
+          "dimension": "Topic",
+          "value": "people",
+          "confidence": 0.35,
+          "in_scheme": true
+        }
+      ],
+      "input_truncated": false,
+      "seconds": 1.0
+    }
+  ],
+  "summary": {
+    "classifications": 57,
+    "failed": 0,
+    "type_correct": 57,
+    "type_match_rate": 100.0,
+    "department_in_scheme": 57,
+    "tags_total": 136,
+    "tags_out_of_scheme": 4,
+    "correct_confidences": [
+      0.72,
+      0.8,
+      0.8,
+      0.8,
+      0.8,
+      0.8,
+      0.8,
+      0.85,
+      0.85,
+      0.85,
+      0.85,
+      0.85,
+      0.85,
+      0.85,
+      0.9,
+      0.9,
+      0.9,
+      0.9,
+      0.9,
+      0.93,
+      0.93,
+      0.93,
+      0.93,
+      0.93,
+      0.93,
+      0.93,
+      0.93,
+      0.93,
+      0.93,
+      0.93,
+      0.93,
+      0.93,
+      0.93,
+      0.95,
+      0.95,
+      0.95,
+      0.95,
+      0.95,
+      0.95,
+      0.95,
+      0.95,
+      0.95,
+      0.95,
+      0.95,
+      0.95,
+      0.95,
+      0.95,
+      0.95,
+      0.95,
+      0.95,
+      0.95,
+      0.95,
+      0.96,
+      0.96,
+      0.96,
+      0.97,
+      0.97
+    ],
+    "wrong_confidences": [],
+    "seconds_median": 1.9,
+    "threshold_choice": {
+      "threshold": 0.72,
+      "separates": false,
+      "best_score": 57,
+      "trivial_score": 57,
+      "lowest_correct": 0.72,
+      "reason": "no threshold beats applying everything: confidences do not separate correct from wrong",
+      "table": [
+        {
+          "t": 0.0,
+          "score": 57
+        },
+        {
+          "t": 0.72,
+          "score": 57
+        },
+        {
+          "t": 0.8,
+          "score": 56
+        },
+        {
+          "t": 0.85,
+          "score": 50
+        },
+        {
+          "t": 0.9,
+          "score": 43
+        },
+        {
+          "t": 0.93,
+          "score": 38
+        },
+        {
+          "t": 0.95,
+          "score": 24
+        },
+        {
+          "t": 0.96,
+          "score": 5
+        },
+        {
+          "t": 0.97,
+          "score": 2
+        },
+        {
+          "t": 1.0,
+          "score": 0
+        }
+      ]
+    }
+  }
+}

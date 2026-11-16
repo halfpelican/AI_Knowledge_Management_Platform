@@ -1,0 +1,29 @@
+TECHNOLOGY STEERING COMMITTEE
+Meeting of 14 October 2026, paper 3
+
+REPLACEMENT OF THE OFFICE TELEPHONE SYSTEM
+
+Purpose of this paper
+This paper asks the committee to approve the replacement of the office telephone system, which reaches the end of vendor support in March 2027, and to choose between the three options set out below.
+
+Recommendation
+That the committee approve option 2, a cloud-hosted telephony service on a three-year contract, at a cost of $148,000 over three years, and authorise the head of technology to proceed to contract.
+
+Background
+The current system, the Heron Ridge exchange, was installed in 2015. Spare parts are no longer manufactured, two of the four line cards have failed in the past year, and the vendor has confirmed that support ends on 31 March 2027. Four hundred handsets and the reception switchboard depend on it.
+
+Options
+Option 1: extend support with a third-party maintainer for two years at $54,000. This defers the decision without removing the risk, and the maintainer cannot guarantee parts.
+Option 2: move to a cloud-hosted service, using the existing network and replacing handsets with software on laptops and mobiles. Three-year cost $148,000. Reception keeps a physical console.
+Option 3: install a new on-premises exchange at $212,000 plus $18,000 a year in maintenance. This keeps the current handsets but repeats the present position in ten years.
+
+Risks
+Option 2 depends on the office internet connection, which has a second provider for resilience since 2024. A pilot with the service desk team in August showed call quality within target on both connections.
+
+Financial implications
+Option 2 is within the technology capital plan for 2027. The annual cost after year three is estimated at $44,000.
+
+Decision sought
+The committee is asked to approve option 2 and to note that the migration will run from January to March 2027.
+
+Author: head of technology. Sponsor: chief operating officer.

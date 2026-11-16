@@ -1,0 +1,27 @@
+Port 8000, observed at 2026-11-11T19:23:16+11:00 by observe_listener.py (read only).
+
+Socket rows on local port 8000 with remote port 0 (state 2 is Listen): 1
+  127.0.0.1:8000  state 2  owning process 28208
+
+Owning process 28208, and the processes that started it:
+  pid 28208 (python.exe), started 2026-11-11T19:23:05.127+11:00, parent 32020
+    "C:\Users\mozza\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\python.exe"  "C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.venv\Scripts\waitress-serve.exe" --listen=127.0.0.1:8000 --threads=24 --max-request-body-size=54525952 config.wsgi:application
+    -> Waitress, 24 threads (--threads on the command line), listen 127.0.0.1:8000
+  pid 32020 (python.exe), started 2026-11-11T19:23:05.103+11:00, parent 33548
+    "C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.venv\Scripts\python.exe" "C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.venv\Scripts\waitress-serve.exe" --listen=127.0.0.1:8000 --threads=24 --max-request-body-size=54525952 config.wsgi:application
+    -> Waitress, 24 threads (--threads on the command line), listen 127.0.0.1:8000
+  pid 33548 (waitress-serve.exe), started 2026-11-11T19:23:05.079+11:00, parent 12832
+    "C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.venv\Scripts\waitress-serve.exe" --listen=127.0.0.1:8000 --threads=24 --max-request-body-size=54525952 config.wsgi:application
+    -> Waitress, 24 threads (--threads on the command line), listen 127.0.0.1:8000
+  pid 12832 (powershell.exe), started 2026-11-11T19:23:01.714+11:00, parent 19816
+    "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\brave-shtern-4aa41c\corpus\objective-02\runs\2026-11-11\haiku-http-check\start_server.ps1
+  pid 19816 (powershell.exe), started 2026-11-11T19:22:59.993+11:00, parent 16732
+    "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"  -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$__claudeCodeScript = $env:CLAUDE_CODE_SHELL_LAUNCHER_SCRIPT; $env:CLAUDE_CODE_SHELL_LAUNCHER_SCRIPT = $null; Invoke-Expression -Command $__claudeCodeScript" 
+  pid 16732 (cmd.exe), started 2026-11-11T19:22:59.896+11:00, parent 5332
+    C:\Windows\System32\cmd.exe /d /s /c ""C:\Windows\System32\chcp.com" 65001 >nul & "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$__claudeCodeScript = $env:CLAUDE_CODE_SHELL_LAUNCHER_SCRIPT; $env:CLAUDE_CODE_SHELL_LAUNCHER_SCRIPT = $null; Invoke-Expression -Command $__claudeCodeScript" > "C:\Users\mozza\AppData\Local\Temp\claude\bc248ff4fdbcbaba\f081b3d5-a98d-4cba-b590-4da2e514df57\tasks\bad1kkb42.output" 2>&1"
+
+scripts/server_record.py's own lookup (Get-NetTCPConnection -State Listen), at the same moment:
+  pid 28208, started 2026-11-11T08:23:05.127Z, note: None
+
+Waitress log (C:\kmp-measurement\2026-11-11-haiku-draws\logs\http-check\waitress.log), its 'Serving on' lines:
+  2026-11-11 19:23:06,900 INFO waitress Serving on http://127.0.0.1:8000

@@ -79,7 +79,7 @@ cut a requirement.
 | Backend | Django 5.x + Django REST Framework |
 | Database | PostgreSQL 16 + pgvector (via `pgvector-django`) |
 | Frontend | React + Vite |
-| Generation & embeddings | **FastFlowLM (FLM)** on the AMD Ryzen AI NPU — see §4 |
+| Generation & embeddings | **Claude Haiku 5.5 + Voyage `voyage-4`**, the `anthropic` provider, the default since D-122; **FastFlowLM (FLM)** on the AMD Ryzen AI NPU as the offline alternative — see §4 |
 | Extraction | `pypdf`, `python-docx`, `openpyxl`; TXT read directly |
 | Tests | `pytest-django`; Vitest + Testing Library + jsdom for `frontend/` (D-62) |
 | Python | **3.12** — matches the CI runner. Pinned in `.python-version` and CI. |
@@ -92,34 +92,60 @@ embedding are written in the same ACID transaction (NFR-21).
 ## 4. AI provider — the most important rule in this file
 
 **No application code may import an AI vendor SDK directly.** Every AI call goes
-through `apps/ai/provider.py`, which exposes exactly three operations:
+through `apps/ai/base.py`, which exposes exactly the operations listed here:
 
 ```python
 class AIService(Protocol):
     def embed(self, texts: list[str]) -> EmbeddingResult: ...
     def generate_statements(self, question: str, passages: list[Passage]) -> StatementList: ...
     def health(self) -> ProviderHealth: ...
+    def classify_document(self, title: str, text: str, scheme: TagScheme) -> DocumentClassification: ...
+    def transcribe(self, audio: bytes, *, filename: str = "segment.wav") -> Transcription: ...
+    def transcription_health(self) -> ProviderHealth: ...
+    def summarise_meeting(self, title: str, passages: list[str]) -> MeetingSummaryDraft: ...
 ```
+
+The list, not a count, is the source of truth. `classify_document` arrived with FR-10 on 9 November
+2026 (D-104). `transcribe` and `transcription_health` arrived on 10 November 2026 with recording
+transcription (D-123): only FLM has speech-to-text, so the FLM and Anthropic providers alike send a
+segment to FLM's Whisper, selected by its own `TRANSCRIPTION_PROVIDER` (`none` by default), not by
+`AI_PROVIDER`. `summarise_meeting` arrived on 11 November 2026 with FR-16 (D-125): one
+structured call returning a meeting's summary and action items, on whichever provider
+`AI_PROVIDER` names.
 
 Two implementations, selected by the `AI_PROVIDER` environment variable:
 
-- `flm` — **the default for all development, testing and demonstration.**
-  FastFlowLM, local, on the NPU. Free, offline, no key.
-- `anthropic` — Claude + Voyage. The documented production configuration. Kept
-  working so the proposal's §9.2 remains true, but not used day to day — and not
-  available to this project in practice, because there is no budget for it. The
-  alpha and the demonstration run on `flm`. Plan nothing around a provider switch.
+- `anthropic` — Claude + Voyage, the proposal's §9.2 production configuration.
+  **The default since 10 November 2026 (D-122),** after every tuned value was
+  re-derived on it, each per model: the relevance threshold and partial-match floor
+  (D-120), FR-19's grouping threshold and FR-10's confidence threshold (D-122).
+  Generation and classification run on Claude Haiku 5.5 (D-121), embeddings on Voyage
+  `voyage-4` at 1024. **Funded since 10 November 2026** by the Max plan's monthly Claude
+  API credits (D-113, superseding D-35's "no budget"); Voyage is billed separately. It
+  needs no NPU, so M8 can be hosted on any device with the platform in place (D-114).
+  Keys live in `.env` only.
+- `flm` — FastFlowLM, local, on the NPU. Free, offline, no key. **The default until
+  10 November 2026:** the M6 alpha and every measurement up to then ran on it. Now the
+  offline alternative.
+
+Which provider is the default, and which one M8 runs on, are decided by measurement.
+The provider is chosen once, at setup: `AI_PROVIDER` in `.env` before the first
+`migrate`. A database keeps the provider it was set up with (D-131). Changing provider
+means a new database, set up under the new provider and ingested again, with every
+tuned value re-derived on the new vectors before it is relied on.
 
 If you find yourself writing `import anthropic` or `from openai import OpenAI`
 anywhere outside `apps/ai/`, stop — that is the bug.
 
 Full contract in `docs/ai-provider.md`.
 
-### FLM configuration
+### FLM configuration (the offline alternative)
 
 Development runs on **native Windows with PowerShell** — not WSL. The NPU is not
 visible from inside WSL2, so keeping everything on the Windows side means
-`127.0.0.1` genuinely is the same machine and there is no host-IP indirection.
+`127.0.0.1` genuinely is the same machine and there is no host-IP indirection. With
+the `anthropic` default nothing needs the NPU, but the scripts and runbooks still
+assume this setup. Running FLM also needs a database set up under FLM.
 
 ```powershell
 # In its own PowerShell window, left running
@@ -139,7 +165,6 @@ FLM_BASE_URL=http://127.0.0.1:8625/v1
 FLM_API_KEY=flm                          # placeholder, no real credential
 FLM_CHAT_MODEL=gemma3:4b
 FLM_EMBED_MODEL=embed-gemma
-EMBEDDING_DIMENSION=768
 ```
 
 FLM speaks the OpenAI wire format, so the `openai` Python package is the client for
@@ -154,8 +179,9 @@ similarity score, so a model change is a silent corruption, not an error. Theref
 - Retrieval executes **only** over chunks whose recorded model matches the current
   query model. Mismatched chunks are excluded, not ranked.
 - The pgvector column dimension comes from `EMBEDDING_DIMENSION`, never a literal.
-- Switching providers is a full re-index event. There is a management command for
-  it: `python manage.py reindex --provider <name>`.
+- A database keeps its provider (D-131). The startup check refuses a database set up
+  for another provider. `reindex --provider <name>` rebuilds chunks with the database's
+  own provider only.
 
 This is risk R10 in the register. It is the highest-scoring technical risk and the
 one most likely to be discovered the night before the demo.
@@ -172,12 +198,25 @@ set during evaluation, not guessed in a code review.
 | `CHUNK_SIZE` | 500 tokens |
 | `CHUNK_OVERLAP` | 50 tokens |
 | `TOP_K` | 25 initially, *tune* |
-| `RELEVANCE_THRESHOLD` | **0.30** — cosine similarity floor for admitting a passage. Kept after step 7 tested higher and lower values (D-102) |
-| `PARTIAL_MATCH_FLOOR` | **0.0**, i.e. no floor — a near miss is offered as a partial match only at or above this; D-56 stays open (D-102) |
+| `RELEVANCE_THRESHOLD` | **0.30** — cosine similarity floor for admitting a passage. Kept after step 7 tested higher and lower values (D-102). Per embedding model since D-120: **0.2687** for `voyage-4` (`RELEVANCE_THRESHOLD_BY_MODEL`); 0.30 for EmbeddingGemma and any model not listed |
+| `PARTIAL_MATCH_FLOOR` | **0.0**, i.e. no floor — a near miss is offered as a partial match only at or above this; D-56 stays open (D-102). Per embedding model since D-120: **0.2468** for `voyage-4` (`PARTIAL_MATCH_FLOOR_BY_MODEL`) |
 | `MAXIMUM_CONTEXT_TOKENS` | *tune* — ceiling on grounding context per call |
 | `MAXIMUM_GENERATION_ATTEMPTS` | **3** — 1 initial call + 2 retries, then 503 (NFR-19) |
 | `MAXIMUM_EMBED_ATTEMPTS` | **3** — 1 initial call + 2 retries, then flag the item |
 | `MAXIMUM_CLASSIFY_ATTEMPTS` | **3** — 1 initial call + 2 retries (FR-10, NIT3004) |
+| `MAXIMUM_TRANSCRIBE_ATTEMPTS` | **3** — 1 initial call + 2 retries (recording transcription, D-123) |
+| `MAXIMUM_SUMMARY_ATTEMPTS` | **3** — 1 initial call + 2 retries (FR-16, D-125) |
+| `MAXIMUM_MALFORMED_SUMMARY_REPLIES` | **2** — 1 malformed reply + 1 retry, within the three (FR-16: "a malformed response triggers one retry") |
+| `MINIMUM_SUMMARY_TRANSCRIPT_LENGTH` | 200 tokens, *tune* — below this a transcript is not summarised and the summary routes answer 422 |
+| `SUMMARY_INPUT_TOKENS` / `SUMMARY_INPUT_CHARACTERS` | 10,000 tokens, *tune* — the most of a transcript one summary request carries, as whole passages / 100,000 characters, the same cap in characters, which real speech (5.7–6.3 characters a word) never reaches (D-125's third note) |
+| `MAXIMUM_SUMMARY_RETRY_RUNS` / `SUMMARY_STALE_AFTER_SECONDS` | 3 queued runs, then a failed summary leaves NFR-20's retry queue / 2,400 s, after which a run still Processing is an orphan |
+| `MAXIMUM_MALFORMED_RETRY_RUNS` | 1 — a run that failed because no reply conformed is queued once, not three times (D-125's third note) |
+| `MAXIMUM_ACTION_ITEMS_PER_MEETING` | 200 — a person's addition past it is refused with 409 (D-125's third note) |
+| `MAXIMUM_SUMMARIES_IN_FLIGHT` / `MAXIMUM_SUMMARIES_WAITING` | 2 — background summary runs calling the provider at once in one server process / 20 waiting for a place, past which a run is queued as "busy" for the hourly retry (D-125's third note) |
+| `TRANSCRIPTION_SEGMENT_SECONDS` / `MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS` | 30 s, the page's segment / 60 s, the most the server transcribes in one request |
+| `TRANSCRIPTION_SILENCE_DBFS` | **-45 dBFS**, *tune* — a segment whose loudest half second is quieter is never sent to Whisper |
+| `MAXIMUM_RECORDING_BYTES` | 500 MB — the largest recording the page decodes; client-only, since the recording never reaches the server |
+| `MAXIMUM_TRANSCRIPTIONS_IN_FLIGHT` | 2 — segments the whole server sends to FLM at once (D-123) |
 | `MAXIMUM_STATEMENTS` | **6**, *tune* — chosen on the development set; a retry after a cut-off asks for fewer (D-100) |
 | `MINIMUM_QUESTION_LENGTH` | ~10 characters |
 | `MAXIMUM_QUESTION_LENGTH` | ~500 characters |
@@ -187,7 +226,7 @@ set during evaluation, not guessed in a code review.
 | `LOCKOUT_THRESHOLD` / `LOCKOUT_DURATION` | 5 attempts / 15 minutes (FR-02 enforces, D-25; FR-03 adds the interface, NIT3004) |
 | `NO_ANSWER_MESSAGE` | fixed text, defined once |
 
-**The three attempt constants are totals, not retry counts.** The proposal words them
+**The attempt constants are totals, not retry counts.** The proposal words them
 as "2 retries", which is the same thing said differently. Comment each one
 `# 1 initial call + 2 retries` so nobody helpfully corrects them to 2. NFR-19's
 fault-injection test asserts the provider was called exactly three times before the

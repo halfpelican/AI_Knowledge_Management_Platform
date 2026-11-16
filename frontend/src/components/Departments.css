@@ -1,0 +1,79 @@
+/* FR-10's department list on the Tags page (D-129): the section, the form that adds a
+   department, and the departments table. It mirrors the tags' own (src/pages/Tags.css)
+   so the two read as one page. Tokens only, and no colour pair that tokens.css does
+   not already document with its contrast ratio: body and muted text on the surface and
+   the alt surface, a field error on the alt surface, and the two button variants. */
+
+/* Set apart from the tags above it by space, not by a rule: the heading carries the
+   change of subject. */
+.departments {
+  margin-top: var(--space-6);
+}
+
+.departments__intro {
+  max-width: var(--measure-text);
+  color: var(--color-text-muted);
+}
+
+.departments__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+/* One panel, its field and button stacked as every form's are, no wider than a field,
+   so it reads as one step at any width. Text on the alt surface keeps the documented
+   ratios (body 13.41:1, muted 6.87:1, a field error 5.97:1), and the panel's border is a
+   separator, not the boundary of a control: the field and the button draw their own. */
+.departments-create {
+  margin-bottom: var(--space-5);
+}
+
+.departments-create__form {
+  max-width: var(--layout-field-max-width);
+  padding: var(--space-4);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface-alt);
+}
+
+/* At a narrow width the table scrolls sideways inside its own labelled, focusable
+   region (base.css, .table-scroll) instead of widening the page. */
+.departments-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.departments-table th,
+.departments-table td {
+  padding: var(--space-2);
+  border-bottom: var(--border-width) solid var(--color-border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.departments-table thead th {
+  font-weight: var(--weight-semibold);
+}
+
+/* A department as a person typed it, up to 255 characters: it wraps rather than
+   widening the table. */
+.departments-table__name {
+  min-width: var(--layout-card-min-width);
+  font-weight: var(--weight-medium);
+  word-break: break-word;
+}
+
+.departments-table__count {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Retired reads as the word first; muted text on the surface is 7.56:1. */
+.departments-table__retired {
+  color: var(--color-text-muted);
+}
+
+.departments-table__action {
+  white-space: nowrap;
+}

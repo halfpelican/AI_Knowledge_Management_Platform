@@ -1,0 +1,11 @@
+Operations to perform:
+  Apply all migrations: accounts, auth, contenttypes, core, documents, meetings, retrieval, sessions
+Running migrations:
+  Applying accounts.0006_seed_manage_meetings... OK
+  Applying accounts.0007_seed_review_knowledge_gaps... OK
+  Applying accounts.0008_seed_manage_tags... OK
+  Applying documents.0008_fr10_document_analysis... OK
+  Applying documents.0009_fr10_tag_corrections... OK
+  Applying documents.0010_tag_grown... OK
+  Applying documents.0011_grown_marks_withheld_tags... OK
+  Applying retrieval.0004_fr19_knowledge_gaps... OK

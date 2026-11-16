@@ -15,6 +15,8 @@ urlpatterns = [
     # Stage 2: FR-01, FR-02
     path("auth/register", views.RegisterView.as_view(), name="auth-register"),
     path("auth/login", views.LoginView.as_view(), name="auth-login"),
+    # NIT3004: FR-03's running lockout policy, for the sign-in page (D-130 decision 7).
+    path("auth/lockout-policy", views.LockoutPolicyView.as_view(), name="auth-lockout-policy"),
     # Stage 2: FR-04
     path("auth/logout", views.LogoutView.as_view(), name="auth-logout"),
     path("auth/me", views.MeView.as_view(), name="auth-me"),
@@ -25,6 +27,8 @@ urlpatterns = [
     # cannot collide, but reading first is the habit that keeps it true.
     path("users/directory", views.UserDirectoryView.as_view(), name="user-directory"),
     path("users/<uuid:pk>/role", views.UserRoleView.as_view(), name="user-role"),
+    # FR-03's administrator release (D-130), behind release_account_locks.
+    path("users/<uuid:pk>/unlock", views.UserUnlockView.as_view(), name="user-unlock"),
     # Stage 3: FR-08
     path("documents", views.DocumentsView.as_view(), name="document-list"),
     # Stage 5 item 2: FR-15's list view, filters, sort and facets in one request (D-72).
@@ -37,6 +41,26 @@ urlpatterns = [
     # Stage 5 item 2a: FR-15's download link, the stored original as an attachment (D-75).
     path("documents/<uuid:pk>/download", views.DocumentDownloadView.as_view(),
          name="document-download"),
+    # NIT3004: FR-10's classification routes (D-104, D-105). Each has a non-UUID segment after the
+    # id, so none can collide with documents/<uuid:pk> below; listed before it for the reading
+    # habit's sake, as reprocess and download are. Scoped 404 first, then contribute_content.
+    path("documents/<uuid:pk>/classify", views.DocumentClassifyView.as_view(),
+         name="document-classify"),
+    path("documents/<uuid:pk>/classification", views.DocumentClassificationView.as_view(),
+         name="document-classification"),
+    # A person applies a tag: an existing one offered for the document, or a new Topic (D-105's
+    # dated note of 10 November 2026, night). POST only.
+    path("documents/<uuid:pk>/tags", views.DocumentTagsView.as_view(), name="document-tags"),
+    path("documents/<uuid:pk>/tags/<uuid:content_tag_id>/confirm",
+         views.DocumentTagConfirmView.as_view(), name="document-tag-confirm"),
+    path("documents/<uuid:pk>/tags/<uuid:content_tag_id>", views.DocumentTagView.as_view(),
+         name="document-tag"),
+    # D-128: a value the classifier held below the threshold, in Project, Process or Topic, confirmed
+    # or rejected; body {"dimension", "value"}. They replace proposed-topics/confirm and /reject.
+    path("documents/<uuid:pk>/proposed-tags/confirm",
+         views.DocumentProposedTagConfirmView.as_view(), name="document-proposed-tag-confirm"),
+    path("documents/<uuid:pk>/proposed-tags/reject",
+         views.DocumentProposedTagRejectView.as_view(), name="document-proposed-tag-reject"),
     # Stage 4 item 10b: the route a document citation links to, so FR-12's "links to the
     # source document or meeting" reaches the document rather than the repository (D-46).
     # Stage 5 item 2 adds FR-15's detail fields to its GET, and the DELETE method (D-73).
@@ -44,7 +68,21 @@ urlpatterns = [
     # Stage 3: FR-09
     path("meetings", views.MeetingsView.as_view(), name="meeting-list"),
     # D-99 adds can_delete to its GET, and the DELETE method, mirroring documents/<uuid:pk>.
+    # NIT3004: FR-16's summary and action items (D-125). Each has a non-UUID segment after the id,
+    # so none can collide with meetings/<uuid:pk> below; listed before it for the reading habit's
+    # sake. Scoped 404 first, then contribute_content on the three that write.
+    path("meetings/<uuid:pk>/summary", views.MeetingSummaryView.as_view(), name="meeting-summary"),
+    path("meetings/<uuid:pk>/action-items", views.MeetingActionItemsView.as_view(),
+         name="meeting-action-items"),
+    path("meetings/<uuid:pk>/action-items/<uuid:item_id>", views.MeetingActionItemView.as_view(),
+         name="meeting-action-item"),
     path("meetings/<uuid:pk>", views.MeetingDetailView.as_view(), name="meeting-detail"),
+    # D-123: a meeting recording becomes a draft transcript, one WAV segment per POST, and
+    # nothing is stored. The confirmed draft goes in through "meetings" above. The status first,
+    # for the reading habit's sake; "status" is not a segment of the POST's path either way.
+    path("transcriptions/status", views.TranscriptionStatusView.as_view(),
+         name="transcription-status"),
+    path("transcriptions", views.TranscriptionsView.as_view(), name="transcription-list"),
     # Stage 4: FR-12 keyword search, the Front-End clause's grouped results (D-41).
     path("search", views.SearchView.as_view(), name="search"),
     # Stage 4: FR-12's question-and-answer path, which is also FR-13's turn when the body
@@ -58,4 +96,25 @@ urlpatterns = [
          name="conversation-detail"),
     # Stage 5 item 3: FR-14's one aggregating endpoint, every dashboard panel in one request.
     path("dashboard", views.DashboardView.as_view(), name="dashboard"),
+    # NIT3004, Objective 06: FR-19's knowledge-gap log (D-107), every route behind
+    # review_knowledge_gaps. The list, sorted Open first by occurrence count.
+    path("knowledge-gaps", views.KnowledgeGapListView.as_view(), name="knowledge-gap-list"),
+    # One aggregation cycle, run now (D-107); the scheduled one is manage.py
+    # aggregate_knowledge_gaps. Before the <uuid:pk> route below; "cycles" is not a UUID, so the
+    # two cannot collide.
+    path("knowledge-gaps/cycles", views.KnowledgeGapCyclesView.as_view(),
+         name="knowledge-gap-cycles"),
+    # FR-19's "mark an entry as addressed" (D-107): PATCH {"status": "Addressed" | "Open"}.
+    path("knowledge-gaps/<uuid:pk>", views.KnowledgeGapDetailView.as_view(),
+         name="knowledge-gap-detail"),
+    # NIT3004: FR-10's tag administration (D-119 finding 5), both routes behind manage_tags. The
+    # inventory with item counts; POST, an Administrator adds a value, vocabulary, throttled in
+    # "tagging" (D-128); and DELETE: deactivate a tag in use, delete an unused one.
+    path("tags", views.TagListView.as_view(), name="tag-list"),
+    path("tags/<uuid:pk>", views.TagDetailView.as_view(), name="tag-detail"),
+    # NIT3004: FR-10's department list (D-129), the scheme's fourth dimension, behind manage_tags as
+    # the tag routes are. The list with item counts; POST adds a department, or reactivates a retired
+    # one, throttled in "tagging"; DELETE deactivates a department in use and deletes an unused one.
+    path("departments", views.DepartmentListView.as_view(), name="department-list"),
+    path("departments/<uuid:pk>", views.DepartmentDetailView.as_view(), name="department-detail"),
 ] + router.urls

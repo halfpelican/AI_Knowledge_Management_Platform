@@ -26,11 +26,12 @@ suite's habit of a test stating its own premise.
 """
 
 import uuid
-from datetime import date
+from datetime import date, timedelta
 from math import sqrt
 
 import pytest
 from django.conf import settings
+from django.utils import timezone
 
 import apps.ai
 from apps.ai.base import EmbeddingResult, ProviderUnavailable, Statement, StatementList
@@ -178,7 +179,7 @@ class ControlledService:
         self.embed_calls: list[list[str]] = []
         self.generate_calls: list[tuple] = []
 
-    def embed(self, texts):
+    def embed(self, texts, *, input_type=None):
         self.embed_calls.append(list(texts))
         return EmbeddingResult(
             vectors=[list(self.vector)],
@@ -288,7 +289,11 @@ def test_an_answered_turn_carries_its_statements_and_the_items_consulted(
     assert source["title"] == DOCUMENT_TITLE
     # FR-12: "Each citation expands to display the source passage", so the passage the
     # statement cites travels with it.
-    assert source["passages"] == [{"chunk_id": str(chunk.id), "text": PASSAGE_TEXT}]
+    # ``ai_generated`` since D-125: False for a transcript or document passage, True only for a
+    # passage of a meeting's AI-generated summary (apps/api/tests/test_summary_in_retrieval.py).
+    assert source["passages"] == [
+        {"chunk_id": str(chunk.id), "text": PASSAGE_TEXT, "ai_generated": False}
+    ]
 
 
 def test_the_sources_panel_lists_every_item_consulted_and_not_only_the_cited_one(
@@ -945,6 +950,14 @@ def test_a_turn_is_logged_against_its_thread_and_returns_its_updated_state(
 ):
     """FR-13's Responses clause: "200 OK with the answer and updated conversation state"."""
     conversation = Conversation.objects.create(user=session_client.user, title="Leave")
+    # Put an hour in the past, so that "the turn moved it" cannot read as "equal". The turn can
+    # land in the same step of the clock as the create — Windows' clock steps at anything from
+    # about 0.3 ms to about 15.6 ms (D-107's note) — and the comparison below would then fail
+    # with nothing wrong. An UPDATE bypasses auto_now, which a save() would overwrite.
+    Conversation.objects.filter(pk=conversation.pk).update(
+        last_updated_at=timezone.now() - timedelta(hours=1)
+    )
+    conversation.refresh_from_db()
     before = conversation.last_updated_at
 
     body = ask(session_client.client, conversation_id=str(conversation.pk)).json()

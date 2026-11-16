@@ -1,0 +1,100 @@
+--- corpus/objective-02/runs/2026-11-10/voyage-threshold/threshold_floor_e2e_voyage.py
++++ corpus/objective-02/runs/2026-11-10/haiku/dev_set_e2e_haiku.py
+@@ -1,4 +1,19 @@
+-"""D-113 (10 November 2026): D-102's end-to-end comparison, on the Voyage-indexed copy with Claude.
++"""The Haiku round, step 1 (10 November 2026): D-102's end-to-end pass of dev-set-v2 on claude-haiku-5-5.
++
++A copy of runs/2026-11-10/voyage-threshold/threshold_floor_e2e_voyage.py at 0f184ca, changed only where the
++model and the threshold's source were named:
++
++- ANTHROPIC_MODEL is set from --model (default claude-haiku-5-5) before Django starts, and checked after.
++  The run refuses unless the model, voyage-4, effort "low", MAXIMUM_STATEMENTS 6 and D-120's
++  0.2687 / 0.2468 are what the code will use.
++- Nothing is patched. Since D-120 the pipeline reads voyage-4's threshold and floor itself, so the
++  --expect-* and --patch-* options are gone. The summary records the values in force, the model and the
++  effort.
++
++The bar this run is judged against is in haiku-round.md, committed before any Haiku call. The original
++docstring follows.
++
++D-113 (10 November 2026): D-102's end-to-end comparison, on the Voyage-indexed copy with Claude.
+ 
+ A copy of corpus/objective-02/runs/2026-11-08/threshold_floor_e2e.py, changed only where FLM was named:
+ the database is kmp_voyage_20261110, the provider is ``anthropic`` (Voyage embeddings at 1024,
+@@ -85,15 +100,10 @@
+ def main() -> int:
+     parser = argparse.ArgumentParser()
+     parser.add_argument("--out", required=True)
+-    parser.add_argument("--label", default="T4472_F4458_N6")
+-    parser.add_argument("--expect-threshold", type=float, default=0.4472)
+-    parser.add_argument("--expect-floor", type=float, default=0.4458)
+-    parser.add_argument("--set", default="dev-set.json", help="a file in corpus/objective-02/")
+-    parser.add_argument("--patch-threshold", type=float,
+-                        help="phase 2c baseline: the threshold admit() uses, in this process only")
+-    parser.add_argument("--patch-floor", type=float,
+-                        help="phase 2c baseline: the partial-match floor, in this process only "
+-                             "(-inf for none)")
++    parser.add_argument("--label", default="v2_haiku_T2687_F2468_N6")
++    parser.add_argument("--set", default="dev-set-v2.json", help="a file in corpus/objective-02/")
++    parser.add_argument("--model", default="claude-haiku-5-5",
++                        help="the Claude model this run sets as ANTHROPIC_MODEL, then checks")
+     args = parser.parse_args()
+     out = Path(args.out)
+     out.mkdir(parents=True, exist_ok=True)
+@@ -105,6 +115,7 @@
+     os.environ["DEBUG"] = "False"
+     os.environ["AI_PROVIDER"] = "anthropic"  # Voyage embeddings, Claude generation
+     os.environ["EMBEDDING_DIMENSION"] = "1024"
++    os.environ["ANTHROPIC_MODEL"] = args.model  # this copy: the model under test
+     os.environ["ERROR_LOG_PATH"] = str(logs / "errors.log")
+     os.environ["AUDIT_LOG_PATH"] = str(logs / "audit.log")
+     os.environ["WAITRESS_LOG_PATH"] = str(logs / "waitress.log")
+@@ -141,32 +152,33 @@
+     if connection.settings_dict["NAME"] != DATABASE:
+         print(f"refusing: connected to {connection.settings_dict['NAME']!r}", flush=True)
+         return 2
++    # This copy: D-120's values for voyage-4 are the code's own, so nothing is patched; the model
++    # and the effort are checked, not assumed (haiku-round.md).
++    from django.conf import settings
++
++    from apps.ai.anthropic import CLAUDE_EFFORT
++    from apps.retrieval.partial_matches import partial_match_floor
++    from apps.retrieval.ranking import relevance_threshold
++
+     in_force = {
+         "RELEVANCE_THRESHOLD": constants.RELEVANCE_THRESHOLD,
+         "PARTIAL_MATCH_FLOOR": constants.PARTIAL_MATCH_FLOOR,
+         "MAXIMUM_STATEMENTS": apps.ai.generation.MAXIMUM_STATEMENTS,
+         "TOP_K": constants.TOP_K,
++        "threshold_used": relevance_threshold(settings.VOYAGE_MODEL),
++        "floor_used": partial_match_floor(settings.VOYAGE_MODEL),
++        "patched": False,
++        "chat_model": settings.ANTHROPIC_MODEL,
++        "embed_model": settings.VOYAGE_MODEL,
++        "effort": CLAUDE_EFFORT,
+     }
+-    expected_values = {"RELEVANCE_THRESHOLD": args.expect_threshold,
+-                       "PARTIAL_MATCH_FLOOR": args.expect_floor, "MAXIMUM_STATEMENTS": 6}
++    expected_values = {"threshold_used": 0.2687, "floor_used": 0.2468, "MAXIMUM_STATEMENTS": 6,
++                       "chat_model": args.model, "embed_model": "voyage-4", "effort": "low"}
+     for name, value in expected_values.items():
+         if in_force[name] != value:
+             print(f"refusing: {name} is {in_force[name]!r}, not {value!r}", flush=True)
+             return 2
+ 
+-    # Phase 2c's baseline: the 0.30 threshold with no floor, over the same set, on the same code.
+-    # The two names the pipeline reads at call time are reassigned in this process only, as
+-    # phase 2a's sweep reassigned MAXIMUM_STATEMENTS; nothing on disk changes. Recorded in meta.
+-    import apps.retrieval.partial_matches as partial_matches_module
+-    import apps.retrieval.ranking as ranking_module
+-    if args.patch_threshold is not None:
+-        ranking_module.RELEVANCE_THRESHOLD = args.patch_threshold
+-    if args.patch_floor is not None:
+-        partial_matches_module.PARTIAL_MATCH_FLOOR = args.patch_floor
+-    in_force["threshold_used"] = ranking_module.RELEVANCE_THRESHOLD
+-    in_force["floor_used"] = partial_matches_module.PARTIAL_MATCH_FLOOR
+-    in_force["patched"] = args.patch_threshold is not None or args.patch_floor is not None
+-
+     set_path = REPO / "corpus/objective-02" / args.set
+     _, questions = question_set.load(set_path)
+     runs = question_set.expand_runs(questions, (ADMINISTRATOR_ROLE_NAME, EMPLOYEE_ROLE_NAME))

@@ -22,7 +22,8 @@ What is sent is the question wrapped in the embedding model's query task prefix
 (apps/ai/prefixes.py), which is how EmbeddingGemma is told it is embedding a question
 rather than a passage. The prefix exists only on the wire: the caller's question is
 what is logged, shown and stored, and a model that does not take prefixes receives
-the question unchanged.
+the question unchanged. The request also says it is a question
+(``input_type=INPUT_TYPE_QUERY``, D-116), which is how Voyage learns the same thing.
 
 Two failures, one exception, and deliberately different attempt counts. A transient
 outage is retried to MAXIMUM_EMBED_ATTEMPTS, because the next call may well succeed.
@@ -55,7 +56,7 @@ import time
 
 import apps.ai
 from apps.ai import attempt_log
-from apps.ai.base import EmbeddingResult, ProviderUnavailable
+from apps.ai.base import INPUT_TYPE_QUERY, EmbeddingResult, ProviderRefused, ProviderUnavailable
 from apps.ai.prefixes import query_text
 from apps.core.constants import MAXIMUM_EMBED_ATTEMPTS
 
@@ -78,15 +79,17 @@ def embed_question(question: str) -> EmbeddingResult:
     for attempt in range(1, MAXIMUM_EMBED_ATTEMPTS + 1):  # 1 initial call + 2 retries
         started = time.perf_counter()
         try:
-            result = service.embed([prefixed])
+            result = service.embed([prefixed], input_type=INPUT_TYPE_QUERY)
         except ProviderUnavailable as exc:
             attempt_log.failed_attempt(
                 "question embedding", attempt, MAXIMUM_EMBED_ATTEMPTS, time.perf_counter() - started,
                 attempt_log.cause_of(exc), str(exc),
             )
-            # A transient outage. Retry; the loop bound is the whole policy, and the
-            # last failure is re-raised with its own message rather than replaced.
-            if attempt == MAXIMUM_EMBED_ATTEMPTS:
+            # A transient outage, a rate limit included. Retry; the loop bound is the whole
+            # policy, and the last failure is re-raised with its own message rather than
+            # replaced. A refusal (a bad key, an exhausted quota) is re-raised at once: a
+            # retry would be refused the same way (D-118).
+            if attempt == MAXIMUM_EMBED_ATTEMPTS or isinstance(exc, ProviderRefused):
                 raise
             continue
         problem = _usability_problem(result)

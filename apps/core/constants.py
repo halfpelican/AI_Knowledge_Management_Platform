@@ -41,6 +41,15 @@ CHUNK_OVERLAP = 50
 # availability measure second.
 MAXIMUM_CHUNKS_PER_SOURCE = 1000
 
+# --- Embedding width (FR-08, risk R10; docs/decisions.md D-131) ------------------------
+# The length of the vectors each provider's embedding model returns. The provider is chosen once,
+# at setup: AI_PROVIDER in .env, before the first migrate. settings.EMBEDDING_DIMENSION follows
+# from it, the vector columns are created at that width, and a database keeps it. A database keeps
+# the provider it was set up with, and a change of provider means a new database (the user's
+# decision of 13 November 2026, D-131). voyage-4 returns 1024, because no output_dimension is sent
+# (apps/ai/anthropic.py), and FLM's embed-gemma returns 768.
+EMBEDDING_DIMENSION_BY_PROVIDER = {"anthropic": 1024, "flm": 768}
+
 # --- PDF extraction bounds (FR-08, FR-09; docs/decisions.md D-81) ---------------------
 # Four bounds on the work pypdf may do for one PDF (two per-stream caps, the page cap and
 # the operator budget), plus the text ceiling, which is MAXIMUM_CHUNKS_PER_SOURCE above
@@ -156,6 +165,8 @@ TOP_K = 25
 # most no-answer questions reach generation. Generation, capped at MAXIMUM_STATEMENTS, carries
 # most of the declining (path B). On users' wording no threshold separates answerable from
 # unanswerable questions (D-37's finding). Re-measure with the corpus or the embedding model.
+# This is EmbeddingGemma's value, and the default for any model RELEVANCE_THRESHOLD_BY_MODEL
+# below does not list. Voyage has its own (D-120).
 RELEVANCE_THRESHOLD = 0.30
 
 # Cosine-similarity floor for OFFERING an item as one of FR-12's partial matches beside a
@@ -171,6 +182,28 @@ RELEVANCE_THRESHOLD = 0.30
 # under the ceiling, but it would also remove the offers that point u07 and u24 at their
 # expected sources (D02 at 0.280085, T03 at 0.291925).
 PARTIAL_MATCH_FLOOR = 0.0
+
+# Per embedding model (D-120, 10 November 2026). A cosine value means something only for the
+# model whose scores it was chosen on (risk R10). Voyage's questions and passages score in a
+# different band from EmbeddingGemma's, so a model listed here uses its own threshold and
+# floor, and any other, EmbeddingGemma included, uses the two values above. The names are the
+# ones a provider answers with and every chunk records (settings.VOYAGE_MODEL for Voyage).
+# Read through apps/retrieval/ranking.relevance_threshold and
+# apps/retrieval/partial_matches.partial_match_floor, never directly.
+#
+# FR-19 reads voyage-4's threshold too (D-126): its permission exclusion admits at this value, so
+# changing it moves which permission-only questions reach the gap log. D-120's rule was indifferent
+# anywhere in [0.2467, 0.2908], and Objective 06's P02 has its restricted answer at 0.2812, inside
+# that interval. apps/core/tests/test_constants.py holds the two together.
+#
+# voyage-4: D-101's margin rule (m = 0.006) on dev-set-v2's Voyage scores gave T 0.2687 and
+# F 0.2468. It declines 4 of 8 no-answer runs with margin, against 1 of 8 on EmbeddingGemma,
+# and keeps all 32 answerable runs. End to end on the same set, with Claude Sonnet 5.5, it
+# answered 32/32, declined 8/8 and matched 32/32, where 0.30 lost u07 (0.2968) at path A. The
+# floor holds here (F <= T - m), so D-56's unrelated offers stop for runs declined at path A.
+# Evidence: corpus/objective-02/runs/2026-11-10/voyage-threshold/voyage-threshold.md.
+RELEVANCE_THRESHOLD_BY_MODEL = {"voyage-4": 0.2687}
+PARTIAL_MATCH_FLOOR_BY_MODEL = {"voyage-4": 0.2468}
 
 # PROVISIONAL: ceiling on grounding-context tokens per generation call. Tuned in
 # Stage 4 once the prompt and the model's context window are measured.
@@ -197,9 +230,24 @@ MAXIMUM_STATEMENTS = 6
 MAXIMUM_GENERATION_ATTEMPTS = 3
 # Same policy: one attempt plus two retries, after which the item is flagged.
 MAXIMUM_EMBED_ATTEMPTS = 3
-# Same policy for classification (FR-10, NIT3004). Named here now so the retry
-# policy is uniform across every AI call, not so anything uses it before Stage 6.
+# Same policy for classification (FR-10, NIT3004; D-104): apps/ai/classification.py's attempt
+# loop makes at most this many classify_document calls (1 initial call + 2 retries), then
+# raises ProviderUnavailable, which POST /api/documents/{id}/classify answers 503 and the
+# ingestion hook answers by leaving the document indexed and unclassified (invariant 8).
 MAXIMUM_CLASSIFY_ATTEMPTS = 3
+# Same policy for a recording segment's transcription (D-123): apps/ai/transcription.py
+# makes at most this many calls to FLM's speech endpoint (1 initial call + 2 retries), then
+# raises ProviderUnavailable, which POST /api/transcriptions answers 503. The page keeps the
+# segment and the draft, so the person can resume once FLM is back (invariant 8).
+MAXIMUM_TRANSCRIBE_ATTEMPTS = 3
+# Same policy for a meeting summary (FR-16, NIT3004; D-125): apps/ai/summarisation.py's attempt
+# loop makes at most this many summarise_meeting calls, then raises ProviderUnavailable, and the
+# run is marked Unavailable and queued for retry (NFR-20). FR-16: "Failures are retried twice
+# before the summary is marked unavailable."
+MAXIMUM_SUMMARY_ATTEMPTS = 3  # 1 initial call + 2 retries
+# Within those three, a malformed reply gets exactly one retry. FR-16: "a malformed response
+# triggers one retry". A second malformed reply ends the run even if an attempt is left (D-125).
+MAXIMUM_MALFORMED_SUMMARY_REPLIES = 2  # 1 malformed reply + 1 retry
 
 # --- Question bounds (FR-12, FR-13), in characters -----------------------------------
 MINIMUM_QUESTION_LENGTH = 10
@@ -227,6 +275,12 @@ MAXIMUM_CONVERSATION_TURNS = 3
 # same requirement, not because the two paths share a bound: they do not, and a search
 # term is not a question.
 MINIMUM_SEARCH_LENGTH = 2
+# The upper bound on a search term (D-79's note of 10 November 2026, on the FR-19 security review's
+# L1 and L2). Keyword search bounded a term from below only, so one request could log a term of any
+# length for FR-19's cycle to embed and show. 500, the question's ceiling: a search term is not a
+# question, but no real one comes near it. Enforced by ``search`` alone and not by the check
+# ``search_total`` shares, so the cycle can still recount a term logged before the bound existed.
+MAXIMUM_SEARCH_LENGTH = 500
 
 # --- Dashboard (FR-14) ----------------------------------------------------------------
 # How many items each of the dashboard's recent panels shows: recent documents, recent
@@ -263,8 +317,22 @@ MINIMUM_CONTENT_LENGTH = 50
 
 # The proposal's section 7.0 names this MAXIMUM_UPLOAD_SIZE; CLAUDE.md section 5
 # names it MAX_UPLOAD_BYTES, and the byte unit is in the name here. Enforced before
-# the file is read into memory (FR-08 Validation).
+# the file is read into memory (FR-08 Validation): against the declared length, before the
+# body is parsed. That holds since D-124. Before it, the CSRF check parsed a signed-in
+# session's body first.
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # 50 MB
+
+# The web server's own ceiling on a request body, in bytes, on every route: waitress-serve's
+# --max-request-body-size (D-124). Waitress refuses a declared Content-Length at or above it,
+# with its own plain-text 413, before it reads the body. So no body declared larger is received,
+# spooled to a temporary file or parsed. A chunked body declares no length: Waitress counts it as
+# it arrives and refuses it at the cap. Without the flag the ceiling is Waitress's default, 1 GB.
+# Two MiB above MAX_UPLOAD_BYTES, so a body a little over the upload ceiling still reaches the
+# view and gets the API's JSON 413 rather than Waitress's text. That includes the Objective 02
+# ingestion's oversized item: scripts/ingest_objective02.py generates it 1 MiB past the ceiling,
+# so its recorded outcome, the view's 413, is unchanged. Every documented serve command carries
+# this value, and apps/api/tests/test_request_body_bound.py reads them.
+MAX_REQUEST_BODY_BYTES = MAX_UPLOAD_BYTES + 2 * 1024 * 1024  # 54525952
 
 # Formats admitted at upload, established from the file's CONTENT (FR-08:
 # "confirmed by inspecting the file signature rather than the extension alone").
@@ -309,6 +377,52 @@ DOWNLOAD_CONTENT_TYPES = {
     "txt": TEXT_CONTENT_TYPE,
 }
 
+# --- Recording transcription (D-123) --------------------------------------------
+# A meeting recording becomes a draft transcript in the browser, one segment at a time: the
+# page decodes the recording, cuts it into short WAV segments and posts each to
+# POST /api/transcriptions, which returns that segment's text. Nothing is indexed until a person
+# confirms the draft and submits it through FR-09's POST /api/meetings.
+#
+# The length the page aims each segment at, in seconds: 30 s is Whisper's own window. The page cuts
+# at the quietest tenth of a second in a segment's last third, so a cut rarely falls inside a word,
+# and lets its last segment run up to a second longer rather than send a sliver. The page reads
+# this from GET /api/transcriptions/status (``segment_seconds``), so there is no client copy to
+# drift.
+TRANSCRIPTION_SEGMENT_SECONDS = 30
+# The longest segment the server will transcribe, in seconds of audio. Above the page's own
+# segment length, so a final segment that absorbs a short tail is still accepted, and well below
+# what would make one request long: at FLM's measured 0.24-0.31x real time, 60 s of audio is
+# about 15-19 s of transcription.
+MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS = 60
+# The sample rate the page resamples a recording to before cutting it, in hertz: Whisper's own.
+# The server accepts a 16-bit PCM mono WAV at exactly this rate and nothing else: the page sends
+# nothing else, and a wider range only made a segment dearer to measure (the security review of
+# 11 November). frontend/src/constants.js copies it.
+TRANSCRIPTION_SAMPLE_RATE = 16_000
+# Silence never reaches Whisper, which invents text from it: on 6 November a silent track
+# (-90 dBFS) came back as "E ai E ai...". A segment whose loudest TRANSCRIPTION_SILENCE_WINDOW
+# is quieter than this, in dB relative to full scale, is answered "silent" without a provider
+# call. *tune*: -45 dBFS sits far above that silent track and well below ordinary speech, which
+# a laptop microphone records at around -30 to -15 dBFS in its loud moments. It is to be
+# checked on the user's real recordings in the end-to-end trial.
+TRANSCRIPTION_SILENCE_DBFS = -45.0
+TRANSCRIPTION_SILENCE_WINDOW_SECONDS = 0.5
+# How many segments the whole server sends to FLM at once, across every user. FLM has one NPU and
+# takes requests in turn, so more at once only queue there, each holding a Waitress thread, until
+# they meet TRANSCRIPTION_TIMEOUT_SECONDS. Two lets one segment wait behind another, at most one
+# segment's time, without many users' segments holding every thread (the security review of 11
+# November, finding 2). A segment past it is answered 429 "transcription_busy" with
+# TRANSCRIPTION_BUSY_RETRY_SECONDS in Retry-After, which the page waits out by itself.
+MAXIMUM_TRANSCRIPTIONS_IN_FLIGHT = 2
+TRANSCRIPTION_BUSY_RETRY_SECONDS = 5
+# The largest recording the page will decode, in bytes. The recording never reaches the server,
+# only its segments do, and each of those is held to MAX_UPLOAD_BYTES; so this bounds the
+# page's memory, where the whole file and its decoded audio sit together, and only the client
+# enforces it. The value is set from what a browser tab can hold, not measured on every browser:
+# the decoded audio is resampled to 16 kHz, so it is far smaller than a video file of the same
+# meeting, and the file itself is the larger share. frontend/src/constants.js copies it.
+MAXIMUM_RECORDING_BYTES = 500 * 1024 * 1024  # 500 MB
+
 # --- Password complexity (FR-01) -----------------------------------------------------
 # FR-01 Server-End, Validation rules: "Password must meet complexity rules (min 8
 # chars, 1 uppercase, 1 number, 1 special character)." The four conditions are
@@ -327,18 +441,46 @@ PASSWORD_SPECIAL_CHARACTERS = frozenset(string.punctuation)
 # --- Account lockout (FR-02 Server-End; FR-03, NIT3004) -------------------------------
 # FR-02 Business Logic: "Failed attempts increment a counter; five consecutive
 # failures lock the account for 15 minutes", and FR-02 Responses: "403 forbidden if
-# account is locked". Enforcement is therefore FR-02's, not FR-03's; FR-03 adds the
-# interface (remaining-attempt warning, countdown) and the administrator release.
-# Configuration values rather than literals, as FR-03 Business logic requires.
+# account is locked". Enforcement is therefore FR-02's, not FR-03's. FR-03 adds the
+# remaining-attempt warning, the countdown, the administrator release
+# (RELEASE_ACCOUNT_LOCKS_PERMISSION, below) and the LoginAttempts table that records
+# each lockout and each release (D-130).
+#
+# FR-03 Business logic: "threshold and lockout duration are configuration values rather than
+# literals, so the policy can be tightened without code changes".
+# - **These two are the defaults.** The running values are settings.LOCKOUT_THRESHOLD and
+#   settings.LOCKOUT_DURATION, read from the .env variables LOCKOUT_THRESHOLD and
+#   LOCKOUT_DURATION_MINUTES, which default to these (config/settings.py, D-130 decision 7).
+# - **Read the running values at request time:** LoginView does, and so does
+#   GET /api/auth/lockout-policy, which gives the sign-in page its copy.
+# - **Not here, and not in frontend/src/constants.js:** the browser's copy, which since D-130
+#   decision 7 it fetches at run time.
 LOCKOUT_THRESHOLD = 5
 LOCKOUT_DURATION = timedelta(minutes=15)
+# The policy may only be tightened (FR-03's "so the policy can be tightened"; NFR-04's five
+# attempts and 15 minutes; Benjamin's decision 8, D-130). So config/settings.py refuses to start on:
+# - a threshold outside 1 to LOCKOUT_THRESHOLD;
+# - a duration outside LOCKOUT_DURATION to LOCKOUT_DURATION_MAXIMUM.
+# The maximum exists because a duration far longer overflows the lock's timestamp at the threshold
+# failure, a 500 that only a registered address could trigger (the final security review, M1).
+LOCKOUT_DURATION_MAXIMUM = timedelta(days=365)
 # How many failed attempts in total may still be answered with the distinct
-# "account is locked" notice. Past this, a locked account answers every attempt with
-# the generic message, right password or wrong. Without a ceiling the lock withheld
-# the session but not the answer: guessing during the window was unlimited and each
-# response said whether that guess was correct (D-26). Twice the threshold leaves a
-# user who mistypes once after locking themselves out with the useful message.
-LOCKOUT_NOTICE_CEILING = LOCKOUT_THRESHOLD * 2
+# "account is locked" notice, as a multiple of the running threshold. Past it, a locked
+# account answers every attempt with the generic message, right password or wrong.
+# Without a ceiling the lock withheld the session but not the answer: guessing during the
+# window was unlimited and each response said whether that guess was correct (D-26). Twice
+# the threshold leaves a user who mistypes once after locking themselves out with the useful
+# message. LoginView multiplies it by settings.LOCKOUT_THRESHOLD.
+LOCKOUT_NOTICE_CEILING_FACTOR = 2
+# The ceiling at the default threshold, for the tests that run on the defaults.
+LOCKOUT_NOTICE_CEILING = LOCKOUT_THRESHOLD * LOCKOUT_NOTICE_CEILING_FACTOR
+# What a LoginAttempts row records (FR-03, D-130; docs/schema-v1.md section 3): a lockout,
+# written by login in the transaction that sets locked_until, or an Administrator's release
+# of one. Nothing else is recorded. An ordinary sign-in, failed or not, writes no row, so an
+# address with no account is never stored.
+LOGIN_ATTEMPT_LOCKOUT = "lockout"
+LOGIN_ATTEMPT_RELEASE = "release"
+LOGIN_ATTEMPT_EVENTS = (LOGIN_ATTEMPT_LOCKOUT, LOGIN_ATTEMPT_RELEASE)
 
 # Requests per minute allowed to the two anonymous authentication endpoints, per
 # client address. Lockout without a throttle is a denial-of-service primitive:
@@ -360,6 +502,31 @@ INGESTION_THROTTLE_RATE = "60/hour"
 # POST /api/conversations, scope "conversation_create": the ask rate in a budget of its own, so
 # creating a thread does not spend the ask budget (D-80).
 CONVERSATION_CREATE_THROTTLE_RATE = ASK_THROTTLE_RATE
+# GET /api/search, scope "search" (the user's decision of 10 November 2026, D-79's note). Search
+# spends no NPU time; the rate bounds how fast one user can fill SearchLog, which FR-19's cycle
+# reads (the security review's L1 and L2). The page sends one request per submitted term.
+SEARCH_THROTTLE_RATE = "30/min"
+# POST /api/documents/{id}/tags, scope "tagging" (the user's decision of 10 November 2026, night;
+# D-79's note on tagging, answering D-105's security review, finding 4). Each new Topic name a
+# person types there becomes a permanent Tag, which joins the scheme that later classification
+# prompts list with no cap (apps/ai/classification.py) and that tag_options offers. Like search's,
+# the rate is not about NPU time, since applying a tag calls no provider: it bounds how fast one
+# user can grow the vocabulary. The page sends one request per tag a person adds. Since D-128
+# the same scope also limits POST /api/tags, an Administrator adding a vocabulary value; its GET is
+# not throttled. The other tag routes are not throttled, and D-79's note says why.
+TAGGING_THROTTLE_RATE = "30/min"
+# POST /api/transcriptions, scope "transcription" (D-123). The page posts one segment at a
+# time, each taking FLM 7-10 s for 30 s of audio, so a transcribing page sends about six a
+# minute. A silent segment is answered without a provider call and so returns at once; this rate
+# lets a long silent stretch through at that pace, and the page waits out a 429's Retry-After
+# and carries on. One transcription per user is in flight at once regardless
+# (apps/api/transcription_slot.py), so the rate bounds requests, not NPU time.
+TRANSCRIPTION_THROTTLE_RATE = "60/min"
+# POST, PATCH and DELETE on /api/meetings/{id}/action-items, scope "action_items" (FR-16; the
+# security review of 12 November 2026, finding 2, D-125's third note). They call no provider: the
+# rate bounds how fast one account can fill or rewrite a meeting's Action Items panel, which every
+# reader of the meeting loads. The page sends one request per save, addition or deletion.
+ACTION_ITEM_THROTTLE_RATE = "30/min"
 
 # How much longer than generation's worst case a user's in-flight ask slot is held before it
 # expires on its own, in seconds. The slot's timeout is GENERATION_TIMEOUT_SECONDS times
@@ -514,8 +681,10 @@ EFFECTIVE_ROLES = {
 }
 
 # Permission codes (FR-05, FR-06; docs/decisions.md D-14). Held against roles in
-# role_permissions, seeded by accounts migrations 0003, 0004, 0005 and 0006; a test asserts
-# the constants and the seed agree.
+# role_permissions, seeded by accounts migrations 0003, 0004, 0005 and 0006, 0007 for
+# REVIEW_KNOWLEDGE_GAPS_PERMISSION (under "Knowledge gaps" below), 0008 for
+# MANAGE_TAGS_PERMISSION and 0010 for RELEASE_ACCOUNT_LOCKS_PERMISSION; a test asserts the
+# constants and the seed agree.
 MANAGE_ROLES_PERMISSION = "manage_roles"
 # FR-08's section 7.2 validateUpload() opens with hasContributePermission(), before
 # the signature, size and title checks, because it is the cheapest rejection and the
@@ -535,10 +704,266 @@ MANAGE_DOCUMENTS_PERMISSION = "manage_documents"
 # one never grants the other. Held by Administrator only, seeded by accounts migration 0006.
 # D-66 puts every Employee-only meeting in an Administrator's scope, so none is undeletable.
 MANAGE_MEETINGS_PERMISSION = "manage_meetings"
+# FR-10's taxonomy administered (D-119 finding 5; D-105's dated note of 10 November 2026, night):
+# GET /api/tags lists every tag with its count of sources, and DELETE /api/tags/{id} deactivates
+# a tag content still references or deletes an unused one. Held by Administrator only, seeded by
+# accounts migration 0008. The inventory is unscoped, which is safe only for a role that reads
+# every source (D-66); apps/accounts/tests/test_manage_tags_seed.py holds every holder to that.
+# Since D-129 it also guards the department list (GET, POST /api/departments and
+# DELETE /api/departments/{id}), whose counts of documents are unscoped for the same reason.
+MANAGE_TAGS_PERMISSION = "manage_tags"
+# FR-03's administrator release (D-130): POST /api/users/{id}/unlock clears an account's lock,
+# and GET /api/users shows each live lock to a holder. FR-03: "Only a user holding the
+# Administrator role may release a lock." Held by Administrator only, seeded by accounts
+# migration 0010. A code of its own rather than manage_roles, so that granting one never grants
+# the other (D-99's reason).
+RELEASE_ACCOUNT_LOCKS_PERMISSION = "release_account_locks"
 
-# Provenance of a ContentTags row (FR-10, FR-15).
+# Provenance of a ContentTags row (FR-10, FR-15), and of the department a document carries
+# (DocumentAnalysis.department_applied_by, D-119 finding 10): the machine's, or a person's.
 TAG_APPLIED_BY_VALUES = ("ai", "user")
+AI_APPLIED, USER_APPLIED = TAG_APPLIED_BY_VALUES
+
+# --- Classification (FR-10; docs/decisions.md D-104, D-105, D-106) ------------------------
+# FR-10 Front-End: "an automatically assigned type (Policy, Procedure, Report, Meeting Paper)",
+# and Server-End Validation: "the type must be selected from a fixed list rather than
+# generated freely". The classification reply's doc_type must be one of these or the reply is
+# a schema violation (apps/ai/classification.py); DocumentAnalysis.doc_type is a vocabulary
+# field over the same tuple.
+DOCUMENT_TYPES = ("Policy", "Procedure", "Report", "Meeting Paper")
+
+# How much of a document the classification call reads: its title and this many whitespace
+# tokens (D-31's token) from the START of the extracted text. The opening of a document is
+# where its kind is stated; FR-10's sectioned summarising of long documents is deferred, and
+# this is said in the DocumentAnalysis record rather than hidden. 1,500 is about five pages,
+# well inside the 4B model's window beside the prompt, and larger than every corpus document
+# but D04 (8,357 words), whose first chapter already says it holds procedures.
+CLASSIFICATION_INPUT_TOKENS = 1500
+
+# An assignment whose confidence is below this is marked provisional and held for confirmation
+# rather than applied (FR-10 Business logic, confidence; compared with ``<`` in one place,
+# apps/documents/classification.py). Chosen on the development documents under
+# corpus/objective-05/dev-documents/, never on the twenty reference documents (D-93), by the rule
+# D-106 fixed before any run. TUNED, 10 November 2026: the second sweep (b40dc0f, after the one
+# prompt revision) found the type's confidence does not separate right from wrong on gemma3:4b
+# (right 0.95 to 0.98, wrong 0.95), so the rule's own fallback applies: the lowest confidence
+# seen on a correct assignment, 0.95. At 0.95 no type is held; on that sweep 24 of 36 department
+# and 71 of 84 tag suggestions fall below it. An FLM-configuration value: re-derived on the same
+# development documents before the anthropic provider is relied on (D-113). The evidence is in
+# corpus/objective-05/runs/2026-11-09/dev-sweep/ and corpus/objective-05/runs/2026-11-10/dev-sweep-2/.
+CLASSIFICATION_CONFIDENCE_THRESHOLD = 0.95
+
+# Per classification model (D-122): a confidence belongs to the model that reported it, as a cosine
+# belongs to the embedding model (D-120). claude-haiku-5-5's value comes from D-106's rule, run on the
+# development documents through the shipped classify_document, 19 documents three times each
+# (10 November 2026, corpus/objective-05/runs/2026-11-10/dev-sweep-haiku/). Haiku typed all 57 right,
+# so nothing beats applying everything, and the rule's fallback applies: the lowest confidence seen on
+# a correct assignment, 0.72. The development set has seven more documents than when 0.95 was chosen
+# (caf9e22, D-106's note). Any model not listed, gemma3:4b included, keeps
+# CLASSIFICATION_CONFIDENCE_THRESHOLD; apps/documents/classification.py's confidence_threshold()
+# reads both.
+CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL = {"claude-haiku-5-5": 0.72}
+
+# A department's threshold, per classification model (D-129, the lead's decision of 13 November 2026,
+# in a tabbed question), from the run in corpus/objective-05/runs/2026-11-13-tag-threshold/. D-106's
+# rule on departments alone found no split (56 right, 1 wrong), so it took the lowest right
+# confidence, 0.30. The rule pooled with tags gave 0.25, capped from 0.50, and the user chose two
+# values instead: departments 0.30, tags 0.72 (D-129). A model not listed uses the shared value for
+# that model (CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL, else CLASSIFICATION_CONFIDENCE_THRESHOLD),
+# so gemma3:4b keeps 0.95. The type and the tags always use the shared value. apps/documents/
+# classification.py's department_threshold() reads this.
+CLASSIFICATION_DEPARTMENT_CONFIDENCE_THRESHOLD_BY_MODEL = {"claude-haiku-5-5": 0.30}
+
+# The longest value POST /api/documents/{id}/proposed-tags/reject reads, in characters (D-133, the
+# lead's decision of 15 November 2026). From D-129 until D-134 a run proposed a Topic outside the
+# scheme whatever its length, and a rejection writes only JSON (``rejected_tags``), so the reject
+# route is not held to the Tags column. Until D-133 it was, at NAME_MAX_LENGTH, and a Topic over 255
+# characters could be neither confirmed nor rejected. Confirm keeps NAME_MAX_LENGTH, because
+# confirming creates a Tag.
+#
+# Since D-134 (the lead's decision of 15 November 2026) a run discards a Topic longer than
+# NAME_MAX_LENGTH instead of proposing it, so no proposal a run makes is longer than the column, and
+# this bound serves only proposals stored before D-134. The residual below, a proposal longer than
+# this bound, can then come only from a run made before D-134. What follows is D-133's reasoning.
+# Scaled to the longest classification reply, Claude's ceiling, CLAUDE_MAX_TOKENS (16,000 tokens):
+# 100,000 is that ceiling at 6.25 characters a token. The ratio was worked back from the bound
+# (100,000 / 16,000), not measured, and it is a ratio for prose, not a ceiling: a run of punctuation
+# can be one token of many characters, and at 10 characters a token, the ratio D-133's 4,000 option
+# was priced at, the ceiling would be 160,000 characters. FLM's ceiling, CLASSIFICATION_MAX_TOKENS
+# (400 tokens), is far inside either. So a proposal longer than this is possible, and would still be
+# refused 400: a residual, since nothing bounds a tag value in the reply, but far from anything
+# measured (the longest Topic in the recorded Objective 05 runs is 21 characters). D-133 names it, and
+# the reviews' notes on it, under "Not covered". apps/core/tests/test_constants.py fails if either
+# ceiling is raised past 16,000 tokens, so that the bound is below 6.25 characters a token of it.
+MAXIMUM_PROPOSED_TAG_LENGTH = 100_000
+
+# How the apply layer (apps/documents/classification.py, D-105) disposed of one assignment,
+# recorded per assignment on DocumentAnalysis (doc_type_outcome, department_outcome):
+#   applied      at or above the classifying model's threshold for that kind of assignment
+#                (confidence_threshold for the type, department_threshold for the department,
+#                D-129) and written to the effective field, still marked AI-generated and editable;
+#   provisional  below the threshold: held and presented for confirmation, not written
+#                (FR-10 Business logic, confidence);
+#   discarded    outside the established scheme (the department only: the type is always in
+#                DOCUMENT_TYPES because the parser refuses anything else), FR-10's controlled
+#                taxonomy growth clause;
+#   confirmed    a person confirmed or edited it; later reprocessing leaves it alone.
+ASSIGNMENT_OUTCOMES = ("applied", "provisional", "discarded", "confirmed")
+(ASSIGNMENT_APPLIED, ASSIGNMENT_PROVISIONAL, ASSIGNMENT_DISCARDED,
+ ASSIGNMENT_CONFIRMED) = ASSIGNMENT_OUTCOMES
 
 # --- Sessions (FR-04, docs/decisions.md D-10) -----------------------------------------
 # Inactivity expiry; config/settings.py derives SESSION_COOKIE_AGE from it.
 SESSION_INACTIVITY_MINUTES = 60
+
+# --- Knowledge gaps (FR-19; docs/decisions.md D-107, D-108, D-109) --------------------------
+# A KnowledgeGap's status (FR-19 Front-End: "the ability to mark an entry as addressed"). Every
+# entry starts Open; PATCH /api/knowledge-gaps/{id} moves it either way. Only an Open entry is a
+# join candidate for D-109's grouping, so a subject that recurs after being addressed opens a new
+# entry rather than disappearing into one the Administrator has already dealt with.
+KNOWLEDGE_GAP_STATUS_VALUES = ("Open", "Addressed")
+(KNOWLEDGE_GAP_OPEN, KNOWLEDGE_GAP_ADDRESSED) = KNOWLEDGE_GAP_STATUS_VALUES
+DEFAULT_KNOWLEDGE_GAP_STATUS = KNOWLEDGE_GAP_OPEN
+
+# The cosine similarity, against an Open entry's centroid, at or above which an unanswered
+# question or zero-result search joins that entry instead of starting its own (D-109;
+# apps/retrieval/gaps.py, ``>=``). CHOSEN on the development paraphrase set,
+# corpus/objective-06/dev-paraphrases.json, by D-109's rule fixed in advance, and never on the
+# thirty seeded queries (D-93). The pairwise similarities do not separate: the lowest within-subject
+# pair is 0.5322 and the highest cross-subject pair 0.5876 ("password length" against "password
+# reset window"), so the rule takes the value with the best pairwise F1, 0.5256. Centroid grouping
+# simulated at that value forms exactly 12 entries of 3 from the 36 items, none mixed. The lowest
+# within-subject pair sits only 0.0066 above it, about twice D-40's query-vector drift (0.003), so
+# a re-measurement after any change of corpus, embedding model, prefix or FLM build is owed. The
+# evidence is corpus/objective-06/runs/2026-11-09/grouping-sweep/ (9 November 2026, FLM v0.9.39,
+# commit 4a1ed3d), and D-109's dated note of the same day records it.
+GAP_GROUPING_THRESHOLD = 0.5256
+
+# Per embedding model (D-122), as RELEVANCE_THRESHOLD_BY_MODEL is (D-120): a cosine belongs to the
+# model that produced the vectors. voyage-4's value comes from D-109's rule, run on the same
+# development paraphrase set with Voyage's query embeddings (10 November 2026,
+# corpus/objective-06/runs/2026-11-10/grouping-sweep-voyage/). The pairs again do not separate:
+# the lowest within-subject pair is 0.5157, and the highest cross-subject pair is 0.5297, the same
+# password pair. So the rule's best pairwise F1 gives 0.5054, and centroid grouping at that value
+# forms 12 entries of 3, none mixed. The lowest within-subject pair sits 0.0103 above it, about
+# 8.6 times Voyage's re-embedding jitter: differences of up to 0.0012 between two passes over one
+# question (D-109's note of 12 November 2026). Any model not listed, EmbeddingGemma included, keeps
+# GAP_GROUPING_THRESHOLD; apps/retrieval/gaps.py's grouping_threshold() reads both.
+GAP_GROUPING_THRESHOLD_BY_MODEL = {"voyage-4": 0.5054}
+
+# FR-19's permission exclusion for a question, per embedding model (D-126; apps/retrieval/gaps.py's
+# exclusion_rule() reads these). Each string decided is ranked over the Administrator's scope: the
+# question, or for a conversation follow-up the composed string and then its own wording (D-127).
+# Then:
+# - "rank-one" (D-108's note of 10 November 2026, 333be14): the top-ranked passage decides, whether
+#   or not it clears the model's relevance threshold. A restricted top passage means the row is left
+#   out, and a readable one means that string does not leave it out;
+# - "threshold-first" (D-108 as first written): if no passage reaches the model's own relevance
+#   threshold (ranking.relevance_threshold, D-120), nobody could have been answered and that string
+#   does not leave the row out. Otherwise the top admitted passage decides, as above.
+# A row that no string leaves out is a gap.
+GAP_EXCLUSION_RANK_ONE = "rank-one"
+GAP_EXCLUSION_THRESHOLD_FIRST = "threshold-first"
+GAP_EXCLUSION_RULES = (GAP_EXCLUSION_RANK_ONE, GAP_EXCLUSION_THRESHOLD_FIRST)
+# Any model not listed below, EmbeddingGemma included, keeps rank-one. It passed D-108's
+# development check 15 of 15 on embed-gemma, and threshold-first kept P02 there, at 0.298 against
+# 0.30.
+GAP_EXCLUSION_RULE = GAP_EXCLUSION_RANK_ONE
+# voyage-4: threshold-first, the user's decision of 11 November 2026 (D-126).
+# - On D-108's development questions, rank-one fails the check on voyage-4: u36 and d27 have no
+#   answer anywhere, but their weak top matches (0.230, 0.238) are Administrator-only, so both are
+#   left out. Threshold-first passes it, as does D-108's margin rule at 0.0939
+#   (corpus/objective-06/runs/2026-11-11-anthropic/).
+# - The choice between those two was informed by the frozen thirty: under rank-one U01 was left out,
+#   and the margin rule would keep P02 (margin 0.045). That makes it a departure from D-93, disclosed
+#   in D-126.
+GAP_EXCLUSION_RULE_BY_MODEL = {"voyage-4": GAP_EXCLUSION_THRESHOLD_FIRST}
+
+# How far before the previous cycle's start an aggregation cycle's window reaches back, in seconds
+# (D-107). It covers a QueryLog or SearchLog row whose timestamp was set before the previous cycle
+# started and that committed after that cycle read. Re-scanning is harmless: a row already in the
+# log is skipped by its unique membership, and a row left out on permission grounds is left out
+# again by the same rule. A presentation of time, not a tuned value.
+CYCLE_GRACE_SECONDS = 60
+
+# FR-19's permission code (D-107), checked by every knowledge-gap route and by the dashboard's
+# knowledge_gaps panel. Held by Administrator only, seeded by accounts migration 0007, D-99's
+# pattern; a test asserts the constant and the seed agree. Declined: testing the role name, which
+# no other Administrator-only route does.
+REVIEW_KNOWLEDGE_GAPS_PERMISSION = "review_knowledge_gaps"
+
+# How many Open entries the dashboard's knowledge-gap panel lists (D-107, closing D-69): the same
+# presentation constant as the other recent panels, named for this panel so that changing one does
+# not silently change the other.
+DASHBOARD_GAP_ITEMS = DASHBOARD_RECENT_ITEMS
+
+# --- Meeting summaries and action items (FR-16, NIT3004; docs/decisions.md D-125) ------------
+# FR-16 Validation: "transcripts below a minimum length are rejected rather than submitted, since
+# short transcripts produce unreliable output". Counted in whitespace tokens by D-31's one
+# definition (apps/ingestion/chunking.py's length_in_tokens). Below it no run starts at ingestion,
+# and GET and POST /api/meetings/{id}/summary answer 422. FR-09's own floor, MINIMUM_CONTENT_LENGTH,
+# is 50; a summary needs more than a meeting needs to be indexed. *tune*: a starting value, about
+# ninety seconds of speech, chosen without a measurement.
+MINIMUM_SUMMARY_TRANSCRIPT_LENGTH = 200
+# The most of a transcript one summary request carries, in whitespace tokens, as whole passages
+# (FR-09's own chunks). FR-16 sends "a single structured request", so a longer transcript is not
+# summarised in sections: the passages after the cap are left out, the summary records
+# input_truncated and how many passages it read, and the panel says so. About seventy-five
+# minutes of speech; it keeps gemma3:4b's prompt inside FLM's context. *tune*.
+SUMMARY_INPUT_TOKENS = 10_000
+# The same cap in characters, beside the one in tokens. A token here is a whitespace-separated word,
+# and a word has no length limit, so a transcript of very long "words" could carry far more to the
+# provider than SUMMARY_INPUT_TOKENS suggests (the security review of 12 November 2026, finding 3,
+# D-125's third note). Speech runs about six characters a word, so 10,000 words is about 60,000
+# characters and this does not bind on a real transcript. A first passage longer than this alone is
+# cut to it, and the summary records the transcript as truncated.
+SUMMARY_INPUT_CHARACTERS = 100_000
+# A MeetingSummary's status (FR-16: processing, "Ready", "marked unavailable"). A run is created
+# Processing and ends Ready or Unavailable; summary_text is written once, when Ready (D-125).
+SUMMARY_STATUS_VALUES = ("Processing", "Ready", "Unavailable")
+(SUMMARY_PROCESSING, SUMMARY_READY, SUMMARY_UNAVAILABLE) = SUMMARY_STATUS_VALUES
+DEFAULT_SUMMARY_STATUS = SUMMARY_PROCESSING
+# Why a run ended Unavailable, kept on the row for the operator and never shown to a user.
+# "no_verified_narrative" is FR-12's path (b) for a summary: a reply came back and no narrative
+# sentence named a passage that was sent (invariant 7's distinction, D-125). "busy" is a run the
+# server had no room to start (MAXIMUM_SUMMARIES_WAITING): it never reached the provider.
+SUMMARY_FAILURE_REASONS = ("provider_unavailable", "provider_refused", "malformed",
+                           "no_verified_narrative", "indexing_failed", "orphaned", "error", "busy")
+(SUMMARY_FAILED_PROVIDER_UNAVAILABLE, SUMMARY_FAILED_PROVIDER_REFUSED, SUMMARY_FAILED_MALFORMED,
+ SUMMARY_FAILED_NO_VERIFIED_NARRATIVE, SUMMARY_FAILED_INDEXING, SUMMARY_FAILED_ORPHANED,
+ SUMMARY_FAILED_ERROR, SUMMARY_FAILED_BUSY) = SUMMARY_FAILURE_REASONS
+# NFR-20's retry queue: a failed run is queued, and manage.py retry_meeting_summaries runs it
+# again on the hourly schedule. After this many queued runs have also failed it leaves the queue
+# and stays Unavailable until a person presses Regenerate (D-125).
+MAXIMUM_SUMMARY_RETRY_RUNS = 3
+# A run whose replies never conformed ("malformed") is queued only while no queued run has been
+# made, so at most one follows it, not MAXIMUM_SUMMARY_RETRY_RUNS. A transcript that leads the model
+# to break the schema tends to break it again, and each queued run is up to two more provider calls
+# (MAXIMUM_MALFORMED_SUMMARY_REPLIES); one still covers a reply that went wrong by chance. The
+# security review of 12 November 2026, finding 3 (D-125's third note).
+MAXIMUM_MALFORMED_RETRY_RUNS = 1
+# A run still Processing this long after it started was left by a server that stopped mid-run:
+# the retry command marks it failed ("orphaned") and runs it again. Three attempts of the slowest
+# call (SUMMARY_TIMEOUT_SECONDS, 600 s, apps/ai/summarisation.py), plus the summary's own
+# embedding and a margin.
+SUMMARY_STALE_AFTER_SECONDS = 3 * 600 + 600
+# Background runs calling the provider at once in one server process (D-125). A third waits for a
+# place rather than being refused: nobody is waiting on the request, which answered 202.
+MAXIMUM_SUMMARIES_IN_FLIGHT = 2
+# Background runs WAITING for one of those places in one server process. Each waits in a thread of
+# its own, so without a bound a burst of requests (ingestions and Regenerates, from accounts anyone
+# can register) held a thread each for as long as the backlog took. Past it a run is not started:
+# it is closed Unavailable and queued as "busy", and the hourly retry carries it. Twenty runs at
+# about 30 seconds each clear in five minutes on two places. The security review of 12 November
+# 2026, finding 4 (D-125's third note).
+MAXIMUM_SUMMARIES_WAITING = 20
+# Where an action item came from: extracted by the model, or added by a person (FR-16's "manually
+# add items the extraction missed"). The same two words as TAG_APPLIED_BY_VALUES, FR-10's.
+ACTION_ITEM_ORIGINS = ("ai", "user")
+(ACTION_ITEM_FROM_AI, ACTION_ITEM_FROM_USER) = ACTION_ITEM_ORIGINS
+# The most action items one meeting may hold before a person's addition is refused (409). Every
+# item counts, extracted or added. Extraction gives at most 25 a run and replaces its own untouched
+# items (apps/ai/summarisation.py), so this binds the items people add. The security review of 12
+# November 2026, finding 2 (D-125's third note): without it one account could add rows without end,
+# and every reader of the meeting loads them all. A starting value: no meeting in any set comes near.
+MAXIMUM_ACTION_ITEMS_PER_MEETING = 200

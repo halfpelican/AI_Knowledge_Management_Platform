@@ -101,10 +101,16 @@ class ConsultedPassage:
     FR-12: "Each citation expands to display the source passage and links to the source
     document or meeting." The expansion needs the passage text, and no endpoint in the
     API returns a chunk, so the text travels with the answer that was drawn from it.
+
+    ``ai_generated`` is True for a passage of a meeting's AI-generated summary (FR-16, UC-04:
+    the summary "is available to UC07 ... as source material"; D-125 choice 1). The interface
+    marks such a passage as AI content wherever it shows it (NFR-15), so a summary's sentence is
+    never read as the transcript's.
     """
 
     chunk_id: str
     text: str
+    ai_generated: bool = False
 
 
 @dataclass(frozen=True)
@@ -221,7 +227,11 @@ def resolve_sources(passages, *, user) -> tuple[ConsultedSource, ...]:
     for passage in passages:
         key = (passage.source_type, passage.source_id)
         grouped.setdefault(key, []).append(
-            ConsultedPassage(chunk_id=passage.chunk_id, text=passage.chunk_text)
+            ConsultedPassage(
+                chunk_id=passage.chunk_id,
+                text=passage.chunk_text,
+                ai_generated=passage.ai_generated,
+            )
         )
 
     titles_and_dates = _titles_and_dates(grouped, user=user)

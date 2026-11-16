@@ -42,3 +42,35 @@
   margin: var(--space-3) 0 0;
   color: var(--color-text-muted);
 }
+
+/* D-123: a recording transcribed into a draft, then reviewed. */
+.recording-transcriber {
+  margin: 0 0 var(--space-4);
+}
+
+.recording-transcriber__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--space-3) 0;
+}
+
+.recording-transcriber__status {
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-muted);
+}
+
+.meeting-form__review {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-min-height);
+  margin: 0 0 var(--space-2);
+}
+
+.meeting-form__draft-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-4);
+}

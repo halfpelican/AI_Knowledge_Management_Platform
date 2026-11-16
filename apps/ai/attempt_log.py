@@ -16,12 +16,28 @@ below ERROR, and lowering it would let in every 4xx WARNING from ``django.reques
   ``ValueError`` FLM's 200 carrying an error body) or ``SchemaViolation``;
 - each failed attempt to embed the question, the same way, and an embedding reply that
   cannot be used as a query vector;
-- the 503 ``POST /api/ask`` answers, with the message of the exception that caused it.
+- the 503 ``POST /api/ask`` answers, with the message of the exception that caused it;
+- **each request a provider refuses with a 4xx (D-118, 10 November 2026),** with the
+  status and the provider's message. A 429 is a WARNING, because a rate limit is expected
+  under load and passes. Any other 4xx is an ERROR: a bad key, an unknown model, a
+  malformed request or an exhausted credit, none of which a retry fixes.
+  - **What the provider raises** (apps/ai/_status.py): a 429 as ProviderUnavailable, which
+    callers retry, and any other 4xx as ProviderRefused, which they do not.
+  - **What the user sees:** NFR-19's 503 either way.
+  - **Where the cause shows:** this line, the ingestion path included, which logs no
+    attempts of its own.
 
 Each line names the account, by primary key, when the view has set it with ``account``.
 Nothing logged here quotes the question, a passage or the model's reply: the details are
 the exception messages, which describe the failure (``not valid JSON: ...``, ``Request
 timed out.``), and they are cut at ``DETAIL_LIMIT`` characters.
+
+**Until c016bbe (13 November 2026) that was untrue of key names.** A schema violation from
+the statement or the classification parser named each key the reply had that the schema
+does not, and a key name is the model's words, which a passage or an uploaded document can
+steer. Both parsers now name only the schema's own keys and count the reply's. FR-16's
+parser had the same fault: its security review found it on 12 November, and 8a2eec1 fixed
+it on 13 November, the same way (D-125's third note).
 
 **What each generation attempt's reply reported (7 November 2026),** at the user's order
 for step 7: "log each attempt's finish_reason and completion-token count". D-82's notes of
@@ -51,6 +67,13 @@ reading, not observed", because nothing recorded how a reply ended.
   answered ``finish_reason: "stop"`` to a request whose reply stopped at exactly
   ``max_tokens`` (20 of 20, mid-list). So the completion-token count against
   ``max_tokens`` is logged beside it, and a reader compares the two.
+
+**Classification attempts (9 November 2026, FR-10, D-104).** The loop in
+``apps/ai/classification.py`` records each attempt the same way, under the step
+``classification``: a failed attempt is a WARNING and a parsed attempt an INFO line ending
+``: 2 tag(s)``. The bracket's ``max_statements`` reads ``unreported`` on those lines, because a
+classification request carries no statement cap. As everywhere in this file, nothing of the
+reply is quoted: not the type, the department or a tag.
 
 **It observes; it does not decide.** No attempt count, timeout or reply changes because
 of it. A logging call does not raise into its caller: a handler that fails reports through
@@ -148,9 +171,10 @@ def failed_attempt(
     *,
     reply: ReplyFacts | None = None,
 ) -> None:
-    """One failed attempt of ``step``, "generation" or "question embedding".
+    """One failed attempt of ``step``: "generation", "question embedding", "classification",
+    "transcription" (one recording segment, D-123) or "summarisation" (one meeting, D-125).
 
-    ``reply`` is passed for a generation attempt, and adds the bracket.
+    ``reply`` is passed for a generation or a classification attempt, and adds the bracket.
     """
     logger.warning(
         "%s attempt %d of %d failed after %.1f s%s (account %s): %s: %s",
@@ -179,6 +203,73 @@ def parsed_attempt(number: int, of: int, seconds: float, statements: int, *, rep
         _bracket(reply),
         _account.get() or "not set",
         statements,
+    )
+
+
+def refused(source: str, status: int, detail: str) -> None:
+    """A provider's 4xx refusal of one request (D-118).
+
+    ``source`` names the provider or endpoint, ``status`` is the HTTP status, and
+    ``detail`` is the SDK's message, which carries the provider's error body. It is cut at
+    DETAIL_LIMIT, as every detail here is.
+    """
+    logger.log(
+        logging.WARNING if status == 429 else logging.ERROR,
+        "%s refused the request with HTTP %d (account %s): %s",
+        source,
+        status,
+        _account.get() or "not set",
+        _detail(detail),
+    )
+
+
+def parsed_classification(number: int, of: int, seconds: float, tags: int, *, reply: ReplyFacts) -> None:
+    """One classification attempt whose reply parsed into CLASSIFICATION_SCHEMA, at INFO (FR-10).
+
+    ``parsed_attempt``'s counterpart for ``classify_document`` (D-104). Like it, the line says how
+    many items the reply held and nothing of what they were: a suggested type, department or
+    tag is the model's reply, and this module quotes no reply.
+    """
+    logger.info(
+        "classification attempt %d of %d parsed after %.1f s%s (account %s): %d tag(s)",
+        number,
+        of,
+        seconds,
+        _bracket(reply),
+        _account.get() or "not set",
+        tags,
+    )
+
+
+def parsed_summary(
+    number: int,
+    of: int,
+    seconds: float,
+    *,
+    sentences: int,
+    decisions: int,
+    highlights: int,
+    action_items: int,
+    reply: ReplyFacts,
+) -> None:
+    """One summary attempt whose reply parsed into SUMMARY_SCHEMA, at INFO (FR-16, D-125).
+
+    ``parsed_classification``'s counterpart for ``summarise_meeting``. The line says how many
+    elements of each kind the reply held and nothing of what they said: this module quotes no
+    reply, and a meeting's summary is the meeting's content.
+    """
+    logger.info(
+        "summarisation attempt %d of %d parsed after %.1f s%s (account %s): %d sentence(s), "
+        "%d decision(s), %d highlight(s), %d action item(s)",
+        number,
+        of,
+        seconds,
+        _bracket(reply),
+        _account.get() or "not set",
+        sentences,
+        decisions,
+        highlights,
+        action_items,
     )
 
 

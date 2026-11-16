@@ -15,6 +15,7 @@ import Dashboard from './pages/Dashboard.jsx'
 import DocumentDetail from './pages/DocumentDetail.jsx'
 import DocumentRepository from './pages/DocumentRepository.jsx'
 import Home from './pages/Home.jsx'
+import KnowledgeGaps from './pages/KnowledgeGaps.jsx'
 import Login from './pages/Login.jsx'
 import ForgotPassword from './pages/ForgotPassword.jsx'
 import MeetingDetail from './pages/MeetingDetail.jsx'
@@ -23,6 +24,7 @@ import Register from './pages/Register.jsx'
 import RoleManagement from './pages/RoleManagement.jsx'
 import Profile from './pages/Profile.jsx'
 import Search from './pages/Search.jsx'
+import Tags from './pages/Tags.jsx'
 import Upload from './pages/Upload.jsx'
 import './App.css'
 
@@ -77,7 +79,22 @@ function PrimaryNav({ onLogoutError }) {
           to non-admin roles (button and route do not render)". This is the button
           half; RequireRole is the route half. Both are usability — the server
           refuses the call either way (CLAUDE.md §6, invariant 4). */}
-      {user?.role === ROLES.administrator ? <NavLink to="/admin/roles">Role management</NavLink> : null}
+      {/* FR-19: the knowledge-gap log is "visible to Administrators", so its link
+          sits beside role management under the same test, and RequireRole guards
+          its route the same way. Usability again: every knowledge-gap route checks
+          `review_knowledge_gaps` on the server (D-107, invariant 4). */}
+      {/* FR-10's tag administration (D-119 finding 5) is the Administrator's too:
+          its link sits beside the other two under the same test, and RequireRole
+          guards its route the same way. Usability once more: both tag routes check
+          `manage_tags` on the server, which only the Administrator holds
+          (accounts 0008, invariant 4). */}
+      {user?.role === ROLES.administrator ? (
+        <>
+          <NavLink to="/admin/roles">Role management</NavLink>
+          <NavLink to="/admin/knowledge-gaps">{TEXT.gapsHeading}</NavLink>
+          <NavLink to="/admin/tags">{TEXT.tagsHeading}</NavLink>
+        </>
+      ) : null}
       <NavLink to="/components">Component sheet</NavLink>
       {/* FR-04: "A 'Logout' control visible in navigation for all authenticated
           roles." One branch, no role test, so every signed-in user has it. */}
@@ -187,6 +204,10 @@ export default function App() {
           <Route element={<RequireAuth />}>
             <Route element={<RequireRole role={ROLES.administrator} />}>
               <Route path="admin/roles" element={<RoleManagement />} />
+              {/* FR-19's knowledge-gap log (NIT3004, Objective 06). */}
+              <Route path="admin/knowledge-gaps" element={<KnowledgeGaps />} />
+              {/* FR-10's tag administration (NIT3004, D-119 finding 5). */}
+              <Route path="admin/tags" element={<Tags />} />
             </Route>
           </Route>
         </Route>

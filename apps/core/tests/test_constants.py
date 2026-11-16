@@ -16,6 +16,7 @@ SECTION_5_NAMES = [
     "MAXIMUM_GENERATION_ATTEMPTS",
     "MAXIMUM_EMBED_ATTEMPTS",
     "MAXIMUM_CLASSIFY_ATTEMPTS",
+    "MAXIMUM_TRANSCRIBE_ATTEMPTS",
     "MINIMUM_QUESTION_LENGTH",
     "MAXIMUM_QUESTION_LENGTH",
     "MINIMUM_CONTENT_LENGTH",
@@ -43,6 +44,13 @@ VOCABULARIES = [
     "NO_ANSWER_REASONS",
     "ROLE_NAMES",
     "TAG_APPLIED_BY_VALUES",
+    # FR-10 (D-105), 8 November 2026: the fixed type list and the per-assignment outcomes.
+    "DOCUMENT_TYPES",
+    "ASSIGNMENT_OUTCOMES",
+    # FR-19 (D-107), 9 November 2026: a knowledge-gap entry's status.
+    "KNOWLEDGE_GAP_STATUS_VALUES",
+    # FR-03 (D-130), 13 November 2026: what a LoginAttempts row records.
+    "LOGIN_ATTEMPT_EVENTS",
 ]
 
 
@@ -103,6 +111,16 @@ def test_lockout_values():
     assert constants.LOCKOUT_DURATION == timedelta(minutes=15)
 
 
+def test_the_login_attempt_vocabulary_and_release_code_are_d130s():
+    """FR-03 (D-130; docs/schema-v1.md section 3). A LoginAttempts row is a lockout or a release
+    and nothing else (Benjamin's decision 5), and the release route checks its own code, which
+    accounts 0010 freezes under the same name (apps/accounts/tests/test_release_account_locks_seed.py)."""
+    assert constants.LOGIN_ATTEMPT_EVENTS == ("lockout", "release")
+    assert constants.LOGIN_ATTEMPT_LOCKOUT == "lockout"
+    assert constants.LOGIN_ATTEMPT_RELEASE == "release"
+    assert constants.RELEASE_ACCOUNT_LOCKS_PERMISSION == "release_account_locks"
+
+
 def test_password_complexity_constants_are_fr_01s_four_rules():
     # FR-01: "min 8 chars, 1 uppercase, 1 number, 1 special character" (D-25).
     assert constants.PASSWORD_MINIMUM_LENGTH == 8
@@ -137,10 +155,26 @@ def test_upload_limit_is_fifty_megabytes():
 
 def test_attempt_counts_are_one_attempt_plus_two_retries():
     # docs/decisions.md D-19: three total attempts, uniform across every AI call,
-    # including classification (FR-10, NIT3004) which is named now but unused.
+    # including classification (FR-10, NIT3004), whose attempt loop in apps/ai/classification.py
+    # has used it since D-104.
     assert constants.MAXIMUM_GENERATION_ATTEMPTS == 3
     assert constants.MAXIMUM_EMBED_ATTEMPTS == 3
     assert constants.MAXIMUM_CLASSIFY_ATTEMPTS == 3
+    # And recording transcription's (D-123), 1 initial call + 2 retries like the rest.
+    assert constants.MAXIMUM_TRANSCRIBE_ATTEMPTS == 3
+
+
+def test_the_transcription_bounds_are_ordered():
+    """D-123: the page's segment fits under the server's ceiling with room for a tail, the page
+    sends Whisper's rate, silence is measured in dBFS, and the server-wide cap lets one segment
+    wait behind another."""
+    assert 0 < constants.TRANSCRIPTION_SEGMENT_SECONDS < constants.MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS
+    assert constants.TRANSCRIPTION_SAMPLE_RATE == 16_000
+    assert constants.TRANSCRIPTION_SILENCE_DBFS < 0
+    assert constants.MAXIMUM_TRANSCRIPTIONS_IN_FLIGHT == 2
+    assert constants.TRANSCRIPTION_BUSY_RETRY_SECONDS > 0
+    assert 0 < constants.TRANSCRIPTION_SILENCE_WINDOW_SECONDS < constants.TRANSCRIPTION_SEGMENT_SECONDS
+    assert constants.MAXIMUM_RECORDING_BYTES > constants.MAX_UPLOAD_BYTES
 
 
 def test_top_k_is_positive():
@@ -239,6 +273,177 @@ def test_vocabulary_values_are_distinct_strings_that_fit_the_column(name):
         assert len(value) <= VOCABULARY_MAX_LENGTH
 
 
+def test_the_knowledge_gap_constants_are_d107s_and_d109s():
+    """FR-19 (D-107 to D-109). The status vocabulary and its default, the grace of the window, the
+    permission code and the panel size are the decisions' values; the grouping threshold is a
+    cosine similarity chosen by D-109's sweep on the development paraphrase set (9 November 2026,
+    corpus/objective-06/runs/2026-11-09/grouping-sweep/), and pinned so a change is a decision."""
+    assert constants.KNOWLEDGE_GAP_STATUS_VALUES == ("Open", "Addressed")
+    assert constants.KNOWLEDGE_GAP_OPEN == "Open"
+    assert constants.KNOWLEDGE_GAP_ADDRESSED == "Addressed"
+    assert constants.DEFAULT_KNOWLEDGE_GAP_STATUS == constants.KNOWLEDGE_GAP_OPEN
+    assert isinstance(constants.GAP_GROUPING_THRESHOLD, float)
+    assert 0.0 < constants.GAP_GROUPING_THRESHOLD <= 1.0
+    assert constants.GAP_GROUPING_THRESHOLD == 0.5256
+    # The sweep's own margin: its lowest within-subject pair, 0.5322, is above the value.
+    assert constants.GAP_GROUPING_THRESHOLD < 0.5322
+    # D-122: voyage-4's own value, by D-109's rule on Voyage's vectors (10 November 2026,
+    # corpus/objective-06/runs/2026-11-10/grouping-sweep-voyage/), below that sweep's lowest
+    # within-subject pair, 0.5157. No other model is listed, so EmbeddingGemma keeps 0.5256.
+    assert constants.GAP_GROUPING_THRESHOLD_BY_MODEL == {"voyage-4": 0.5054}
+    assert constants.GAP_GROUPING_THRESHOLD_BY_MODEL["voyage-4"] < 0.5157
+    assert constants.CYCLE_GRACE_SECONDS == 60
+    assert constants.REVIEW_KNOWLEDGE_GAPS_PERMISSION == "review_knowledge_gaps"
+    assert constants.DASHBOARD_GAP_ITEMS == constants.DASHBOARD_RECENT_ITEMS
+
+
+def test_the_gap_exclusion_rules_are_d108s_and_d126s():
+    """FR-19's permission exclusion. Rank-one (D-108's note of 10 November 2026) is the rule for any
+    model not listed. voyage-4 is threshold-first, the user's decision of 11 November 2026 (D-126),
+    pinned so a change is a decision."""
+    assert constants.GAP_EXCLUSION_RANK_ONE == "rank-one"
+    assert constants.GAP_EXCLUSION_THRESHOLD_FIRST == "threshold-first"
+    assert constants.GAP_EXCLUSION_RULES == (constants.GAP_EXCLUSION_RANK_ONE, constants.GAP_EXCLUSION_THRESHOLD_FIRST)
+    assert constants.GAP_EXCLUSION_RULE == constants.GAP_EXCLUSION_RANK_ONE
+    assert constants.GAP_EXCLUSION_RULE_BY_MODEL == {"voyage-4": constants.GAP_EXCLUSION_THRESHOLD_FIRST}
+
+
+# The lowest score a restricted answer has had among the questions D-126 was chosen on, per
+# embedding model: Objective 06's P02, on three draws
+# (corpus/objective-06/runs/2026-11-10-anthropic/exclusion_diagnosis.txt).
+LOWEST_MEASURED_RESTRICTED_ANSWER = {"voyage-4": 0.2812}
+
+
+def test_a_threshold_first_model_has_its_own_threshold_at_or_under_its_lowest_restricted_answer():
+    """D-126 couples FR-19's exclusion to a model's relevance threshold, and nothing held the two
+    together (the requirements audit and the security review of 12 November 2026).
+
+    - A model given threshold-first with no threshold of its own would admit at the default 0.30,
+      and voyage-4's P02 (0.2812) would be logged as a gap.
+    - D-120's rule was indifferent anywhere in [0.2467, 0.2908]. A re-tune above 0.2812 fits its
+      evidence equally and would log P02, a permission-only question, failing Objective 06's
+      clause 3. Raising the threshold past this figure is a decision about FR-19 too.
+    """
+    threshold_first = [model for model, rule in constants.GAP_EXCLUSION_RULE_BY_MODEL.items()
+                       if rule == constants.GAP_EXCLUSION_THRESHOLD_FIRST]
+    assert threshold_first == ["voyage-4"]
+    for model in threshold_first:
+        assert model in constants.RELEVANCE_THRESHOLD_BY_MODEL
+        assert model in LOWEST_MEASURED_RESTRICTED_ANSWER
+        assert constants.RELEVANCE_THRESHOLD_BY_MODEL[model] <= LOWEST_MEASURED_RESTRICTED_ANSWER[model]
+
+
 def test_session_inactivity_is_sixty_minutes():
     # FR-04, docs/decisions.md D-10.
     assert constants.SESSION_INACTIVITY_MINUTES == 60
+
+
+def test_effective_roles_are_closed_under_generalisation():
+    """The security review's finding 7 (D-105's dated note of 10 November 2026, night). FR-10's
+    tag_options discloses nothing only because whatever a role in a role's effective set reads,
+    that role reads too: for every role C and every R in EFFECTIVE_ROLES[C], EFFECTIVE_ROLES[R] is a
+    subset of EFFECTIVE_ROLES[C]. A role missing from the map reads nothing, which is a subset of
+    anything."""
+    for role, effective in constants.EFFECTIVE_ROLES.items():
+        for included in effective:
+            assert set(constants.EFFECTIVE_ROLES.get(included, ())) <= set(effective), (role, included)
+
+
+def test_fr10s_confidence_threshold_is_per_classifying_model():
+    """D-122: claude-haiku-5-5's own value, by D-106's rule on the development documents (10 November
+    2026, corpus/objective-05/runs/2026-11-10/dev-sweep-haiku/): the lowest confidence on a correct type
+    assignment, since Haiku typed all 57 right. Every other model keeps CLASSIFICATION_CONFIDENCE_THRESHOLD."""
+    assert constants.CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL == {"claude-haiku-5-5": 0.72}
+    assert 0.0 < constants.CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL["claude-haiku-5-5"] <= 1.0
+
+
+def test_fr10s_department_threshold_is_its_own_on_haiku():
+    """D-129, the lead's decision of 13 November 2026: D-106's rule on departments alone found no
+    split (56 right, 1 wrong) on the development documents (corpus/objective-05/runs/
+    2026-11-13-tag-threshold/), so it took the lowest right confidence, 0.30, and the user chose it
+    over the pooled 0.25. Types and tags keep 0.72 on Haiku. Any other model is not listed, and
+    falls back to the shared value for that model (department_threshold)."""
+    assert constants.CLASSIFICATION_DEPARTMENT_CONFIDENCE_THRESHOLD_BY_MODEL == {"claude-haiku-5-5": 0.30}
+    assert 0.0 < constants.CLASSIFICATION_DEPARTMENT_CONFIDENCE_THRESHOLD_BY_MODEL["claude-haiku-5-5"] <= 1.0
+    # Its own value, not the shared one's: the two maps disagree for Haiku on purpose.
+    assert (constants.CLASSIFICATION_DEPARTMENT_CONFIDENCE_THRESHOLD_BY_MODEL["claude-haiku-5-5"]
+            != constants.CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL["claude-haiku-5-5"])
+
+
+# D-133's ratio: the characters a token at which the bound equals Claude's classification ceiling
+# (100,000 / 16,000). Worked back from the bound and assumed, not measured; not a ceiling on a token.
+CHARACTERS_A_TOKEN = 6.25
+
+
+def test_the_reject_bound_is_at_least_6_25_characters_a_token_of_either_classification_ceiling():
+    """D-133, the lead's decision of 15 November 2026: the reject route reads a proposed value up to
+    MAXIMUM_PROPOSED_TAG_LENGTH, 100,000 characters. When D-133 was decided a run proposed a Topic
+    whatever its length (D-129), and since D-134 a run discards one longer than the Tags column, so
+    the bound now serves proposals stored before D-134. Nothing bounds a tag value in the reply, so
+    the bound is scaled to the longest reply,
+    Claude's classification ceiling, CLAUDE_MAX_TOKENS: 100,000 is 16,000 tokens at 6.25 characters
+    a token. That ratio was worked back from the bound, not measured, so this asserts what was
+    decided, not that every reply fits: at 10 characters a token the ceiling would be 160,000, and a
+    run of punctuation can be one longer token still (D-133's "Not covered"). It asserts the value;
+    that neither ceiling, Claude's or FLM's CLASSIFICATION_MAX_TOKENS, has grown past 16,000 tokens,
+    which would leave the bound under 6.25 characters a token of it and the decision to revisit; and
+    that the bound is above the Tags column, which binds only confirm."""
+    from apps.ai.anthropic import CLAUDE_MAX_TOKENS
+    from apps.ai.classification import CLASSIFICATION_MAX_TOKENS
+    from apps.core.models import NAME_MAX_LENGTH
+
+    assert constants.MAXIMUM_PROPOSED_TAG_LENGTH == 100_000
+    for ceiling in (CLAUDE_MAX_TOKENS, CLASSIFICATION_MAX_TOKENS):
+        assert constants.MAXIMUM_PROPOSED_TAG_LENGTH >= ceiling * CHARACTERS_A_TOKEN, ceiling
+    assert constants.MAXIMUM_PROPOSED_TAG_LENGTH > NAME_MAX_LENGTH
+
+
+# --- The embedding width follows the provider (D-131) ---------------------------------------------
+
+
+def test_each_provider_has_its_models_width():
+    """voyage-4 returns 1024 with no output_dimension sent, and FLM's embed-gemma 768."""
+    from apps.core.constants import EMBEDDING_DIMENSION_BY_PROVIDER
+    from apps.ingestion.management.commands.reindex import VALID_PROVIDERS
+
+    assert EMBEDDING_DIMENSION_BY_PROVIDER == {"anthropic": 1024, "flm": 768}
+    assert set(EMBEDDING_DIMENSION_BY_PROVIDER) == set(VALID_PROVIDERS)
+
+
+def test_the_suites_own_width_is_its_providers():
+    """Otherwise ai.E004 would refuse the configuration the suite runs under."""
+    from django.conf import settings
+
+    from apps.core.constants import EMBEDDING_DIMENSION_BY_PROVIDER
+
+    assert settings.EMBEDDING_DIMENSION == EMBEDDING_DIMENSION_BY_PROVIDER[settings.AI_PROVIDER]
+
+
+@pytest.mark.parametrize("provider, explicit, width", [
+    ("anthropic", None, 1024),
+    ("flm", None, 768),
+    ("flm", "1024", 1024),  # read as written, and refused at startup by ai.E004
+], ids=["anthropic, no line", "flm, no line", "flm, a line that disagrees"])
+def test_settings_take_the_width_from_the_provider(provider, explicit, width):
+    """config/settings.py, imported in a clean process with no .env read: EMBEDDING_DIMENSION
+    follows AI_PROVIDER unless .env names one (D-131)."""
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[3]
+    keep = ("PATH", "SYSTEMROOT", "TEMP", "TMP", "USERPROFILE", "HOME")
+    environment = {name: os.environ[name] for name in keep if name in os.environ}
+    environment.update(SECRET_KEY="settings-test", DATABASE_URL="postgres://user:pass@127.0.0.1:5432/none",
+                       AI_PROVIDER=provider, PYTHONPATH=str(root))
+    if explicit is not None:
+        environment["EMBEDDING_DIMENSION"] = explicit
+    program = (
+        "import environ; environ.Env.read_env = classmethod(lambda cls, *a, **k: None); "
+        "import config.settings as s; print(s.EMBEDDING_DIMENSION)"
+    )
+    completed = subprocess.run([sys.executable, "-c", program], cwd=root, env=environment,
+                               capture_output=True, text=True, timeout=60)
+    assert completed.returncode == 0, completed.stderr[-2000:]
+    assert completed.stdout.strip().splitlines()[-1] == str(width)

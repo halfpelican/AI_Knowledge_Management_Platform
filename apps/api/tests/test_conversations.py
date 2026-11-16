@@ -238,11 +238,15 @@ def test_a_turn_moves_its_thread_to_the_top_of_the_list(employee_client, employe
     # assertion below becomes a coin flip. An UPDATE sets the column directly, bypassing
     # auto_now, which a save() would overwrite.
     #
-    # "First" is pushed into the PAST rather than "Second" into the future, and that
-    # direction matters: the turn below touches "First" with a real timezone.now(), which
-    # could never beat a timestamp set ahead of the clock.
+    # BOTH are pushed into the PAST, "First" the further, rather than either into the
+    # future. The turn below touches "First" with a real timezone.now(), which could never
+    # beat a timestamp set ahead of the clock. And it has to beat "Second": had "Second" kept
+    # the timestamp it was created with, the turn could land in the same step of the clock
+    # and tie it, and the last assertion would be the coin flip instead.
+    an_hour_ago = timezone.now() - timedelta(hours=1)
+    Conversation.objects.filter(pk=second.pk).update(last_updated_at=an_hour_ago)
     Conversation.objects.filter(pk=first.pk).update(
-        last_updated_at=second.last_updated_at - timedelta(minutes=1)
+        last_updated_at=an_hour_ago - timedelta(minutes=1)
     )
     assert [entry["title"] for entry in employee_client.get(CONVERSATIONS_URL).json()] == [
         "Second",
@@ -308,6 +312,16 @@ def build_thread(user, chunk):
         no_answer_reason=NO_STATEMENT_VERIFIED,
         rejected_count=3,
     )
+    # A minute apart, as stated rather than left to the clock: the read orders turns by
+    # answered_at, and two rows written back to back can share one (the clock steps at
+    # anything from about 0.3 ms to about 15.6 ms here, D-107's note), which leaves their
+    # order to two random UUIDs. Both in the past, in the order asked. answered_at is
+    # auto_now_add, which overwrites a value given to create(), so an UPDATE sets it.
+    asked_at = timezone.now() - timedelta(hours=1)
+    QueryLog.objects.filter(pk=answered.pk).update(answered_at=asked_at)
+    QueryLog.objects.filter(pk=unanswered.pk).update(answered_at=asked_at + timedelta(minutes=1))
+    answered.refresh_from_db(fields=["answered_at"])
+    unanswered.refresh_from_db(fields=["answered_at"])
     return conversation, answered, unanswered
 
 
@@ -349,7 +363,10 @@ def test_a_reopened_thread_carries_its_turns_with_their_verified_citations(
             "source_id": str(content_chunk.source_id),
             "title": document_body["title"],
             "date": document_body["uploaded_at"],
-            "passages": [{"chunk_id": str(content_chunk.id), "text": content_chunk.chunk_text}],
+            "passages": [
+                {"chunk_id": str(content_chunk.id), "text": content_chunk.chunk_text,
+                 "ai_generated": False}  # D-125
+            ],
         }
     ]
     assert second["question"] == SECOND_QUESTION
@@ -477,7 +494,7 @@ class ControlledService:
         self.fabricate = fabricate
         self.generate_calls = []
 
-    def embed(self, texts):
+    def embed(self, texts, *, input_type=None):
         return EmbeddingResult(
             vectors=[list(self.vector)], model=STUB_EMBEDDING_MODEL,
             dimension=settings.EMBEDDING_DIMENSION,
@@ -602,7 +619,7 @@ def test_an_uncited_consulted_passage_is_in_the_reopened_panel(
     assert turn["sources"][-1]["source_id"] == str(schedule.id)
     assert turn["sources"][-1]["title"] == SCHEDULE_TITLE
     assert turn["sources"][-1]["passages"] == [
-        {"chunk_id": str(schedule_chunk.id), "text": SCHEDULE_PASSAGE}
+        {"chunk_id": str(schedule_chunk.id), "text": SCHEDULE_PASSAGE, "ai_generated": False}
     ]
 
 

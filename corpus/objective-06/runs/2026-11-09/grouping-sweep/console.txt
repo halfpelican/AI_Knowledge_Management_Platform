@@ -1,0 +1,99 @@
+FLM gate: scripts/check_flm.py's checks (D-83)
+
+[GET /models]
+  33 model(s) advertised by /models:
+    - deepseek-r1:8b
+    - deepseek-r1-0528:8b
+    - gemma3:1b
+    - gemma3:4b
+    - gemma4-it:e2b
+    - gpt-oss:20b
+    - gpt-oss-sg:20b
+    - lfm2:1.2b
+    - lfm2:2.6b
+    - lfm2-trans:2.6b
+    - lfm2.5-it:1.2b
+    - lfm2.5-tk:1.2b
+    - llama3.1:8b
+    - llama3.2:1b
+    - llama3.2:3b
+    - medgemma:4b
+    - medgemma1.5:4b
+    - nanbeige4.1:3b
+    - phi4-mini-it:4b
+    - qwen2.5-it:3b
+    - qwen2.5vl-it:3b
+    - qwen3:0.6b
+    - qwen3:1.7b
+    - qwen3:4b
+    - qwen3:8b
+    - qwen3-it:4b
+    - qwen3-tk:4b
+    - qwen3.5:0.8b
+    - qwen3.5:2b
+    - qwen3.5:4b
+    - qwen3.5:9b
+    - qwen3vl-it:4b
+    - translategemma:4b
+  note: this list is the model catalogue rather than the resident set,
+        and it does not include the embedding model. The two calls below are the proof.
+  chat model 'gemma3:4b': advertised
+  PASS
+
+[POST /chat/completions]
+  model  : gemma3:4b
+  prompt : 'Reply with the single word: pong'
+  reply  : 'pong'  (2.2s)
+  PASS
+
+[POST /embeddings]
+  model      : embed-gemma
+  inputs     : 3, vectors returned: 3  (1.3s)
+  dimensions : [768, 768, 768]  (expected 768)
+  determinism : same input twice in one batch -> cosine 1.0000
+  determinism : same input in a second call  -> cosine 1.0000
+  discrimination: two unrelated inputs      -> cosine 0.1296
+  sanity      : vectors are deterministic and discriminate between inputs
+  PASS
+  embedded g01.1: How quickly does annual leave build up for someone working full time?
+  embedded g01.2: What is the monthly accrual rate for annual leave?
+  embedded g01.3: annual leave accrual
+  embedded g02.1: After how many days off sick do I have to produce a doctor's certificate?
+  embedded g02.2: Is a medical certificate required for a single day of personal leave?
+  embedded g02.3: medical certificate
+  embedded g03.1: What is the minimum number of characters for a password?
+  embedded g03.2: Is there a rule about how long passwords have to be?
+  embedded g03.3: password length
+  embedded g04.1: During which hours can I reset my password on the self-service page?
+  embedded g04.2: Is the password reset page available at night?
+  embedded g04.3: password reset window
+  embedded g05.1: Who does an unresolved customer complaint go to next?
+  embedded g05.2: What are the steps for escalating a complaint I cannot resolve?
+  embedded g05.3: complaint escalation
+  embedded g06.1: How much can I claim for meals per day on a work trip?
+  embedded g06.2: Is there a cap on what I spend on food while travelling for work?
+  embedded g06.3: meal allowance
+  embedded g07.1: How do I set up printing from my laptop?
+  embedded g07.2: What do I do at the printer to release my print job?
+  embedded g07.3: printer setup
+  embedded g08.1: Who has to approve a meeting room booking for a large group?
+  embedded g08.2: Can I book a room for an evening event with thirty guests without asking anyone?
+  embedded g08.3: large event room booking
+  embedded g09.1: What has to be written in the logbook when I use a pool car?
+  embedded g09.2: Which details does the fleet logbook record for every trip?
+  embedded g09.3: vehicle logbook
+  embedded g10.1: Is every new employee given a buddy?
+  embedded g10.2: What does the buddy program do for someone in their first week?
+  embedded g10.3: buddy program
+  embedded g11.1: For how many years must finance records be retained?
+  embedded g11.2: When can old accounting paperwork be destroyed?
+  embedded g11.3: financial records retention
+  embedded g12.1: How far from the main office must copies of vital records be stored?
+  embedded g12.2: Where are the backups of our most important records kept?
+  embedded g12.3: vital records backup
+Commit 4a1ed3d, FLM v0.9.39 (flm version), server v0.9.39, embedding model embed-gemma, 36 items, 36 positive and 594 negative pairs.
+
+- Lowest within-subject similarity: 0.5322
+- Highest cross-subject similarity: 0.5876
+- Separates: False; gap -0.0555 against D-40's drift of 0.003
+- **Threshold by D-109's rule (best pairwise F1): 0.5256**

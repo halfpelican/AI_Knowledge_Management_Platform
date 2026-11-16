@@ -1,0 +1,117 @@
+FLM gate: scripts/check_flm.py's checks (D-83)
+
+[GET /models]
+  33 model(s) advertised by /models:
+    - deepseek-r1:8b
+    - deepseek-r1-0528:8b
+    - gemma3:1b
+    - gemma3:4b
+    - gemma4-it:e2b
+    - gpt-oss:20b
+    - gpt-oss-sg:20b
+    - lfm2:1.2b
+    - lfm2:2.6b
+    - lfm2-trans:2.6b
+    - lfm2.5-it:1.2b
+    - lfm2.5-tk:1.2b
+    - llama3.1:8b
+    - llama3.2:1b
+    - llama3.2:3b
+    - medgemma:4b
+    - medgemma1.5:4b
+    - nanbeige4.1:3b
+    - phi4-mini-it:4b
+    - qwen2.5-it:3b
+    - qwen2.5vl-it:3b
+    - qwen3:0.6b
+    - qwen3:1.7b
+    - qwen3:4b
+    - qwen3:8b
+    - qwen3-it:4b
+    - qwen3-tk:4b
+    - qwen3.5:0.8b
+    - qwen3.5:2b
+    - qwen3.5:4b
+    - qwen3.5:9b
+    - qwen3vl-it:4b
+    - translategemma:4b
+  note: this list is the model catalogue rather than the resident set,
+        and it does not include the embedding model. The two calls below are the proof.
+  chat model 'gemma3:4b': advertised
+  PASS
+
+[POST /chat/completions]
+  model  : gemma3:4b
+  prompt : 'Reply with the single word: pong'
+  reply  : 'pong'  (1.4s)
+  PASS
+
+[POST /embeddings]
+  model      : embed-gemma
+  inputs     : 3, vectors returned: 3  (1.1s)
+  dimensions : [768, 768, 768]  (expected 768)
+  determinism : same input twice in one batch -> cosine 1.0000
+  determinism : same input in a second call  -> cosine 1.0000
+  discrimination: two unrelated inputs      -> cosine 0.1297
+  sanity      : vectors are deterministic and discriminate between inputs
+  PASS
+  X01 #1: ok  Policy (0.98) dept Legal and Compliance (0.95) 14.9s
+  X01 #2: ok  Policy (0.98) dept Legal and Compliance (0.95) 11.6s
+  X01 #3: ok  Policy (0.98) dept Legal and Compliance (0.95) 12.1s
+  X02 #1: ok  Policy (0.95) dept Legal and Compliance (0.92) 12.2s
+  X02 #2: ok  Policy (0.95) dept Legal and Compliance (0.92) 12.1s
+  X02 #3: ok  Policy (0.95) dept Legal and Compliance (0.92) 12.4s
+  X03 #1: ok  Policy (0.95) dept Legal and Compliance (0.90) 9.0s
+  X03 #2: ok  Policy (0.95) dept Legal and Compliance (0.92) 12.0s
+  X03 #3: ok  Policy (0.95) dept Legal and Compliance (0.92) 12.0s
+  X04 #1: ok  Procedure (0.95) dept Information Technology (0.92) 12.0s
+  X04 #2: ok  Procedure (0.95) dept Information Technology (0.92) 12.5s
+  X04 #3: ok  Procedure (0.95) dept Information Technology (0.85) 12.4s
+  X05 #1: ok  Procedure (0.95) dept Operations (0.92) 13.5s
+  X05 #2: ok  Procedure (0.95) dept Operations (0.92) 13.3s
+  X05 #3: ok  Procedure (0.95) dept Operations (0.92) 14.2s
+  D21 #1: ok  Procedure (0.95) dept Operations (0.80) 8.8s
+  D21 #2: ok  Procedure (0.95) dept Operations (0.80) 8.7s
+  D21 #3: ok  Procedure (0.95) dept Operations (0.80) 8.8s
+  X06 #1: ok  Report (0.95) dept Operations (0.80) 9.0s
+  X06 #2: ok  Report (0.95) dept Customer Insight (0.92) 14.1s
+  X06 #3: ok  Report (0.95) dept Customer Insight (0.92) 14.6s
+  X07 #1: FAILED FLM at http://127.0.0.1:8625/v1 returned no response conforming to CLASSIFICATION_SCHEMA in 3 attempts; last failure: schema violation: not valid JSON: Expecting property name enclosed in double quotes: line 1 column 224 (char 223)
+  X07 #2: ok  Report (0.95) dept Operations (0.85) 16.8s
+  X07 #3: ok  Report (0.95) dept Operations (0.85) 16.6s
+  X08 #1: ok  Report (0.95) dept Human Resources (0.92) 13.1s
+  X08 #2: ok  Report (0.95) dept Human Resources (0.92) 9.0s
+  X08 #3: ok  Report (0.95) dept Human Resources (0.92) 9.1s
+  X09 #1: ok  Meeting Paper (0.95) dept Information Technology (0.92) 12.0s
+  X09 #2: ok  Meeting Paper (0.95) dept Information Technology (0.92) 11.6s
+  X09 #3: ok  Meeting Paper (0.95) dept Information Technology (0.92) 11.8s
+  X10 #1: ok  Meeting Paper (0.95) dept Legal and Compliance (0.85) 12.2s
+  X10 #2: ok  Meeting Paper (0.95) dept Legal and Compliance (0.85) 11.4s
+  X10 #3: ok  Meeting Paper (0.95) dept Legal and Compliance (0.85) 11.4s
+  X11 #1: ok  Meeting Paper (0.95) dept Finance (0.98) 11.4s
+  X11 #2: ok  Meeting Paper (0.95) dept Finance (0.98) 11.2s
+  X11 #3: ok  Meeting Paper (0.95) dept Finance (0.98) 11.2s
+  X12 #1: ok  Report (0.95) dept Information Technology (0.92) 11.4s
+  X12 #2: ok  Report (0.95) dept Information Technology (0.92) 11.2s
+  X12 #3: ok  Report (0.95) dept Information Technology (0.92) 8.0s
+  X13 #1: MISS Procedure (0.95) dept Operations (0.92) 11.2s
+  X13 #2: MISS Procedure (0.95) dept Operations (0.92) 11.2s
+  X13 #3: MISS Procedure (0.95) dept Operations (0.92) 11.9s
+  X14 #1: MISS Meeting Paper (0.95) dept Human Resources (0.85) 11.3s
+  X14 #2: MISS Meeting Paper (0.95) dept Human Resources (0.92) 11.3s
+  X14 #3: MISS Meeting Paper (0.95) dept Human Resources (0.92) 11.4s
+  X15 #1: MISS Meeting Paper (0.95) dept Operations (0.80) 7.0s
+  X15 #2: ok  Report (0.95) dept Operations (0.85) 11.4s
+  X15 #3: MISS Meeting Paper (0.95) dept Operations (0.80) 6.7s
+  X16 #1: MISS Meeting Paper (0.95) dept Operations (0.85) 11.6s
+  X16 #2: MISS Meeting Paper (0.95) dept Operations (0.85) 11.6s
+  X16 #3: MISS Meeting Paper (0.95) dept Operations (0.85) 11.7s
+  X17 #1: MISS Meeting Paper (0.95) dept Operations (0.92) 11.6s
+  X17 #2: MISS Meeting Paper (0.95) dept Operations (0.92) 11.2s
+  X17 #3: MISS Meeting Paper (0.95) dept Operations (0.92) 11.2s
+  X18 #1: ok  Procedure (0.95) dept Information Technology (0.92) 11.1s
+  X18 #2: ok  Procedure (0.95) dept Information Technology (0.92) 11.1s
+  X18 #3: ok  Procedure (0.95) dept Information Technology (0.92) 11.2s
+
+wrote corpus\objective-05\runs\2026-11-10\dev-sweep-3\dev-sweep.json and dev-sweep.md
+threshold by D-106's rule: 0.95 (separates: False)

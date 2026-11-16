@@ -1,11 +1,14 @@
 """Embedding call shared by the two OpenAI-wire-format endpoints, FLM and Voyage.
 
-Private to apps.ai. Transport failures and server errors become ProviderUnavailable
-so nothing outside this package sees an openai exception on the outage path.
+Private to apps.ai. Transport failures, server errors and, since D-118, client errors
+(4xx) all become ProviderUnavailable, a refused 4xx as its subclass ProviderRefused
+(apps/ai/_status.py). So nothing outside this package sees an openai exception from a
+failed call.
 """
 
 import openai
 
+from apps.ai._status import error_for_status
 from apps.ai.base import EmbeddingResult, ProviderUnavailable
 
 
@@ -16,18 +19,33 @@ def build_client(base_url: str, api_key: str) -> openai.OpenAI:
     return openai.OpenAI(base_url=base_url, api_key=api_key, max_retries=0)
 
 
-def embed(client: openai.OpenAI, model: str, texts: list[str], endpoint: str) -> EmbeddingResult:
-    """Embed ``texts`` with ``model`` through ``client``; ``endpoint`` labels messages."""
+def embed(
+    client: openai.OpenAI,
+    model: str,
+    texts: list[str],
+    endpoint: str,
+    *,
+    extra_body: dict | None = None,
+) -> EmbeddingResult:
+    """Embed ``texts`` with ``model`` through ``client``; ``endpoint`` labels messages.
+
+    ``extra_body`` adds fields the OpenAI shape does not have, such as Voyage's
+    ``input_type`` (D-116). FLM's requests never carry one.
+
+    The client asks for base64 by default and decodes it as float32. That matches what
+    Voyage documents for base64: a float32 NumPy array. A server that answers with plain
+    floats, as FLM does, is passed through unchanged.
+    """
     if not texts:
         raise ValueError("embed() needs at least one text")
     try:
-        response = client.embeddings.create(model=model, input=texts)
+        response = client.embeddings.create(model=model, input=texts, extra_body=extra_body)
     except (openai.APITimeoutError, openai.APIConnectionError) as exc:
         raise ProviderUnavailable(f"{endpoint} unreachable: {exc}") from exc
     except openai.APIStatusError as exc:
-        if exc.status_code >= 500:
-            raise ProviderUnavailable(f"{endpoint} returned HTTP {exc.status_code}: {exc}") from exc
-        raise  # 4xx is a configuration or request error, not an outage: let it surface
+        # D-118: a 5xx or a 429 is retried; any other 4xx is refused at once. Either way
+        # it ends in the NFR-19 503, not a 500, and a 4xx is logged with its cause.
+        raise error_for_status(endpoint, exc.status_code, str(exc)) from exc
     except ValueError as exc:
         # The SDK raises ValueError when an HTTP 200 body carries no embedding data.
         # FLM reports an NPU fault exactly that way ({"error": ...} with status 200),

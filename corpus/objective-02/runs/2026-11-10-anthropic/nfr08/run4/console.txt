@@ -1,0 +1,95 @@
+Reset the password of loadtest01@example.com
+Reset the password of loadtest02@example.com
+Reset the password of loadtest03@example.com
+Reset the password of loadtest04@example.com
+Reset the password of loadtest05@example.com
+0 created and 5 reset: 5 Employee account(s), loadtest01@example.com to loadtest05@example.com.
+
+=== the copied run.ps1, attempt 1 of 3 ===
+
+== Waitress's version, from C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.venv\Scripts\python.exe
+stated: waitress 3.0.2 (installed in that venv), 24 threads (-ServerThreads)
+
+== the provider gate, C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-anthropic-verify\corpus\objective-02\runs\2026-11-10-anthropic\load\provider_gate.py, with C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.venv\Scripts\python.exe
+configuration: anthropic, claude-haiku-5-5, voyage-4 at 1024; database kmp_obj02_anthropic_20261110
+health: available
+embedding probe: voyage-4, 1024 wide
+PROVIDER GATE: PASS (anthropic, claude-haiku-5-5, voyage-4 at 1024, both keys present, D-120's values, database kmp_obj02_anthropic_20261110)
+the provider gate passed at 2026-11-10T23:37:43.639Z
+
+== scripts\server_record.py preflight, for http://127.0.0.1:8000
+server         : waitress 3.0.2, unknown threads, DEBUG off
+command line   : not observed
+process start  : not observed
+version from   : the installed package in this process's environment: the listening process's command line names no venv
+Server header  : waitress (GET /api/), waitress (the DEBUG probe)
+DEBUG          : off: GET /api/__preflight_not_a_route__ -> 404 application/json; a 404 in handler404's JSON, which Django sends only with DEBUG off
+Waitress log   : C:\kmp-measurement\2026-11-10-obj02-anthropic\logs\waitress.log (from -WaitressLog)
+server started : 2026-11-11T10:37:27.486+11:00 (line 5: 2026-11-11 10:37:27,486 INFO waitress Serving on http://127.0.0.1:8000)
+previous run   : C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-anthropic-verify\tests\load\results\nfr08_summary.json, ended 2026-11-11T10:00:50.991+11:00 (when the file was last written)
+REFUSED: the server listening on port 8000 is not observed (nothing is listening on port 8000; the server is named from its Server header only; its thread count is unknown), not Waitress (D-85 decision 2, D-87 decision 2). Stop it (Ctrl+C) and start it as `waitress-serve --listen=127.0.0.1:8000 --threads=24 config.wsgi:application`, under DEBUG=False.
+PREFLIGHT: REFUSED
+
+REFUSED: scripts\server_record.py preflight exited 2 without its READY line. Its REFUSED lines above say what was observed (D-87 decision 2).
+k6 was not started.
+The pre-flight refused only because the listener was not found; trying again in 10 s.
+
+=== the copied run.ps1, attempt 2 of 3 ===
+
+== Waitress's version, from C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.venv\Scripts\python.exe
+stated: waitress 3.0.2 (installed in that venv), 24 threads (-ServerThreads)
+
+== the provider gate, C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-anthropic-verify\corpus\objective-02\runs\2026-11-10-anthropic\load\provider_gate.py, with C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.venv\Scripts\python.exe
+configuration: anthropic, claude-haiku-5-5, voyage-4 at 1024; database kmp_obj02_anthropic_20261110
+health: available
+embedding probe: voyage-4, 1024 wide
+PROVIDER GATE: PASS (anthropic, claude-haiku-5-5, voyage-4 at 1024, both keys present, D-120's values, database kmp_obj02_anthropic_20261110)
+the provider gate passed at 2026-11-10T23:38:00.228Z
+
+== scripts\server_record.py preflight, for http://127.0.0.1:8000
+server         : waitress 3.0.2, unknown threads, DEBUG off
+command line   : not observed
+process start  : not observed
+version from   : the installed package in this process's environment: the listening process's command line names no venv
+Server header  : waitress (GET /api/), waitress (the DEBUG probe)
+DEBUG          : off: GET /api/__preflight_not_a_route__ -> 404 application/json; a 404 in handler404's JSON, which Django sends only with DEBUG off
+Waitress log   : C:\kmp-measurement\2026-11-10-obj02-anthropic\logs\waitress.log (from -WaitressLog)
+server started : 2026-11-11T10:37:27.486+11:00 (line 5: 2026-11-11 10:37:27,486 INFO waitress Serving on http://127.0.0.1:8000)
+previous run   : C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-anthropic-verify\tests\load\results\nfr08_summary.json, ended 2026-11-11T10:00:50.991+11:00 (when the file was last written)
+REFUSED: the server listening on port 8000 is not observed (nothing is listening on port 8000; the server is named from its Server header only; its thread count is unknown), not Waitress (D-85 decision 2, D-87 decision 2). Stop it (Ctrl+C) and start it as `waitress-serve --listen=127.0.0.1:8000 --threads=24 config.wsgi:application`, under DEBUG=False.
+PREFLIGHT: REFUSED
+
+REFUSED: scripts\server_record.py preflight exited 2 without its READY line. Its REFUSED lines above say what was observed (D-87 decision 2).
+k6 was not started.
+The pre-flight refused only because the listener was not found; trying again in 10 s.
+
+=== the copied run.ps1, attempt 3 of 3 ===
+
+== Waitress's version, from C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.venv\Scripts\python.exe
+stated: waitress 3.0.2 (installed in that venv), 24 threads (-ServerThreads)
+
+== the provider gate, C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-anthropic-verify\corpus\objective-02\runs\2026-11-10-anthropic\load\provider_gate.py, with C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.venv\Scripts\python.exe
+configuration: anthropic, claude-haiku-5-5, voyage-4 at 1024; database kmp_obj02_anthropic_20261110
+health: available
+embedding probe: voyage-4, 1024 wide
+PROVIDER GATE: PASS (anthropic, claude-haiku-5-5, voyage-4 at 1024, both keys present, D-120's values, database kmp_obj02_anthropic_20261110)
+the provider gate passed at 2026-11-10T23:38:16.745Z
+
+== scripts\server_record.py preflight, for http://127.0.0.1:8000
+server         : waitress 3.0.2, unknown threads, DEBUG off
+command line   : not observed
+process start  : not observed
+version from   : the installed package in this process's environment: the listening process's command line names no venv
+Server header  : waitress (GET /api/), waitress (the DEBUG probe)
+DEBUG          : off: GET /api/__preflight_not_a_route__ -> 404 application/json; a 404 in handler404's JSON, which Django sends only with DEBUG off
+Waitress log   : C:\kmp-measurement\2026-11-10-obj02-anthropic\logs\waitress.log (from -WaitressLog)
+server started : 2026-11-11T10:37:27.486+11:00 (line 5: 2026-11-11 10:37:27,486 INFO waitress Serving on http://127.0.0.1:8000)
+previous run   : C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-anthropic-verify\tests\load\results\nfr08_summary.json, ended 2026-11-11T10:00:50.991+11:00 (when the file was last written)
+REFUSED: the server listening on port 8000 is not observed (nothing is listening on port 8000; the server is named from its Server header only; its thread count is unknown), not Waitress (D-85 decision 2, D-87 decision 2). Stop it (Ctrl+C) and start it as `waitress-serve --listen=127.0.0.1:8000 --threads=24 config.wsgi:application`, under DEBUG=False.
+PREFLIGHT: REFUSED
+
+REFUSED: scripts\server_record.py preflight exited 2 without its READY line. Its REFUSED lines above say what was observed (D-87 decision 2).
+k6 was not started.
+
+D-89: 5 load-test account(s) retired, rows kept; 0 with a usable password
+the copied run.ps1 ended with exit code 2 after 3 attempt(s)

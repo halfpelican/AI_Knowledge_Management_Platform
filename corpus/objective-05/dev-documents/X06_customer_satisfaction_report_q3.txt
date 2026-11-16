@@ -1,0 +1,26 @@
+CUSTOMER SATISFACTION REPORT, THIRD QUARTER 2026
+
+Summary
+This report presents the results of the quarterly customer satisfaction survey for July to September 2026. Overall satisfaction rose to eighty-four percent, up three points on the previous quarter, and the Kingfisher net promoter score reached thirty-one. Response times remain the strongest driver of satisfaction and billing clarity the weakest.
+
+Method
+The survey was sent to every customer contact who raised a support case or renewed a contract during the quarter: 1,240 people. 384 responded, a response rate of thirty-one percent, compared with twenty-eight percent last quarter. Scores are weighted by customer size.
+
+Findings
+Satisfaction with support response times was ninety-one percent, the highest figure recorded since the survey began. Satisfaction with the clarity of invoices was sixty-two percent, unchanged. Thirty-eight written comments mentioned the new online portal, of which thirty were positive. Customers in the smallest size band gave the lowest scores on every question.
+
+Results by question
+Question | This quarter | Last quarter
+Overall satisfaction | 84% | 81%
+Support response times | 91% | 86%
+Quality of answers | 83% | 82%
+Clarity of invoices | 62% | 62%
+Likelihood to recommend | 31 (net score) | 26 (net score)
+
+Trends
+Overall satisfaction has risen for three consecutive quarters. The gap between the largest and smallest customers has widened from six points to nine.
+
+Next steps
+The billing team will trial a redesigned invoice with twenty customers in November and report the effect in the fourth-quarter survey. The customer success team will contact every small-band customer who gave a score below sixty percent.
+
+Prepared by the customer insight team, 9 October 2026.

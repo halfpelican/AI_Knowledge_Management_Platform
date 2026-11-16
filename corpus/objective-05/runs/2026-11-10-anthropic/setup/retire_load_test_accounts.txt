@@ -1,0 +1,2 @@
+database kmp_obj0506_anthropic_20261110: 21 load-test accounts, 21 with a usable password before
+after: 0 with a usable password (D-89: unusable on a measurement copy, rows kept)

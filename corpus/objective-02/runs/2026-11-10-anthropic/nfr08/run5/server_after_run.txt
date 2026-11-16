@@ -1,0 +1,27 @@
+Observed 2026-11-11T10:48:33+11:00
+
+Waitress process chain (Win32_Process):
+ProcessId       : 71988
+ParentProcessId : 57412
+CreationDate    : 11/11/2026 10:41:57 AM
+CommandLine     : "C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.venv\Scripts\waitress-s
+                  erve.exe" --listen=127.0.0.1:8000 --threads=24 config.wsgi:application
+
+ProcessId       : 51172
+ParentProcessId : 71988
+CreationDate    : 11/11/2026 10:41:57 AM
+CommandLine     : "C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.venv\Scripts\python.exe
+                  " "C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.venv\Scripts\waitress
+                  -serve.exe" --listen=127.0.0.1:8000 --threads=24 config.wsgi:application
+
+ProcessId       : 68232
+ParentProcessId : 51172
+CreationDate    : 11/11/2026 10:41:57 AM
+CommandLine     : "C:\Users\mozza\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\python.exe"  "C:\Users\moz
+                  za\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.venv\Scripts\waitress-serve.exe" 
+                  --listen=127.0.0.1:8000 --threads=24 config.wsgi:application
+
+The port 8000 listening row now (MSFT_NetTCPConnection; State 2 is Listen):
+LocalAddress LocalPort State OwningProcess
+------------ --------- ----- -------------
+127.0.0.1         8000     0         68232

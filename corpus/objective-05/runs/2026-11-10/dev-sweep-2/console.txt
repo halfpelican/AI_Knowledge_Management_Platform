@@ -1,0 +1,96 @@
+FLM gate: scripts/check_flm.py's checks (D-83)
+
+[GET /models]
+  33 model(s) advertised by /models:
+    - deepseek-r1:8b
+    - deepseek-r1-0528:8b
+    - gemma3:1b
+    - gemma3:4b
+    - gemma4-it:e2b
+    - gpt-oss:20b
+    - gpt-oss-sg:20b
+    - lfm2:1.2b
+    - lfm2:2.6b
+    - lfm2-trans:2.6b
+    - lfm2.5-it:1.2b
+    - lfm2.5-tk:1.2b
+    - llama3.1:8b
+    - llama3.2:1b
+    - llama3.2:3b
+    - medgemma:4b
+    - medgemma1.5:4b
+    - nanbeige4.1:3b
+    - phi4-mini-it:4b
+    - qwen2.5-it:3b
+    - qwen2.5vl-it:3b
+    - qwen3:0.6b
+    - qwen3:1.7b
+    - qwen3:4b
+    - qwen3:8b
+    - qwen3-it:4b
+    - qwen3-tk:4b
+    - qwen3.5:0.8b
+    - qwen3.5:2b
+    - qwen3.5:4b
+    - qwen3.5:9b
+    - qwen3vl-it:4b
+    - translategemma:4b
+  note: this list is the model catalogue rather than the resident set,
+        and it does not include the embedding model. The two calls below are the proof.
+  chat model 'gemma3:4b': advertised
+  PASS
+
+[POST /chat/completions]
+  model  : gemma3:4b
+  prompt : 'Reply with the single word: pong'
+  reply  : 'pong'  (1.3s)
+  PASS
+
+[POST /embeddings]
+  model      : embed-gemma
+  inputs     : 3, vectors returned: 3  (0.8s)
+  dimensions : [768, 768, 768]  (expected 768)
+  determinism : same input twice in one batch -> cosine 1.0000
+  determinism : same input in a second call  -> cosine 1.0000
+  discrimination: two unrelated inputs      -> cosine 0.1299
+  sanity      : vectors are deterministic and discriminate between inputs
+  PASS
+  X01 #1: ok  Policy (0.98) dept Legal and Compliance (0.95) 13.8s
+  X01 #2: ok  Policy (0.98) dept Legal and Compliance (0.95) 11.5s
+  X01 #3: ok  Policy (0.98) dept Legal and Compliance (0.95) 10.7s
+  X02 #1: ok  Policy (0.95) dept Legal and Compliance (0.92) 11.6s
+  X02 #2: ok  Policy (0.95) dept Legal and Compliance (0.92) 11.7s
+  X02 #3: ok  Policy (0.95) dept Legal and Compliance (0.92) 12.9s
+  X03 #1: ok  Policy (0.95) dept Legal and Compliance (0.92) 11.9s
+  X03 #2: ok  Policy (0.95) dept Legal and Compliance (0.92) 10.7s
+  X03 #3: ok  Policy (0.95) dept Legal and Compliance (0.92) 11.3s
+  X04 #1: ok  Procedure (0.98) dept Information Technology (0.95) 10.7s
+  X04 #2: ok  Procedure (0.98) dept Information Technology (0.95) 10.8s
+  X04 #3: ok  Procedure (0.98) dept Information Technology (0.95) 10.7s
+  X05 #1: ok  Procedure (0.98) dept Operations (0.95) 12.5s
+  X05 #2: ok  Procedure (0.98) dept Operations (0.95) 12.6s
+  X05 #3: ok  Procedure (0.98) dept Operations (0.95) 12.6s
+  D21 #1: ok  Procedure (0.95) dept Operations (0.92) 10.9s
+  D21 #2: ok  Procedure (0.95) dept Operations (0.92) 10.5s
+  D21 #3: ok  Procedure (0.95) dept Operations (0.92) 11.4s
+  X06 #1: ok  Report (0.95) dept Operations (0.80) 7.6s
+  X06 #2: ok  Report (0.95) dept Customer Insight (0.92) 12.6s
+  X06 #3: ok  Report (0.95) dept Operations (0.80) 8.6s
+  X07 #1: ok  Report (0.95) dept Operations (0.85) 12.8s
+  X07 #2: ok  Report (0.95) dept Operations (0.85) 12.8s
+  X07 #3: ok  Report (0.95) dept Operations (0.85) 13.2s
+  X08 #1: ok  Report (0.95) dept Human Resources (0.90) 8.4s
+  X08 #2: ok  Report (0.95) dept Human Resources (0.90) 8.4s
+  X08 #3: ok  Report (0.95) dept Human Resources (0.90) 9.0s
+  X09 #1: ok  Meeting Paper (0.95) dept Information Technology (0.92) 11.0s
+  X09 #2: ok  Meeting Paper (0.95) dept Information Technology (0.92) 11.5s
+  X09 #3: ok  Meeting Paper (0.95) dept Information Technology (0.92) 10.8s
+  X10 #1: MISS Report (0.95) dept Information Technology (0.85) 11.4s
+  X10 #2: MISS Report (0.95) dept Information Technology (0.85) 11.4s
+  X10 #3: MISS Report (0.95) dept Information Technology (0.85) 10.5s
+  X11 #1: ok  Meeting Paper (0.98) dept Finance (0.95) 10.7s
+  X11 #2: ok  Meeting Paper (0.95) dept Finance (0.98) 10.5s
+  X11 #3: ok  Meeting Paper (0.95) dept Finance (0.98) 11.1s
+
+wrote corpus\objective-05\runs\2026-11-10\dev-sweep-2\dev-sweep.json and dev-sweep.md
+threshold by D-106's rule: 0.95 (separates: False)

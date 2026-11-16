@@ -1,0 +1,30 @@
+listener lookup, try 1: Get-NetTCPConnection: nothing is listening on port 8000; netstat -ano lists no LISTENING line for port 8000; the port's own row (remote port 0) is owned by pid 46608, reported state 0 (2 is Listen), read through Win32_Process
+{
+  "via": "http",
+  "base_url": "http://127.0.0.1:8000",
+  "server": "waitress",
+  "version": "3.0.2",
+  "version_source": "the Waitress installed in C:\\Users\\mozza\\Documents\\IT_Captone_Project_KMP\\KMP_Prototype\\KMP_Prototype\\.venv, the venv the listening process's command line runs from",
+  "version_in_this_python": "3.0.2",
+  "venv": "C:\\Users\\mozza\\Documents\\IT_Captone_Project_KMP\\KMP_Prototype\\KMP_Prototype\\.venv",
+  "threads": 24,
+  "threads_source": "--threads on the command line",
+  "listen": "127.0.0.1:8000",
+  "pid": 46608,
+  "process_started_at": "2026-11-11T00:09:36.422Z",
+  "command_line": "\"C:\\Users\\mozza\\AppData\\Roaming\\uv\\python\\cpython-3.12-windows-x86_64-none\\python.exe\"  \"C:\\Users\\mozza\\Documents\\IT_Captone_Project_KMP\\KMP_Prototype\\KMP_Prototype\\.venv\\Scripts\\waitress-serve.exe\" --listen=127.0.0.1:8000 --threads=24 config.wsgi:application",
+  "server_header": "waitress",
+  "d85_command": "waitress-serve --listen=127.0.0.1:8000 --threads=24 config.wsgi:application",
+  "notes": [],
+  "debug": {
+    "path": "/api/__preflight_not_a_route__",
+    "url": "http://127.0.0.1:8000/api/__preflight_not_a_route__",
+    "status": 404,
+    "content_type": "application/json",
+    "server_header": "waitress",
+    "body": "{\"detail\": \"Not found.\"}",
+    "body_bytes": 24,
+    "debug": "off",
+    "reason": "a 404 in handler404's JSON, which Django sends only with DEBUG off"
+  }
+}

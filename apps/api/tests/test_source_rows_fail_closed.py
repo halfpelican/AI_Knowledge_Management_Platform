@@ -47,6 +47,7 @@ from pathlib import Path
 import pytest
 from django.conf import settings
 from django.core.files.base import ContentFile
+from django.utils import timezone
 
 import apps.ai
 from apps.ai.base import EmbeddingResult, Statement, StatementList
@@ -58,8 +59,8 @@ from apps.core.constants import (
     RELEVANCE_THRESHOLD,
     SOURCE_TYPES,
 )
-from apps.documents.models import ContentChunk, ContentTag, Document, Tag
-from apps.meetings.models import Meeting
+from apps.documents.models import ContentChunk, ContentTag, Document, DocumentAnalysis, Tag
+from apps.meetings.models import ActionItem, Meeting
 from apps.retrieval.scoping import scoped_chunks, scoped_documents, scoped_meetings
 
 DOCUMENT_SOURCE_TYPE, MEETING_SOURCE_TYPE = SOURCE_TYPES
@@ -310,7 +311,7 @@ def disagreement(administrator):
 class _CitingService:
     """A double: the query vector is QUERY, and the reply cites the first passage supplied."""
 
-    def embed(self, texts):
+    def embed(self, texts, *, input_type=None):
         return EmbeddingResult(
             vectors=[list(QUERY)], model=STUB_EMBEDDING_MODEL, dimension=settings.EMBEDDING_DIMENSION
         )
@@ -419,6 +420,70 @@ def _browses(client, case, monkeypatch):
     return case.disclosed_in(response) or DOCUMENT_TAG in response.content.decode()
 
 
+# FR-10's routes (D-105) act on a document by id, so each is a status-code probe like the delete:
+# 404 says nothing, anything else confirms the id is real. Each probe first gives the disagreeing
+# document what its route acts on (an analysis, a proposal, a tag link), so that the
+# Administrator's mirror reaches the work and answers non-404, and the Employee's 404 can only be
+# the scope's. contribute_content is held by both roles, so the Employee's 404 is not a 403 hidden
+# behind one: it is resolved before the permission (D-73's order).
+PROPOSED_TOPIC = "succession planning"
+# The proposed-tags routes' body (D-128): the proposal's dimension and value.
+PROPOSAL_BODY = {"dimension": "Topic", "value": PROPOSED_TOPIC}
+
+
+def _classified(document) -> DocumentAnalysis:
+    analysis, _ = DocumentAnalysis.objects.get_or_create(
+        document=document,
+        defaults={
+            "classified_at": timezone.now(),
+            "proposed_tags": [{"dimension": "Topic", "value": PROPOSED_TOPIC, "confidence": 0.8}],
+        },
+    )
+    return analysis
+
+
+def _linked(document) -> ContentTag:
+    tag, _ = Tag.objects.get_or_create(tag_name=DOCUMENT_TAG, dimension="Project")
+    link, _ = ContentTag.objects.get_or_create(
+        tag=tag, source_type=DOCUMENT_SOURCE_TYPE, source_id=document.id,
+        defaults={"applied_by": "ai", "confirmed": False, "provisional": True},
+    )
+    return link
+
+
+def _acts_on(method, path, body=None, prepare=None):
+    def probe(client, case, monkeypatch):
+        if prepare is not None:
+            prepare(case.document)
+        url = f"/api/documents/{case.document.id}/{path(case)}"
+        response = getattr(client, method)(url, body or {}, format="json")
+        return response.status_code != 404
+
+    return probe
+
+
+# FR-16's routes (D-125) act on a meeting by id, so each is a status-code probe like the meeting
+# delete: 404 says nothing, anything else confirms the id is real. The fixture's transcript is a
+# sentence, under FR-16's minimum, so the Administrator's mirror on both summary routes is the
+# 422, which no provider call precedes; the action-item routes are given an item to act on.
+# contribute_content is held by both roles, so the Employee's 404 is the scope's and not a 403
+# hidden behind one: it is resolved before the permission (D-73's order).
+def _action_item(meeting) -> ActionItem:
+    item, _ = ActionItem.objects.get_or_create(
+        meeting=meeting, description="Write to the nominations committee.", defaults={"origin": "user"}
+    )
+    return item
+
+
+def _acts_on_meeting(method, path, body=None):
+    def probe(client, case, monkeypatch):
+        url = f"/api/meetings/{case.meeting.id}/{path(case)}"
+        response = getattr(client, method)(url, body or {}, format="json")
+        return response.status_code != 404
+
+    return probe
+
+
 ROUTES_RETURNING_SOURCE_ROWS = {
     ("api/documents", "GET"): _lists("/api/documents"),
     ("api/documents/<uuid:pk>", "GET"): _is_found(lambda case: f"/api/documents/{case.document.id}"),
@@ -451,18 +516,57 @@ ROUTES_RETURNING_SOURCE_ROWS = {
     ("api/meetings/<uuid:pk>", "DELETE"): _is_found(
         lambda case: f"/api/meetings/{case.meeting.id}", method="delete"
     ),
+    # FR-10 (D-105). Classify: the document has no extracted text, so the Administrator's mirror is
+    # the 422, which no provider call precedes; the Employee's answer is the scope's 404.
+    ("api/documents/<uuid:pk>/classify", "POST"): _acts_on("post", lambda case: "classify"),
+    ("api/documents/<uuid:pk>/classification", "POST"): _acts_on(
+        "post", lambda case: "classification", prepare=_classified
+    ),
+    ("api/documents/<uuid:pk>/tags/<uuid:content_tag_id>/confirm", "POST"): _acts_on(
+        "post", lambda case: f"tags/{_linked(case.document).id}/confirm"
+    ),
+    ("api/documents/<uuid:pk>/tags/<uuid:content_tag_id>", "DELETE"): _acts_on(
+        "delete", lambda case: f"tags/{_linked(case.document).id}"
+    ),
+    ("api/documents/<uuid:pk>/proposed-tags/confirm", "POST"): _acts_on(
+        "post", lambda case: "proposed-tags/confirm", body=PROPOSAL_BODY, prepare=_classified,
+    ),
+    ("api/documents/<uuid:pk>/proposed-tags/reject", "POST"): _acts_on(
+        "post", lambda case: "proposed-tags/reject", body=PROPOSAL_BODY, prepare=_classified,
+    ),
+    # A person applies a tag (D-105's dated note of 10 November 2026, night): a new Topic, so the
+    # Administrator's mirror is the 201 and the Employee's answer is the scope's 404.
+    ("api/documents/<uuid:pk>/tags", "POST"): _acts_on(
+        "post", lambda case: "tags", body={"dimension": "Topic", "tag_name": "board succession"}
+    ),
+    # FR-16 (D-125): the summary, which is the meeting's content restated, and its action items.
+    ("api/meetings/<uuid:pk>/summary", "GET"): _acts_on_meeting("get", lambda case: "summary"),
+    ("api/meetings/<uuid:pk>/summary", "POST"): _acts_on_meeting("post", lambda case: "summary"),
+    ("api/meetings/<uuid:pk>/action-items", "POST"): _acts_on_meeting(
+        "post", lambda case: "action-items", body={"description": "Book the boardroom."}
+    ),
+    ("api/meetings/<uuid:pk>/action-items/<uuid:item_id>", "PATCH"): _acts_on_meeting(
+        "patch", lambda case: f"action-items/{_action_item(case.meeting).id}",
+        body={"description": "Write to the committee chair."},
+    ),
+    ("api/meetings/<uuid:pk>/action-items/<uuid:item_id>", "DELETE"): _acts_on_meeting(
+        "delete", lambda case: f"action-items/{_action_item(case.meeting).id}"
+    ),
 }
 
 ROUTES_RETURNING_NO_SOURCE_ROWS = {
     ("api/", "GET"): "DRF's API root: a map of router routes, of which there are none.",
     ("api/auth/register", "POST"): "Users only.",
     ("api/auth/login", "POST"): "Users only.",
+    ("api/auth/lockout-policy", "GET"): "Two numbers, the same for every caller (D-130).",
     ("api/auth/logout", "POST"): "A confirmation message.",
     ("api/auth/me", "GET"): "The caller's own user row.",
     ("api/roles", "GET"): "Roles and their permission codes.",
     ("api/users", "GET"): "Users and roles (FR-05).",
     ("api/users/directory", "GET"): "Names and addresses (D-34).",
     ("api/users/<uuid:pk>/role", "PATCH"): "The updated user.",
+    # FR-03's release (D-130): reads and writes the users and login_attempts rows only.
+    ("api/users/<uuid:pk>/unlock", "POST"): "The released user, as GET /api/users lists it.",
     ("api/documents", "POST"): (
         "Returns the document the caller has just uploaded, which D-29 places inside the "
         "caller's own scope. Its 409 duplicate check is the cross-scope existence oracle D-33 "
@@ -474,6 +578,35 @@ ROUTES_RETURNING_NO_SOURCE_ROWS = {
     ),
     ("api/conversations", "GET"): "The caller's own threads: titles they wrote or asked.",
     ("api/conversations", "POST"): "The new thread.",
+    # FR-19 (D-107). An entry's subject is a question someone typed, not a source row, and no
+    # route here reads Document or Meeting rows; the cycle reads chunks only through
+    # candidate_chunks and search_total, which are the scoped helpers.
+    ("api/knowledge-gaps", "GET"): "Gap entries: a subject, a count, a status and two dates.",
+    ("api/knowledge-gaps/cycles", "POST"): "The cycle row: its times and four counts.",
+    ("api/knowledge-gaps/<uuid:pk>", "PATCH"): "The updated gap entry.",
+    # FR-10's tag administration (D-119 finding 5), Administrator-only through manage_tags. Tag rows
+    # and counts of the sources carrying them, read by a role that reads every source (D-66); no
+    # Document or Meeting row is read or returned.
+    ("api/tags", "GET"): "Tags and their counts of sources, for the Administrator alone.",
+    # D-128: an Administrator adds a value; the 201 is the new tag's entry, and the 409 names the
+    # existing tag's id, which the inventory above already lists to the same reader.
+    ("api/tags", "POST"): "The new tag's entry, or the id of the tag already holding the name.",
+    ("api/tags/<uuid:pk>", "DELETE"): "The retired tag's entry, or nothing.",
+    # FR-10's department list (D-129), Administrator-only through manage_tags. Department rows and
+    # counts of the documents whose department equals each name, read by a role that reads every
+    # document (D-66), in apps/documents/taxonomy.py; no Document or Meeting row is returned.
+    ("api/departments", "GET"): "Departments and their counts of documents, for the Administrator alone.",
+    ("api/departments", "POST"): (
+        "The new or reactivated department's entry, or the id of the active department holding the name."
+    ),
+    ("api/departments/<uuid:pk>", "DELETE"): "The retired department's entry, or nothing.",
+    # Recording transcription (D-123). No transcription route reads a Document, a Meeting or a
+    # chunk, or stores anything: a transcript enters the knowledge base only through
+    # POST /api/meetings, classified above.
+    ("api/transcriptions/status", "GET"): "Two flags and the two segment lengths.",
+    ("api/transcriptions", "POST"): (
+        "The text of the audio segment the caller has just sent, and that segment's length and level."
+    ),
 }
 
 

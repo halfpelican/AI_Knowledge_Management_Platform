@@ -29,6 +29,27 @@ export function dashboardPathForRole(role) {
   return DASHBOARD_PATHS[role] ?? DASHBOARD_PATHS[ROLES.employee]
 }
 
+/*
+ * FR-03's lockout policy, the failures that lock an account and how long the lock lasts, is
+ * not copied here. Since D-130 decision 7 it is the server's .env, and the sign-in page fetches
+ * it from GET /api/auth/lockout-policy (src/api/auth.js getLockoutPolicy), so a change needs no
+ * rebuild. apps/api/tests/test_front_end_constants_agreement.py fails if a copy comes back.
+ */
+
+/**
+ * The remaining-attempts warning shows once this many attempts or fewer remain
+ * before the page's own count reaches the policy's threshold, which at the default
+ * of five is after the third and the fourth consecutive failure (Benjamin's
+ * decision 2, D-130). The page's own rule, with no counterpart on the server.
+ */
+export const LOCKOUT_WARNING_REMAINING = 2
+
+/** A lock's length in words, rounded up to whole minutes, for the sentence that names it. */
+function durationInWords(seconds) {
+  const minutes = Math.ceil(seconds / 60)
+  return minutes === 1 ? '1 minute' : `${minutes} minutes`
+}
+
 /**
  * The two document statuses a 201 can carry (docs/schema-v1.md §3, mirrored in
  * apps/core/constants.py DOCUMENT_STATUS_VALUES). The interface branches on
@@ -73,7 +94,36 @@ export const DOCUMENT_STATUS = {
 export const TRANSCRIPT_SOURCE = {
   text: 'text',
   file: 'file',
+  // D-123: a meeting recording, transcribed by Whisper into a draft that a
+  // person reviews before it is added. What is added is the draft's text, sent as
+  // pasted text is: the recording never reaches the server, only its segments do,
+  // and none of them is stored.
+  recording: 'recording',
 }
+
+/**
+ * The largest meeting recording the page will decode, mirroring
+ * apps/core/constants.py MAXIMUM_RECORDING_BYTES (D-123). Only the client
+ * enforces it: the recording itself is never uploaded, so it bounds this page's
+ * memory, where the file and its decoded audio sit together. Each segment the page
+ * sends is held to MAX_UPLOAD_BYTES by the server. apps/api/tests/
+ * test_front_end_constants_agreement.py fails when the two drift.
+ */
+export const MAXIMUM_RECORDING_BYTES = 500 * 1024 * 1024
+export const MAXIMUM_RECORDING_LABEL = '500 MB'
+/**
+ * The rate the page resamples a recording to before cutting it: Whisper's own,
+ * mirroring apps/core/constants.py TRANSCRIPTION_SAMPLE_RATE.
+ */
+export const TRANSCRIPTION_SAMPLE_RATE = 16000
+/**
+ * What the recording picker offers by default: audio files, and the video files a
+ * screen or meeting recorder writes (Game Bar and Teams write MP4). A hint to the
+ * picker, not a check: whatever the browser can decode is accepted, and anything
+ * it cannot is refused with a message when it is read.
+ */
+export const RECORDING_ACCEPT =
+  'audio/*,video/mp4,video/webm,video/quicktime,.m4a,.mp3,.wav,.aac,.ogg,.oga,.flac,.mp4,.webm,.mov'
 
 /**
  * FR-08 upload limits, mirroring apps/core/constants.py (ACCEPTED_EXTENSIONS,
@@ -99,6 +149,24 @@ const PARTIALLY_INDEXED_DETAIL =
   'Some passages could not be indexed, so parts of this document will not appear in search results.'
 
 /**
+ * NFR-15's mark, in the one place its words are written: "All AI-generated content
+ * (summaries, action items, extracted knowledge) must be visually distinguished from
+ * human-authored content using one consistent convention ... applied system-wide."
+ * The convention is FR-10's, and every entry in TEXT that says it is built from
+ * these two, so FR-10's type, department and tags, FR-16's summary and action items
+ * and a summary passage shown by FR-12 cannot come to say it differently.
+ */
+const SUGGESTED_BY_AI = 'Suggested by AI'
+/** What the same convention says of content a person wrote. */
+const ADDED_BY_PERSON = 'Added by a person'
+
+/** A description short enough to name a button with: its first 80 characters. */
+function briefly(text) {
+  const value = String(text ?? '')
+  return value.length > 80 ? `${value.slice(0, 79).trimEnd()}…` : value
+}
+
+/**
  * FR-12 search and question bounds, mirroring apps/core/constants.py
  * (MINIMUM_SEARCH_LENGTH, MINIMUM_QUESTION_LENGTH, MAXIMUM_QUESTION_LENGTH).
  *
@@ -112,8 +180,35 @@ const PARTIALLY_INDEXED_DETAIL =
  * inclusive.
  */
 export const SEARCH_MINIMUM_LENGTH = 2
+// The upper bound on a search term, mirroring MAXIMUM_SEARCH_LENGTH (D-79's note of
+// 10 November 2026). The server answers 400 above it whatever the browser allowed.
+export const SEARCH_MAXIMUM_LENGTH = 500
 export const QUESTION_MINIMUM_LENGTH = 10
 export const QUESTION_MAXIMUM_LENGTH = 500
+
+/**
+ * FR-10's new Topic name: at most this many characters, mirroring apps/core/models.py
+ * NAME_MAX_LENGTH, the width of `Tags.tag_name` and the `max_length` of the apply
+ * route's `tag_name` (docs/api-contract.md, NIT3004 FR-10). Counted after trimming and
+ * single-spacing, the form the name is sent in (src/utils/validation.js
+ * `spacedTagName`), so the server measures what the screen measured. A convenience:
+ * the server answers 400 `{"tag_name": [...]}` above it whatever the browser allowed
+ * (CLAUDE.md §6, invariant 4). apps/api/tests/test_front_end_constants_agreement.py
+ * fails when the two drift. The document page also offers no Confirm on a proposed
+ * value longer than this, since confirming one creates a tag (D-135).
+ */
+export const TAG_NAME_MAXIMUM_LENGTH = 255
+
+/**
+ * FR-10's department name, the one an Administrator adds to the department list on the
+ * Tags page (D-129): at most this many characters, the width of `Departments.name`, which
+ * is NAME_MAX_LENGTH as `Tags.tag_name` is. Taken from TAG_NAME_MAXIMUM_LENGTH rather than
+ * written out again, so the one copy apps/api/tests/test_front_end_constants_agreement.py
+ * holds to NAME_MAX_LENGTH covers this bound too. Counted after trimming and
+ * single-spacing, the form the name is sent in. A convenience: the server answers 400
+ * `{"name": [...]}` above it whatever the browser allowed (CLAUDE.md §6, invariant 4).
+ */
+export const DEPARTMENT_NAME_MAXIMUM_LENGTH = TAG_NAME_MAXIMUM_LENGTH
 
 /**
  * The two source types, from the fixed vocabulary the chunks, the search results
@@ -123,6 +218,39 @@ export const SOURCE_TYPE = {
   document: 'document',
   meeting: 'meeting',
 }
+
+/**
+ * FR-16's summary statuses, mirroring apps/core/constants.py SUMMARY_STATUS_VALUES
+ * (D-125): the latest run's `status` in the summary state both summary routes
+ * return. A vocabulary, not a tuned value. A meeting nobody has asked a summary of
+ * carries `null` instead, which is why there is no fourth entry.
+ * tests/meetingSummary.test.jsx fails when the two lists drift.
+ */
+export const SUMMARY_STATUS = {
+  processing: 'Processing',
+  ready: 'Ready',
+  unavailable: 'Unavailable',
+}
+
+/**
+ * Who an action item came from, mirroring apps/core/constants.py ACTION_ITEM_ORIGINS:
+ * "ai" for one the summary run extracted, "user" for one a person added. NFR-15's
+ * mark reads it. tests/meetingActionItems.test.jsx fails when the two lists drift.
+ */
+export const ACTION_ITEM_ORIGIN = {
+  ai: 'ai',
+  user: 'user',
+}
+
+/**
+ * How often the meeting page asks `GET /api/meetings/{id}/summary` again while the
+ * latest run is "Processing", in milliseconds (FR-16: "202 Accepted while
+ * processing"). The page's own value with no counterpart on the server, which leaves
+ * that route unthrottled because the page polls it (docs/api-contract.md, FR-16).
+ * It asks only while a run is in flight: a summary waiting for its hourly retry is
+ * not polled.
+ */
+export const MEETING_SUMMARY_POLL_MS = 3000
 
 /**
  * Client-side validation text. Fixed here so every form says the same thing.
@@ -154,15 +282,65 @@ export const VALIDATION = {
   meetingDateFuture: 'A meeting date may not be in the future.',
   transcriptRequired: 'Paste the transcript text.',
   transcriptFileRequired: 'Choose a transcript file.',
+  // D-123: a recording's draft is added only once it exists and a person
+  // has said they reviewed it.
+  recordingTooLarge: `Recording is larger than ${MAXIMUM_RECORDING_LABEL}. Choose a smaller file.`,
+  recordingTypeUnsupported: 'Choose an audio or video recording, such as M4A, MP3, WAV or MP4.',
+  transcriptDraftRequired: 'Transcribe a recording first, so there is a draft to add.',
+  transcriptReviewRequired: 'Confirm that you have reviewed and corrected the transcript.',
+  transcriptStillTranscribing: 'Wait for the transcription to finish, or stop it, before adding the transcript.',
   // FR-12: "queries shorter than two characters are rejected client-side". The
   // message names the minimum, so a refusal says what would be accepted.
   searchTermRequired: 'Enter something to search for.',
   searchTermTooShort: `Enter at least ${SEARCH_MINIMUM_LENGTH} characters to search.`,
+  // The upper bound (D-79's note), named in the message for the same reason.
+  searchTermTooLong: `A search term can be at most ${SEARCH_MAXIMUM_LENGTH} characters.`,
   // FR-12's question bounds. Named in the message for the same reason.
   questionRequired: 'Enter a question.',
   questionTooShort: `A question needs at least ${QUESTION_MINIMUM_LENGTH} characters.`,
   questionTooLong: `A question can be at most ${QUESTION_MAXIMUM_LENGTH} characters.`,
+  // FR-10's new Topic name, refused before any request when it is empty or longer
+  // than the server's column, both measured as the name is sent: trimmed, and each
+  // run of spaces one space. The limit is named, so a refusal says what would do.
+  tagNameRequired: 'Enter a name for the new topic.',
+  tagNameTooLong: `A topic name can be at most ${TAG_NAME_MAXIMUM_LENGTH} characters.`,
+  // The value an Administrator adds on the tags page (D-128), refused before any
+  // request on the same two rules, worded for a value of any of the three dimensions.
+  tagValueRequired: 'Enter a name for the new tag value.',
+  tagValueTooLong: `A tag name can be at most ${TAG_NAME_MAXIMUM_LENGTH} characters.`,
+  // The department an Administrator adds to the department list (D-129), refused before
+  // any request on the same two rules, measured as it is sent: trimmed and single-spaced.
+  departmentNameRequired: 'Enter a name for the new department.',
+  departmentNameTooLong: `A department name can be at most ${DEPARTMENT_NAME_MAXIMUM_LENGTH} characters.`,
+  // FR-16's action item: only the description is required, on an edit and on an
+  // item added by hand. Refused before any request; the server answers 400
+  // `{"description": [...]}` for a blank one regardless (CLAUDE.md §6, invariant 4).
+  actionItemDescriptionRequired: 'Enter a description.',
 }
+
+/**
+ * A tag dimension in the words a sentence uses, singular and plural, keyed on the
+ * contract's "Project", "Process" and "Topic" without regard to case. Any other is
+ * used as it came, lower-cased. Read by the sentences about a value the AI proposed
+ * (D-128), which name the proposal's own dimension.
+ */
+const DIMENSION_WORDS = {
+  project: { one: 'project', many: 'projects' },
+  process: { one: 'process', many: 'processes' },
+  topic: { one: 'topic', many: 'topics' },
+}
+
+function dimensionWords(dimension) {
+  const key = String(dimension ?? '').toLowerCase()
+  return DIMENSION_WORDS[key] ?? { one: key, many: key }
+}
+
+/**
+ * A whole number as a sentence writes it, thousands grouped: 1,024. Read by the
+ * sentence about a proposal too long to become a tag (D-135), whose length nothing on
+ * the page bounds.
+ */
+const COUNT_FORMAT = new Intl.NumberFormat('en-AU')
 
 /**
  * Fixed, user-facing text for every screen: auth and roles, then ingestion and
@@ -174,12 +352,45 @@ export const TEXT = {
   // FR-04 wording: "a brief confirmation 'You've been logged out'".
   loggedOut: 'You’ve been logged out.',
   registered: 'Your account has been created. Sign in to continue.',
-  // FR-02: "Where the account is locked and the submitted password was correct,
-  // a distinct message is shown." Distinct from the 401 text, and it names no
-  // account detail, so it discloses nothing a 401 does not.
+  // FR-02 and FR-03 (D-130): the server's 403 `account_locked`, which only a request whose
+  // password matched receives, and only within D-26's notice ceiling, twice the running threshold. It is
+  // distinct from the 401 text and names no account detail, so it discloses nothing
+  // to anyone without the password. It names the release, so a locked-out user has a
+  // route forward (FR-03, UC-02 E2): D-26 took that promise out while no release
+  // existed, and D-130 built one. "The timer" is the countdown beside Sign in, run
+  // from the reply's `retry_after`, or from the policy's duration where it gave none (decision 7).
   accountLocked:
     'This account is temporarily locked after too many failed sign-in attempts. ' +
-    'Please try again later.',
+    'Try again when the timer ends, or ask an administrator to unlock it.',
+  // FR-03: the sign-in page's own count of consecutive failures for the address typed
+  // reached the running policy's threshold. The page does not know whether the address has an account,
+  // nor whether the server locked it: the count is the page's alone (D-130 decision
+  // 1), and failures elsewhere can have locked it sooner, while a success elsewhere
+  // can have reset the server's count. So the sentence is true of any address (the
+  // security review, finding C): "if this address has an account", "may" and "up to".
+  // `durationSeconds` is the running policy's (D-130 decision 7).
+  accountMayBeLocked: (durationSeconds) =>
+    `Too many failed sign-in attempts. If this address has an account, it may be locked for up to ${durationInWords(durationSeconds)}, ` +
+    'and an administrator can unlock it sooner.',
+  // Shown with either lock message. A release (POST /api/users/{id}/unlock) reaches the server
+  // and not a sign-in page already open, whose countdown is its own record. So the page says how
+  // to pick the release up: a reload clears that record (the pre-PR security review, finding 1).
+  // Conditional, so it is true of any address. A lock still live answers again, but every attempt
+  // during it counts toward D-26's notice ceiling. Within it, the right password gets the 403
+  // again; past it, even the right password gets the generic 401 until the lock ends.
+  lockedReloadHint: 'If an administrator has unlocked the account, reload this page to sign in.',
+  // FR-03's warning, beside FR-02's generic banner, once LOCKOUT_WARNING_REMAINING or
+  // fewer attempts remain (decision 2). From the page's own count, so it is the same
+  // for every address, registered or not (decision 1).
+  attemptsRemaining: (count) =>
+    count === 1
+      ? '1 attempt remaining before temporary lockout'
+      : `${count} attempts remaining before temporary lockout`,
+  // FR-03's countdown beside the disabled Sign in button, in minutes and seconds.
+  lockoutCountdown: (seconds) => {
+    const whole = Math.max(0, Math.ceil(seconds))
+    return `Try again in ${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`
+  },
   // FR-06: the "403 - Access Denied" page a guarded route redirects to. It never
   // describes what the requested screen would have contained.
   accessDeniedTitle: '403 – Access Denied',
@@ -198,6 +409,63 @@ export const TEXT = {
   // accidental lockout of the last administrator."
   roleChangeSelfDemotion:
     'You cannot remove your own Administrator role. Ask another Administrator to change it for you.',
+
+  /* ---- FR-03 unlocking an account, on Role management (D-130) ---------- */
+  // The page's introduction: FR-05's two sentences, as they were, then FR-03's. An
+  // Administrator may unlock any account but their own (FR-03).
+  rolesIntro:
+    `Choose a role for a user and save the row. Changes take effect on that user's next request and are recorded in the audit log. ` +
+    'An account locked after repeated failed sign-ins can be unlocked from its row, except your own.',
+  // The Account column. `lock` arrives on each user of GET /api/users for a holder of
+  // release_account_locks; the server checks that permission on every unlock
+  // whatever this screen shows (CLAUDE.md §6, invariant 4).
+  accountColumn: 'Account',
+  // A live lock, in words and in a bordered badge, so it is told by more than colour
+  // (WCAG 2.1 SC 1.4.1). `time` is when the lock ends.
+  accountLockedUntil: (time) => `Locked until ${time}`,
+  // An account with no live lock: quiet, because nothing needs doing.
+  accountActive: 'Active',
+  // The signed-in Administrator's own locked row, which has no Unlock button: FR-03
+  // forbids releasing a lock on one's own account.
+  accountLockedOwn: 'Another administrator can unlock your account.',
+  // The same row when the list holds no other Administrator. Nobody can release that lock, so
+  // the row says when it ends rather than promise a release (the pre-PR security review,
+  // finding 2). `time` is when the lock ends.
+  accountLockedOwnAlone: (time) => `No other administrator can unlock your account. It unlocks at ${time}.`,
+  unlock: 'Unlock',
+  // The accessible name, so a column of "Unlock" buttons each name their account
+  // (WCAG 2.1 SC 2.4.6), starting with the visible word (SC 2.5.3).
+  unlockLabel: (name) => `Unlock ${name}'s account`,
+  unlockConfirm: (name) => `Unlock ${name}'s account?`,
+  unlockConfirmLabel: 'Unlock account',
+  unlocking: 'Unlocking…',
+  unlockCancel: 'Cancel',
+  // When the lock began and from which address, where the lockout that set it was
+  // recorded; both are missing for a lock older than the LoginAttempts table, and
+  // then only its end is said. Each argument is already formatted for display.
+  unlockLockDetails: (lockedAt, sourceIp, lockedUntil) => {
+    const at = lockedAt ? ` at ${lockedAt}` : ''
+    const from = sourceIp ? ` from ${sourceIp}` : ''
+    return at || from ? `Locked${at}${from}, until ${lockedUntil}.` : `Locked until ${lockedUntil}.`
+  },
+  // FR-03: a release restores the ability to attempt authentication and nothing
+  // more; the Administrator never sees, sets or resets the password.
+  unlockPasswordUnchanged: 'Unlocking lets them try to sign in again at once. Their password is not changed.',
+  // The security review, finding L3: the request to unlock can come from whoever has
+  // been guessing the password, so the dialogue asks for the check before the press.
+  unlockCheckRequest: (name) =>
+    `Check that the request to unlock really comes from ${name}. ` +
+    'A lock can mean that someone else has been trying to guess the password.',
+  unlockedTitle: 'Account unlocked',
+  accountUnlocked: (name) => `${name}'s account is unlocked.`,
+  unlockFailedTitle: 'Could not unlock',
+  // The 409: the lock ended, or another administrator released it, since the list
+  // was read. Not a failure of anything the reader wanted, so said as information.
+  unlockNotLocked: 'That account is no longer locked. The list has been reloaded.',
+  // The 403 for the requester's own account. There is no button for it, so this is
+  // reached only if the screen's idea of who is signed in is out of date.
+  unlockRefusedTitle: 'Unlock refused',
+  unlockSelfRefused: 'You cannot unlock your own account. Ask another administrator to unlock it.',
 
   /* ---- D-79's limits and D-85's in-flight refusal, on every screen that can meet one */
   // Login and registration keep the API client's own 429 text (D-26). These are
@@ -491,6 +759,171 @@ export const TEXT = {
   documentDeleteCancel: 'Cancel',
   documentDeleteFailed: 'Could not delete the document',
   documentDeleteNotPermitted: 'You do not have permission to delete documents.',
+  // FR-10's classification section on the detail view (src/components/
+  // Classification.jsx, D-104, D-105). Every AI value is said to be one in words,
+  // never by colour or position alone: "each marked as AI-generated" is the FR's
+  // clause, and a mark a screen reader cannot read is not a mark.
+  classificationHeading: 'Classification',
+  classificationIntro:
+    'The type, the department and some tags are suggested by AI and are marked as such. A suggestion can be confirmed, edited or removed; what a person confirms or edits is kept by later reprocessing.',
+  // `classification` is null: nothing has been suggested. An ordinary state.
+  classificationNone: 'Not classified yet.',
+  classificationNoneHint: 'No type, department or tags have been suggested for this document.',
+  classifyNow: 'Classify now',
+  classifying: 'Classifying…',
+  // The request itself is the wait: the AI reads the opening of the document and
+  // answers in ten to sixty seconds. Announced as well as spun.
+  classifyingStatus: 'Classifying this document. This can take up to a minute.',
+  classifyDone: 'The document has been classified.',
+  classifyFailedTitle: 'Could not classify this document',
+  // FR-10's 422: there is no extracted text to classify. It says what would help.
+  classifyNoText:
+    'No text was extracted from this document, so there is nothing to classify. A text-based or OCR’d copy can be.',
+  // The 503 is NFR-19's notice; this sentence follows the client's fixed 503 text and
+  // says what became of the record: nothing.
+  classifyNotDone: 'The document was not classified, so nothing here has changed.',
+  // The ingestion 429 (D-79), the budget classification shares with upload,
+  // meeting ingestion and reprocess. Named "the upload limit" as the other three
+  // name it, so the one limit is recognisably one.
+  classifyLimitReached: (when) =>
+    `The upload limit has been reached, so this document was not classified. You can try again ${when}.`,
+  classificationFieldType: 'Document type',
+  classificationFieldDepartment: 'Department',
+  // The document's type while the only suggestion is provisional: `doc_type` is
+  // null, and the screen says so rather than showing the held suggestion in its
+  // place (FR-10: "presented for confirmation rather than applied silently").
+  classificationNotAssigned: 'Not yet assigned',
+  classificationSuggestedByAI: SUGGESTED_BY_AI,
+  // D-119 finding 10: an applied department whose `department_applied_by` is "user" is
+  // one a person gave, typed at upload or written through the confirm route, which the
+  // machine's suggestion matched. It is the person's, so it does not read "Suggested by
+  // AI"; the second sentence keeps the machine's assignment beside it (FR-10).
+  classificationGivenByPerson: 'Given by a person',
+  classificationSuggestionMatched: 'The AI’s suggestion matched it',
+  classificationAwaiting: 'Awaiting your confirmation',
+  classificationConfirmed: 'Confirmed by a person',
+  classificationConfidence: (percent) => `${percent}% confidence`,
+  // A provisional value, named beside the "not yet assigned" effective value, so
+  // the reader sees what confirming would apply.
+  classificationSuggestion: (value) => `The AI suggested ${value}`,
+  // A held department suggestion beside a different department already on the
+  // document, which since 10 November stays until a person accepts the suggestion
+  // (D-105's note). The empty-body confirm writes the suggestion over it, and this
+  // says so, so "Confirm" is not read as confirming the department on screen.
+  classificationConfirmReplaces: (current, suggested) => `Confirming replaces ${current} with ${suggested}.`,
+  // A department outside the known departments is discarded, never written
+  // (FR-10's controlled taxonomy growth). The department shown is the document's
+  // own, and this sentence says what happened to the suggestion.
+  classificationDiscardedDepartment: (value) =>
+    `The AI suggested “${value}”, which is not one of the known departments, so it was not applied.`,
+  classificationDiscardedDepartmentUnnamed:
+    'The AI’s department suggestion was not one of the known departments, so it was not applied.',
+  // One request confirms both suggestions as they stand; the edit form sends the
+  // chosen values in one request as well.
+  classificationConfirmAll: 'Confirm type and department',
+  classificationConfirming: 'Confirming…',
+  classificationConfirmedAll: 'The type and department are confirmed.',
+  classificationEdit: 'Edit type and department',
+  classificationEditLegend: 'Edit the type and department',
+  classificationDepartmentHint: 'Leave empty to record no department.',
+  classificationSave: 'Save',
+  classificationSaving: 'Saving…',
+  classificationCancel: 'Cancel',
+  classificationSaved: 'The type and department have been saved.',
+  classificationFailed: 'Could not update the classification',
+  // The 400 on the edit form, whose message is already under the field.
+  classificationCheckFields: 'Check the highlighted field and try again.',
+  // A 403 on any action: the role may not change classifications, so the
+  // controls go, and the sentence says why in words. The record stays.
+  classificationNotPermitted: 'Your role may not change classifications, so these controls are not available.',
+  classificationTagsHeading: 'Tags',
+  // Provenance per tag, in words (FR-10: "tags applied automatically are visually
+  // distinguished from those applied by a person"). A word, not only a border.
+  tagAddedByPerson: ADDED_BY_PERSON,
+  tagSuggestedByAI: SUGGESTED_BY_AI,
+  tagConfirmedAI: `${SUGGESTED_BY_AI}, confirmed by a person`,
+  tagConfirm: 'Confirm',
+  tagRemove: 'Remove',
+  tagReject: 'Reject',
+  // The accessible names, so a column of "Confirm" and "Remove" buttons each name
+  // their tag (WCAG 2.1 SC 2.4.6), starting with the visible word (SC 2.5.3).
+  tagConfirmLabel: (name) => `Confirm tag ${name}`,
+  tagRemoveLabel: (name) => `Remove tag ${name}`,
+  tagRejectLabel: (name) => `Reject suggested tag ${name}`,
+  tagConfirmed: (name) => `“${name}” is now a confirmed tag.`,
+  tagRemoved: (name) => `“${name}” was removed.`,
+  tagRejected: (name) => `The suggestion “${name}” was rejected.`,
+  // Held suggestions: provisional AI tags, and the values the AI proposed below the
+  // confidence threshold in Project, Process or Topic (D-128). They are not the
+  // document's tags until confirmed (FR-10), and the heading says so.
+  suggestedTagsHeading: 'Suggested tags awaiting confirmation',
+  suggestedTagsIntro:
+    'These are suggestions, not tags of the document. Confirm one to add it as a tag, or reject it.',
+  // A value the AI proposed below the threshold that is not in this document's list
+  // for its dimension (D-128; `proposed_tags`). It is no tag of the document's until a
+  // person confirms it. Worded alike whether no tag has that name, a retired one has,
+  // or one carried only by material some reader of the document cannot see has,
+  // because the reader must not be able to tell which (CLAUDE.md §6, invariant 1).
+  // An AI tag applied at or above the threshold is a different thing and is never
+  // called new: it reads as any AI tag reads (`tagSuggestedByAI`). Each sentence
+  // names the proposal's dimension; Topic's words are the ones it had before D-128.
+  proposedTagLabel: (dimension) => {
+    const { one, many } = dimensionWords(dimension)
+    return `New ${one}, not yet in the list of ${many}`
+  },
+  proposedTagConfirmLabel: (dimension, value) => `Confirm new ${dimensionWords(dimension).one} ${value}`,
+  proposedTagRejectLabel: (dimension, value) => `Reject new ${dimensionWords(dimension).one} ${value}`,
+  proposedTagConfirmed: (dimension, value) => `“${value}” was added as a ${dimensionWords(dimension).one} tag.`,
+  proposedTagRejected: (dimension, value) => `The proposed ${dimensionWords(dimension).one} “${value}” was rejected.`,
+  // D-135: a proposal longer than a tag name can be. Confirming creates a tag, whose
+  // name the column limits, so the server refuses it every time (D-133). The page offers
+  // no Confirm on it, and this sentence in the row says why in words, and that Reject
+  // still works. The length is in characters (code points), as the server counts it.
+  proposedTagTooLong: (dimension, length) =>
+    `This ${dimensionWords(dimension).one} has ${COUNT_FORMAT.format(length)} characters, more than the ${TAG_NAME_MAXIMUM_LENGTH} a tag name can have, so it cannot be confirmed as a tag. You can reject it.`,
+  // FR-10's provenance clause and UC-09 A3: a person applies a tag, choosing one the
+  // document's own classification scheme offers (`tag_options`) or typing a new
+  // Topic, the one dimension a person may name a new value in: D-128 lets the AI add
+  // Project and Process values and left this form as it was. What a person adds
+  // reads as a person's tag.
+  tagAddHeading: 'Add a tag',
+  tagAddIntro:
+    'Choose a tag offered for this document, or type a new topic. A tag you add is marked as added by a person.',
+  tagChooseLegend: 'Choose an existing tag',
+  tagDimensionLabel: 'Dimension',
+  tagChooseLabel: 'Tag',
+  // A dimension with nothing to offer is said to have none, rather than shown as an
+  // empty list. It speaks of this document's options only (invariant 1).
+  tagChooseNone: (dimension) => `No ${dimension} tags are offered for this document.`,
+  tagAdd: 'Add tag',
+  // The accessible name says which tag the press applies, after the visible words
+  // (WCAG 2.1 SC 2.4.6, SC 2.5.3).
+  tagAddLabel: (name) => `Add tag ${name}`,
+  tagAdding: 'Adding…',
+  tagNewTopicLegend: 'Type a new topic',
+  tagNewTopicLabel: 'New topic',
+  tagNewTopicHint: `Only a topic can be new; a project or process is chosen from the existing tags. Up to ${TAG_NAME_MAXIMUM_LENGTH} characters.`,
+  tagNewTopicAdd: 'Add topic',
+  // The 201 and the 200 are worded apart: a new link, or a tag the document already
+  // had, which the server confirmed (a held suggestion), restored (one removed) or
+  // left as it was. After either, the tag is among the document's tags.
+  tagApplied: (name) => `“${name}” was added as a tag.`,
+  tagAlreadyApplied: (name) => `“${name}” was already on this document and is among its tags.`,
+  // The `tagging` limit on adding tags (D-79's dated note; the security review's
+  // finding 4, D-105): its own limit, named as the upload limit is named, with when to
+  // try again from Retry-After.
+  tagLimitReached: (when) =>
+    `The limit on adding tags has been reached, so this tag was not added. You can try again ${when}.`,
+  // FR-10's 409, word for word as the server sends it (apps/api/views.py
+  // TOPIC_ALREADY_OFFERED_MESSAGE). Shown from this copy, because the screen never
+  // renders a backend string; tests/documentClassification.test.jsx fails when the two
+  // drift.
+  tagAlreadyOffered: 'A Topic with this name is already offered for this document. Choose it from the tag options.',
+  // Said after it only when the tag the 409 named was found and selected.
+  tagAlreadyOfferedSelected: 'It is now selected under “Choose an existing tag”, so pressing Add tag applies it.',
+  // `input_truncated`: only the opening of a long document was read (D-104). Said
+  // rather than hidden, which is why the record keeps the flag.
+  classificationTruncated: 'Only the opening of this document was read to classify it.',
   // The meeting delete, which is not in the proposal and mirrors the document
   // delete above (src/pages/MeetingDetail.jsx). The control shows only when the
   // meeting detail says `can_delete`; the server checks `manage_meetings` on
@@ -535,7 +968,68 @@ export const TEXT = {
   meetingNotFound: 'That meeting transcript could not be found.',
   meetingSourceText: 'Paste the transcript text',
   meetingSourceFile: 'Upload a transcript file',
+  meetingSourceRecording: 'Transcribe a meeting recording',
   meetingSourceLegend: 'How are you supplying the transcript?',
+
+  /* ---- Recording transcription (D-123) --------------------------- */
+  // Asked once, when the recording option is chosen, so nobody waits through a
+  // long run to learn that it cannot work.
+  recordingChecking: 'Checking whether recordings can be transcribed…',
+  recordingDisabledTitle: 'Transcription is not enabled here',
+  recordingDisabled:
+    'Recording transcription is not enabled on this server. Paste or upload the transcript instead.',
+  recordingUnavailableTitle: 'Transcription is not available right now',
+  recordingUnavailable:
+    'The transcription service is not answering. Try again shortly, or paste or upload the transcript instead.',
+  recordingStatusFailed: 'Could not check whether recordings can be transcribed.',
+  recordingCheckAgain: 'Check again',
+  recordingLabel: 'Meeting recording',
+  recordingHint:
+    `Audio or video, up to ${MAXIMUM_RECORDING_LABEL}. The recording stays in your browser; ` +
+    'it is transcribed a short segment at a time, and nothing is added until you review the draft.',
+  recordingNone: 'No recording chosen yet.',
+  recordingChosen: (name) => `Chosen: ${name}`,
+  recordingBusy: 'Transcribing. The recording cannot be changed until it has finished or is stopped.',
+  transcribeStart: 'Transcribe recording',
+  transcribeStop: 'Stop',
+  transcribeResume: 'Resume transcription',
+  transcribeReading: 'Reading the recording…',
+  transcribeProgressLabel: 'Transcription progress',
+  transcribeProgress: (done, total) => `Transcribed ${done} of ${total} segments.`,
+  transcribeSilent: (count) =>
+    count === 1 ? 'One silent stretch was skipped.' : `${count} silent stretches were skipped.`,
+  transcribeDone: 'Transcription finished. Review the draft below before adding it.',
+  transcribeNothingHeard: 'No speech was found in this recording, so nothing was added to the draft.',
+  transcribeStopped: (done, total) =>
+    `Stopped after ${done} of ${total} segments. The draft so far is kept, and you can resume.`,
+  // Invariant 8: a failed segment discards nothing. The page still holds the
+  // recording and the draft, and Resume sends the failed segment again.
+  transcribeFailedTitle: 'Transcription paused',
+  transcribeUnavailable: (done, total) =>
+    `The transcription service stopped answering after ${done} of ${total} segments. ` +
+    'The draft so far and the recording are kept; resume when it is back.',
+  transcribeDisabledNow:
+    'Recording transcription has been switched off on this server. The draft so far is kept.',
+  transcribeInFlight:
+    'Another transcription of yours is still running, perhaps in another tab. ' +
+    'The draft so far is kept; resume once it has finished.',
+  transcribeRefused: (done, total) =>
+    `A segment of this recording was refused after ${done} of ${total} segments. The draft so far is kept.`,
+  transcribeWaiting: (seconds) =>
+    `The transcription limit was reached. Carrying on in ${seconds} ${seconds === 1 ? 'second' : 'seconds'}…`,
+  // The server is transcribing as many segments as it allows, for other people too.
+  transcribeBusy: (seconds) =>
+    `The transcription service is busy with other recordings. Carrying on in ${seconds} ${seconds === 1 ? 'second' : 'seconds'}…`,
+  transcribeUnreadable:
+    'Your browser could not read this recording. Try an M4A, MP3, WAV or MP4 file.',
+  draftLabel: 'Transcript draft',
+  draftHint: 'Correct anything Whisper misheard. What you add is exactly this text.',
+  draftReviewTitle: 'Review the draft before adding it',
+  draftReviewNotice:
+    'This is a machine transcript. Check names, numbers and dates against the recording: ' +
+    'Whisper writes dates the US way ("March 1, 2027"), and a misheard word becomes a wrong answer later.',
+  draftReviewed: 'I have reviewed and corrected this transcript.',
+  draftSave: 'Save draft as a text file',
   // The transcript file's drop zone states its own state (usability finding 2).
   meetingFileNone: 'No file chosen yet.',
   meetingFileChosen: (name) => `Chosen: ${name}`,
@@ -569,6 +1063,187 @@ export const TEXT = {
   // version, so the stored text is shown exactly as it was supplied.
   transcriptVerbatim:
     'Stored and shown exactly as it was supplied, including any speaker labels and timestamps.',
+
+  /* ---- NFR-15: the one mark on AI-generated content --------------------- */
+  // The convention is FR-10's (src/components/Classification.jsx): words beside the
+  // content, because a mark a screen reader cannot read is not a mark, and a dashed
+  // boundary as a second cue (--border-style-ai in tokens.css). The words come from
+  // SUGGESTED_BY_AI above, the same constant FR-10's entries are built from.
+  // src/components/AiMark.jsx renders them on every surface FR-16 adds.
+  aiSuggested: SUGGESTED_BY_AI,
+  // An extracted action item a person has since changed (`edited`), mirroring
+  // FR-10's "Suggested by AI, confirmed by a person".
+  aiSuggestedEdited: `${SUGGESTED_BY_AI}, edited by a person`,
+  // An action item a person added (`origin` "user"): no AI mark, and the words
+  // FR-10 puts on a tag a person applied.
+  addedByPerson: ADDED_BY_PERSON,
+  // A passage of a meeting's AI-generated summary, where FR-12 shows a source
+  // passage or a search snippet (D-125, choice 1). Said after the mark, from the
+  // reply's flag alone (`ai_generated`, `snippet_ai_generated`): the text of such a
+  // passage is the summary's own sentences with nothing added, so no word in it
+  // says what it is (docs/api-contract.md, "The summary as source material").
+  aiSummaryPassage: 'This passage is from the meeting’s AI-generated summary, not from its transcript.',
+  aiSummarySnippet: 'This snippet is from the meeting’s AI-generated summary, not from its transcript.',
+
+  /* ---- FR-16 meeting summary and action items (NIT3004, D-125) ---------- */
+  // FR-16 Front-End: "A "Summary" panel on the meeting page shows a concise
+  // paragraph-length summary once processing completes." The heading is the FR's.
+  // The panel reads `GET /api/meetings/{id}/summary` apart from the meeting itself,
+  // so a slow or failed read never hides the transcript (src/components/
+  // MeetingSummary.jsx).
+  summaryHeading: 'Summary',
+  loadingSummary: 'Loading the summary…',
+  summaryLoadFailed: 'Could not load the summary',
+  // `status` null and no summary: nobody has asked for one. An ordinary state.
+  summaryNone: 'No summary has been generated for this meeting yet.',
+  // FR-16: "A "Regenerate Summary" button lets the user re-run generation if the
+  // result is unsatisfactory." It reads "Generate Summary", NFR-14's label, while
+  // the meeting has no Ready summary. Offered only when the state says `can_edit`;
+  // the server checks `contribute_content` on every POST (CLAUDE.md §6, invariant 4).
+  summaryGenerate: 'Generate Summary',
+  summaryRegenerate: 'Regenerate Summary',
+  // The POST itself answers at once with 202; the run happens after it.
+  summaryStarting: 'Starting…',
+  // What a new run does to the action items (docs/api-contract.md, "What a run
+  // does", step 3), said beside the button because pressing it removes rows.
+  summaryRegenerateHint:
+    'Regenerating replaces this summary and the extracted action items nobody has edited. Action items a person added or edited are kept.',
+  // 202, `status` "Processing": a run is in flight and the page asks again every
+  // few seconds. Announced in a polite live region as well as shown.
+  summaryProcessing: 'The summary is being generated. It will appear here when it is ready.',
+  // The same while a Regenerate runs: `summary` is still the previous Ready one.
+  summaryRegenerating:
+    'A new summary is being generated. The previous summary is shown below until the new one is ready.',
+  // 202, "Unavailable" with `queued_for_retry`: UC-04 E1, "the system marks the
+  // summary as pending and queues the transcript for a later attempt", and NFR-20,
+  // "the raw transcript must still be stored, retrievable, and flagged for automatic
+  // retry". The retry is hourly, so the page does not poll for it.
+  summaryPendingRetry:
+    'The summary is not available yet. The transcript is stored and searchable, and the summary will be tried again automatically.',
+  summaryRegeneratePendingRetry:
+    'A new summary is not available yet, so the previous summary is shown below. The transcript is stored and searchable, and the new summary will be tried again automatically.',
+  // 200, "Unavailable" with its retries spent: only the button tries again.
+  summaryUnavailable: 'The summary could not be generated. The transcript is stored and searchable.',
+  summaryRegenerateUnavailable:
+    'A new summary could not be generated, so the previous summary is shown below. The transcript is stored and searchable.',
+  // FR-16's 422, word for word as the server sends it in `detail` (apps/api/views.py
+  // SUMMARY_TOO_SHORT_MESSAGE). Shown from this copy, as FR-10's 409 is, because the
+  // screen never renders a backend string; tests/meetingSummary.test.jsx fails when
+  // the two drift. It names no minimum, so no tuned value is restated here.
+  summaryTooShort:
+    'This transcript is too short to summarise. It is stored and searchable, and action items can still be added by hand.',
+  // Announced when a run this page was waiting on finishes.
+  summaryReady: 'The summary is ready.',
+  summaryRequestFailed: 'Could not start the summary',
+  // A check on a run in flight failed. The page stops asking and says so, rather
+  // than leaving "being generated" on screen with nothing behind it (NFR-19's rule
+  // against a wait that never resolves).
+  summaryCheckFailed: 'Could not check whether the summary is ready',
+  // The ingestion 429 (D-79), the budget the summary POST shares with upload,
+  // meeting ingestion, reprocess and classify, named as they name it.
+  summaryLimitReached: (when) =>
+    `The upload limit has been reached, so no summary was started. You can try again ${when}.`,
+  // A 403 on Generate or on any action-item write: the role does not hold
+  // `contribute_content` now, whatever `can_edit` said when the panel loaded. One
+  // permission covers all four writes, so every control goes, in both panels, and
+  // this one sentence is true wherever it is shown.
+  meetingContributionNotPermitted:
+    'Your role may not generate summaries or change action items, so those controls are not available.',
+  // UC-04: the summary carries "a record of the model that produced it and the date
+  // of production". Shown after the mark.
+  summaryModel: (model) => `Model: ${model}`,
+  summaryGenerated: 'Generated:',
+  // `input_truncated`: the transcript was longer than one request carries, and the
+  // summary covers its opening passages (D-125). Said rather than hidden.
+  summaryTruncated: (sent, total) =>
+    `This summary covers the first ${sent} of ${total} passages of the transcript.`,
+  // The same, for a truncated summary that arrived without its two counts: it is
+  // still said, without a number the reply did not carry.
+  summaryTruncatedOpening: 'This summary covers only the opening of the transcript.',
+  summaryDecisionsHeading: 'Decisions',
+  summaryHighlightsHeading: 'Highlights',
+  // UC-04: "Every element of the summary carries a reference to the passage of the
+  // transcript it was drawn from." The reference is a button that opens the
+  // passage's text, as FR-12's citation opens its source passage; this is its
+  // accessible name and the opened panel's label, so a bare "[2]" is never all a
+  // screen reader is given (WCAG 2.1 SC 1.1.1).
+  transcriptPassage: (number) => `Transcript passage ${number}`,
+  // An action item kept through a Regenerate can name a passage the current summary
+  // does not quote, so its number is shown without a button (docs/api-contract.md,
+  // the action item's `passages`). Said once, under the list, where that happens.
+  passageNumberOnly:
+    'A passage number that is not a button names a part of the transcript the current summary does not quote, so its text is not shown here.',
+
+  // FR-16: "An "Action Items" panel lists each extracted item with description,
+  // suggested owner and due date, all editable. Users can edit, delete or manually
+  // add items the extraction missed; deletion requires confirmation."
+  actionItemsHeading: 'Action Items',
+  loadingActionItems: 'Loading the action items…',
+  // The one read both panels share failed; the failure is announced once, under
+  // Summary, rather than twice.
+  actionItemsUnavailable: 'Not available. See the message under Summary.',
+  // UC-04 A1: "The system records the action item section as empty rather than
+  // omitting it." A Ready summary whose run extracted none. It is the AI's finding,
+  // so the sentence says whose it is (NFR-15).
+  actionItemsNoneRaised: 'No action items were raised in this meeting, according to its AI-generated summary.',
+  // Empty for any other reason: no summary yet, or every item deleted.
+  actionItemsNone: 'There are no action items for this meeting yet.',
+  actionItemOwner: 'Owner',
+  // `owner` null. FR-16: "where no confident match exists the item is stored as
+  // unassigned rather than attributed to the wrong person."
+  actionItemUnassigned: 'Unassigned',
+  // `owner_name` and `due_text`: the transcript's own words, kept beside whatever
+  // the server matched or a person chose, so "the facilities team" stays readable.
+  actionItemOwnerSaid: (name) => `Named in the meeting: “${name}”`,
+  actionItemDue: 'Due date',
+  // `due_date` null: the phrase fixed no date, or none was said. Never invented.
+  actionItemNoDate: 'No date set',
+  actionItemDueSaid: (text) => `Said in the meeting: “${text}”`,
+  actionItemEdit: 'Edit',
+  actionItemDelete: 'Delete',
+  // The accessible names, so a column of "Edit" and "Delete" buttons each name
+  // their item (WCAG 2.1 SC 2.4.6), starting with the visible word (SC 2.5.3). A
+  // long description is cut short: the name identifies the item, it does not read it.
+  actionItemEditLabel: (description) => `Edit action item: ${briefly(description)}`,
+  actionItemDeleteLabel: (description) => `Delete action item: ${briefly(description)}`,
+  actionItemEditLegend: 'Edit the action item',
+  actionItemDescription: 'Description',
+  // The owner is chosen from the directory any session may read (D-34), plus
+  // "Unassigned". It is read when a form first opens; `loadingAttendees` is said
+  // while it is, and this where the read failed. The item can still be saved.
+  actionItemOwnerUnavailable: 'The list of people could not be loaded, so another owner cannot be chosen here.',
+  actionItemDueHint: 'Leave empty for no date.',
+  actionItemSave: 'Save',
+  actionItemSaving: 'Saving…',
+  actionItemCancel: 'Cancel',
+  actionItemSaved: 'The action item was saved.',
+  // Save pressed with nothing changed: no request is sent, and the screen says so.
+  actionItemUnchanged: 'Nothing was changed.',
+  // FR-16: "manually add items the extraction missed".
+  actionItemAdd: 'Add action item',
+  actionItemAddLegend: 'Add an action item',
+  actionItemAdding: 'Adding…',
+  actionItemAdded: 'The action item was added.',
+  // FR-16: "deletion requires confirmation". Nothing is sent until the dialogue's
+  // confirm, and the dialogue quotes the item it is about.
+  actionItemDeleteConfirm: 'Delete this action item?',
+  actionItemDeleteBody: 'It is removed from this meeting’s action items. This cannot be undone.',
+  // Said for an extracted item only: a later run starts from the transcript again.
+  actionItemDeleteAiNote: 'If the summary is regenerated, the AI may extract it again.',
+  actionItemDeleteConfirmLabel: 'Delete action item',
+  actionItemDeleting: 'Deleting…',
+  actionItemDeleteCancel: 'Cancel',
+  actionItemDeleted: 'The action item was deleted.',
+  actionItemsFailed: 'Could not change the action items',
+  // The 400 whose message is already under the field it concerns.
+  actionItemCheckFields: 'Check the highlighted field and try again.',
+  // A 404 on a write: the item, or the meeting, is gone or now out of scope. One
+  // message for all of them (CLAUDE.md §6, invariant 1), and the panel is read again.
+  actionItemNotFound: 'That action item could not be found. The list has been reloaded.',
+  // The 409: the meeting holds as many items as one meeting may (MAXIMUM_ACTION_ITEMS_PER_MEETING;
+  // the security review of 12 November, D-125's third note). Said from this copy, without the
+  // server's number, so the page never shows a backend string.
+  actionItemsAtLimit: 'This meeting holds as many action items as it can. Delete one to add another.',
 
   /* ---- FR-12 keyword search --------------------------------------------- */
   searchFieldLabel: 'Search',
@@ -790,4 +1465,262 @@ export const TEXT = {
   dashboardUploaded: 'Uploaded',
   dashboardHeld: 'Held',
   dashboardAsked: 'Asked',
+
+  /* ---- FR-19 knowledge-gap log (NIT3004, Objective 06) ------------------ */
+  // FR-19: "A list, visible to Administrators, of questions the system could not
+  // answer and searches returning no results, grouped by subject with an
+  // occurrence count and the ability to mark an entry as addressed." The screen
+  // (src/pages/KnowledgeGaps.jsx) and FR-14's panel show what an entry carries and
+  // nothing else. No payload names who asked, their role, or why a question was
+  // left out of the log, and none counts what was left out (D-107, D-108), so no
+  // sentence here mentions any of them or implies that they exist.
+  // The page heading, the navigation link and the dashboard panel's heading: the
+  // link and the panel name the screen they open.
+  gapsHeading: 'Knowledge gaps',
+  // D-107: `subject` is the first member's wording, verbatim, and no model writes it.
+  gapsIntro:
+    'Questions the knowledge base could not answer and searches that returned no results, grouped by subject. ' +
+    'Each entry is named by the first question or search in it, worded as it was typed, and counts how many times its subject came up. ' +
+    'Mark an entry addressed once the knowledge base covers it.',
+  gapsListHeading: 'Entries',
+  loadingGaps: 'Loading the knowledge-gap log…',
+  gapsLoadFailed: 'Could not load the knowledge-gap log',
+  // The 200 with an empty list: before the first cycle, or when nothing has gone
+  // unanswered since.
+  noGaps: 'No knowledge gaps have been recorded.',
+  // The server's order, which the screen keeps (docs/api-contract.md).
+  gapsTableCaption: 'Knowledge gaps: open entries first, the most frequent at the top, then addressed entries.',
+  gapsColumnSubject: 'Subject',
+  gapsColumnOccurrences: 'Occurrences',
+  gapsColumnStatus: 'Status',
+  gapsColumnFirstSeen: 'First seen',
+  gapsColumnLastSeen: 'Last seen',
+  gapsColumnAction: 'Action',
+  // One action per entry: "Mark addressed" on an Open entry, "Reopen" on an
+  // Addressed one (PATCH's two values). A column of buttons all named "Mark
+  // addressed" names nothing to someone moving between controls, so each one's
+  // accessible name adds its entry, after the visible words (WCAG 2.1 SC 2.4.6,
+  // SC 2.5.3).
+  gapMarkAddressed: 'Mark addressed',
+  gapReopen: 'Reopen',
+  gapMarkAddressedLabel: (subject) => `Mark addressed: ${subject}`,
+  gapReopenLabel: (subject) => `Reopen: ${subject}`,
+  gapUpdateFailed: 'Could not change the entry',
+  // The PATCH 404: the entry is gone, so the list on screen is out of date and is
+  // read again.
+  gapNotFound: 'That entry no longer exists. The list has been reloaded.',
+  // A 403 on a change or on a cycle: the role does not hold review_knowledge_gaps
+  // now, whatever it held when the list was read. Every action is withdrawn.
+  gapsNotPermitted:
+    'Your role may not review the knowledge-gap log, so its entries cannot be changed and the aggregation cannot be run.',
+  // "Run aggregation now" runs one cycle synchronously (D-107). The hint does not
+  // promise a schedule: whether one is set up is the deployment's, not the screen's.
+  gapsCycleHeading: 'Aggregation',
+  gapsCycleHint:
+    'Questions and searches are added to the log when the aggregation runs. Run it now to add the ones recorded since it last ran.',
+  gapsCycleRun: 'Run aggregation now',
+  gapsCycleRunning: 'Running aggregation…',
+  // Announced as well as shown while the cycle runs: it embeds every new question
+  // and search, so it is not instant.
+  gapsCycleWait: 'Running the aggregation. This can take a minute.',
+  // The 201 in words, from the four counts it carries and no others. Its two
+  // "added" counts are the rows that entered the log (the contract), so nothing
+  // here says how many were read. When any of the four is missing, only
+  // `gapsCycleDone` is said, so no number appears that the reply did not carry.
+  gapsCycleDone: 'Aggregation finished.',
+  gapsCycleQuestions: (count) =>
+    count === 1 ? '1 question that could not be answered' : `${count} questions that could not be answered`,
+  gapsCycleSearches: (count) =>
+    count === 1 ? '1 search that returned no results' : `${count} searches that returned no results`,
+  gapsCycleAdded: (questions, searches) => `Added to the log: ${questions} and ${searches}.`,
+  gapsCycleCreated: (count) => (count === 1 ? '1 new entry started' : `${count} new entries started`),
+  gapsCycleUpdated: (count) => (count === 1 ? '1 existing entry updated' : `${count} existing entries updated`),
+  gapsCycleEntries: (created, updated) => `In the list: ${created} and ${updated}.`,
+  gapsCycleFailed: 'Could not run the aggregation',
+  // The 503 (NFR-19), after the client's own 503 sentence: the cycle rolled back.
+  gapsCycleNotRun: 'No aggregation ran and nothing in the log was changed.',
+  gapOccurrences: (count) => (count === 1 ? '1 occurrence' : `${count} occurrences`),
+  // FR-14's panel (D-69, closed by D-107). Present only when the payload carries
+  // `knowledge_gaps`; there is no copy for its absence, because nothing is shown.
+  dashboardGapsOpen: 'Open entries',
+  dashboardLoadingGaps: 'Loading knowledge gaps…',
+  dashboardNoGaps: 'No open entries to show.',
+  // The contract: the dashboard's filters narrow neither the count nor the list.
+  dashboardGapsNote: 'The open entries that came up most often. The filters above do not apply to this panel.',
+
+  /* ---- FR-10 tag administration (D-119 finding 5; D-128) ---------------- */
+  // FR-10's taxonomy clause: "Tags are deactivated rather than deleted where content
+  // still references them, preserving historical classification", and its CRUD line,
+  // which gives Tags "Create" and "Delete". The screen is src/pages/Tags.jsx, an
+  // Administrator's; the server checks `manage_tags` on every request whatever it
+  // shows (invariant 4).
+  // The page heading and the navigation link, which names the screen it opens.
+  tagsHeading: 'Tags',
+  tagsIntro:
+    'Every Project, Process and Topic tag, active or retired. Deleting a tag that no document or meeting references removes it. A tag that content still references is deactivated instead and shown as retired, so past classification is kept.',
+  // Why a count of 0 does not promise a deletion: held suggestions and removed links
+  // reference a tag without being counted (docs/api-contract.md, `item_count`).
+  tagsCountNote:
+    'The count is the number of documents and meetings carrying the tag. Suggestions awaiting confirmation and tags removed from a document are not counted, but they still reference it, so a tag with a count of 0 may be deactivated rather than deleted.',
+  tagsListHeading: 'All tags',
+  loadingTags: 'Loading the tags…',
+  tagsLoadFailed: 'Could not load the tags',
+  noTags: 'There are no tags to show.',
+  // The server's order, which the screen keeps.
+  tagsTableCaption:
+    'Tags by dimension, then by name, with whether each is active and how many documents and meetings carry it.',
+  tagsColumnName: 'Name',
+  tagsColumnDimension: 'Dimension',
+  tagsColumnState: 'State',
+  tagsColumnItems: 'Documents and meetings carrying it',
+  tagsColumnAction: 'Action',
+  tagStateActive: 'Active',
+  tagStateRetired: 'Retired',
+  // One action per row. A column of "Delete" buttons names nothing to someone moving
+  // between controls, so each one's accessible name adds its tag, after the visible
+  // word (WCAG 2.1 SC 2.4.6, SC 2.5.3).
+  tagDelete: 'Delete',
+  tagDeleteLabel: (dimension, name) => `Delete ${dimension} tag ${name}`,
+  tagDeleteConfirm: (dimension, name) => `Delete the ${dimension} tag “${name}”?`,
+  // What the DELETE will do, said before it is sent. The server decides which from
+  // the references it finds, so the sentence gives both. Since D-128 a retired tag is
+  // not out of reach for good: the AI applying the value with enough confidence, or
+  // a person confirming it as a suggestion, brings it back, and the last sentence
+  // says so rather than promising it can never be applied again.
+  tagDeleteBody:
+    'If no document or meeting references this tag, it is deleted. If any still does, it is deactivated instead: it stays on that content, so past classification is kept, and it is shown as retired and no longer offered for tagging. A retired topic can come back later, if a person confirms it from the AI’s suggestions or names it again, on a document everyone can read; a retired project or process stays retired.',
+  tagDeleteConfirmLabel: 'Delete tag',
+  tagDeleting: 'Deleting…',
+  tagDeleteCancel: 'Cancel',
+  // The 200: deactivated, because content still references it.
+  tagDeactivated: (name) =>
+    `“${name}” was deactivated rather than deleted, because content still references it. It is now retired, and past classification is kept.`,
+  // The 204: nothing referenced it, so it is gone.
+  tagDeleted: (name) => `“${name}” was deleted.`,
+  // The 404: it no longer exists, so its row goes.
+  tagGone: (name) => `“${name}” no longer exists, so it has been taken off the list.`,
+  tagDeleteFailed: 'Could not delete the tag',
+  // A 403 on an add or a delete: the role does not hold `manage_tags` now, whatever it
+  // held when the list was read. Every action is withdrawn, the add form with them, and
+  // the department list's too, since its routes ask for the same code (D-129).
+  tagsNotPermitted: 'Your role may not manage tags or departments, so they cannot be added, deleted or deactivated.',
+
+  // An Administrator adds a value (D-128; FR-10's CRUD line gives Tags "Create"). The
+  // value is vocabulary: offered for every document whatever its audience, and listed
+  // for the AI when it classifies one. The two sentences under the heading say so, and
+  // what the AI does with values outside the list (D-129, which reverses D-128's
+  // creation of values): stated where a person retiring a tag will read it.
+  tagCreateHeading: 'Add a tag value',
+  tagCreateScope:
+    'A value added here is offered for every document, whatever its audience: to everyone who tags a document, and to the AI when it classifies one. Anyone who can read a document can see its name.',
+  tagCreateAiNote:
+    'The AI does not add values of its own. When it classifies a document it assigns values already in this list; a new topic it suggests waits for a person to confirm it, and a project or process outside the list is discarded. A retired topic comes back only if a person confirms or names it again, on a document everyone can read.',
+  tagCreateNameLabel: 'Name',
+  // The server stores a name trimmed, single-spaced and in lower case, so the name the
+  // list shows, and the 201 announces, can differ from the one typed in case alone.
+  tagCreateNameHint: `Stored in lower case. Up to ${TAG_NAME_MAXIMUM_LENGTH} characters.`,
+  tagCreateAdd: 'Add tag value',
+  // The 201, polite: the value as stored, its dimension, and where it is now offered.
+  tagCreated: (dimension, name) => `“${name}” was added as a ${dimension} tag. It is now offered for every document.`,
+  // The 409: a tag of that name is already in the dimension, active or retired. The
+  // tag its `tag_id` names is looked up in the list, read again first, so a retired one
+  // is said to be retired: this form does not bring a retired tag back, and nor does
+  // any other route (D-105's note). Never the reply's `detail`.
+  tagCreateExists: (dimension, name) => `“${name}” is already a ${dimension} tag, so it was not added again.`,
+  tagCreateExistsRetired: (dimension, name) =>
+    `“${name}” is already a ${dimension} tag, and it is retired. A retired tag is not added again here.`,
+  // The title over a 400, a 429 or any other failure of the add. A 429 is the
+  // `tagging` limit adding a tag to a document counts against too, so it is worded as
+  // that one is (`tagLimitReached`), and a 400 points at the field it names
+  // (`classificationCheckFields`).
+  tagCreateFailed: 'Could not add the tag value',
+
+  /* ---- FR-10's department list (D-129) ----------------------------------- */
+  // The scheme's fourth dimension, kept by an Administrator on the Tags page (the user's
+  // decision of 13 November 2026). The list is what the AI may assign and nothing else:
+  // `Documents.department` stays the one field FR-14 and FR-15 read (D-72), and the
+  // upload form still takes any department. The screen is
+  // src/components/Departments.jsx; the server checks `manage_tags` on every request
+  // whatever it shows (invariant 4).
+  departmentsHeading: 'Departments',
+  // The three things the user decided, said where the list is kept: the AI assigns
+  // only listed departments, the upload form takes any, and retiring keeps a department
+  // on its documents (and in FR-14's and FR-15's filters, which read the documents).
+  departmentsSuggestNote: 'The AI assigns a department to a document only from this list.',
+  departmentsUploadNote:
+    'The upload form still accepts any department. One typed there that is not in this list stays on its document, but the AI does not assign it.',
+  departmentsRetiredNote:
+    'A retired department stays on the documents that have it, and in the department filters, but the AI no longer assigns it. A department no document has is deleted rather than retired.',
+  departmentsListHeading: 'All departments',
+  loadingDepartments: 'Loading the departments…',
+  departmentsLoadFailed: 'Could not load the departments',
+  // The retry under a failed read. Its name says which list, after the visible words
+  // (WCAG 2.1 SC 2.5.3), since the tags' own "Try again" can be on the page as well.
+  departmentsRetryLabel: 'Try again to load the departments',
+  noDepartments: 'There are no departments in the list, so the AI assigns none.',
+  // The server's order, which the screen keeps.
+  departmentsTableCaption: 'Departments by name, with whether each is active and how many documents use it.',
+  departmentsColumnName: 'Name',
+  departmentsColumnState: 'State',
+  departmentsColumnItems: 'Documents using it',
+  departmentsColumnAction: 'Action',
+  departmentStateActive: 'Active',
+  departmentStateRetired: 'Retired',
+  // One action per row, named for what the list says it will do: Retire for an active
+  // department documents use, Delete for one no document uses or one already retired,
+  // where deleting is the only change left. The server decides from the documents as
+  // they are when it is asked, so each confirmation gives the other outcome too. Each
+  // accessible name adds the department after the visible word (WCAG 2.1 SC 2.4.6, SC
+  // 2.5.3).
+  departmentRetire: 'Retire',
+  departmentRetireLabel: (name) => `Retire department ${name}`,
+  departmentRetireConfirm: (name) => `Retire the department “${name}”?`,
+  departmentRetireBody:
+    'It stays on the documents that have it, and in the department filters, but the AI no longer assigns it. You can bring it back by adding its name again. If no document has it any more, it is deleted instead.',
+  departmentRetireConfirmLabel: 'Retire department',
+  departmentRetiring: 'Retiring…',
+  departmentRetireFailed: 'Could not retire the department',
+  departmentDelete: 'Delete',
+  departmentDeleteLabel: (name) => `Delete department ${name}`,
+  departmentDeleteConfirm: (name) => `Delete the department “${name}”?`,
+  departmentDeleteBody:
+    'If no document has this department, it is deleted. If any does, it is kept on those documents as a retired department instead, and the AI does not assign it.',
+  departmentDeleteConfirmLabel: 'Delete department',
+  departmentDeleting: 'Deleting…',
+  departmentDeleteFailed: 'Could not delete the department',
+  departmentActionCancel: 'Cancel',
+  // The 200: retired because documents have it, or still retired, for one that was.
+  departmentRetired: (name) =>
+    `“${name}” is retired rather than deleted, because documents have it. It stays on them, and the AI no longer assigns it.`,
+  // The 204: no document had it, so it is gone.
+  departmentDeleted: (name) => `“${name}” was deleted.`,
+  // The 404: it no longer exists, so its row goes.
+  departmentGone: (name) => `“${name}” no longer exists, so it has been taken off the list.`,
+  // A 403 on an add, a retire or a delete. The department routes ask for the same
+  // `manage_tags` as the tag routes, so every action on the page is withdrawn.
+  departmentsNotPermitted: 'Your role may not manage departments or tags, so they cannot be added, retired or deleted.',
+  // Adding a department. A new one is vocabulary, offered to the AI for every document
+  // whatever its audience, as a tag value added here is; the scope sentence says so, and
+  // that a retired department comes back this way, which is the only way back.
+  departmentCreateHeading: 'Add a department',
+  departmentCreateScope:
+    'A new department added here can be assigned to any document, whatever its audience. Adding the name of a retired department brings it back as it was before it was retired.',
+  departmentCreateNameLabel: 'Department name',
+  // The server trims a name and single-spaces it, and keeps its case (D-129: departments
+  // keep their case on documents, unlike tags).
+  departmentCreateNameHint: `Stored with the capitals you type. Up to ${DEPARTMENT_NAME_MAXIMUM_LENGTH} characters.`,
+  departmentCreateAdd: 'Add department',
+  departmentAdding: 'Adding…',
+  // The 201, polite: the department as stored, and what it is now for.
+  departmentCreated: (name) => `“${name}” was added to the department list. The AI can now assign it to any document.`,
+  // The 200: the name was a retired department's, and it is active again.
+  departmentReactivated: (name) => `“${name}” was retired, and has been brought back. The AI can assign it again.`,
+  // The 409: an active department of that name, without regard to case, is in the list.
+  // Named as the list spells it, never by the reply's `detail`.
+  departmentCreateExists: (name) => `“${name}” is already in the department list, so it was not added again.`,
+  // The title over a 400, a 429 or any other failure of the add.
+  departmentCreateFailed: 'Could not add the department',
+  // The 429: the `tagging` limit, which adding a tag counts against too.
+  departmentLimitReached: (when) =>
+    `The limit on adding tags and departments has been reached, so this department was not added. You can try again ${when}.`,
 }

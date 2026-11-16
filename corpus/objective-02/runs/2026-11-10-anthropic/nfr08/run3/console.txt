@@ -1,0 +1,37 @@
+Reset the password of loadtest01@example.com
+Reset the password of loadtest02@example.com
+Reset the password of loadtest03@example.com
+Reset the password of loadtest04@example.com
+Reset the password of loadtest05@example.com
+0 created and 5 reset: 5 Employee account(s), loadtest01@example.com to loadtest05@example.com.
+
+=== the copied run.ps1, attempt 1 of 3 ===
+
+== Waitress's version, from C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.venv\Scripts\python.exe
+stated: waitress 3.0.2 (installed in that venv), 24 threads (-ServerThreads)
+
+== the provider gate, C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-anthropic-verify\corpus\objective-02\runs\2026-11-10-anthropic\load\provider_gate.py, with C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.venv\Scripts\python.exe
+configuration: anthropic, claude-haiku-5-5, voyage-4 at 1024; database kmp_obj02_anthropic_20261110
+health: available
+embedding probe: voyage-4, 1024 wide
+PROVIDER GATE: PASS (anthropic, claude-haiku-5-5, voyage-4 at 1024, both keys present, D-120's values, database kmp_obj02_anthropic_20261110)
+the provider gate passed at 2026-11-10T23:01:41.075Z
+
+== scripts\server_record.py preflight, for http://127.0.0.1:8000
+server         : waitress 3.0.2, 24 threads (--threads on the command line), pid 54188, DEBUG off
+command line   : "C:\Users\mozza\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\python.exe"  "C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.venv\Scripts\waitress-serve.exe" --listen=127.0.0.1:8000 --threads=24 config.wsgi:application
+process start  : 2026-11-10T22:58:00.687Z
+version from   : the Waitress installed in C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.venv, the venv the listening process's command line runs from
+Server header  : waitress (GET /api/), waitress (the DEBUG probe)
+DEBUG          : off: GET /api/__preflight_not_a_route__ -> 404 application/json; a 404 in handler404's JSON, which Django sends only with DEBUG off
+Waitress log   : C:\kmp-measurement\2026-11-10-obj02-anthropic\logs\waitress.log (from -WaitressLog)
+server started : 2026-11-11T09:58:01.441+11:00 (line 4: 2026-11-11 09:58:01,441 INFO waitress Serving on http://127.0.0.1:8000)
+previous run   : C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-anthropic-verify\tests\load\results\nfr08_summary.json, ended 2026-11-11T10:00:50.991+11:00 (when the file was last written)
+REFUSED: Waitress last started at 2026-11-11T09:58:01.441+11:00 (its log's 'Serving on'), before the previous run recorded in C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-anthropic-verify\tests\load\results ended: nfr08_summary.json was written at 2026-11-11T10:00:50.991+11:00 (when the file was last written). The server was not restarted after that run (D-87 decision 1), so its throttle counters and in-flight slots are not empty. Stop it (Ctrl+C), start it again, and run this again.
+PREFLIGHT: REFUSED
+
+REFUSED: scripts\server_record.py preflight exited 2 without its READY line. Its REFUSED lines above say what was observed (D-87 decision 2).
+k6 was not started.
+
+D-89: 5 load-test account(s) retired, rows kept; 0 with a usable password
+the copied run.ps1 ended with exit code 2 after 1 attempt(s)

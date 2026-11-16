@@ -86,6 +86,12 @@
   --border-width: 1px;
   --border-width-strong: 2px;   /* invalid input outline */
   --border-width-emphasis: 4px; /* leading edge of a notice */
+  /* NFR-15: the boundary of AI-generated content is dashed where a person's is
+     solid. One value, read by every surface that shows AI content (FR-10's tags,
+     FR-16's summary and action items, a summary passage in an answer or a search
+     result), so the convention cannot come to differ between them. Always a second
+     cue beside the words "Suggested by AI", never the only one (SC 1.4.1). */
+  --border-style-ai: dashed;
   --control-min-height: 2.75rem; /* 44px: buttons and inputs meet the touch-target guideline */
   --content-max-width: 72rem;
   /* Comfortable reading measure for running prose: an answer's statements, a

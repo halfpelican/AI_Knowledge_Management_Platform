@@ -14,11 +14,69 @@ running FLM server. apps/ai/tests/test_no_live_provider.py asserts both layers.
 import hashlib
 import random
 
+# The SDKs are imported here, inside apps/ai, so tests elsewhere can run a real provider
+# against a scripted endpoint without importing a vendor SDK themselves (CLAUDE.md
+# section 4, apps/ai/tests/test_boundary.py). ``import anthropic`` is the installed SDK,
+# never apps/ai/anthropic.py: Python 3 imports are absolute.
+import anthropic as anthropic_sdk
+import httpx2
+import openai
 from django.conf import settings
 
-from apps.ai.base import EmbeddingResult, Passage, ProviderHealth, Statement, StatementList
+from apps.ai.base import (
+    Assignment,
+    DocumentClassification,
+    EmbeddingResult,
+    ExtractedActionItem,
+    InputType,
+    MeetingSummaryDraft,
+    Passage,
+    ProviderHealth,
+    Statement,
+    StatementList,
+    SummaryElement,
+    TagScheme,
+    TagSuggestion,
+    Transcription,
+)
+from apps.ai.classification import classification_input
+from apps.core.constants import REPOSITORY_TAG_DIMENSIONS
 
 STUB_EMBEDDING_MODEL = "stub-embed"
+# What the stub's classify_document reports (FR-10, D-104): a model name no provider has, one
+# fixed confidence for every assignment, and a department no scheme lists, returned when the
+# scheme has no departments so that a test of the scheme rule has an out-of-scheme value to
+# see without building one.
+#
+# STUB_CONFIDENCE is 1.0, the top of the range, so the stub's assignments are applied whatever
+# CLASSIFICATION_CONFIDENCE_THRESHOLD is. It was 0.9 until D-106's sweep moved the threshold to
+# 0.95 (10 November 2026), and six route, command and hook tests that classify through the
+# default stub then read their applied outcomes as held. A test of the provisional rule builds
+# its own classification, with confidences derived from the threshold
+# (apps/documents/tests/classification_builders.py), and never relies on this value.
+STUB_CHAT_MODEL = "stub-chat"
+STUB_CONFIDENCE = 1.0
+STUB_OUT_OF_SCHEME_DEPARTMENT = "stub department"
+# What the stub's transcribe reports (D-123): a model name no provider has, and a fixed
+# text per segment, numbered by call so a test that sends several segments can see each one's
+# text land in order.
+STUB_ASR_MODEL = "stub-asr"
+
+
+def stub_transcript_text(number: int) -> str:
+    """The stub's text for the ``number``-th segment it transcribes, counting from 1."""
+    return f"Stub transcript of segment {number}."
+
+
+# What the stub's summarise_meeting reports (FR-16, D-125): one narrative sentence naming the title,
+# one decision and one action item with no owner and no deadline, each citing a passage that was
+# sent, so the default reply survives verification and a test of the apply layer sees every part.
+def stub_summary_sentence(title: str) -> str:
+    return f"Stub summary of the meeting {title!r}."
+
+
+STUB_DECISION = "Stub decision."
+STUB_ACTION_ITEM = "Stub action item."
 
 # Port 9 (discard) is closed on every development machine and CI runner, so a
 # connect is actively refused rather than left to time out: about 2 s per attempt
@@ -29,19 +87,42 @@ UNROUTABLE_PROVIDER_URL = f"{UNROUTABLE_PROVIDER_HOST}/v1"
 
 
 class StubAIService:
-    """Deterministic AIService: fixed vectors, fixed statements, no network, a call log."""
+    """Deterministic AIService: fixed vectors, fixed statements, a scheme-derived
+    classification, a numbered transcript per segment, no network, a call log."""
 
     def __init__(
         self,
         dimension: int | None = None,
         available: bool = True,
         detail: str = "stub provider",
+        classification=None,
+        transcription=None,
+        transcription_available: bool = True,
+        summary=None,
     ):
         self.dimension = settings.EMBEDDING_DIMENSION if dimension is None else dimension
         self.available = available
         self.detail = detail
+        # What classify_document returns instead of the scheme-derived default: a
+        # DocumentClassification, or a callable of (title, text, scheme). See the method.
+        self.classification = classification
+        # What transcribe returns instead of the numbered default: a Transcription, or a
+        # callable of (audio, filename). See the method. And what transcription_health reports.
+        self.transcription = transcription
+        self.transcription_available = transcription_available
+        # What summarise_meeting returns instead of the default draft: a MeetingSummaryDraft, or a
+        # callable of (title, passages). See the method.
+        self.summary = summary
         self.embed_calls: list[list[str]] = []
+        # The input_type each embed() call carried (D-116), one entry per call, in step
+        # with embed_calls.
+        self.embed_input_types: list[InputType | None] = []
         self.generate_calls: list[tuple[str, list[Passage]]] = []
+        self.classify_calls: list[tuple[str, str, TagScheme]] = []
+        # One (audio bytes, filename) per transcribe() call (D-123).
+        self.transcribe_calls: list[tuple[bytes, str]] = []
+        # One (title, passages) per summarise_meeting() call (D-125).
+        self.summarise_calls: list[tuple[str, list[str]]] = []
 
     def vector_for(self, text: str) -> list[float]:
         # Seeded from a content hash so the same text embeds to the same vector in
@@ -50,10 +131,11 @@ class StubAIService:
         rng = random.Random(seed)
         return [rng.uniform(-1.0, 1.0) for _ in range(self.dimension)]
 
-    def embed(self, texts: list[str]) -> EmbeddingResult:
+    def embed(self, texts: list[str], *, input_type: InputType | None = None) -> EmbeddingResult:
         if not texts:
             raise ValueError("embed() needs at least one text")
         self.embed_calls.append(list(texts))
+        self.embed_input_types.append(input_type)
         return EmbeddingResult(
             vectors=[self.vector_for(text) for text in texts],
             model=STUB_EMBEDDING_MODEL,
@@ -73,3 +155,133 @@ class StubAIService:
 
     def health(self) -> ProviderHealth:
         return ProviderHealth(available=self.available, detail=self.detail)
+
+    def classify_document(
+        self, title: str, text: str, scheme: TagScheme
+    ) -> DocumentClassification:
+        """FR-10's operation, deterministic and derived from the scheme (D-104).
+
+        By default: the scheme's FIRST document type; its FIRST department, or
+        STUB_OUT_OF_SCHEME_DEPARTMENT (a value no scheme lists) when it has none; one tag per
+        dimension that lists a value, that dimension's first, in Project, Process, Topic
+        order; every confidence STUB_CONFIDENCE; ``model`` STUB_CHAT_MODEL; and
+        ``input_truncated`` from the real ``classification_input``, so a long text is
+        reported cut exactly as a provider would report it. The same scheme gives the same
+        reply in every process.
+
+        **Overriding it.** Pass ``classification=`` to the constructor, or set the attribute
+        on an instance (the autouse ``stub_ai_service`` fixture's, for example). A
+        DocumentClassification is returned as-is for every call. A callable is called with
+        ``(title, text, scheme)`` and its return value returned, so a test can vary the
+        reply per document, or raise ProviderUnavailable to stand in for an outage. Either
+        way the call is recorded in ``classify_calls`` first.
+        """
+        self.classify_calls.append((title, text, scheme))
+        override = self.classification
+        if callable(override):
+            return override(title, text, scheme)
+        if override is not None:
+            return override
+        if not scheme.doc_types:
+            raise ValueError("classify_document() needs a scheme with at least one document type")
+        department = scheme.departments[0] if scheme.departments else STUB_OUT_OF_SCHEME_DEPARTMENT
+        return DocumentClassification(
+            doc_type=Assignment(value=scheme.doc_types[0], confidence=STUB_CONFIDENCE),
+            department=Assignment(value=department, confidence=STUB_CONFIDENCE),
+            tags=tuple(
+                TagSuggestion(dimension=dimension, value=values[0], confidence=STUB_CONFIDENCE)
+                for dimension in REPOSITORY_TAG_DIMENSIONS
+                for values in [scheme.tags.get(dimension, ())]
+                if values
+            ),
+            model=STUB_CHAT_MODEL,
+            input_truncated=classification_input(text)[1],
+        )
+
+    def transcribe(self, audio: bytes, *, filename: str = "segment.wav") -> Transcription:
+        """D-123's operation, deterministic: the n-th call returns ``stub_transcript_text(n)``.
+
+        It does not read TRANSCRIPTION_PROVIDER: the route asks ``apps.ai.transcription_enabled()``
+        before it calls this, and the providers' own refusal is tested against them
+        (apps/ai/tests/test_transcription.py).
+
+        **Overriding it.** Pass ``transcription=`` to the constructor, or set the attribute on an
+        instance (the autouse ``stub_ai_service`` fixture's, for example). A Transcription is
+        returned as-is for every call. A callable is called with ``(audio, filename)`` and its
+        return value returned, so a test can raise ProviderUnavailable or ProviderRefused to stand
+        in for an outage or a refusal. Either way the call is recorded in ``transcribe_calls``
+        first.
+        """
+        self.transcribe_calls.append((audio, filename))
+        override = self.transcription
+        if callable(override):
+            return override(audio, filename)
+        if override is not None:
+            return override
+        return Transcription(text=stub_transcript_text(len(self.transcribe_calls)), model=STUB_ASR_MODEL)
+
+    def transcription_health(self) -> ProviderHealth:
+        return ProviderHealth(
+            available=self.transcription_available,
+            detail="stub transcription" if self.transcription_available else "stub transcription down",
+        )
+
+    def summarise_meeting(self, title: str, passages: list[str]) -> MeetingSummaryDraft:
+        """FR-16's operation, deterministic (D-125).
+
+        By default: one narrative sentence, ``stub_summary_sentence(title)``, citing passage 1;
+        one decision, STUB_DECISION, citing passage 1; no highlights; and one action item,
+        STUB_ACTION_ITEM, with no owner and no deadline, citing the LAST passage sent. Every
+        reference names a passage that was sent, so the default survives verification.
+        ``model`` is STUB_CHAT_MODEL.
+
+        **Overriding it.** Pass ``summary=`` to the constructor, or set the attribute on an
+        instance (the autouse ``stub_ai_service`` fixture's, for example). A MeetingSummaryDraft
+        is returned as-is for every call. A callable is called with ``(title, passages)`` and its
+        return value returned, so a test can vary the reply per meeting, or raise
+        ProviderUnavailable, ProviderRefused or MalformedSummary to stand in for a failure.
+        Either way the call is recorded in ``summarise_calls`` first.
+        """
+        self.summarise_calls.append((title, list(passages)))
+        override = self.summary
+        if callable(override):
+            return override(title, passages)
+        if override is not None:
+            return override
+        if not passages:
+            raise ValueError("summarise_meeting() needs at least one passage")
+        return MeetingSummaryDraft(
+            narrative=(SummaryElement(text=stub_summary_sentence(title), passages=(1,)),),
+            decisions=(SummaryElement(text=STUB_DECISION, passages=(1,)),),
+            highlights=(),
+            action_items=(
+                ExtractedActionItem(
+                    description=STUB_ACTION_ITEM, owner=None, due=None, passages=(len(passages),)
+                ),
+            ),
+            model=STUB_CHAT_MODEL,
+        )
+
+
+def scripted_openai_client(base_url: str, handler) -> openai.OpenAI:
+    """An openai client whose every request ``handler`` answers in-process.
+
+    ``handler`` takes an httpx2 request and returns an httpx2 response, as a MockTransport
+    handler does. For instance, it can stand in for Voyage's /embeddings endpoint in the
+    D-118 route tests. ``max_retries=0``, as production builds it (apps/ai/_openai_compat.py).
+    """
+    return openai.OpenAI(
+        base_url=base_url,
+        api_key="test-key",
+        max_retries=0,
+        http_client=httpx2.Client(transport=httpx2.MockTransport(handler)),
+    )
+
+
+def anthropic_status_error(status: int, message: str) -> anthropic_sdk.APIStatusError:
+    """The APIStatusError the anthropic SDK raises for ``status``, built without a live call."""
+    request = httpx2.Request("POST", "https://api.anthropic.test/v1/messages")
+    response = httpx2.Response(
+        status, json={"type": "error", "error": {"message": message}}, request=request
+    )
+    return anthropic_sdk.APIStatusError(message, response=response, body=None)

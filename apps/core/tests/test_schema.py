@@ -36,7 +36,10 @@ SCHEMA_V1 = {
     "content_chunks": (
         ("chunk_id",),
         {"chunk_id", "source_type", "source_id", "chunk_index", "chunk_text", "embedding",
-         "embedding_model", "embedding_dimension", "created_at", "visible_to_roles"},  # D-17
+         "embedding_model", "embedding_dimension", "created_at", "visible_to_roles",  # D-17
+         # documents 0012, 11 November 2026 (FR-16, D-125): true only for a passage of a
+         # meeting's AI-generated summary (docs/schema-v1.md §1).
+         "ai_generated"},
     ),
     "meetings": (
         ("meeting_id",),
@@ -44,6 +47,23 @@ SCHEMA_V1 = {
          "visible_to_roles"},  # D-16
     ),
     "meeting_attendees": (("attendee_id",), {"attendee_id", "meeting_id", "user_id"}),
+    # FR-16 (D-125), 11 November 2026: meetings 0003. The first five columns of
+    # meeting_summaries are the proposal's field table; the proposal names action_items and
+    # gives it no field table, so its columns are docs/schema-v1.md §1's.
+    "meeting_summaries": (
+        ("summary_id",),
+        {"summary_id", "meeting_id", "summary_text", "status", "generated_at",
+         "run_number", "narrative", "decisions", "highlights", "passages", "model",
+         "input_truncated", "passages_sent", "passages_total", "action_items_extracted",
+         "requested_by", "requested_at", "started_at", "queued_for_retry", "retry_runs",
+         "failure_reason"},
+    ),
+    "action_items": (
+        ("action_item_id",),
+        {"action_item_id", "meeting_id", "summary_id", "description", "owner_id", "owner_name",
+         "due_date", "due_text", "passages", "origin", "position", "edited", "created_at",
+         "updated_at", "created_by", "updated_by"},
+    ),
     "conversations": (
         ("conversation_id",),
         {"conversation_id", "user_id", "title", "last_updated_at"},
@@ -67,15 +87,75 @@ SCHEMA_V1 = {
          # keeps the cited identifier when the chunk is deleted (docs/schema-v1.md §1).
          "chunk_uuid"},
     ),
-    "tags": (("tag_id",), {"tag_id", "tag_name", "dimension", "active"}),
+    "tags": (
+        ("tag_id",),
+        {"tag_id", "tag_name", "dimension", "active",
+         # documents 0010, 10 November 2026 (FR-10, D-105's dated note, the lead's revision): a
+         # Topic brought into use by a name, which is not vocabulary once unlinked.
+         "grown"},
+    ),
+    # documents 0015, 13 November 2026 (FR-10, D-129): the department list the classifier suggests
+    # from, a table of its own because Tags lower-cases names and a department keeps its case.
+    "departments": (("department_id",), {"department_id", "name", "active", "grown"}),
     "content_tags": (
         ("content_tag_id",),
-        {"content_tag_id", "tag_id", "source_type", "source_id", "applied_by", "confirmed"},
+        {"content_tag_id", "tag_id", "source_type", "source_id", "applied_by", "confirmed",
+         # Migration v2, 8 November 2026 (FR-10, D-105): the model's confidence for an AI link,
+         # and whether the link is held for confirmation (docs/schema-v1.md §1).
+         "confidence", "provisional",
+         # documents 0009, 10 November 2026 (FR-10, D-119 finding 3): a link a person removed,
+         # an AI link kept beside the machine's assignment and a person's so that no later run
+         # links it again (docs/schema-v1.md §1).
+         "removed"},
+    ),
+    # Migration v2, 8 November 2026 (FR-10, D-105): out of §2's deferred table and into §1 by
+    # documents 0008, when FR-10 was built. The columns are docs/schema-v1.md §1's.
+    # "proposed_topics" is the column of the field documents 0012 renamed proposed_tags (D-128),
+    # which kept the column's name.
+    "document_analysis": (
+        ("analysis_id",),
+        {"analysis_id", "doc_id", "machine_doc_type", "machine_doc_type_confidence",
+         "machine_department", "machine_department_confidence", "doc_type", "doc_type_outcome",
+         "department_outcome", "user_edited", "proposed_topics", "discarded_suggestions",
+         "model", "input_truncated", "classified_at",
+         # documents 0009, 10 November 2026 (FR-10, D-119 finding 10): whose department it is.
+         "department_applied_by",
+         # documents 0013, 13 November 2026 (FR-10; the requirements audit of D-128, finding A5):
+         # the proposals a person rejected, which no later run proposes, creates or links.
+         "rejected_tags"},
+    ),
+    # Schema v2, 9 November 2026 (FR-19, D-107): out of section 2's deferred table and into
+    # section 1 by retrieval 0004, with its membership and cycle tables. The columns are
+    # docs/schema-v1.md section 1's.
+    "knowledge_gaps": (
+        ("gap_id",),
+        {"gap_id", "subject", "occurrence_count", "status", "first_seen_at", "last_seen_at",
+         "embedding", "embedding_model"},
+    ),
+    "knowledge_gap_items": (
+        ("gap_item_id",),
+        {"gap_item_id", "gap_id", "query_id", "search_id", "added_at"},
+    ),
+    "knowledge_gap_cycles": (
+        ("cycle_id",),
+        {"cycle_id", "started_at", "finished_at", "triggered_by", "queries_considered",
+         "searches_considered", "entries_created", "entries_updated"},
+    ),
+    # 13 November 2026 (FR-03, D-130): out of section 2's deferred table and into section 1 by
+    # accounts 0009. The proposal's five columns, then the four FR-03's clauses need. The columns
+    # are docs/schema-v1.md section 1's.
+    "login_attempts": (
+        ("attempt_id",),
+        {"attempt_id", "attempted_email", "source_ip", "success", "attempted_at",
+         "event", "user_id", "released_by", "locked_until"},
     ),
 }
 
-# schema-v1.md section 2: deferred to NIT3004, must not exist in v1
-SECTION_2_TABLES = {"login_attempts", "document_analysis", "mfa_recovery_codes", "knowledge_gaps"}
+# schema-v1.md section 2: deferred to NIT3004, must not exist in v1. document_analysis left this
+# set on 8 November 2026, when documents 0008 created it for FR-10 (D-105), knowledge_gaps on
+# 9 November 2026, when retrieval 0004 created it for FR-19 (D-107), and login_attempts on
+# 13 November 2026, when accounts 0009 created it for FR-03 (D-130).
+SECTION_2_TABLES = {"mfa_recovery_codes"}
 SECTION_2_USER_COLUMNS = {"mfa_enabled", "mfa_secret"}
 
 OUR_APPS = ("core", "accounts", "documents", "meetings", "retrieval")
@@ -182,8 +262,22 @@ SECTION_5_PLAN = [
     # D-99: the meeting delete permission, Administrator only. Placed where the executor plans
     # it, immediately after accounts 0005, the rule D-51 records.
     ("accounts", "0006_seed_manage_meetings"),
+    # FR-19 (D-107): the knowledge-gap permission, Administrator only, immediately after 0006.
+    ("accounts", "0007_seed_review_knowledge_gaps"),
+    # FR-10's tag administration (D-119 finding 5): manage_tags, Administrator only, immediately
+    # after 0007.
+    ("accounts", "0008_seed_manage_tags"),
+    # FR-03 (D-130), 13 November 2026: the login_attempts table, then the release_account_locks
+    # seed, Administrator only, each immediately after the one before, where the executor plans
+    # them.
+    ("accounts", "0009_login_attempts"),
+    ("accounts", "0010_seed_release_account_locks"),
     ("documents", "0001_initial"),
     ("meetings", "0001_initial"),
+    # D-16: visible_to_roles on Meetings. Planned here, before documents 0002, since documents 0011
+    # depends on it (its backfill reads meetings' visible_to_roles); it was planned after documents
+    # 0010 until then. Its operations are unchanged.
+    ("meetings", "0002_visible_to_roles"),
     ("documents", "0002_content_chunks"),
     ("retrieval", "0001_initial"),
     ("documents", "0003_tags"),
@@ -198,7 +292,32 @@ SECTION_5_PLAN = [
     # every chunk failed"; a document refused over MAXIMUM_CHUNKS_PER_SOURCE was never
     # attempted, and the vocabulary already separated those two kinds (schema-v1.md §3).
     ("documents", "0007_document_status_too_large_to_index"),
-    ("meetings", "0002_visible_to_roles"),  # D-16: visible_to_roles on Meetings
+    # FR-10 (D-105), 8 November 2026: DocumentAnalysis, and ContentTags' confidence and
+    # provisional columns. Immediately after 0007 because that is where its dependency puts it
+    # in the plan, the rule D-51 records.
+    ("documents", "0008_fr10_document_analysis"),
+    # FR-10's tag corrections (D-119 findings 3 and 10), 10 November 2026: ContentTags.removed and
+    # DocumentAnalysis.department_applied_by, immediately after 0008, where its dependency puts it.
+    ("documents", "0009_fr10_tag_corrections"),
+    # Tags.grown (the lead's revision of the same night), immediately after 0009.
+    ("documents", "0010_tag_grown"),
+    # The security review's backfill (D-105's dated note of 10 November 2026, night), immediately
+    # after 0010.
+    ("documents", "0011_grown_marks_withheld_tags"),
+    # D-128, 12 November 2026: DocumentAnalysis.proposed_topics renamed proposed_tags, the column
+    # kept, and each entry given its dimension; then 13 November (the requirements audit of D-128,
+    # finding A5): DocumentAnalysis.rejected_tags. Both follow 0011 on their own branch.
+    ("documents", "0012_proposed_tags"),
+    ("documents", "0013_rejected_tags"),
+    # FR-16 (D-125), 11 November 2026: ContentChunks.ai_generated, also numbered 0012 and also on
+    # 0011, so the app had two leaves. 0014 is the merge migration that joins them (no operations),
+    # then the summary and action-item tables, where the executor plans them.
+    ("documents", "0012_content_chunk_ai_generated"),
+    ("documents", "0014_merge_fr16_and_d128"),
+    # FR-10's department list (D-129), 13 November 2026: Departments, seeded from the departments
+    # documents carry, immediately after 0014, where its dependency puts it.
+    ("documents", "0015_departments"),
+    ("meetings", "0003_fr16_meeting_summaries"),
     # Stage 4 item 8: the fabrication signal invariant 7 needs, which no_answer_reason
     # cannot carry on its own (docs/schema-v1.md §1 QueryLog).
     ("retrieval", "0002_querylog_rejected_count"),
@@ -206,6 +325,9 @@ SECTION_5_PLAN = [
     # Placed where the executor plans it, immediately after retrieval 0002, the rule D-51
     # records for documents 0007.
     ("retrieval", "0003_answercitation_chunk_set_null"),
+    # FR-19 (D-107), 9 November 2026: the knowledge-gap log's three tables, immediately after
+    # retrieval 0003, where its dependency puts it.
+    ("retrieval", "0004_fr19_knowledge_gaps"),
 ]
 
 

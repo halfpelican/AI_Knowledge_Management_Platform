@@ -1,0 +1,25 @@
+Provider gate: PASS (anthropic, claude-haiku-5-5, voyage-4 at 1024, both keys present; database kmp_obj0506_anthropic_20261110)
+Classifying against database 'kmp_obj0506_anthropic_20261110'.
+910d0241-38de-4305-b901-a10bf40b8781  'Employee Leave Policy 2026'                type Policy/applied  department 'Human Resources'/applied  tags 1 applied, 2 held, 0 removed, 0 proposed, 0 discarded  2.248s
+e65ad9ac-df6b-4a48-9d41-9b11af281c3f  'IT Acceptable Use Policy'                  type Policy/applied  department 'Information Technology'/applied  tags 1 applied, 2 held, 0 removed, 0 proposed, 0 discarded  1.554s
+9862c3e2-bd78-4061-a535-2e6f8649d008  'Health and Safety Induction Guide'         type Procedure/applied  department 'Operations'/provisional  tags 1 applied, 2 held, 0 removed, 0 proposed, 0 discarded  2.075s
+b17e1c8a-3f89-4b59-8740-06cec1913505  'Records Management Handbook'               type Procedure/provisional  department 'Legal and Compliance'/provisional  tags 1 applied, 1 held, 0 removed, 0 proposed, 0 discarded  2.589s
+937a4447-e94f-4c63-a025-0bd5afa94057  'Procurement Guidelines'                    type Policy/applied  department 'Finance'/provisional  tags 1 applied, 3 held, 0 removed, 0 proposed, 0 discarded  1.527s
+46f78870-1670-45fb-8a00-1d1b53f2cba1  'Customer Complaints Procedure'             type Procedure/applied  department 'Operations'/provisional  tags 0 applied, 0 held, 0 removed, 1 proposed, 0 discarded  2.392s
+3899e26b-b3dd-4478-9845-093046a99ab8  'Remote Work Agreement Template'            type Policy/applied  department 'Human Resources'/applied  tags 2 applied, 2 held, 0 removed, 0 proposed, 0 discarded  2.281s
+9b5631b9-6175-4830-a353-56b2d0abb817  'Onboarding Checklist for New Starters'     type Procedure/applied  department 'Human Resources'/applied  tags 1 applied, 3 held, 0 removed, 0 proposed, 0 discarded  1.898s
+0d5a2e7b-f85f-4b3c-b1cf-24910a56ac99  'Project Atlas Kickoff Brief'               type Report/provisional  department 'Projects'/applied  tags 2 applied, 1 held, 0 removed, 0 proposed, 0 discarded  2.937s
+f9621aa3-d664-44af-a25e-94734780119e  'Expense Claims Guide'                      type Procedure/provisional  department 'Finance'/applied  tags 1 applied, 1 held, 0 removed, 0 proposed, 0 discarded  2.809s
+ab0dcd1f-0bbf-43d4-8241-58e175a7336b  'Data Privacy Notice'                       type Policy/applied  department 'Legal and Compliance'/applied  tags 1 applied, 1 held, 0 removed, 0 proposed, 0 discarded  2.076s
+6971af02-ec47-4a5f-b3ac-cd481571abdd  'Vendor Register 2026'                      type Report/applied  department 'Finance'/provisional  tags 1 applied, 2 held, 0 removed, 0 proposed, 0 discarded  2.482s
+d703ccb2-c424-4dfe-8b0e-a78a6513b6c3  'Training Schedule Q4'                      type Report/applied  department 'Human Resources'/provisional  tags 0 applied, 1 held, 0 removed, 0 proposed, 0 discarded  2.272s
+fd77e898-d2f3-4af0-8f9f-3d44a52d91b2  'Asset Inventory Melbourne Office'          type Report/applied  department 'Operations'/provisional  tags 0 applied, 3 held, 0 removed, 0 proposed, 0 discarded  2.27s
+862c2739-c8a8-45b2-8d24-4e8434266333  'Project Budget Tracker FY27'               type Report/applied  department 'Finance'/provisional  tags 1 applied, 0 held, 0 removed, 0 proposed, 0 discarded  1.898s
+054d33f3-c2cd-4476-8ad3-6b054886a7ba  'Team Roster and Skills Matrix'             type Report/applied  department 'Human Resources'/provisional  tags 1 applied, 0 held, 0 removed, 0 proposed, 0 discarded  1.742s
+2e101ba3-2d3f-4d92-82b9-53f4da8f2fae  'Meeting Room Booking Rules'                type Policy/applied  department 'Operations'/provisional  tags 1 applied, 3 held, 0 removed, 0 proposed, 0 discarded  2.578s
+a3aee338-142e-4f4e-ba38-2d1b7408cb29  'IT Helpdesk Frequently Asked Questions'    type Procedure/provisional  department 'Information Technology'/applied  tags 1 applied, 1 held, 0 removed, 0 proposed, 0 discarded  1.421s
+49c56238-3aa7-465c-a426-de0bbc739a7d  'Fleet Vehicle Usage Notes'                 type Policy/applied  department 'Operations'/provisional  tags 0 applied, 2 held, 0 removed, 0 proposed, 0 discarded  2.414s
+483170de-7f0f-4750-b259-3fb2f5c22c2b  'Office Relocation Announcement'            type Report/applied  department 'Operations'/provisional  tags 2 applied, 0 held, 0 removed, 0 proposed, 0 discarded  2.094s
+Done: 20 classified, 0 failed.
+Record written to corpus\objective-05\runs\2026-11-10-anthropic\classify\classify.json.
+Claude usage: {'calls': 20, 'input_tokens': 39286, 'output_tokens': 5816, 'replies_without_usage': 0, 'estimated_usd': 0.0068} (written to corpus\objective-05\runs\2026-11-10-anthropic\classify\claude_usage.json)

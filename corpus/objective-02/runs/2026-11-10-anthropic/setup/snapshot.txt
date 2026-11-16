@@ -1,0 +1,7 @@
+Snapshot of kmp_obj02_anthropic_20261110 written to C:\kmp-measurement\2026-11-10-obj02-anthropic\snapshot
+  dump sha256 : 6e514170055c685f32f839a22f3a3d2f7571e98ea69bb2b58150d770ec9fe6fc
+  media       : 23 file(s), 319746 bytes
+  commit      : df73de5c5e33cc0f998257600c2d54923f972c1c
+  FLM         : v0.9.39 (flm version), server v0.9.39
+
+Pass it on: --dump-sha256 6e514170055c685f32f839a22f3a3d2f7571e98ea69bb2b58150d770ec9fe6fc

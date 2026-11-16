@@ -57,6 +57,8 @@ Rules for this file:
   | D-59, in `403087f` | "The other nine name a requirement in the body", and D-57 "found three departures" — counts over sets listed elsewhere or not at all |
   | `frontend/src/pages/Ask.jsx`, in `403087f` | "the four paths enumerated at" `apps/core/constants.py` — a count of a list held in another file |
   | D-52, and `M6-BUILD-PROMPT.md` item 2a | the download link "is built" and its storage path "depends on D-18" — the link was never built, and migration 0006 had closed the storage question on 21 September; and extracted text "is `ContentChunk.chunk_text`", while `ExtractedContent` held it whole |
+  | D-107's build note, and a comment in `apps/retrieval/gaps.py` | "the exclusion fails closed" for a role missing from `EFFECTIVE_ROLES`: which rows it covered. The role was read after the return for no passage of the question's model, from the first build, and after threshold-first's return for nothing admitted, in the first build and again from D-126 (D-107's note of 12 November 2026) |
+  | D-126 | "neither the development questions nor the thirty have one": which kinds of question the two sets hold. Neither holds a conversation turn, and threshold-first decides a follow-up differently from a one-off (D-126's note of 12 November 2026, D-127) |
 
 | ID | Decision | Status | Date |
 |---|---|---|---|
@@ -784,6 +786,31 @@ before Stage 3, which ships more screens.
 >   account. That is step 3 of the user's post-M6 order. The server side is already tested
 >   (`test_login.py`), and the front-end message is step 6's (D-94).
 
+> **Dated note, 13 November 2026: FR-03 is built, and the login decision is made under a row lock
+> (D-130).**
+>
+> - **"A gap that arrived with enforcement" is closed.** This entry recorded that a lockout had no
+>   evidence trail and that a locked user's only remedy was to wait. Now:
+>   - `LoginAttempts` records every lockout, with the address, the source address and the time, and
+>     every release, with the Administrator, the account and the time;
+>   - an Administrator can release a lock from Role management (`POST /api/users/{id}/unlock`).
+> - **"Deferred: FR-03's lockout interface … stays out of the M6 gate" stands for the gate.** FR-03
+>   is NIT3004 work. Its warning, countdown and release were built on 13 November, not for M6.
+> - **The login order this entry fixed had a race,** which the FR-03 design review found (D-130,
+>   security finding H1). The handler decided "locked or not" on a read taken before the password
+>   check, without a lock.
+>   - **Erasing a lock:** five concurrent wrong passwords at a count of 1 all read "unlocked". The
+>     fourth set the lock, and the fifth, finding it set, took it for an expired one and cleared it.
+>   - **A session for a locked account:** a right password that had read "unlocked" got a session
+>     for an account a concurrent request had just locked.
+>   - **The fix:** the decision is now made on the account row read with `select_for_update()` after
+>     the password check. The rules are unchanged:
+>     - a wrong password during a lock is the 401, and the right one is the 403;
+>     - the window is never extended;
+>     - the counter resets with an expired window;
+>     - a success clears both fields.
+> - **Left as written:** the entry's text above, as this file's rules require.
+
 ## D-26 · Stage 2 security review, round two
 
 **Status:** Settled · **Date:** 2026-09-13 · **Amends:** one bullet of D-25
@@ -858,6 +885,36 @@ matters because the 403 is by design the one distinguishable outcome;
 the counter and window cannot be set by a caller; no path authenticates except the
 login view; no mass assignment through the role change; and the two 403 bodies,
 though different, are only ever visible to someone who already holds the permission.
+
+> **Dated note, 13 November 2026: the locked-account message names the release again (D-130).**
+> Finding 4 removed "An Administrator can release it." because FR-03's release route did not exist,
+> so the promise was false in that build.
+>
+> - **What changed.** FR-03 is now built. `POST /api/users/{id}/unlock` releases a lock (D-130), so
+>   the message may name it. FR-03's front-end clause asks for it: "The lockout message states that
+>   an administrator can unlock the account, so a locked-out user has a route forward."
+> - **Both texts now name it:**
+>   - the server's `ACCOUNT_LOCKED_MESSAGE`: "This account is temporarily locked after repeated
+>     failed sign-ins. Try again later, or ask an administrator to unlock it.";
+>   - the client's `TEXT.accountLocked`, which the sign-in page shows for the 403: "This account is
+>     temporarily locked after too many failed sign-in attempts. Try again when the timer ends, or
+>     ask an administrator to unlock it."
+> - **Finding 4's defect could return in a new place.** The sign-in page now has a locked state of
+>   its own, entered when its own count of failures reaches five (D-130 decision 1). There the page
+>   does not know whether the address has an account, or whether the server locked it. So that
+>   text is worded to be true for any address: "If this address has an account, it may be locked
+>   for up to 15 minutes, and an administrator can unlock it sooner" (D-130, security finding C).
+> - **Finding 2's "there is no release route"** is overtaken: an Administrator can now release any
+>   other account's lock. The throttle stays, because anyone can still lock any account with five
+>   requests.
+>   - **Except for the only Administrator.** Nobody can release that account's lock, because FR-03
+>     forbids releasing one's own and there is no other Administrator.
+>   - So for that account, finding 2 still stands as written: five requests every 15 minutes keep
+>     it out (D-130's residue, from the pre-PR security review).
+> - **What stands.** The ceiling, the throttle, and the counting of attempts during a lock are
+>   unchanged. The residue "a lock does not end an existing session" stands too, since the release
+>   touches no session.
+> - **Left as written:** finding 4 and the residue above, as this file's rules require.
 
 ## D-27  NO_ANSWER_MESSAGE wording — "This question cannot be answered from the available knowledge base."  2026-09-14
 **The PROVISIONAL marker is removed: the proposal never specifies this string.**
@@ -983,6 +1040,22 @@ administration surface, and is out of the M6 gate.
 - Because both roles hold it, the permission refuses nobody in the shipped seed. It
   is enforcement machinery with its own test, not a demonstrable restriction; say
   that plainly rather than presenting it as access control that does something.
+
+**Dated note, 11 November 2026: the 403 came first among the answers, but not before the body
+was read (D-124).** This entry says the permission "precedes the signature, size and title checks
+exactly as §7.2 `validateUpload()` orders them". Its rationale quotes §7.2's reason: "it is the
+cheapest rejection".
+
+- **The order of the answers was true. The cheapness was not.** Until D-124, every signed-in
+  session holding the CSRF cookie had its whole request body parsed by DRF's CSRF check while it
+  authenticated, before this 403. A multipart upload was parsed whole, with its files spooled to
+  temporary files. A JSON transcript was read and parsed if it was within Django's 2.5 MiB
+  `DATA_UPLOAD_MAX_MEMORY_SIZE`, and refused unread if it was larger. The security review of
+  `feat/FR-09-recording-transcription` found it on 11 November 2026.
+- **D-124 makes the reason true.** The CSRF check reads its token from the header only, so nothing
+  reads the body before this 403, and Waitress's `--max-request-body-size` caps what is received.
+- **`DocumentsView`'s docstring** cited this entry for "before the body is parsed at all". It is
+  corrected, with the same date.
 
 ## D-31 · A token is a whitespace-delimited word
 
@@ -1280,6 +1353,12 @@ Mitigations, all of which cost nothing:
   live system is unavailable; they do not accept a description.
 - The AMD driver version the NPU depends on is recorded, after a
   `VIDEO_SCHEDULER_INTERNAL_ERROR` bugcheck under FLM load on 21 September 2026.
+
+**Dated note, 10 November 2026: superseded by D-113 and D-114.** The premise, "The team has no
+budget", no longer holds. The user's Max plan includes $100 of Claude API credits each billing
+cycle, so the `anthropic` provider is funded and brought into use (D-113). The demonstration is no
+longer tied to one machine: M8 can be hosted on any device with the platform in place (D-114). What
+this entry records about the past stays true where it was written.
 
 ## D-36 · FastFlowLM pinned to v0.9.39, and what the health check has to prove
 
@@ -1848,6 +1927,32 @@ question-then-follow-up set, which does not exist.
 >   two extra documents. The measured reason comes from step 5's run: the nine threads with
 >   history, cold and spelled out, then the HTTP check.
 > - **FR-13 is partial at the gate** (D-91).
+
+**Dated note, 12 November 2026: FR-13 end to end is measured, and this entry's boundary is read
+again on each provider.** The header's "Unmeasured: yes", and "FR-13 end to end is still
+unmeasured … which does not exist" in the caveat, were true when written. They are overtaken, and
+left as written.
+
+- **The set exists:** `corpus/objective-02/threads.json`, frozen on 1 November (D-86).
+- **It has been run end to end:** on FLM on 3, 8 and 9 November (D-91's note, D-103, D-111), and on
+  `anthropic` on 10 and 11 November (D-112's notes of 11 and 12 November).
+- **The history block holds the schema.** In those runs every with-history run conformed on its
+  first attempt, on both providers. The one run that never conformed was asked cold, with no
+  history block: t04, on 3 November (`corpus/objective-02/runs/2026-11-03/fr13-before.md`).
+- **"Holds for subject nouns and not for references into an answer's wording", per provider.** The
+  follow-ups whose referent is named in the first question are t01 to t05, and t06 and t07 asked by
+  the Administrator.
+  - **On FLM, it did not hold for subject nouns.** The rule read "history works" for none of them
+    on 3 November, for t04 on 8 November, and on 9 November for t02 and t04 in phase 3 and for t04
+    in phase 4. D-91's note splits the cause, and D-112 records the clause as partial.
+  - **On `anthropic`, it held for subject nouns.** Each of them read "history works" on Sonnet
+    5.5's draw and on every Haiku 5.5 draw.
+  - **A reference into an earlier answer.** t09, the previous-answer thread, was not resolved on
+    FLM. On `anthropic` it matched on every draw, but through retrieval: the joined questions
+    retrieved D17, which names the facilities team itself. The earlier answer was not used.
+- **The decision stands on both providers:** prior questions only. A referent that is only in an
+  earlier answer reaches the prompt only if retrieval supplies a passage naming it, and no frozen
+  follow-up tests that case. FR-13's status is in D-112's notes.
 
 ## D-43 · A conversation's title is optional on create and derived from its first question
 
@@ -3567,6 +3672,36 @@ only, and D-88 left "M8's hosting and database" open. The user has settled the h
   - how NFR-03's TLS scan is met. This entry put HTTPS out of scope for the alpha, and moved that
     scan to round 2.
 
+**Dated note, 10 November 2026: the 7 November note's hosting is superseded by D-114.** M8 can be
+hosted on any device with the platform in place. The note's reason, that FastFlowLM needs this
+laptop's NPU and there is no budget for Claude, fell with D-113. The laptop with FLM remains one
+valid host. The three open points above stay open, and D-114 restates them. This entry's M6 alpha
+decision is unchanged.
+
+**Dated note, 12 November 2026: `npm audit` finds nothing, which closes the last "Not covered"
+point.** The five advisories were five development packages: `vite`, `vitest` with its
+`@vitest/mocker`, and two that jsdom and PostCSS bring in, `undici` and `source-map-js`. All
+seventeen advisories behind them were published by 27 October, and the lockfile had not changed
+since 28 September, so these are the same five that were counted on 1 November.
+
+- **No flagged code reached the alpha.** None of the five sits under the three runtime
+  dependencies (`react`, `react-dom`, `react-router-dom`): `npm audit --omit=dev` finds nothing on
+  the old lockfile either. The alpha serves the built `frontend/dist`. The Vite and Vitest
+  advisories concern their development servers, three of them only on Windows, where development
+  runs. `source-map-js` is build tooling. `undici` is jsdom's HTTP client, and the suite makes no
+  requests through it, since it stubs `fetch` and `XMLHttpRequest` (D-62).
+- **What changed.** In `frontend/package.json`, `vite` 8.3.0 → 8.3.5 and `vitest` 5.0.2 → 5.0.5,
+  still exact pins (`frontend/.npmrc` sets `save-exact=true`). In the lockfile only, `undici`
+  8.11.2 → 8.12.3 and `source-map-js` 1.2.1 → 1.2.2. All four are patch releases. D-62 lists the
+  versions of 28 September.
+- **Not the versions `npm audit fix --force` offers.** It would install vite 8.3.8, published the
+  day before, and vitest 5.1.0, a minor release of 2 November. The versions taken are the newest
+  that clear every advisory and had been published for at least two weeks. The install ran with
+  `--before=2026-10-29`, so nothing newer entered the lockfile; the newest version in it is
+  `magic-string` 1.4.5, published 27 October.
+- **Checked on Node 24.16.0.** `npm audit` finds nothing. Lint and build pass. `npm test` passes
+  470 tests in 42 files, on two runs, the same count as on the old versions.
+
 ## D-65 · Every query parameter passes a DRF serializer; D-54 is settled
 
 **Status:** Settled by the user · **Date:** 2026-10-05 · **Settles:** D-54 · **Stage:** 5
@@ -3904,6 +4039,12 @@ reason, is a deviation; the same clause unrecorded is a defect.
   FR-14 work to revisit, scoped as FR-19 then specifies.
 - **The evidence FR-19 will read.** `QueryLog` and `SearchLog` already record every question and
   search with its result count (FR-12's gap-evidence clause), so nothing is lost by deferring.
+
+**Dated note, 10 November 2026: FR-19 supplies the table** (D-107). On `feat/FR-19-knowledge-gaps`
+the dashboard reads `KnowledgeGaps` for a role holding `review_knowledge_gaps`, which migration
+`accounts 0007` gives the Administrator alone: its payload gains `knowledge_gaps`, the number of
+Open entries and up to `DASHBOARD_GAP_ITEMS` of them in the list's order. An Employee's payload keeps
+its keys. This entry's deferral ends when that branch merges to `main`.
 
 ## D-70 · FR-14's filters and totals: department narrows documents, the total counts "Indexed" by type, each type filters on its own date
 
@@ -4844,6 +4985,77 @@ user's asks can hold: one Waitress thread.
 >   - **Where it does matter.** The record only matters when the user leaves the empty thread and
 >     then presses "Start a new topic". A test for that was added, and the break then failed it.
 
+**Dated note, 10 November 2026 (night): keyword search gets a scope, `search`, at 30 a minute, and a
+term an upper bound of 500 characters.** The user's decision on the FR-19 security review's L1 and
+L2 (D-107's note; D-119). Keyword search was unthrottled and bounded a term from below only. So one
+Employee could log terms as fast and as long as they liked into `SearchLog`, which FR-19's cycle
+reads. That opened a timing signal on the shared NPU (L1) and let them put chosen text at the top of
+the Administrator's gap list (L2).
+
+- **`SEARCH_THROTTLE_RATE = "30/min"`,** per user, through `ScopedRateThrottle` like the other
+  scopes. Search spends no NPU time, so the rate is not about the NPU, as the ask rate is; it bounds
+  how fast one user can fill the log. The page sends one request per submitted term, so a person
+  searching never meets it, and no load test calls search.
+- **`MAXIMUM_SEARCH_LENGTH = 500`,** the question's ceiling, refused with FR-12's 400 before any
+  query runs and before any row is written, and refused in the browser first with a message that
+  names it. `search` applies it and `search_total` does not: FR-19's cycle recounts terms logged
+  before the bound existed, and a refusal there would roll back that cycle and every later one. The
+  cycle's own cut to `MAXIMUM_QUESTION_LENGTH` (D-107's note, M1) stays for those rows.
+- **What it does not do:** a user can still repeat one term 30 times a minute. The rate slows L2 and
+  shrinks L1's signal, but does not remove either, and occurrence counts still count rows rather
+  than people, which Objective 06's "accurate occurrence count" requires.
+- **A throttled search is DRF's 429 with `Retry-After`,** and the search page shows the client's
+  rate-limit text with Try again.
+
+**Dated note, 10 November 2026 (night): applying a tag gets a scope, `tagging`, at 30 a minute.**
+The user's decision on finding 4 of the security review in D-105's dated note of the same night (the
+tag corrections). `POST /api/documents/{id}/tags` was unthrottled, and each new Topic name a person
+types there becomes a permanent `Tag`. The Topic is grown, so it joins the scheme of every document
+whose whole audience reads a source carrying it: every document, when it was typed on one every
+role reads. The scheme is what `apps/ai/classification.py` lists in each classification prompt,
+every value with no cap, and what the detail offers as `tag_options`.
+
+- **`TAGGING_THROTTLE_RATE = "30/min"`,** per user, through `ScopedRateThrottle` like the other
+  scopes, on that route alone (`DocumentTagsView`). As with search, the rate is not about the NPU,
+  since applying a tag calls no provider; it bounds how fast one user can grow the vocabulary. The
+  page sends one request per tag a person adds, so a person tagging by hand never meets it, and no
+  script or load test calls the route.
+- **Where the 429 sits.** DRF checks throttles in `initial()`, after authentication and the
+  permission classes and before the view's method runs. The route's one permission class is
+  `IsAuthenticated`, so an anonymous request is still 401, and past the rate the 429 comes before
+  the scoped 404 and `contribute_content`'s 403. It is the same answer for every id, so it
+  discloses nothing, as the search throttle answers before any query runs. Every request the
+  throttle admits counts, a 400, 403, 404 or 409 included, and a throttled apply writes nothing.
+- **The other tag routes stay unthrottled.** Confirming or removing a link and rejecting a proposal
+  create no `Tag`. Confirming a proposed Topic can create one, but only from a proposal the
+  classifier made, and classification is reached over HTTP only through upload, reprocess and
+  classify, which share the `ingestion` budget.
+- **What it does not do.** One user can still create 30 Topics a minute. Each stays in the scheme,
+  and so in every later prompt and `tag_options` its audience reaches, until an Administrator
+  retires it, and a person naming a retired Topic brings it back (D-105's finding 6, accepted).
+  Capping the Topics the prompt lists would change the classifier's input, so it stays deferred.
+- **Tested** in `apps/api/tests/test_throttles.py`, from both roles: past the rate an apply is
+  DRF's 429 with `Retry-After` and writes no `Tag` and no link; past it, an id naming nothing, an
+  Administrator-only document and a readable document the caller may not tag all get the same 429,
+  where below it they were told apart by 404 and 403; and one user's budget is not another's, each
+  way round. `test_configuration.py`'s walk of every route lists this one in the `tagging` scope.
+- **The interface's 429 text** (`6b3e565`). The classification panel answered every 429 in
+  classify's words, "The upload limit has been reached". The Add tag control now says the limit on
+  adding tags was reached, with when to try again from `Retry-After`, and classify keeps its own
+  words. Tested in `frontend/tests/documentClassification.test.jsx`, for the chooser and for a new
+  topic.
+
+**Dated note, 13 November 2026: `POST /api/tags` spends the same budget (D-128).** The `tagging`
+scope is no longer "on that route alone".
+
+- **What spends it now:** an Administrator adding a vocabulary value through `POST /api/tags`
+  (D-128) spends the same per-user budget, 30 a minute, shared with `POST /api/documents/{id}/tags`.
+- **Where its 429 sits:** that route's permission classes include `manage_tags`, so its 429 comes
+  after the 401 and the 403.
+- **What stays unthrottled:** its GET. The other tag routes stay unthrottled.
+- **What the classifier creates (D-128)** is bounded by the `ingestion` budget instead.
+- **Tested** in `test_configuration.py`'s walk and in `apps/api/tests/test_fr10_tag_create.py`.
+
 ## D-80 · The conversation list leaves out a thread nobody has asked anything in
 
 **Status:** Settled by the user · **Date:** 2026-10-21 · **Stage:** 5 item 5 · **Closes:** D-58,
@@ -5506,6 +5718,17 @@ slice of item 9 that the measurement needs · **Concerns:** Objective 03, NFR-08
 >   shows that window exists. For a retry the server's in-flight 429 closes it; for a removal
 >   nothing does.
 
+**Dated note, 11 November 2026: the serve command gains a body cap (D-124).** Decision 2's command
+becomes
+`waitress-serve --listen=127.0.0.1:8000 --threads=24 --max-request-body-size=54525952 config.wsgi:application`.
+
+- **What the flag does:** it caps any request body at `MAX_REQUEST_BODY_BYTES`. Waitress's default
+  is 1 GB.
+- **What it does not touch:** anything a measurement measures. `scripts/server_record.py` neither
+  records nor checks the flag. Its `D85_COMMAND`, the command the scripts print when they refuse a
+  server, now includes it.
+- **Runs recorded before this date** were served without it.
+
 ## D-86 · FR-13 is measured end to end on frozen two-turn threads, built beside Objective 03 and never ahead of it
 
 **Status:** Settled by the user · **Date:** 2026-10-27 · **Stage:** 5 item 6 · **Concerns:**
@@ -5717,6 +5940,348 @@ D-85, D-86, Objective 03, NFR-08, NFR-09
 > - **Nothing checks that the server was restarted before the HTTP check.**
 > - **The restart check rests on file times.**
 
+**Dated note, 11 November 2026: the listening process is found three ways, because Windows can
+report a serving socket's state wrongly.** The user asked for this on main after NFR-08's runs on
+`anthropic` (#88).
+
+- **The fault,** on this laptop (Windows 11, build 26300). `scripts/server_record.py` found the
+  listening process with `Get-NetTCPConnection -State Listen` only. With Waitress answering on
+  127.0.0.1:8000:
+  - the TCP table reported its listening socket in state 0, which is undefined, or 1 (Closed),
+    where 2 is Listen;
+  - `netstat -ano` showed no line for it, or CLOSED;
+  - the socket's own row was there throughout, with the Waitress PID.
+
+  So decision 2's pre-flight refused D-85's server as nothing listening, and the closing check
+  marked measured runs INVALID. NFR-08's runs 1 and 5 on `anthropic` were measured and marked
+  INVALID that way, and runs 2 and 4 were refused before k6
+  (`corpus/objective-02/runs/2026-11-10-anthropic/nfr08-anthropic.md`, #88).
+- **The fault can refuse a run or invalidate it. It cannot pass one.** A lookup that finds
+  nothing fails the pre-flight and the closing check alike.
+- **The lookup now** (`listening_process`), in this order:
+  1. the Listen row, as before, taken when its process's command line can be read;
+  2. `netstat -ano`: the one PID with a LISTENING line on the port;
+  3. the port's own socket row, local port and remote port 0, whatever state is reported, when
+     exactly one live process with a readable command line owns such a row. PID 0 and PID 4 never
+     qualify.
+
+  Two candidates in step 2 or 3 is not found. When none of the three names a process that can be
+  read, they are tried again every 10 s for about 60 s. Then the Listen row's own answer is
+  returned, as it always was.
+- **Where it came from.** NFR-08's run 6, the valid one, ran a run-folder copy of the script with
+  this lookup, which the user approved before it ran (#88, `154915c`). This is that copy's lookup,
+  with what follows added.
+- **Recorded:** which lookup found the process, and what each try saw:
+  - in the pre-flight record: `process_found_by` and `process_lookup`;
+  - on the pre-flight's console: `found by`;
+  - in the summary's `server_at_end`: `found_by` and `lookup`.
+- **What does not change.** Decision 2's rules, and the built note's two checks beyond D-87:
+  - the server and its thread count are still read from the found process's command line;
+  - the process at the end must still be the one observed before the run. Another PID, no
+    process, or a "Serving on" line inside the window still marks the run INVALID.
+- **Tried on the laptop on 11 November,** with `python -m http.server` on scratch ports. The
+  record is `corpus/objective-02/runs/2026-11-11-listener-lookup/`, and its `README.md` gives
+  each trial.
+  - **At 14:44, with the fault present.** With the listener answering, the Listen row and netstat
+    showed nothing for it, and the port's own row named its PID, in state 0 and then 1. Step 3
+    found it, in 2.8 s. With the listener stopped, the lookup gave up after 53.8 s.
+  - **A Listen row naming PID 0, and at times a netstat LISTENING line naming it too,** were seen
+    in that trial and in the one before it, at 14:42:
+    - beside an answering listener's own row, and again just after it stopped (14:42);
+    - about 40 s after a listener had stopped (14:44).
+
+    PID 0 is not a process. Step 1 takes a Listen row only with a readable command line, so such
+    a row does not end the search. A first draft of this change took any Listen row that named a
+    PID, and returned PID 0 in the 14:42 trial. It was corrected before it was committed.
+  - **At 19:15, after the laptop had restarted at 17:07, the fault did not show.** The committed
+    script (`421f9ed`) found the listener by its Listen row in 1.5 s. Netstat and the port's row
+    named the same PID, in state 2. With nothing listening, it said so after 50.8 s.
+  - **Only the 19:15 trial has a console on file.** The two earlier ones were not teed, and the
+    README quotes the session's console for them.
+  - **Whether a restart clears the fault is not known.** It is one observation.
+- **Tests,** in `apps/ai/tests/test_server_record_preflight.py`. Each fails under at least one
+  deliberate break of the script, named after the list:
+  - `test_netstat_names_the_pid_listening_on_the_port_and_no_other`: S5;
+  - `test_netstat_gives_one_listening_pid_or_none`: S2, S5;
+  - `test_the_ports_own_row_gives_one_owner_or_none`: S3, S7, S11;
+  - `test_a_listen_row_is_taken_first_and_nothing_else_is_asked`: S13;
+  - `test_a_listener_with_no_listen_row_is_found_through_netstat`: S1;
+  - `test_when_netstat_misreports_too_the_ports_own_row_names_the_process`: S1;
+  - `test_the_lookup_is_tried_again_before_it_says_nothing_is_listening`: S1, S4;
+  - `test_nothing_listening_is_said_only_after_the_wait_and_in_the_same_words`: S1, S4;
+  - `test_a_listen_row_and_a_netstat_line_naming_pid_0_do_not_end_the_search`: S1, S10;
+  - `test_a_process_no_lookup_can_read_is_returned_after_the_wait_as_it_always_was`: S1, S4, S10;
+  - `test_off_windows_the_process_is_not_looked_up_and_nothing_waits`: S6;
+  - `test_the_record_says_which_lookup_found_the_process`: S8;
+  - `test_the_closing_check_says_how_it_found_the_process`: S12;
+  - `test_another_process_found_by_a_fallback_still_makes_the_run_invalid`: S14;
+  - `test_no_process_found_at_the_end_still_makes_the_run_invalid`: S9.
+
+  The breaks:
+  - S1: only the Listen row is asked, as before this note;
+  - S2: netstat picks one of two LISTENING processes;
+  - S3: the port's row picks the first of two owners;
+  - S4: no second try;
+  - S5: netstat's port is matched as a suffix, so 18000 reads as 8000;
+  - S6: the fallbacks run off Windows;
+  - S7: the port's row is asked for in state Listen only;
+  - S8: the record does not say which lookup found the process;
+  - S9: no process at the end reads as the same process;
+  - S10: a Listen row is taken without a readable command line;
+  - S11: PID 0 and PID 4 may own the port's row;
+  - S12: the closing check does not record how the process was found;
+  - S13: a Listen row is never taken;
+  - S14: any process at the end reads as the same process. The existing
+    `test_another_process_at_the_end_makes_the_run_invalid` fails under it too.
+- **The runbook's own check** has the same fault. Its step 4 runs
+  `Get-NetTCPConnection -LocalPort 8000 -State Listen` and expects nothing. That can print
+  nothing while a server listens, and a leftover row with `OwningProcess` 0 after one stops. The
+  runbook now says so and names `scripts\server_record.py` as the check.
+- **Not covered:**
+  - **Why Windows misreports the state.** It is observed, not explained, and another build may
+    differ.
+  - **A listener whose process cannot be read,** such as another user's or PID 4's. No lookup is
+    credited with it, and the answer is the one given before, after the wait.
+  - **The PowerShell and netstat commands themselves in the test suite.** The tests script each
+    lookup's output. The commands ran on the laptop only, in the trials above.
+  - **The committed script against the fault, with a console on file.** The 14:44 trial ran the
+    script as committed, and its console was not kept. By 19:15 the fault had gone.
+  - **`run.ps1`,** which still has no automated test (the built note's first "Not covered" line).
+  - **NFR-08 again with this code.** Run 6's copy had the same lookup without the record fields.
+  - **Measured runs before 11 November.** They are not re-examined for this fault.
+
+**Dated note, 12 and 13 November 2026: no lookup takes a process while another is seen on the
+port, or while a lookup could not be read.** The requirements audit on `25f6179`, run on main after
+#93 had merged (D-126's note of 12 November records why it ran late), found B1. The audit and the
+security review on `80a9301`, this note's branch, ran before its pull request, and so did the
+re-audit on `bbbda8c`, on 13 November. Their findings on the lookup, and what was done:
+
+- **B1: a state the lookup merged on 11 November would pass.** Its port-row step dropped every
+  owner whose command line could not be read before counting. So with D-85's Waitress and an
+  unreadable process on the port (another user's, an elevated one, PID 4), it would return Waitress
+  and the pre-flight would be READY. That was found by reading the code, and not reproduced. The
+  Listen-row lookup alone returned the unreadable process when its row came first, and the
+  pre-flight refused. The user chose a stricter lookup.
+- **B2: the Listen row can name one of two listeners.** The audit on `25f6179` raised it, and the
+  trial at `89f71f0` below showed it with the real commands. Windows let two servers listen on one
+  address and port.
+  - The Listen row named one of them, a different one from try to try, and step 1 took it.
+  - netstat listed both PIDs LISTENING.
+  - The port's CIM rows showed one, because the two rows share one key.
+- **Step 1's rule is the session's extension, confirmed by the user.** The question first put to
+  the user covered the port-row step only. After the trial at `89f71f0` the session applied the
+  same rule to step 1, using netstat. The audit and the security review on `80a9301` then found
+  that step 1 did not read the port's rows. A second listener on another address has a row of its
+  own, which netstat can miss when the state is misreported. The user confirmed the extension on
+  12 November, and chose that step 1 read netstat and the port's rows.
+- **A source that could not be read: the user's decision of 13 November.** Until then, when one of
+  netstat and the port's rows could not be read, the lookup went on with the other. That was the
+  session's design, not the user's, and the re-audit on `bbbda8c` named what it could pass over:
+  - with the port's rows unread, step 1 took the Listen row on netstat alone, which misses a
+    second listener on another address when the fault hides it from netstat (the security
+    review's case on `80a9301`);
+  - with netstat unread, step 1 took the Listen row, and step 2 a sole owner, on the port's rows
+    alone, which show one of two listeners on one address (B2).
+
+  The user chose that nothing is taken when either cannot be read. A lookup tool that keeps
+  failing then blocks a measured run until it is fixed: a false refusal, the safe direction.
+- **The port's rows query reports its own failures** (the re-audit on `bbbda8c`, found by reading
+  the code). It ran with `-ErrorAction SilentlyContinue` and always exited 0, and empty output read
+  as `[]`. So a query that failed inside PowerShell read as "no rows", and with the misreported
+  state, which hides a listener from the Listen row and from netstat, the lookup could still end in
+  "nothing is listening". It now runs inside `try { … } catch { exit 3 }`, with `-ErrorAction
+  Stop` on both CIM calls. A non-zero exit, empty output and output that is not JSON are each
+  unread. A process that has gone still reads as gone: `Get-CimInstance` with a filter that matches
+  nothing returns nothing and does not fail. netstat's exit code is checked as well.
+- **The lookup now** (`listening_process`, `sole_owner`). Every try reads the Listen row, netstat's
+  LISTENING PIDs, and every live owner of a remote-port-0 row on the port, readable or not.
+  1. **The Listen row** is taken when its process's command line can be read, netstat and the
+     port's rows were both read, and neither shows another process on the port: netstat by a PID
+     other than 0 listed LISTENING, the port's rows by another live owner.
+  2. **Otherwise** one process is taken only when netstat and the port's rows were both read, it
+     is the only candidate, it owns a row, and its command line can be read. PID 0 is never a
+     candidate, and a row whose owner is gone is not read as an owner.
+
+  A readable process the Listen row named, which step 1 did not take because another process was
+  seen or a source could not be read, is not returned at the end. A process the Listen row names
+  whose command line cannot be read is returned after the wait with its PID and no command line,
+  as before these checks. It carries a note unless netstat and the port's rows were both read and
+  showed no candidate (B4's last case). Two tests assert it with a note:
+  `test_a_second_process_on_the_port_that_nobody_can_read_is_not_passed_over` and
+  `test_a_process_nobody_can_read_is_returned_after_the_wait_with_a_note_that_says_so`. Either way
+  a refused lookup gives no command line, and the pre-flight refuses.
+- **B4: what the lookup says when it gives up.**
+  - With netstat or the port's rows unread, `note` reads "whether anything holds port N is not
+    known", whatever else was seen. The audit on `80a9301` asked for it where nothing was seen, and
+    the user's decision of 13 November made it the note whatever was seen.
+  - Otherwise, with a candidate seen and none taken, it reads "no single process with a readable
+    command line holds port N", with what was seen.
+  - Otherwise the note is the Listen row's own:
+    - "nothing is listening on port N";
+    - that the Listen row names process 0, which is not a server (D-112's note of 12 November);
+    - the Listen-row lookup's own error, when PowerShell could not be started, timed out, exited
+      non-zero or printed something that is not JSON;
+    - none, beside the Listen row's PID, when that process's command line could not be read and
+      neither netstat nor the port's rows showed a candidate.
+
+  So "nothing is listening" is said only when netstat and the port's rows were both read and
+  neither saw a process. The runbook asks this script whether the port is free, so "nothing is
+  listening" in any other case would be wrong in the unsafe direction.
+- **B8: the wait.** The last try starts within 60 s of the first, so the whole wait is about a
+  minute: 51.4 to 61.4 s in the trials below. A slower try leaves room for fewer tries, five on
+  13 November where there were six on 12 November. A lookup that times out makes it longer. The
+  note of 11 November's "about 60 s" meant this.
+- **B6: run 4.** The note of 11 November counts NFR-08's run 4 among the runs the fault refused.
+  `nfr08-anthropic.md` records that another session traced run 4's refusals to a `runserver` holding
+  port 8000 that morning, unverified. Run 4's console shows "nothing is listening" with a `waitress`
+  Server header on each attempt, which fits either cause. That note should have carried the caveat.
+- **B5: the runbook.** Section 0's step 4 used `$py` and a relative script path, which section 1
+  sets later. It now spells both out, and says which notes mean the port is free.
+- **Unchanged:**
+  - decision 2's rules;
+  - the built note's two checks beyond D-87: the log's start must not predate the listening
+    process's, and the process listening at the end must be the one observed at the start;
+  - process 0, which `_listen_row_process` reports as unknown (D-112's note of 12 November).
+- **Tried on the laptop,** with `python -m http.server` on scratch ports and the fault absent: the
+  laptop had been up since 17:07 on 11 November. The record is
+  `corpus/objective-02/runs/2026-11-12-listener-lookup/`:
+  - **at `89f71f0`** (`console.txt`): one listener was found by its Listen row in 1.2 s. With two,
+    step 1 took one of them (B2). With none, "nothing is listening" after 59.6 s;
+  - **at `b40a425`** (`console-2.txt`), step 1 reading netstat: one listener in 1.0 s. With two,
+    nothing was taken after six tries, 60.4 s. With none, 57.2 s;
+  - **at `79fe3d8`** (`console-3.txt`), step 1 reading netstat and the port's rows: one listener in
+    1.8 s. With two, nothing was taken after six tries, 61.4 s, and the note names both PIDs. With
+    none, 57.4 s;
+  - **at `011d342`** (`console-4.txt`, 13 November), the lookup as it now is: one listener in
+    3.1 s. With two, nothing was taken after five tries, 55.7 s, and the note names both PIDs. With
+    none, "nothing is listening" after 51.4 s;
+  - **the rows query alone, at `011d342`** (`check_rows_query.py`, `rows-query-check.txt`, 13
+    November), through real PowerShell. With nothing on the port it exited 0 and printed `[]`,
+    read as no owner. With one listener it named it, in state 2. Made to fail by asking for a CIM
+    class that does not exist, it exited 3 and was read as unread. The same failing query as the
+    script had it at `bbbda8c`, loaded from git, exited 0, printed `[]`, and was read as no owner.
+
+  No trial had a source that could not be read, so a refusal on an unread source is shown by the
+  tests only.
+- **Tests,** in `apps/ai/tests/test_server_record_preflight.py` unless another file is named. Every
+  test in the file's lookup section, and the two listening-process tests in
+  `apps/ai/tests/test_fr13_measurement_scripts.py`, fails under at least one deliberate break of
+  the script. The breaks are listed after the table, which was generated from the break runs on
+  `011d342`. The three files that load the script pass unbroken: 220 tests. They are
+  `apps/ai/tests/test_server_record_preflight.py`, `apps/ai/tests/test_fr13_measurement_scripts.py`
+  and `apps/api/tests/test_request_body_bound.py`.
+
+  | Test | Fails under |
+  |---|---|
+  | `test_netstat_names_the_pid_listening_on_the_port_and_no_other` | T5 |
+  | `test_netstat_gives_every_listening_pid_or_says_why_not` | T5 |
+  | `test_netstat_that_exits_non_zero_is_unread` | T32 |
+  | `test_the_ports_own_rows_give_every_live_owner` | T3, T7, T11, T19, T20, T31, T34 |
+  | `test_a_rows_query_that_exits_non_zero_is_unread` | T30 |
+  | `test_one_process_is_taken_only_when_it_alone_holds_the_port` | T2, T15, T16, T21 |
+  | `test_nothing_is_taken_when_either_source_could_not_be_read` | T18, T29 |
+  | `test_a_listen_row_is_taken_when_no_other_process_is_seen_on_the_port` | T1, T13 |
+  | `test_a_listen_row_is_not_taken_when_a_source_cannot_be_read` | T1, T4, T13, T23, T27, T28, T29, T33 |
+  | `test_a_readable_listen_row_is_not_taken_while_the_ports_rows_show_another_owner` | T1, T2, T13, T17, T22, T23, T26 |
+  | `test_a_readable_listen_row_is_not_taken_while_netstat_lists_another_listener` | T1, T2, T4, T13, T15, T17, T22, T23 |
+  | `test_a_second_listener_that_goes_away_lets_the_listen_row_be_taken` | T1, T2, T4, T13, T22 |
+  | `test_a_listener_with_no_listen_row_is_found_when_netstat_and_its_row_agree` | T1, T24 |
+  | `test_when_netstat_misreports_too_the_ports_own_row_names_the_process` | T1, T25 |
+  | `test_a_second_process_on_the_port_that_nobody_can_read_is_not_passed_over` | T1, T2, T4, T10, T17 |
+  | `test_two_readable_listeners_are_never_reported_as_nothing_listening` | T1, T2, T17 |
+  | `test_the_lookup_is_tried_again_before_it_says_nothing_is_listening` | T1, T4, T25 |
+  | `test_nothing_listening_is_said_only_after_the_wait_and_in_the_same_words` | T1, T4 |
+  | `test_a_listen_row_and_a_netstat_line_naming_process_0_do_not_end_the_search` | T1, T21, T25 |
+  | `test_only_rows_naming_process_0_are_reported_as_the_listen_row_reports_them` | T1, T4, T21 |
+  | `test_a_process_nobody_can_read_is_returned_after_the_wait_with_a_note_that_says_so` | T1, T4, T10, T16, T17 |
+  | `test_a_lookup_that_could_not_be_read_never_says_nothing_is_listening` | T1, T4, T18, T27 |
+  | `test_off_windows_the_process_is_not_looked_up_and_nothing_waits` | T6 |
+  | `test_the_record_says_which_lookup_found_the_process` | T8 |
+  | `test_the_closing_check_says_how_it_found_the_process` | T12 |
+  | `test_another_process_found_by_a_fallback_still_makes_the_run_invalid` | T14 |
+  | `test_no_process_found_at_the_end_still_makes_the_run_invalid` | T9 |
+  | `test_process_0_is_never_recorded_as_the_listening_process` (`test_fr13_measurement_scripts.py`) | T35 |
+  | `test_a_real_listening_process_is_recorded_as_before` (`test_fr13_measurement_scripts.py`) | T13 |
+
+  - T1: only the Listen row is asked: the lookup returns its answer at once.
+  - T2: with two candidates, the first is taken.
+  - T3: an owner nobody can read is dropped from the port's rows, as before this note.
+  - T4: no second try.
+  - T5: netstat's port is matched as a suffix, so 18000 reads as 8000.
+  - T6: the fallbacks run off Windows.
+  - T7: the port's rows are asked for in state Listen only.
+  - T8: the record does not say which lookup found the process.
+  - T9: no process at the end reads as the same process.
+  - T10: a Listen row is taken without a readable command line.
+  - T11: the command lets process 0 own the port's row.
+  - T12: the closing check does not record how the process was found.
+  - T13: a Listen row is never taken.
+  - T14: any process at the end reads as the same process. The existing
+    `test_another_process_at_the_end_makes_the_run_invalid` fails under it too.
+  - T15: a process netstat names is not a candidate.
+  - T16: a sole owner nobody can read is taken.
+  - T17: the note for a candidate seen and not taken is never written.
+  - T18: rows that could not be read are treated as no rows, in `sole_owner`.
+  - T19: a row whose owner is gone counts.
+  - T20: process 0, if the command printed it, is kept as an owner.
+  - T21: netstat's process 0 is a candidate.
+  - T22: a readable Listen row is taken while another process is seen on the port.
+  - T23: a Listen row rejected for a second process, or for a source that could not be read, is
+    returned at the end.
+  - T24: a process the fallbacks take is always credited to the port's row.
+  - T25: a process the fallbacks take is always credited to netstat.
+  - T26: step 1 ignores the port's own rows.
+  - T27: the note for a lookup that could not be read is never written.
+  - T28: step 1 takes the Listen row although a source could not be read, as before the user's
+    decision of 13 November.
+  - T29: a sole owner is taken on the port's rows alone when netstat could not be run, as before
+    that decision.
+  - T30: a rows query that exits non-zero reads as no rows.
+  - T31: a rows query that prints nothing reads as no rows.
+  - T32: netstat's exit code is not checked.
+  - T33: the note for a candidate seen replaces the note for a lookup that could not be read.
+  - T34: the rows query keeps going past its own errors (`-ErrorAction SilentlyContinue`), as at
+    `bbbda8c`.
+  - T35: the Listen row's process 0 is taken as the listener (`_listen_row_process`, D-112's note of
+    12 November).
+
+  T7, T11, T19 and T34 change only the PowerShell command, which no test runs, so they are caught by
+  assertions on the command's text. `rows-query-check.txt` runs the command itself.
+- **Not covered:**
+  - **B3: the port's own row cannot tell a misreported listener from a socket that truly is not
+    listening.** A live process holding a bound or closed row on the port counts as holding it.
+    Alone, with a readable command line, it is taken, and at the closing check its PID reads as the
+    same process. Beside a listener, it makes the lookup refuse: a false refusal, the safe direction.
+  - **B7: the other callers of `observe`.** `scripts/conversation_http_check.py` and
+    `scripts/ingest_objective02.py` wait about a minute when no process is taken. They can now
+    refuse on a contradiction that a process found by a fallback shows, where a failed lookup only
+    warned.
+  - **A port that PID 4 also holds,** for instance through http.sys, is now refused. That is a false
+    refusal, the safe direction.
+  - **A second listener on the same address that the fault hides from netstat.** The port's CIM rows
+    show one of two listeners on one address. If the fault hid the other from netstat too, the
+    visible one would be taken.
+  - **A lookup tool that keeps failing blocks a measured run.** If netstat or the port's rows cannot
+    be read on every try, the lookup gives up with "not known", whatever holds the port. That is
+    the user's choice of a false refusal over a false pass.
+  - **The Listen-row query's own failure** still reads as no Listen row: it runs with
+    `-ErrorAction SilentlyContinue`, as it has since D-87, and was not changed here. On its own it
+    cannot have a process taken or "nothing is listening" said, since both need netstat and the
+    port's rows read.
+  - **The closing check compares PIDs only** (`finalise`). A process the Listen row names at the end
+    whose command line cannot be read is returned with its PID. If that PID is the one observed
+    before the run, the run reads as the same process, even when netstat or the port's rows could
+    not be read and the note says that whether anything holds the port is not known. #93's lookup
+    and `finalise` on main did the same, and no test covers it. Whether the closing check should
+    require more is the user's to decide; the confirmation audit on `66916cd` raised it.
+  - **This code against the misreported state.** The trials ran with the fault absent, and the tests
+    script each lookup's output. The trials of 11 November showed the fault with the earlier
+    lookup.
+  - **`corpus/objective-02/runs/2026-11-11-listener-lookup/try_listener_lookup.py`** calls
+    `_netstat_listening_pid` and `_port_row_owner`, which this change replaced. It runs only against
+    `421f9ed`'s script.
+  - **A measured run with this code,** NFR-08's included.
+
 ## D-88 · The M6 alpha serves `kmp_demo_20261101`, restored from item 6's snapshot, from a worktree of its own
 
 **Status:** Settled by the user · **Date:** 2026-11-01 · **Stage:** 5 item 9 · **Closes:** D-84's
@@ -5779,6 +6344,16 @@ it was measured.
   threads and demonstrating them (D-40). A second restore resets everything, so it may only come
   before that point.
 - **M8's hosting and database** (D-64).
+
+**Dated note, 13 November 2026: the alpha moved to Anthropic, on a new database (D-131).** By the
+user's decision of that day, a database keeps the provider it was set up with, and the alpha runs on
+Anthropic. So it no longer serves `kmp_demo_20261101`. It serves `kmp_alpha_20261113`, built fresh
+from item 6's corpus under Anthropic (D-131; `corpus/objective-02/runs/2026-11-13-alpha-anthropic/`).
+
+- **This entry's database is unchanged, and kept.** Its `.env` is kept beside the alpha's as
+  `.env.flm-20261101`, and the FLM alpha ran `8598d19`.
+- **The worktree, venv and `.env` arrangement above still holds.**
+- **`docs/alpha-deployment.md`** now describes the anthropic alpha.
 
 ## D-89 · The load-test accounts are retired: unusable on the measurement database, deleted elsewhere
 
@@ -6111,6 +6686,20 @@ stored.
   failure" this decision's table names.
 - **Step 7 starts from this baseline,** and its "after" runs the same threads again.
 
+**Dated note, 10 November 2026: settled by D-112.** Three measured attempts were not adopted (D-103,
+D-111). FR-13's follow-up clause is accepted as partial for NIT3003, as a recorded deviation, and the
+generation-side lever moves to NIT3004. "Work continuing" no longer describes it, for the FLM build.
+
+**Dated note, 12 November 2026: the header's "not yet run" is overtaken, and the default build is
+measured.** The header's "Measured reason: step 5 of the user's post-M6 order, not yet run" was
+true on 2 November. Step 5 ran on 3 November (the note of that day above), and the header is left
+as written.
+
+- **This entry and its notes describe the FLM build,** as D-112 does. Nothing has changed on FLM.
+- **On `anthropic`, the default since D-122,** FR-13 was re-audited on 11 November, then measured
+  on two further Haiku 5.5 draws and a Haiku HTTP check that evening (D-112's notes of 11 and
+  12 November). Its state there is in those notes, not here.
+
 ## D-92 · §8 condition 4: D-60's decline is accepted, for 9508442..e81c6e6 only
 
 **Status:** Settled by the user · **Date:** 2026-11-02 · **Concerns:** CLAUDE.md §8 condition 4,
@@ -6180,6 +6769,87 @@ FR-01, FR-02, FR-04, FR-05, FR-06, FR-08, FR-09, FR-12, D-62, D-61 gap 13
 
 **Not covered**, and still open: S4's duplicated server logic (`views.py:1039` and `:1583`;
 `:673-682` and `:1062-1067`) and the "50 MB" literal at `views.py:151`.
+
+**Dated note, 12 November 2026: FR-12's "a search field available from every page" is tested
+across the routes (#95).** Step 6 left this clause at ⚠️ (`docs/stage-5-front-end-clauses.md`,
+FR-12 row 1) because no test walked the routes. #95 (`a668a08`) walks them, reusing the walk #91
+wrote for FR-13's "reachable from any page" (D-112's note of 12 November on the draws). It changed
+files under `frontend/tests` and `docs/stage-5-front-end-clauses.md`, and no file under
+`frontend/src`.
+
+- **What is tested,** in `frontend/tests/headerSearchField.test.jsx`:
+  - **The walk.** The whole application, signed in through `tests/fakeApi.js`, at every path in
+    `frontend/src/App.jsx`'s route table and at `/`, as an Employee and as an Administrator.
+    - At `a668a08` those paths are `/`, `/login`, `/register`, `/components`, `/dashboard`,
+      `/admin`, `/upload`, `/documents`, `/documents/:docId`, `/meetings`, `/meetings/:meetingId`,
+      `/search`, `/ask`, `/403`, `/admin/roles`, `/admin/knowledge-gaps` and `/admin/tags`.
+    - On the page each visit ends on, the banner landmark holds exactly one search landmark. That
+      landmark holds exactly one input labelled `TEXT.searchFieldLabel`, and the input is not
+      disabled.
+    - The field is looked for in the banner, so neither the search screen's own field nor the
+      component sheet's sample can stand in for it.
+  - **Using the field as an Administrator:** a term submitted from `/admin/tags` shows the Search
+    screen at `/search` for that term. As an Employee, from `/dashboard`, this was already tested
+    by step 6's `search.test.jsx` :: refuses one character from the header field with a message
+    naming the minimum, sends nothing, and searches at two.
+  - **The walk is held to the route table** by `askNavLink.test.jsx` :: has a case, as each role,
+    for every path in the route table of src/App.jsx. The cases are in
+    `frontend/tests/routeWalk.jsx`, which `askNavLink.test.jsx` and `headerSearchField.test.jsx`
+    import.
+- **The breaks** are named in `b0be6d9`'s message, as this entry requires. Every new test failed
+  under at least one of them.
+- **Not covered:**
+  - **Whether the field can be seen.** jsdom applies no stylesheet.
+  - **A visitor who never signed in.** One has no field, by design (`HeaderSearch` in
+    `frontend/src/App.jsx`). `logout.test.jsx` asserts there is no search landmark after logging
+    out.
+  - **A term submitted from every page.** A term is submitted from `/dashboard` as an Employee
+    and from `/admin/tags` as an Administrator.
+  - **An address no route matches.**
+  - **A disabled field, in the test that submits a term.** `fireEvent` sets a disabled input's
+    value all the same, so that test passes with the field disabled. The walk asserts `disabled`
+    itself.
+- **Records this overtakes, left as written.** Each records the clause as having no front-end
+  test on its day:
+  - **D-61's verdict:** its table row "Search field on every page | satisfied (no automated
+    test)", and its gap 9, for FR-12's search field.
+  - **D-62's list** of what the suite does not cover: "the search field on every page". D-62's
+    own note of 2 November had already said that `docs/stage-5-front-end-clauses.md` supersedes
+    that list.
+  - **D-90's verdict:** row 12's "Nothing front-end tests the search field on every page…", and
+    finding S1, for FR-12's search field.
+    - Step 6 tested the other items in row 12's list: the grouping, the two-character minimum,
+      the Search screen and the partial-match label.
+    - The rest of what S1 names is tracked in `docs/stage-5-front-end-clauses.md`.
+  - **`docs/demonstration-script.md`'s answer to "What is not verified by any test?"**, derived
+    from `frontend/tests` on 2 November: its item "Search, its field and its results (the
+    two-character minimum, the grouping, the partial-match label)". Step 6 tested the field's
+    two-character minimum, the grouping and the partial-match label, and #95 the field on every
+    page. The script is not edited by this note.
+
+**Dated note, 12 November 2026 (later): the note above understates what is tested of "whether the
+field can be seen".** It lists that as not covered, because jsdom applies no stylesheet. That is
+true of #95's walk, but not of the suite.
+
+- **What is tested.** Since 8 November `tests/stylesheets.js` reads the stylesheets as text
+  (`c2d7fce`). `tabOrder.test.jsx` uses it to fail on any keyboard stop that a rule hides, on the
+  screens it walks: `/login`, and, as an Employee, `/dashboard`, `/documents`, `/upload`,
+  `/meetings` and `/ask`. The header search field is one of those stops on every one of them
+  except `/login`.
+- **The evidence:** breaks V1 and V2, named in `0ca090c`'s message.
+  - V1 appended `.search-field--header { display: none; }` to `src/components/SearchField.css`.
+    `tabOrder.test.jsx` failed its dashboard, documents, upload, meetings and ask cases, and #95's
+    walk passed.
+  - V2 did the same to FR-13's Ask link, with `.app-nav a[href="/ask"] { display: none; }` in
+    `src/App.css`, with the same result.
+- **Still not covered:**
+  - the field hidden on a route `tabOrder.test.jsx` does not walk;
+  - the field hidden as an Administrator;
+  - whether the field is laid out on screen, which no test sees.
+- **The demonstration script** now says this in its answer to "What is not verified by any test?"
+  (`0ca090c`), and the script is edited this time.
+- **What is overtaken.** The note above's bullet "Whether the field can be seen" is overtaken by
+  this note, and left as written.
 
 ## D-95 · NFR-08's miss is a local-model baseline, not a dropped NFR
 
@@ -6690,3 +7360,9261 @@ and D-56 stays open.
 console record, which quotes ~25 frozen questions — while studying the overlap method, before
 drafting. The drafts avoided those topics and the identifier-only automated check is the control.
 On the record; whether that console file should be redacted from the repository is open.
+
+## D-104 · FR-10's classification is the fourth AI operation, `classify_document`, in its own module
+
+**Status:** Settled by the user · **Date:** 2026-11-08 · **Concerns:** CLAUDE.md §4,
+docs/ai-provider.md §1, `apps/ai/base.py`, invariant 10, D-19, D-33 · **Stage:** Objectives 05 and 06
+(NIT3004), due 13 November 2026 · **Builds on:** D-33 part 1, which deferred FR-08's classification
+hand-off to FR-10
+
+**The question.** CLAUDE.md §4 said the AI service exposes "exactly three operations", and
+`apps/ai/base.py` said classification "gets its own method then". NIT3004 asked for it on 8 November
+(Objective 05). The lead chose the shape; the alternatives are at the end.
+
+**Decision.**
+
+- **A fourth operation,** `classify_document(title: str, text: str, scheme: TagScheme) ->
+  DocumentClassification`, on `AIService`, implemented by `FLMService`, `AnthropicService` and the
+  test stub. CLAUDE.md §4, `docs/ai-provider.md` §1 and `apps/ai/base.py` now name the operations as a
+  list rather than a count ("exactly the operations listed here"), with the date, so the next
+  operation leaves no stale number behind. CLAUDE.md §4 also names `apps/ai/base.py`, the file the
+  contract has always lived in (it said `apps/ai/provider.py`, which never existed).
+- **One structured request returns the type, the department and the tag suggestions together,**
+  FR-10's Server-End clause: "a single structured request issued at upload returns the classification,
+  the summary and key points, and the tag assignments together, at the cost of one call rather than
+  three". The summary and key points are not requested yet: the lead's decision of 7 November is
+  breadth over depth, and they are built only if time allows after both verifications pass. The schema
+  gains them then.
+- **The reply schema, `CLASSIFICATION_SCHEMA`** (`apps/ai/classification.py`): `doc_type` and
+  `department`, each `{value, confidence}`, and `tags`, a list of `{dimension, value, confidence}`,
+  every confidence a number in [0, 1]. `doc_type.value` must be one of `DOCUMENT_TYPES` (Policy,
+  Procedure, Report, Meeting Paper, FR-10's fixed list); any other value is a schema violation, because
+  a type outside the fixed list is not a classification. A reply that does not conform is no reply:
+  retried to `MAXIMUM_CLASSIFY_ATTEMPTS`, a total of 1 initial call + 2 retries (D-19), then
+  `ProviderUnavailable`. Invariant 10 applies to this operation exactly as to generation.
+- **Its own module.** The prompt, the schema, the tolerant parser and the attempt loop live together in
+  `apps/ai/classification.py`. `prompting.py` and `generation.py` are untouched: a sibling branch
+  (`fix/FR-13-follow-up-focus`) is changing `prompting.py`, and the generation loop carries the
+  statement-cap policy (D-100) that classification does not share. The JSON extraction is shared with
+  `schema.py` through public aliases, so there is one copy of it.
+- **What is sent:** the title and the opening `CLASSIFICATION_INPUT_TOKENS` (1,500) whitespace tokens
+  of the extracted text, D-31's token. The record keeps `input_truncated`. FR-10's "summarised in
+  sections and consolidated" for long documents is deferred with the summary; the opening of a
+  document is where its kind is stated, and the one corpus document over the limit (D04, 8,357 words)
+  says in its first chapter that it holds procedures.
+- **The prompt shows the model the scheme** (D-105's audience-scoped scheme: the four types, the
+  departments, the tag values per dimension) and asks for values from it, allowing a new value in Topic
+  only. The application enforces the scheme rule regardless of what the model says.
+- **The provisional rule, the scheme rule and provenance are application code** (D-105), never the
+  model's judgement: the same division invariant 5 makes for citations. The operation returns the
+  suggestions as made.
+
+**Why not the alternatives.**
+
+- *Generalise `run_generation_attempts` into one shared loop first.* Cleaner in the long run, and about
+  a day of the five, on the path NFR-19's fault-injection test guards.
+- *Prompt in `prompting.py`, schema in `schema.py`.* One file for prompts, and a near-certain merge
+  conflict with the FR-13 branch.
+
+**Not covered:** the confidence threshold's value and how it is chosen (D-106); the summary and key
+points; FR-16's summarisation, which gets its own method the same way, when it is built.
+
+**Dated note, 10 November 2026 (night): the summary, the key points, sectioned summarising and the
+summary's grounding are not built in NIT3004.** The user's decision on the requirements audit
+(D-119, its finding 1). This entry built them "only if time allows after both verifications pass",
+and neither objective passed on its independent run (D-106, D-110). FR-10 therefore stays
+INCOMPLETE on its summary clauses:
+
+- the short summary and key points beneath the title in search results;
+- one request returning them together with the classification;
+- sectioned summarising and consolidation of long documents;
+- the summarisation prompt's grounding;
+- the summary in the classify route's 200.
+
+What the classifier reads stays capped at `CLASSIFICATION_INPUT_TOKENS`, with `input_truncated`
+recorded and shown, as before.
+
+**Dated note, 13 November 2026: the prompt's tag rule changed (D-128).** This entry's prompt allowed
+a new value in Topic only. Since D-128 (12 November, the user's decision) rules 6 and 7 allow a new
+value of one to three words in Project, Process or Topic when no listed value fits, and still never
+a new department. The worked example is unchanged. The application enforces the word limit too.
+Nothing else in this entry moves.
+
+**Dated note, 13 November 2026 (later): reversed by D-129.** The prompt is this entry's again,
+byte-identical to #85's commit: a new value in Topic only. D-128's revision no longer ships.
+
+## D-105 · Schema v2 for FR-10: `DocumentAnalysis`, two `ContentTags` columns, the audience-scoped scheme, and how a suggestion becomes a record
+
+**Status:** Settled by the user · **Date:** 2026-11-08 · **Concerns:** FR-10, FR-15, invariants 1, 4
+and 8, D-17, D-30, D-33, D-72, D-73, D-74, docs/schema-v1.md §1 and §2 · **Builds on:** D-104
+
+**The tables.** `docs/schema-v1.md` §2 deferred `DocumentAnalysis` to migration v2 "when its
+requirement is built". It is built now, as `documents 0008`, additive and reversible.
+
+**`DocumentAnalysis`, one row per document,** with these departures from the proposal's field table
+(`analysis_id, doc_id, doc_type, department, confidence, user_edited`), each for a stated reason:
+
+- **Two confidences, not one:** `machine_doc_type_confidence` and `machine_department_confidence`.
+  FR-10 says "any assignment falling below the configured confidence threshold must be marked
+  provisional"; the type and the department are two assignments, and one column cannot hold one
+  provisional and the other applied.
+- **The machine's values are kept beside the person's:** `machine_doc_type` and `machine_department`
+  are always the latest machine assignment; `doc_type` is the effective type, null while a provisional
+  suggestion waits. FR-10: "the machine assignment is retained alongside it so that classification
+  accuracy can be measured over time". Only the latest machine value is kept; a history is not.
+- **The effective department is `Documents.department`,** not a column here. D-72 made that column the
+  one source FR-14 and FR-15 read and said FR-10 "should write this column, so there stays one source".
+- **An outcome per assignment,** `doc_type_outcome` and `department_outcome`, from a fixed vocabulary
+  `ASSIGNMENT_OUTCOMES = ("applied", "provisional", "discarded", "confirmed")` in
+  `apps/core/constants.py`: *applied*, at or above `CLASSIFICATION_CONFIDENCE_THRESHOLD` and written
+  to the effective field, still marked AI-generated and editable; *provisional*, below it, held and not
+  written; *discarded*, outside the scheme (the department only: the parser refuses a type outside the
+  fixed list); *confirmed*, a person confirmed or edited it. The lead approved two booleans for this;
+  the vocabulary holds the same facts plus the discarded state, which a boolean could not.
+- **`user_edited`:** true once a person confirmed or edited the type or the department. From then on a
+  re-run records new machine values and touches nothing else (FR-10: "any value a user edits are
+  retained and is not overwritten by later reprocessing").
+- **`proposed_topics`, JSON:** out-of-scheme Topic suggestions awaiting confirmation, as
+  `{value, confidence}`. FR-10 says a new value "requires user confirmation before it is created", so
+  no `Tags` row may exist for it until then. **`discarded_suggestions`, JSON:** out-of-scheme Project
+  and Process suggestions, kept for Objective 05's evidence of the scheme clause and never shown as
+  tags.
+- **`model`, `input_truncated`, `classified_at`:** provenance of the record.
+
+**`ContentTags` gains `confidence` and `provisional`.** A provisional AI tag is held, not applied: it is
+not read by FR-15's browse facets, filters or the detail's `tags`, and appears only as a suggestion
+awaiting confirmation. `applied_by` and `confirmed` keep their meaning (D-74).
+
+**The scheme a document is classified against is the vocabulary readable by its own audience.**
+`apps/documents/classification.py::tag_scheme(document)` builds it for every role in the document's
+`visible_to_roles`: the four types; the distinct non-blank `Documents.department` values, except one
+that some role in the audience can read no document of; the active `Tags` per dimension, except one
+that is linked only to sources some role in the audience cannot read. A tag with no links is vocabulary
+only and is always in; a document nobody may read gets the full scheme. The scope predicates are
+`scoped_documents` and `scoped_meetings` (invariant 1's one helper), never a hand-written one.
+**Why:** D-74 built the demonstration so that an Employee "is never offered" the Project value
+`atlas`, which exists only on Administrator-only documents. A classifier proposing `atlas` on an
+Employee-visible document would hand every Employee that name. The same holds for the department
+`Projects`, carried only by D09 and D15.
+
+**How a suggestion becomes a record** (`apply_classification`, one transaction):
+
+1. The analysis row is created or updated; the machine values, `model`, `input_truncated` and
+   `classified_at` are always overwritten.
+2. **The type:** provisional below the threshold, applied at or above it; `doc_type` is written only
+   when applied. Untouched when `user_edited`.
+3. **The department:** discarded when not in the scheme; provisional below the threshold, with
+   `Documents.department` untouched; applied at or above it, written to `Documents.department`.
+   Untouched when `user_edited`.
+4. **Each tag suggestion,** normalised with `normalise_tag_name`: in the scheme, a `ContentTags` link
+   is created with `applied_by="ai"`, `confirmed=False`, its confidence and `provisional` by the
+   threshold; an existing confirmed or user-applied link is left alone (FR-10: "a tag confirmed by a
+   user is marked confirmed and is not altered by later reprocessing"); an earlier unconfirmed AI link
+   takes the new confidence. Out of the scheme, Topic goes to `proposed_topics` and Project or Process
+   to `discarded_suggestions` (FR-10's controlled taxonomy growth). Links a re-run no longer mentions
+   are left in place.
+
+**Who may confirm, edit or reject: `contribute_content`, on documents in the caller's scope.** FR-10
+says "users holding the appropriate permission" and names none. Both roles hold `contribute_content`
+(D-30), so an uploader confirms the suggestions on their own document, which is the demonstration
+flow. The server checks it on every confirm, edit and reject, after the scoped 404 (D-73's order,
+invariant 4). *Declined:* `manage_documents` only, which would stop Employees acting on their own
+uploads; a new code, which nothing yet needs.
+
+**The routes** (built in the step after this entry; recorded here so the contract has one source):
+`GET /api/documents/{id}` gains `classification` and `tag_details`; one confirm-or-edit action for
+the type and department; one confirm and one reject action each for a tag link and for a proposed
+topic; `POST /api/documents/{id}/classify` re-runs classification (200 with the classification, 422
+where no text was extracted, FR-10's code, 503 after `MAXIMUM_CLASSIFY_ATTEMPTS`); and
+`manage.py classify_documents` for the Objective 05 run, calling the same function. Exact paths and
+bodies are in `docs/api-contract.md`.
+
+**Classification at upload** (D-33 part 1, invariant 8): after the ingestion pipeline has decided the
+document's status, inside a savepoint of its own, with every exception caught and logged. A failed
+classification leaves no analysis row, which is what "unclassified" means; the document's status is
+never changed by it, and a reprocess (D-32) runs it again while confirmed and edited values survive.
+
+**FR-10's `409 Conflict on a duplicate tag name within a dimension` is not reachable by design,**
+and is recorded as a convention: matching against the scheme happens at suggestion time, and
+confirming a proposed topic finds or creates the `Tags` row by normalised name.
+
+**Not covered:** the tag browser with item counts (FR-15's facets already count tags); the summary and
+key points; a history of machine assignments; meetings, which nothing classifies.
+
+**Build notes, 9 November 2026** (the django-backend agent's choices where the brief was silent,
+accepted as written):
+
+- The provisional comparison uses the float the model reported; the columns store it quantised to
+  three decimals, so a confidence within 0.0005 of the threshold can read differently from its
+  outcome. `discarded_suggestions`, like `proposed_topics`, is replaced on every run, deduplicated by
+  dimension and normalised value. An empty department suggestion is `discarded`. A type outside
+  `DOCUMENT_TYPES` reaching the apply layer raises before anything is written. The document row is
+  locked for the apply, as deletion and reprocess lock it.
+- Confirming or editing the classification of a document that has no analysis is a 404: the type of a
+  never-classified document is edited after `classify` runs, not instead of it. A blank department
+  given by a person is written blank and marked confirmed.
+- **Open, recorded rather than built:** a rejected proposed topic is proposed again by a later run; a
+  document's scheme is built for its audience at classification time, so widening its visibility later
+  does not reclassify it; a suggestion in a dimension outside the three is logged and counted nowhere
+  durable. `confirm_proposed_topic` reactivates a deactivated Topic tag of the same name rather than
+  creating a duplicate.
+- The routes: `POST /api/documents/{id}/classify` (200, 422 insufficient text, 503 provider; the
+  "ingestion" throttle scope, no in-flight slot), `POST /api/documents/{id}/classification`
+  (confirm or edit; 400 invalid type), `POST .../tags/{content_tag_id}/confirm`, `DELETE
+  .../tags/{content_tag_id}`, `POST .../proposed-topics/confirm` and `.../reject`; the detail gains
+  `classification` and `tag_details`, and the 201 upload and reprocess bodies gain `classification`.
+  Lists and browse do not. `manage.py classify_documents --all|--document <uuid> --out <json>` is the
+  Objective 05 instrument.
+
+**Dated note, 10 November 2026: two decisions after the routes were built** (the user's, on the
+django-backend agent's report).
+
+- **The machine fills only a blank department.** As first built, an in-scheme department suggestion
+  at or above the threshold replaced the department the uploader typed, on upload and on every
+  reprocess, until someone confirmed. FR-10 says a value a person gives "is not overwritten by later
+  reprocessing". Now: a blank `Documents.department` takes an applied suggestion; one that already
+  holds the suggested value stays and the outcome is applied; one holding a different value stays,
+  and the suggestion is provisional, held for a person to accept. The value already there may have
+  been typed by the uploader, confirmed, or written by an earlier run; none of them is replaced by a
+  later run. Out of scheme is still discarded, and below the threshold still provisional. On the
+  twenty, which all carry uploader departments, Objective 05's department outcomes stay measurable
+  and no department is changed. *Declined:* marking a typed department confirmed, which would show
+  no department behaviour on the reference set; keeping the overwrite.
+- **Classification stays at upload, and its cost is recorded.** Every upload and reprocess now waits
+  for one classification call, inside the ingestion transaction and holding the document's row lock,
+  where the proposal's 7.8 places it and where it cannot fail the document. On FLM one call took
+  7.6 to 21.2 s in D-106's sweeps, and up to `MAXIMUM_CLASSIFY_ATTEMPTS` are made. **An estimate,
+  not a measurement:** D04 (26 pages) ingested in 33.3 s on 1 November, so with classification about
+  41 to 55 s, and a retry could take a large document past Objective 02's 60-second bound for a
+  document of twenty pages or fewer. **Owed before M8:** re-time that bound with classification on,
+  on the host D-114's choice lands on. *Declined:* moving the call after the ingestion commit, which
+  does not shorten the upload; re-timing now on a throwaway database.
+
+**Dated note, 10 November 2026 (night): a correction to "Classification at upload".** That paragraph
+says the call runs "after the ingestion pipeline has decided the document's status". It does not. It
+runs between storing the extracted text and chunking (`apps/ingestion/documents.py`, section 7.8
+step 4), before the status is decided, as this entry's note on the upload's cost already describes.
+The rest of the paragraph stands: the call has its own savepoint, catches and logs every exception,
+and never changes the document's status. Found by the requirements audit (D-119, its finding 7).
+
+**Dated note, 10 November 2026 (night): the tag corrections (D-119's findings 3, 4, 5 and 10).**
+The user's decisions on the requirements audit (D-119's table), built on
+`feat/FR-10-tag-corrections`, server side only; the interface half follows on the same branch. Each
+decision is recorded with its reason, and each build choice the brief left open is named as one.
+*Corrected the same night, after the requirements re-audit of `5377e3a`: the interface half
+landed on the same branch, in `1641693`, `c6f59d4`, `607feaa` and `4d53cb7`.*
+
+- **A removal is kept (finding 3).** FR-10's correction clause: "any value a user edits are retained
+  and is not overwritten by later reprocessing, and the machine assignment is retained alongside
+  it". `reject_tag` deleted the link, so the machine's assignment was lost and the next classify or
+  reprocess linked the tag again. `documents 0009` adds `ContentTags.removed`, additive and
+  reversible.
+  - **Removing an AI link** (held or applied, confirmed or not) sets `removed` and keeps the row,
+    with the confidence and provisional flag the machine gave it. **Removing a person's link
+    deletes it**: it holds no machine assignment to keep. The route keeps its URL and its 204.
+    *Changed the same night, after the requirements re-audit of `5377e3a`: a person's link is kept
+    and marked removed too, because deleting it let the next run link the value again (the last
+    bullet of this note).*
+  - **No read lists a removed link.** Every read that excluded a provisional link excludes it: FR-15's
+    facets, filters and the detail's `tags`. So does `tag_details`, which does list provisional
+    links: a held suggestion waits for a decision, and a removed one has had it.
+  - **Reprocessing respects it.** A later classify or reprocess neither links the tag again nor
+    alters the removed row, so the confidence it keeps is the machine's at the time of the removal.
+    A Topic removed from a document is not proposed for it again, even once its Tag is retired.
+  - **`tag_scheme` still counts a removed link as a link,** as it counts a provisional one. A removed
+    suggestion on a restricted document is still a fact about that document, and not counting it
+    would turn a value carried only by restricted material into vocabulary every audience is
+    offered (invariant 1). *Corrected the same night, after the requirements re-audit of
+    `5377e3a`: the behaviour stands, but this reason has not held since `824c536`, where a tag that
+    is not grown is vocabulary whatever its links and a grown one never is. What counting a removed
+    link does now: the tag stays in its own document's scheme, offered there to be applied again
+    (`200`) and shown to the classifier, which leaves the removed link alone.*
+  - *Build choices:* a removed link's id is the same 404 as an unknown one on the confirm and remove
+    routes, because nothing ever shows it; confirming a proposed Topic whose link was removed
+    restores that link; `manage.py classify_documents` flags removed links in its record and counts
+    them apart in its summary line.
+  - *Declined:* recording the removal in a table of its own, which is a second home for one boolean.
+- **The department label (finding 10).** When the department the uploader typed equals the AI's
+  suggestion, the outcome is "applied", and the interface labelled the department "Suggested by AI"
+  although a person supplied it. The outcome cannot tell that case from a run that wrote its
+  suggestion into a blank department: both read "applied" with the department equal to the
+  machine's value. `documents 0009` adds `DocumentAnalysis.department_applied_by`, in the tags'
+  provenance vocabulary:
+  - `"user"`: a person gave the department, typed at upload or written through the confirm route.
+  - `"ai"`: a run wrote it into a blank department, and no person has written it since. A person
+    confirming that value as it stands keeps `"ai"`, as a confirmed AI tag keeps
+    `applied_by: "ai"`.
+  - `null`: no department.
+
+  Rule 3 of `apply_classification` sets it, and `confirm_classification` sets it where a person
+  writes the department. It needs history, which is why it is a column rather than something worked
+  out on each read: a second run that finds the machine's own earlier value equal to its suggestion
+  is the same state as finding 10's case, except for who wrote the value.
+  - **Rows classified before 0009 read null** until their next run or confirmation, and the
+    interface treats null as before. Their history is recorded nowhere, so none is guessed. A
+    department a run wrote into a blank before 0009 reads as the person's after its next run, which
+    is the one way this field can still be wrong. The Objective 05 twenty should hold none: all
+    twenty carry uploader departments (this entry's note of 10 November), and both measurement runs
+    (`aee5374`, `caf9e22`) descend from `2a85c9a`, where the machine began filling only a blank
+    department. That is checked against the git history, not against the database.
+  - *Declined:* a fifth outcome, which would change what "applied" means in Objective 05's records
+    and in `scripts/objective05_verify.py`; marking a typed department "confirmed", which this
+    entry's note of 10 November already declined.
+- **The stale comment (finding 10).** The comment above `MAXIMUM_CLASSIFY_ATTEMPTS` said it was named
+  "not so anything uses it before Stage 6". `apps/ai/classification.py`'s attempt loop has used it
+  since D-104. Corrected, and the same stale phrase in `apps/core/tests/test_constants.py` with it.
+- **A person applies a tag (finding 4).** FR-10's provenance clause speaks of tags "applied by a
+  person", and UC-09 A3 of a person who "adds one it did not", but only the D-74 seed script ever
+  wrote a person's link. `POST /api/documents/{id}/tags` (`apply_tag`) is guarded as the other FR-10
+  routes are: 401, then the scoped 404, then `contribute_content`'s 403 (D-73's order). Its body is
+  exactly one of two forms:
+  - `{"tag_id"}`: an existing tag, which must be active and in the document's scheme.
+  - `{"dimension": "Topic", "tag_name"}`: a new Topic, normalised as `Tags` normalises a name.
+    Only Topic may grow, by FR-10's controlled taxonomy growth, so any other dimension is a 400.
+  - **One 400 for a `tag_id` that cannot be applied.** Unknown, inactive, a Department tag or
+    withheld from the document's audience all get the same body, so the route cannot be used to
+    learn that a restricted tag exists (invariant 1).
+  - **The 409, and why an out-of-scheme name answers as created.** FR-10's "409 Conflict on a
+    duplicate tag name within a dimension" is answered only for a Topic already in the document's
+    scheme. The caller is offered that Topic anyway, and the 409 carries its id. A Topic of that
+    name that exists but is outside the scheme is carried only by material some reader of the
+    document cannot see, or is inactive. *Corrected the same night, after the requirements re-audit
+    of `5377e3a`: since `84b5771` it may also be a grown Topic that nothing links, and since
+    `824c536` it is always a grown Topic that no source every reader of the document can read
+    carries, one nothing links included, or an inactive one, as `classification.py` and the
+    contract say.* Answering 409 for it would tell the caller that a value they cannot see exists.
+    So it is linked as it stands, reactivated if it was inactive (as `confirm_proposed_topic`
+    already does), and answered 201 exactly as a new Topic is. *Corrected the same night, after the
+    focused re-audit of `88a488d`: unless this document already holds a link to it, live or
+    removed, which is kept or restored: 200. Since a person's removal is kept, a Topic typed,
+    removed, retired and typed again on the same document is that case. The answer depends only on
+    the document's own links.* A test
+    compares the two replies byte for byte, with only the new link's id masked: `Tags` has no
+    timestamp, and the reply carries no tag id, so nothing in it tells them apart. Timing is not
+    claimed to be indistinguishable. This entry's "the 409 is not reachable by design" is
+    superseded: it is reachable now, for an offered name.
+  - **The new link** is `applied_by: "user"`, `confirmed: true` (the D-74 seed's choice: a person's
+    tag is a decision already made), not provisional, not removed, confidence null, and the route
+    answers 201. A tag already on the document answers 200 with no new row:
+    - held: confirmed, as the confirm route does;
+    - removed: restored and confirmed, keeping its `applied_by` and the machine's confidence;
+    - applied or confirmed: left as it is, which includes an applied AI link nobody has confirmed.
+  - *Build choices:* a restored link is also no longer provisional, since a confirmed link is never
+    held (`confirm_tag` clears both together); the brief named the other fields and not this one.
+    The reply is `{"tag_details": [...]}`, the document's whole list in the classify reply's
+    shape, wrapped as the proposed-topic replies wrap theirs. The 409 carries the offered tag's id.
+- **`tag_options`, the choices (finding 4).** The brief asked for the document's scheme on "the
+  classification GET route". There is no such route: the interface reads the classification from
+  `GET /api/documents/{id}`, so `tag_options` is carried there, recorded as a correction to the
+  brief. It is `tag_scheme`'s tags with their ids, `{Project, Process, Topic: [{tag_id, tag_name}]}`
+  (`offered_tags`, `tag_options`).
+  - **Why every value in it is readable by the caller.** *Corrected the same night, after the
+    focused re-audit of `88a488d`: every grown value in it. A tag that is not grown is vocabulary,
+    readable through no source and disclosing none, as the correction after the next bullet says.*
+    A linked value is offered only if every role in the audience reads a source carrying it. A
+    caller reaches the detail only if their role reads the document, so some audience role is one
+    the caller's role reads, and EFFECTIVE_ROLES is closed under generalisation (D-66).
+  - **What the brief's sentence overstates.** "Every value in it is readable by every role in the
+    document's audience" is true of linked values only. An unlinked tag is in every scheme as
+    vocabulary (this entry's rule), and so in every document's `tag_options`, readable through no
+    source at all. That has always reached the classification prompt; `tag_options` now lists it
+    to every reader. Since the oracle bullet below, this holds for unlinked tags that are not
+    grown: Project and Process tags, and seeded Topics.
+    *Corrected the same night, after the requirements re-audit of `5377e3a`: since `824c536` (the
+    security review's bullet below) a tag that is not grown is offered whatever its links, and only
+    a grown tag needs every audience role to read a source carrying it. Read "linked values" in
+    these two bullets as grown ones, and "unlinked tags that are not grown" as every tag that is not
+    grown.*
+  - **A residual, for the lead.** A tag becomes unlinked when its last link is deleted, and two
+    paths delete links: removing a person's own tag (this note's rule, since it holds no machine
+    assignment) and deleting a document (D-73). So a Topic a person typed on an Administrator-only
+    document and then removed would be listed, by name, to Employees. The kept AI removal does not
+    do this, because a removed AI link still counts as a link. Two changes would close the path:
+    keeping a person's removed link too, or an Administrator deleting the unused tag (finding 5's
+    route). Neither is built as a rule; the decision is the lead's. The lead's review found the
+    worse half of it the same night, and the oracle bullet below closes it for every Topic a
+    person brought in by name. *Since the requirements re-audit of `5377e3a` a person's removed link
+    is kept too (the last bullet of this note), so only deleting a document or a meeting deletes a
+    link.*
+- **An Administrator retires a tag (finding 5).** FR-10: "Tags are deactivated rather than deleted
+  where content still references them, preserving historical classification", and its CRUD line
+  gives Tags "Delete". Only the schema held either (`Tags.active`, and `PROTECT`, D-12).
+  - **`manage_tags`,** a new permission code (`MANAGE_TAGS_PERMISSION`), seeded to the Administrator
+    alone by `accounts 0008`, additive and reversible, as 0007 seeds `review_knowledge_gaps`. Its
+    test holds that every role given the code has the Administrator's scope, as FR-19's seed test
+    does (the security review's L3). *Declined:* `manage_documents`, so that granting one never
+    grants the other, D-99's reason.
+  - **`GET /api/tags`**: 401, then 403 without `manage_tags`, checked before anything else, because
+    nothing on the route is scoped. It lists every Tag in Project, Process and Topic, active or
+    not, ordered by dimension then name, each with `item_count`: the sources, documents and
+    meetings alike, with a link to it that is neither provisional nor removed, each counted once.
+    An Administrator reads every source (D-66), so no count tells them anything they could not
+    read. This is the Administrator's list of every value with its count; FR-15's facets, recorded
+    above as FR-10's tag browser, are unchanged.
+  - **`DELETE /api/tags/{id}`: deactivate versus delete.** 401, then 403, then 404 for an id that
+    names no tag in those three dimensions (a Department tag included, since nothing reads one,
+    D-72). A tag any `ContentTag` row references, in **any** state, is deactivated and kept, and
+    the route answers 200 with it in the list's shape; again for one already inactive. A tag
+    nothing references is deleted, 204. Any reference keeps it, a removed or held link included:
+    `PROTECT` refuses the delete, and a removed link exists precisely to keep the machine's
+    assignment, which needs its tag. The tag row is locked for the check and the delete.
+  - **What retiring does, and does not, do.** An inactive tag leaves `tag_scheme`, so neither the
+    machine nor a person can newly apply it by id, and it leaves every document's `tag_options`.
+    FR-15's reads keep their treatment of `active` unchanged: they do not consult it (D-72's
+    clarification of 7 October). So a retired tag still shows on the documents that carry it, in
+    `tags` and `tag_details`, as a facet value and as a filter. That is FR-10's "preserving
+    historical classification".
+  - **No reactivation route.** A retired Topic comes back the way `confirm_proposed_topic` has
+    always brought one back: a person names it, and `apply_tag` links and reactivates it, answered
+    as a new Topic would be (a retired value is in no scheme, so a 409 would disclose it).
+    *Corrected the same night, after the focused re-audit of `88a488d`: answered 200 instead when
+    the document already holds a link to it, live or removed, which is kept or restored.* A retired
+    Project or Process tag stays retired. *Declined:* a route that only reactivates, which nothing
+    in FR-10 asks for.
+- **The 409 rule's existence oracle, closed (the lead's review, the same night).** The rule as first
+  built (`90ebc51`) left one, found in the lead's review of `4b5cf65`. Two roles suffice:
+  1. An Employee holding `contribute_content` applies a Topic name to a document their role reads.
+     It answers 201 whether or not a Topic of that name exists on Administrator-only material, as
+     intended.
+  2. They remove it. A person's link is deleted, so it answers 204 either way. *(Since the
+     requirements re-audit of `5377e3a` the link is kept and marked removed; still 204.)*
+  3. They apply the name again. A name nothing else carried was now an unlinked Tag, admitted as
+     vocabulary and offered, so it answered 409. A name carried only by Administrator-only material
+     was still linked and unreadable, not offered, so it answered 201. `tag_options` differed the
+     same way after step 2.
+
+  So the three steps told an Employee whether a restricted Topic name exists, which breaks invariant
+  1. Deleting the only document carrying a tag does the same, but only a `manage_documents` holder
+  can delete.
+  - **The rule change (the lead's decisions).** The root cause: an unlinked tag was admitted while
+    a tag linked only on unreadable material was not, and Topics are the only names a person can
+    probe. `documents 0010` adds `Tags.grown`, additive and reversible. It is set on the Topic a
+    person's `apply_tag` name form links and on the Topic `confirm_proposed_topic` links, whether
+    created or fetched (restricted or inactive), and by nothing else. The `tag_id` form does not
+    set it, because an offered tag is already readable or vocabulary. In `tag_scheme` a tag is in
+    if every audience role reads a source carrying it, or if nothing links it and it is not grown.
+    Project and Process tags are never grown, so they are unchanged, and a seeded, unlinked Topic is
+    vocabulary. The empty-audience branch is unchanged, and so is `reject_tag`. A fetched Topic is
+    marked as well as a created one: otherwise a retired, seeded, unlinked Topic a person names
+    would come back as vocabulary after the removal, and answer 201, 204, 409 where a new name
+    answers 201, 204, 201. *Superseded the same night, marked after the requirements re-audit of
+    `5377e3a`: `824c536` admits a tag that is not grown whatever its links (the security review's
+    bullet below), `c99857c` grows only a Topic a name creates or reactivates, and since the
+    re-audit a person's removal is kept, so the sequence answers 201, 204, 409 in every variant.*
+  - *Dated line, 10 November 2026 (night): narrowed the same night.* `11a610f` first took every
+    unlinked Topic out of every scheme. That changed Objective 05's measured configuration, six
+    seeded, unlinked Topics shown to the classifier, and FR-10's "established scheme" for anyone who
+    seeds Topics, so the lead narrowed it the same night to the rule above. The configuration is now
+    as measured.
+  - **What follows.** A person naming a grown Topic that nothing links links it as it stands,
+    answered 201, like any out-of-scheme Topic. `tag_options` and the classification prompt list a
+    seeded, unlinked Topic as vocabulary, as they did before `11a610f`, and never list a grown one
+    that nothing links. The residual in this note's `tag_options` bullet is closed for every Topic
+    a person brought in by name. For a seeded tag of any dimension it stood, and not only by
+    deleting the documents that carry it: an Employee removing its readable person links reached it
+    too (the security review's finding 1, below). *Corrected the same night: this said "reachable
+    only by deleting the documents".* The vocabulary rule below closes it.
+  - **What this does not close.** A seeded tag whose only links are on restricted material is
+    withheld from a narrower audience, so watching `tag_options` over time can show that restricted
+    material has taken up a seeded value. That was so under this entry's rule from the start, for
+    every dimension, and neither `11a610f` nor this rule changed it. *Corrected the same night: this
+    said "An Employee cannot bring it about". The security review's finding 1, below, shows one
+    could, by removing a seeded value's readable person links.* The vocabulary rule below closes it.
+  - **Objective 05's runs met unlinked Topics, and this rule keeps them in.** Both recorded runs
+    began with all six seeded Topic values (compliance, finance, people, safety, technology,
+    workplace) unlinked:
+    - the first after `seed_objective02_tags.py --scheme-only` created the fourteen values with no
+      links (`corpus/objective-05/runs/2026-11-10/objective-05.md`, "before the run"; the script's
+      `--scheme-only` mode exists for this database, D-106);
+    - the informed re-run after the first run's 38 AI links were deleted (`rerun/rerun.md`).
+
+    Under the rule as it then was, all six were in the scheme when each run began. `11a610f`'s rule
+    would have kept all six out, because the run creates no link to a readable source before
+    classifying (it links only values already in the scheme and proposes the rest), so a re-run
+    under it on a scheme-only database would have proposed every Topic suggestion rather than
+    linked it. Under this rule the six are seeded and not grown, so they are in the scheme exactly
+    as when the runs began. A test runs `seed_objective02_tags.py --scheme-only` and checks that
+    all of its Topics are in the scheme. The runs' starting state is shown from the seed script and
+    the committed run records, not from the database.
+- **The security review of `84b5771` (the same night): the vocabulary rule.** The review found the
+  oracle's root cause still open in `tag_scheme`. Its vocabulary half read every `ContentTag`, links
+  nobody in the document's audience can read included, so what a reader was offered moved when
+  links on material they cannot read were made or destroyed. The lead checked findings 1 to 3
+  against the code. The dispositions:
+  - **1 (high): fixed.** An Employee holding `contribute_content` removed the readable person links
+    of a seeded value: the D-74 seed's links are a person's, `reject_tag` deleted a person's link
+    (*until the requirements re-audit of `5377e3a`, the last bullet of this note*), and there is no
+    ownership check. The value then vanished from `tag_options` exactly when
+    Administrator-only material still carried it. The name form's 201 against 409, and the
+    `tag_id` form's 400 against 201, said the same. On the objective-02 manifest, `purchasing`,
+    `onboarding`, `finance` and `people` have such carriers (D15, D16). This refutes "An Employee
+    cannot bring it about", above, corrected in place.
+  - **2 (medium): fixed.** An unlinked seeded value dropped out of every Employee's `tag_options`
+    when Administrator-only material took it up, a held AI suggestion at upload included, and any
+    reader saw it with a GET.
+  - **3 (medium): fixed.** An Administrator removing the person links of a value only
+    Administrator-only material carried, or deleting those documents, left it unlinked and not
+    grown, so every Employee was offered it. That contradicted `classification.py`, `deletion.py`
+    ("a tag left with no links is never offered to anyone") and the contract.
+  - **The rule (the lead's decision).** `tag_scheme` admits a tag if every audience role reads a
+    source carrying it, or if it is not grown, and no longer reads which tags have links at all.
+    `grown` now means "not vocabulary": a tag that is not grown is in every scheme whatever its
+    links, and a grown one only where every audience role reads a source carrying it, every link
+    counting as before. Nothing a reader can see moves when links on material they cannot read are
+    made or destroyed. One exception, found while building the rule, was closed the same night: the
+    last item below.
+  - **`documents 0011`** marks grown every Tag, of any dimension, with at least one link and no link
+    on a source readable by every role. Documents and meetings both count; "readable by role r" is
+    the source's `visible_to_roles` overlapping r's effective roles, as `_in_scope` reads it; and
+    every link counts, held and removed ones included. That is exactly the set today's rule withholds
+    from some audience, so nothing becomes visible anywhere that was not.
+    - It is a RunPython whose reverse does nothing, with the role mapping frozen as literals and
+      historical models only, as accounts 0007 and 0008 freeze their names.
+    - It depends on `meetings 0002`, so a clean start now plans that migration before `documents
+      0002`. Its operations are unchanged.
+  - **The seed's linked mode** marks the same way after linking; on the objective-02 manifest that
+    is `atlas` alone, carried only by D09 and D15. `--scheme-only` links nothing and marks nothing.
+  - **Consequences.** For an audience role that scoping does not know, every grown tag is withheld,
+    as `scoped_documents` fails closed, while vocabulary that is not grown is in: it names no
+    source. Tests that model "a value only restricted material carries" now set `grown=True`, as
+    the backfill and the seed do; a value on restricted material that is not grown is in, as
+    vocabulary.
+  - **Objective 05: a departure from the measured configuration.** Its scheme-only start is
+    unchanged, fourteen unlinked values and none grown; what differs is during a run. Under the
+    rule the runs used, a seeded value first linked only on material some audience role could not
+    read dropped out of later documents' schemes. It happened once in each recorded run:
+    - in the first run, the ninth document, D09 (Administrator-only), applied `atlas` before any
+      other document carried it, so `atlas` was out of the schemes of the nine later Employee-
+      visible documents, D10 to D14 and D17 to D20;
+    - in the re-run, the sixteenth, D16 (Administrator-only), held `people` first, so `people` was
+      out of D17 to D20's schemes.
+
+    Under this rule both stay. The old rule's behaviour there was finding 2's leak, seen in the
+    measurement itself: the scheme an Employee-visible document's prompt received, the same scheme
+    its `tag_options` offers, changed because Administrator-only material had taken up a seeded
+    value. This is shown from the runs' `classify.json` records, in their processing order, and the
+    manifest's `visible_to_roles`, which `scripts/ingest_objective02.py` writes; not from the
+    database. The recorded runs and verdicts stand as records of the old rule, and nothing re-runs
+    them.
+  - **4 (low): the throttle half done, on `fix/FR-10-tag-throttle`; the prompt cap deferred.** An
+    unthrottled `POST /api/documents/{id}/tags`, and Topic growth reaching every classification
+    prompt. The user decided the same night: a per-user throttle on that route, scope `tagging`, 30
+    a minute (`TAGGING_THROTTLE_RATE`), recorded in D-79's note on tagging. Capping the prompt would
+    change the classification input, so it is deferred, and one user can still create 30 Topics a
+    minute. *Until that branch this read "4: open", and "A throttle is the user's question, which
+    the lead will put."*
+  - **5 (low): fixed in the following commit.** Reversing `documents 0009` kept removed AI links,
+    which the 0008-era code shows as live tags again. 0009's reverse now deletes them, before it
+    drops the column; live links are untouched. 0009 is edited in place rather than followed by a
+    new migration. It is unpushed (CLAUDE.md §7 forbids editing a pushed migration's operations),
+    its author applied it only to test databases, and the appended operation does nothing forwards,
+    so a database that did apply it is in the state the edited migration reaches.
+  - **6, accepted residual.** An Employee holding `contribute_content` can undo an Administrator's
+    retirement: naming a retired Topic reactivates it (`_bring_into_use`). The oracle closure
+    depends on that, because linking without reactivating would make `tag_options` differ between
+    a retired name and a new one. Also, nothing records who removed a person's tag.
+  - **7 (info): tested.** `tag_options`' guarantee needs EFFECTIVE_ROLES to be closed under
+    generalisation. `apps/core/tests/test_constants.py` now asserts it.
+  - **8 (info): fixed.** Topics confirmed before `documents 0010` read not grown. 0011 marks those
+    that only restricted material carries; one a readable source carries is vocabulary, which
+    every reader of that source could already see. Confirming a proposal of such a Topic's name
+    made before it existed leaves it vocabulary (the last item below).
+  - **9, accepted residual (integrity, not disclosure).** `normalise_tag_name` does no Unicode
+    normalisation (NFC/NFKC) or casefolding, and keeps zero-width and bidi characters, so
+    look-alike duplicate Topics get past FR-10's `409`. No `500` was found: DRF's `CharField`
+    rejects NUL and lone surrogates, and `apply_tag` re-checks the length after normalising.
+  - **10, accepted residual.** Races give rare `500`s and no corruption:
+    - a link racing `retire_tag`'s delete fails its deferred foreign-key check at commit
+      (`taxonomy.py` says so);
+    - `_bring_into_use`'s save on a tag deleted in the meantime raises `DatabaseError`;
+    - `Tag.objects.get` can miss after the offered check.
+
+    Applies on one document are serialised by the document lock, and `get_or_create` absorbs the
+    concurrent-create `IntegrityError`.
+  - **11, accepted residual.** Timing:
+    - The name form's first probe of a name does different database work: an insert plus an update
+      for a new name, an update for an inactive one, neither for an already-grown one. That is one
+      sample per name and sub-millisecond, and D-105 makes no timing claim.
+    - The detail's cost grows with the total number of tag links, restricted ones included. That
+      reveals volume only.
+  - **Found while building the rule, not one of the review's findings: one exception, fixed the
+    same night, two commits after the rule.** `confirm_proposed_topic` grew the Topic it fetched:
+    `_bring_into_use` marked it whether it was created or fetched (the lead's oracle review), and
+    that included an active vocabulary Topic.
+    - No route could bring that about. A vocabulary Topic is in every scheme, so the machine links
+      it rather than proposing it, and the name form answers `409` for it.
+    - A proposal still pending from before its name became vocabulary could. Two ways make one:
+      `seed_objective02_tags.py` creating the Topic after the proposal; or a person bringing the
+      name in on another document before `documents 0010`, when 0011 then left it as vocabulary
+      because a source every role reads carries it.
+    - Confirmed on restricted material, the Topic was grown and left an audience's options once no
+      source that whole audience reads carried it: at once in the first case, and in the second
+      when its readable links went.
+    - **The fix (the lead's decision):** `_bring_into_use` grows a Topic only when it creates it or
+      reactivates it, and an active one keeps its value, so vocabulary stays vocabulary. The name
+      form never fetches an active vocabulary Topic, since it answers `409` first, so only
+      confirmation changed. A retired seeded Topic a person names is still grown, which 84b5771's
+      three-sequence test covers.
+    - The seed script's docstring says to run it before any document is classified, which is still
+      good advice: a document classified first holds its seeded suggestions as proposals or
+      discarded suggestions until a person acts or it is classified again.
+- **The requirements re-audit of `5377e3a` (the same night): a person's removed link is kept too.**
+  The re-audit's finding 3, partial. `reject_tag` deleted a person's link, so the next classify
+  route, reprocess or `classify_documents` run that suggested the value linked it again, through
+  `_link_tag`'s create branch, as `applied_by: "ai"`, and a Topic the person had typed was proposed
+  again. That breaks FR-10's correction clause, "any value a user edits [is] retained and is not
+  overwritten by later reprocessing" (UC-09 A3 step 3), and nothing tested or recorded it.
+  - **The decision (the lead's, the re-audit's option (a)).** `reject_tag` keeps a person's link
+    too, marked `removed`, exactly as it keeps an AI link. `_link_tag`, `removed_topics` and
+    `_apply_link` already handled a removed row, so nothing else in the apply layer changed.
+  - **The apply, remove, apply sequences** now answer 201, 204, 409 for a new name, a Topic only
+    restricted material carries and a retired seeded Topic alike, and list the name in
+    `tag_options` after the removal in every variant. The removed link still counts as a link, so
+    the document itself carries the name, and the name form answers the 409 that names it. The
+    answers are still identical, so the oracle stays closed. Each variant's Topic is its own row
+    with a random id (`uuid4`), which says nothing about whether it existed before.
+  - **Applying the tag again restores the link,** 200, by its id, as `_apply_link` restores a
+    removed AI link.
+  - **`DELETE /api/tags/{id}`** deactivates a tag whose only links are removed (200): they still
+    reference it. It deletes only a tag nothing references.
+  - **Links are now deleted only with their source,** a document (D-73) or a meeting. So removing a
+    link never takes a tag out of anyone's options; a grown tag leaves an audience's options when
+    the last source that audience reads carrying it is deleted, or the tag is retired (*"or the tag
+    is retired" added the same night, after the focused re-audit of `88a488d`*).
+  - **What the sequences no longer show.** Whether a Topic a name brings in is grown, created or
+    reactivated, no longer shows in them, since the document carries the name either way. A route
+    test holds it instead: a new name, or a retired seeded Topic, named on Administrator-only
+    material stays out of the Employee's options.
+  - **The contract** says a person's link is kept, and its 400 list for the name form now names a
+    missing `dimension` too (`serializers.py`).
+
+**Dated note, 10 November 2026 (night): Objective 02's bound re-timed with classification at upload,
+on FLM. It is met.** This was the "owed before M8" item in this entry's note on the upload's cost,
+and gap 9 of the requirements audit (D-119).
+- **How:** `docs/measurement-runbook.md`, steps 1 to 7, at `749a689`, on a fresh database
+  (`kmp_obj02_20261110classify`), with FLM v0.9.39, `check_flm.py` passing, and Waitress started
+  with `--threads=24`.
+- **The result:** every valid item was Indexed and found, every invalid item was refused with its
+  documented error, and no document of twenty pages or fewer took more than 60 s. The slowest took
+  24.5 s.
+- **What classification added:** 10 to 28 s per document. There were 21 calls for 20 documents, of
+  9.3 to 17.8 s each, and one second attempt after a reply that was not valid JSON. D04, 26 pages
+  and outside the bound, took 61.3 s against 33.3 s, above this entry's estimate of 41 to 55 s.
+- **Evidence:** `corpus/objective-02/runs/2026-11-10/ingestion-classify-flm/` (`results.json`,
+  `results.md`, `retime.md`, and the run's own log lines).
+- **At twenty pages, timed directly the same night** (the user's request), because the corpus has
+  no document near the bound: its only multi-page PDF has 26 pages.
+  - **The result:** five uploads of D04's first twenty pages took 43.5 to 51.6 s, each with one
+    classification attempt (15.1 to 17.1 s), so all were within the bound.
+  - **Not measured:** a retry adds one more attempt of about 9 to 17 s, which on that arithmetic
+    takes some twenty-page uploads past 60 s. No retry happened at twenty pages, and the night saw
+    one in 26 calls.
+  - **Evidence:** `corpus/objective-02/runs/2026-11-10/ingestion-twenty-pages-flm/`.
+- **Not shown:**
+  - **The bound on `anthropic`.** D-114 chooses M8's host with its provider, and D-122 is about to
+    make `anthropic` the default. If M8 runs there, the bound is re-timed on a Voyage-indexed
+    database, and this FLM run does not stand in for it.
+
+**Dated note, 13 November 2026: what D-128 changed in this entry.** The user decided D-128 on 12
+November. The requirements audit of 13 November asked that this entry point to it. Three of its
+rules are superseded:
+
+- **Rule 4 as first built:**
+  - a Topic outside the scheme was always proposed;
+  - a Project or Process outside the scheme was discarded;
+  - only a removed Topic was kept from coming back.
+
+  Since D-128, a value outside the scheme in any of the three dimensions is created and applied at or
+  above the confidence threshold, as a grown Tag, and held as a proposal below it. A value a person
+  removed or rejected on a document is skipped for that document, in every dimension.
+- **The proposal record.** `proposed_topics` became `proposed_tags`, `{dimension, value,
+  confidence}`, on the same column (`documents 0012`). `rejected_tags` (`documents 0013`) keeps
+  what a person rejected.
+- **The retired-tag sentence:** "A retired Project or Process tag stays retired". Since D-128 a
+  retired value of any dimension comes back, but only through a document every role can read.
+
+**One open item recorded here is closed.** "A rejected proposed topic is proposed again by a later
+run": since the audit of 13 November a rejection is kept, and later runs neither propose, create nor
+link that value for that document (D-128).
+
+**Dated note, 13 November 2026 (later): D-129 reverses D-128's creation of values.**
+
+- **Rule 4 is this entry's again** for a value outside the scheme: a Topic is proposed, and a Project
+  or Process is discarded.
+- **Stays from D-128:** the proposal record (`proposed_tags`), kept rejections, and a removed link
+  being skipped in every dimension.
+- **"A retired Project or Process tag stays retired" holds again.** A retired Topic comes back only
+  through a person, on a document every role can read.
+
+## D-106 · Objective 05's measurement: the reference set is frozen, the database is `kmp_obj0506_20261101`, and the confidence threshold is chosen on development documents by a rule fixed in advance
+
+**Status:** Settled by the user · **Date:** 2026-11-08 · **Concerns:** Objective 05, FR-10, D-84,
+D-88, D-93, `CLASSIFICATION_CONFIDENCE_THRESHOLD` · **Builds on:** D-104, D-105
+
+**The reference set.** `corpus/objective-05/reference.json` gives each of the twenty indexed
+documents its reference type, decided from the document's own text with the evidence quoted
+(`reference.md`). The lead approved it as drafted on 8 November: Policy 7, Procedure 6, Report 6,
+Meeting Paper 1; eight strong fits, eight fair, four weak and flagged (D07, a template, as Policy; D09,
+a kickoff brief, as Meeting Paper; D13, a schedule, and D20, an announcement, as Report). The
+alternatives for the weak fits are recorded in the file and were not taken. Department and the
+Project, Process and Topic tags come from `corpus/objective-02/manifest.json`. **The set is frozen:**
+a test set, never a tuning set (D-93's rule), and nothing is chosen against it after this date.
+
+**What the verification counts.** The 75% type match is computed over all twenty suggested types,
+provisional or not: a held suggestion is still "a suggested document type", and holding it is the
+second clause, not an exemption from the first. Department is reported beside it and is not in the
+75%. Tags are reported against the manifest for information, and for the provisional and scheme
+behaviours the objective names.
+
+**The database: `kmp_obj0506_20261101`,** created on 8 November from the 1 November dump
+`3bf98403…6f59` (D-84's snapshot, the one D-88 restored the alpha from), after the checks ran first:
+the snapshot folder's `snapshot.json` equal to the committed copy, the dump's SHA-256 equal to the
+recorded one, the name not a protected one, and `createdb` refusing an existing name, so nothing could
+be overwritten. **No media copy:** classification reads `ExtractedContent` and asks read chunks, so
+no file is needed, and downloads are not measured. Migration v2 is applied to it with FR-10's pull
+request. The fourteen tag values are seeded as the scheme only, `Tags` rows and no links, so the
+documents arrive untagged and the scheme exists. Objective 06's writes go to the same database.
+`kmp`, `kmp_demo_20261101` and `kmp_obj02_20261101` are untouched. The worktree's own `.env` names
+`kmp_obj0506`, pytest's base name, which is never created.
+
+**The confidence threshold is chosen on development documents, never on the twenty.** The
+development set is `corpus/demo/D21_bicycle_end_of_trip_facilities.docx` and eleven one-page
+documents written for the purpose under `corpus/objective-05/dev-documents/`, three per type,
+none on a subject the twenty cover. Each is classified three times against the corpus's scheme (its
+six departments and fourteen tag values). **The rule, fixed before the run:** the threshold that best
+separates correct from wrong type assignments on the development set, the value maximising the
+number of correct assignments at or above it plus wrong assignments below it; a tie goes to the
+higher value; then a margin, the threshold is capped at the lowest confidence seen on a correct
+assignment minus 0.05. If the model's confidences do not separate correct from wrong at all, that is
+reported as the finding, and the threshold is set at the lowest confidence seen on a correct
+assignment. The result replaces the PROVISIONAL 0.70 in `apps/core/constants.py`, with the sweep
+recorded under `corpus/objective-05/runs/`.
+
+**Before the run:** `scripts/check_flm.py` passes, FLM is v0.9.39 (D-83), and the record carries the
+commit SHA, the dump hash and the FLM version, as every measurement does (D-84).
+
+**Declined:** a fixed 0.70 declared untuned, which D-93's rule rules out for a tunable; the five
+transcripts as the development set, which are all one kind.
+
+**Not covered:** Objective 06, whose decisions follow.
+
+**Dated note, 10 November 2026: the threshold is 0.95, and on gemma3:4b the type's confidence does
+not separate right from wrong.** Two development sweeps ran, 12 documents three times each, on FLM
+v0.9.39 with nothing read from or written to a database. The evidence is
+`corpus/objective-05/runs/2026-11-09/dev-sweep/` and
+`corpus/objective-05/runs/2026-11-10/dev-sweep-2/`. The twenty reference documents were not
+consulted.
+
+| | First sweep, `fb9e18a` | Second sweep, `b40dc0f` |
+|---|---|---|
+| type matches | 24 of 33 (72.7%) | **33 of 36 (91.7%)** |
+| Meeting Paper suggested where expected | 0 of 9 | 6 of 9 |
+| classifications that failed | 3 (D21, every attempt) | 0 |
+| type confidence, right | 0.95 to 0.98 | 0.95 to 0.98 |
+| type confidence, wrong | 0.95 to 0.96 | 0.95 |
+| what the rule gives | 0.90 | **0.95** |
+
+- **One prompt revision between the two, by the user's decision of 9 November, on development
+  material only** (`b40dc0f`). The first sweep never suggested Meeting Paper. It also failed D21 on
+  every attempt, because the model gave a tag an empty value and temperature 0 repeated it. The
+  prompt now defines each type by its purpose, and it forbids an empty value, telling the model to
+  leave the dimension out instead.
+- **The rule's first branch, with the cap, on the first sweep.** The separating value was 0.98,
+  which held all 9 wrong types and 7 of 24 right ones. The cap, at the lowest right confidence minus
+  0.05, lowered it to 0.90, where nothing is held. The cap defeats any separation found at the top
+  of the range; that is a flaw in how the rule was drafted. The user kept the rule as fixed, cap
+  included, and applied it to the second sweep.
+- **The rule's second branch on the second sweep.** No threshold beats applying everything: all
+  three wrong types score 0.95, the same as the lowest right ones. So, as the rule fixed in advance
+  says, the confidences do not separate correct from wrong, and the threshold is the lowest
+  confidence seen on a correct assignment: **`CLASSIFICATION_CONFIDENCE_THRESHOLD = 0.95`**.
+- **What 0.95 does:**
+  - **No type is held.** Every type suggestion scored at least 0.95, so the type is always applied
+    as an AI suggestion that a person can confirm or edit.
+  - **Departments and tags are held.** On the second sweep, 24 of 36 department suggestions and 71
+    of 84 tag suggestions fall below 0.95 and would be held for confirmation, against 12 and 13
+    applied.
+  - **So Objective 05's provisional clause is exercised on departments and tags, not on types.** The
+    model's own confidence is close to a constant for the type, and that is recorded as a finding
+    about gemma3:4b, not hidden by the value.
+- **An FLM-configuration value** (D-113, D-114). The threshold was chosen on gemma3:4b's
+  self-reported confidences, and a threshold chosen on one model's confidences does not carry over
+  to another's. Before the `anthropic` provider is relied on, it is re-derived on the same
+  development documents by this rule. Claude is not deterministic on this path (no temperature,
+  D-115), so each development document is classified over repeated draws there, as D-103 measured
+  FLM's band. `scripts/classification_dev_sweep.py` gates on FLM today, so that run needs a
+  provider-aware gate, built when the re-derivation is.
+- **If M8 runs on `anthropic`,** Objective 05 is verified again on that configuration, its
+  type-match rate over repeated draws.
+- **Every Objective 05 result records its configuration** from now on: the provider, the chat model
+  and the embedding model. The two sweeps above ran on `flm`, `gemma3:4b`; classification calls no
+  embedding model.
+- **Not covered:** a confidence derived from anything but the model's own report.
+
+**Dated note, 10 November 2026 (evening): Objective 05's verification. Clause 1 is not met on the FLM
+configuration; clauses 2 and 3 are met.** The evidence is under `corpus/objective-05/runs/2026-11-10/`:
+`objective-05.md` for the first run and `rerun/rerun.md` for the second.
+
+| | First run, `aee5374` | Re-run, `caf9e22` |
+|---|---|---|
+| status | **the independent test** | informed by the first run |
+| clause 1, types matching the frozen reference | **12 of 20 (60%)**, not met | **14 of 20 (70%)**, not met |
+| clause 2, below-threshold assignments held | 48 of 48, met | 47 of 47, met |
+| clause 3, out-of-scheme values | 3 departments and 6 Project or Process values discarded, 2 Topics proposed, none linked; met | 1 department and 6 Project or Process values discarded, 2 Topics proposed, none linked; met |
+
+- **The first run is the frozen reference set's one independent use.** It ran on provider `flm`,
+  `gemma3:4b`, FLM v0.9.39, `kmp_obj0506_20261101` (dump `3bf98403…6f59`), threshold 0.95, after
+  `documents 0008` and `accounts 0006` were applied and the 14 tag values seeded without links. Its
+  eight misses were three shapes the twelve development documents lacked: spreadsheet registers and
+  trackers, a schedule, a booking-rules document and an announcement called Meeting Paper, and two
+  guides given the reference's own alternative. Every miss scored 0.95.
+- **The user's decision: one disclosed revision, then one re-run.** The type definitions were revised
+  once and seven development documents of the failing shapes were added (`caf9e22`; the manifest says
+  when and why). On the third development sweep the first twelve stayed at 35 of 35 and the seven new
+  ones matched 7 of 21: the register and the guide were fixed, while a roster, an announcement and a
+  rules document whose title mentions meetings were still called Meeting Paper. Type confidences
+  still did not separate, so the threshold stayed 0.95. The first run's 20 analysis rows and 38 AI
+  tag links were deleted, after their counts were checked, and the twenty were classified again.
+- **The re-run gained two:** D03, D12 and D17 were fixed and D04 was lost. **It is not an independent
+  test:** the revision was made because of the first run, so the frozen twenty no longer
+  independently test classification, as D-101's note said of the thirty. The 60% stands as the
+  independent figure.
+- **For information only, not the rule:** counting the reference's recorded alternatives would give
+  14 of 20 on the first run and 16 of 20 on the re-run. The frozen rule counts the reference column.
+- **No further revision is made** (the user's decision: one). What remains is recorded rather than
+  fixed: on gemma3:4b the type's confidence carries almost no information, and Meeting Paper attracts
+  documents that mention meetings, schedules or events whatever the prompt says. Whether Claude does
+  better is unmeasured; it would be measured as its own configuration, over repeated draws (this
+  entry's note on the FLM configuration).
+
+**Dated note, 10 November 2026 (night): the revision is a departure from D-93, and is named as
+one.** The reference set's status line says "never tuned against (D-93)". Since `caf9e22` that is not
+true of the type definitions: they were revised once because of the first run's misses, and they
+name the misses' shapes (register, inventory, schedule, roster, tracker, announcement). D-93 settles
+that the frozen sets are not tuning sets, so this was a departure from it. It was made once, by the
+user's decision, and disclosed, with the first run kept as the independent figure. The file is
+frozen and is not edited; this note supersedes its line. The prompt now shipped has no independent
+accuracy figure (the requirements audit, D-119, its finding 8).
+
+**Dated note, 10 November 2026: claude-haiku-5-5's own value is 0.72 (D-122).** D-106's rule ran on
+the development documents through the shipped `classify_document` on Haiku 5.5: 19 documents, three
+times each (`corpus/objective-05/runs/2026-11-10/dev-sweep-haiku/`).
+
+- **Haiku typed all 57 right,** so nothing beat applying everything. The rule's fallback applies: the
+  lowest confidence seen on a correct assignment, **0.72**.
+- **The threshold is now per classifying model** (`CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL`),
+  keyed by the model the classification carries. gemma3:4b keeps 0.95.
+- **The development set had grown to 19 documents** (caf9e22) since 0.95 was chosen on twelve.
+
+**Dated note, 12 November 2026: claude-haiku-5-5's value is 0.80 on D-128's prompt.** D-128 revised
+rules 6 and 7 of the classification prompt, and this rule ran again on the same 19 documents, three
+times each (`corpus/objective-05/runs/2026-11-12/dev-sweep-haiku-d127/`).
+
+- All 57 types were right again, so the fallback applied: the lowest confidence on a right type,
+  0.80.
+- **Objective 05's clause 3,** recorded above as met on the build it ran on, is recorded as not met
+  by the shipped build from D-128 on, by the user's choice. A Project or Process value outside the
+  scheme is no longer discarded, and a Topic at or above the threshold is created without a
+  person's confirmation.
+- The user chose to follow the rule. `CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL["claude-haiku-5-5"]`
+  is 0.80. gemma3:4b's 0.95 is not re-derived on the revised prompt.
+- D-128 has the comparison.
+
+**Dated note, 13 November 2026 (later): claude-haiku-5-5's value is 0.72 again (D-129).**
+
+- **Why:** D-129 restores the prompt that 0.72 was derived on and that #85 measured, so the 0.80 above,
+  derived on D-128's revised prompt, no longer applies.
+- **Objective 05's clause 3 is met by the shipped build again,** as #85 recorded it.
+
+## D-107 · Schema v2 for FR-19: `KnowledgeGap`, its items and cycles, the `review_knowledge_gaps` permission, the aggregation cycle and its routes
+
+**Status:** Settled by the user · **Date:** 2026-11-08 · **Concerns:** FR-19, FR-14 (D-69), invariants 1
+and 4, D-13, D-14, D-66, D-99, docs/schema-v1.md §2 · **Stage:** Objective 06, due 13 November 2026
+
+**The tables** (`retrieval 0004`, additive and reversible; placed in `apps/retrieval` because the logs
+they aggregate live there, D-13):
+
+- **`KnowledgeGap`**, the proposal's table: `gap_id`, `subject`, `occurrence_count`, `status` (`Open` or
+  `Addressed`, a fixed vocabulary in `apps/core/constants.py`), `last_seen_at`; plus `first_seen_at`,
+  and `embedding` with `embedding_model` for D-109's grouping. The embedding columns follow
+  `ContentChunks`' rule (risk R10): a gap is a join candidate only for an item embedded by the same
+  model, and a provider switch starts new gaps rather than comparing vectors that cannot be compared.
+  `subject` is the first member's wording, verbatim: no model writes it, so no model-generated text
+  enters the record, and the Administrator reads what was actually asked.
+- **`KnowledgeGapItem`**: `gap`, and exactly one of `query` (a `QueryLog` row) or `search` (a
+  `SearchLog` row), each unique, with `added_at`. A log row is therefore counted once across every
+  cycle, and `occurrence_count` is a column the proposal names that a test can check against a count
+  of items.
+- **`KnowledgeGapCycle`**: `started_at`, `finished_at`, `triggered_by` (null for the command),
+  `queries_considered`, `searches_considered`, `entries_created`, `entries_updated`. It is the
+  evidence for "within one aggregation cycle", and it bounds the next cycle's window. **No count of
+  rows left out is stored or returned anywhere.**
+
+**FR-19 reads `QueryLog` and `SearchLogs` and writes neither.** Its CRUD line says Read, and the
+membership table is how a row is remembered without a column on it.
+
+**The cycle** (`apps/retrieval/gaps.py::run_cycle`, one transaction):
+
+1. The window is `[previous cycle's started_at − CYCLE_GRACE_SECONDS, this cycle's started_at)`,
+   over `QueryLog.answered_at` where `answered = False` and over `SearchLog.searched_at` where
+   `result_count = 0`; the first cycle has no lower bound. The grace of 60 seconds covers a row whose
+   timestamp was set before the previous cycle started and committed after it read; re-scanning is
+   harmless, because a row already a member is skipped by the unique constraint and a row left out on
+   permission grounds is left out again by the same rule. Windows timestamps tick at about 15.6 ms,
+   so no rule here depends on two timestamps differing.
+2. Each row is tested by D-108's rule. A row the asker's permissions explain is left out, and nothing
+   records that it was.
+3. Each remaining row is embedded (one batched call per cycle) and grouped by D-109's rule into an
+   Open gap or a new one; `occurrence_count` and `last_seen_at` move with it.
+4. The cycle row is written last, with its counts.
+
+**Trigger and surface.** "On a scheduled basis" is `manage.py aggregate_knowledge_gaps`, which a
+scheduler runs (Task Scheduler on the laptop); `POST /api/knowledge-gaps/cycles` runs one cycle
+synchronously for the demonstration and answers 201 with the cycle row. `GET /api/knowledge-gaps`
+lists entries, Open first by `occurrence_count` then `last_seen_at`, then Addressed, each as
+`{gap_id, subject, occurrence_count, status, first_seen_at, last_seen_at}`. `PATCH
+/api/knowledge-gaps/{id}` with `{"status": "Addressed"}` or `"Open"` is the proposal's "mark an entry
+as addressed"; 404 for an unknown id. **No asker, no role and no reason appears in any payload.**
+
+**The permission is a code, `review_knowledge_gaps`,** seeded for Administrator by `accounts 0007`,
+D-99's pattern, and checked on every one of the four routes: 401 without a session, 403 for a role
+that lacks it (invariant 4). *Declined:* testing the role name directly, which every other
+Administrator-only route does not do.
+
+**FR-14's panel** (closes D-69): the dashboard payload gains `knowledge_gaps`, `{open_count, top}`
+with up to `DASHBOARD_RECENT_ITEMS` Open entries, **present only for a caller whose role holds
+`review_knowledge_gaps` and absent otherwise**, so an Employee's payload keeps today's shape. The
+dashboard's date and department filters do not narrow it: a gap has no department and its dates are
+its own.
+
+**Not covered:** FR-18, which does not exist; a gap's department or asker breakdown ("asked repeatedly
+across departments" is visible only as the count); deleting a gap.
+
+**Build notes, 10 November 2026** (the django-backend agent's choices where this entry was silent or,
+in the first case, was overtaken; accepted as written):
+
+- **One `embed_question` call per item, not step 3's "one batched call per cycle".** D-108 needs a
+  question's vector before it can decide whether the row stays, and says it is embedded as retrieval
+  embeds it; and D-113's Voyage work encodes queries inside `embed_question`, so FR-19 follows it only
+  by calling it (D-109's note of 10 November). A source-level test holds this.
+- **What the cycle counts mean.** `queries_considered` and `searches_considered` count the rows added
+  to the log, the survivors, not the rows read: the rows read minus the rows added would be exactly
+  the number this entry says is stored nowhere. `entries_updated` counts entries that existed before
+  the cycle and gained a member; one created and joined in the same cycle counts once, as created.
+- **The centroid** stores the members' mean, updated as `(n*mean + v)/(n+1)`. Its direction is D-109's
+  normalised mean and cosine ignores length, so every join decision is the same; normalising would
+  lose the length the exact update needs.
+- **On a join,** `last_seen_at` is the later and `first_seen_at` the earlier of the entry's and the
+  item's, because the grace window can deliver a row older than an entry's newest member.
+- **Cycles are serialised** by a PostgreSQL advisory transaction lock, and `started_at` is taken after
+  it is acquired; two concurrent cycles would otherwise meet the one-to-one constraint as a 500. The
+  cycle locks the Open entries it may join, and PATCH locks its own row, so a status change made
+  during a cycle waits for it.
+- **An item's foreign keys to `QueryLog` and `SearchLogs` are PROTECT,** so `occurrence_count` cannot
+  fall behind its items.
+- **The cycle's 503 carries its own text,** not the ask's, and is logged on the attempts logger.
+- **A role missing from `EFFECTIVE_ROLES`** has every one of its rows left out: the exclusion fails
+  closed.
+- **`search_total(role_name=...)`** departs from `search.py`'s user-only convention, because it has no
+  user and writes no row; the module says so.
+- **Existing tests amended because of the new code and routes:** the two whole-payload dashboard tests
+  expect `knowledge_gaps` for the Administrator only; the seed tests follow accounts 0007; and
+  `test_rbac`'s new check that each permissioned route checks its own code found
+  `document-reprocess` missing from its list of permissioned routes, a gap older than this work,
+  now added.
+- **`POST /api/knowledge-gaps/cycles` is not throttled** (decided on 10 November, when the merge with
+  main raised it). It is Administrator-only; the advisory lock already runs one cycle at a time; and a
+  cycle considers only rows logged since the previous one, plus the grace, so pressing it again costs
+  almost nothing. D-79's budgets exist to stop one user's asks and ingestions monopolising the NPU,
+  and a cycle adds no NPU work beyond embedding rows already logged.
+
+**Dated note, 10 November 2026 (night): the security review of FR-19 at `45d5c25`.** One
+`security-reviewer` run, read only, taking an authenticated Employee and an Administrator who reads
+the log. It found nothing critical or high. An Employee reaches none of the three routes, nor the
+dashboard key, by any method or path variant. No payload carries an asker, a role, a reason or a
+count of rows left out. The exclusion discloses nothing to anyone who could not already read the
+content, because only the Administrator reads the log and D-66 lets them read every chunk.
+
+| Finding | Severity | What was done |
+|---|---|---|
+| M1. Keyword search bounds a term from below only, and the cycle embedded a kept zero-result term whole. A provider error on one very long term would roll that cycle back, and every later cycle would meet the same row and fail the same way | medium | **Fixed.** A kept term is cut to `MAXIMUM_QUESTION_LENGTH` (500 characters) before it is embedded and stored as a subject; the recount still uses the whole term. A test runs a cycle over a term of about 36,000 characters, then a second cycle |
+| L1. A zero-result search the recount leaves out is never embedded, so whether restricted content contains a term changes how much NPU work a cycle does: a timing signal on a resource every user shares | low | Open, with L2 |
+| L2. Search is unthrottled, so any Employee can repeat a term to put chosen text at the top of the Administrator's list and dashboard. It renders as text, never HTML | low | Open, with L1 |
+| L3. The exclusion discloses nothing only while every holder of `review_knowledge_gaps` reads what the Administrator reads, and nothing enforced that | low, latent | **Tested.** Every role holding the code must have the Administrator's effective roles |
+| I1. `first_seen_at` and `last_seen_at` are exact to the microsecond | informational | Accepted. No route gives an Administrator another user's activity to match them against, and a verbatim subject can identify its author anyway (accepted above) |
+| I2. Zero-result search terms now reach the AI provider, which keyword search never did | informational | **Recorded** in `docs/ai-provider.md`, where `input_type`'s callers are listed |
+| I3. A provider 4xx made `POST /api/knowledge-gaps/cycles` answer 500 | informational | **Closed by the merge with `main`:** under D-118 a 4xx is `ProviderRefused`, a `ProviderUnavailable`, so the route answers its 503 notice |
+| I4. `search_total`'s docstring said it builds no snippets | informational | **Corrected** |
+| I5. D-110's note still said the exclusion admits at `RELEVANCE_THRESHOLD` | informational | **Corrected** there, marked as a correction |
+| I6. `POST /api/knowledge-gaps/cycles` waits on the advisory lock with no timeout | informational | Accepted: the route is the Administrator's alone |
+
+- **L1 and L2 share one fix, and it is not FR-19's:** a throttle on `GET /api/search` and an upper
+  bound on a term, both on FR-12's route. They are left to the user rather than changed here.
+- **Also not FR-19's:** the embedding call sets no timeout of its own, so the client's default of
+  600 seconds applies to every embedding in the system. M1's cut removes the one input only the
+  cycle could send; a provider that hangs affects asks and ingestion the same way.
+
+**Dated note, 10 November 2026 (night): the schedule is daily, and it is in the repository.** The
+requirements audit of that night (D-119, its finding 11) found "on a scheduled basis" unmet as built:
+"Trigger and surface" above names "Task Scheduler on the laptop" but no script, interval or set-up
+step, and D-114 has since let M8 run on any device. The user's decision: a daily run.
+
+- **`scripts/register_knowledge_gap_schedule.ps1`** registers `manage.py aggregate_knowledge_gaps`
+  in Windows Task Scheduler for the current user, daily at 02:00 by default, starting a missed run
+  when the machine is next on and stopping a run after two hours. No password is asked for or
+  stored, so the task runs while that user is logged on. `docs/alpha-deployment.md` section 9 gives
+  the steps and a crontab line for a Linux host.
+- **Registering it on the host is the user's step,** since it changes that machine's settings.
+- **A run that cannot reach the provider changes nothing,** and the next takes the rows it missed,
+  because each cycle's window starts at the last committed cycle.
+- **This supersedes "Task Scheduler on the laptop" above.**
+- **Tests** pin the script's contract: it runs the command from the checkout's venv, daily, and
+  takes no password; the runbook names it.
+
+**Dated note, 10 November 2026 (night): L1 and L2 are taken up** by a `search` throttle and an upper
+bound on a search term, on FR-12's route (D-79's note of the same night). Each is reduced, not
+removed: that note says what remains.
+
+**Dated note, 12 November 2026: "the exclusion fails closed" was not true of every row when it
+was written, and for questions it now is.** The build note above says a role missing from
+`EFFECTIVE_ROLES` "has every one of its rows left out". The requirements audit and the security
+review of that day (D-126's note) found it was not so on voyage-4. The code's history shows it was
+not so from the start.
+
+- **For a question, the role was read only after a return that kept the row:**
+  - **when no passage reached the threshold,** for every model, in the first build (`3ee2d43`,
+    the commit that also wrote the sentence), until rank-one replaced it (`333be14`, 10 November);
+  - **when no chunk of the question's embedding model exists,** from the first build until now;
+  - **on voyage-4, when no passage reaches its threshold,** again from D-126 (`7e69bee`,
+    11 November).
+- **No test put such a role through the cycle,** under any rule.
+- **Now the role is read first.** `run_cycle` leaves out a question from a role that reads nothing
+  before anything is embedded, under rank-one and under threshold-first, so such a row costs no
+  provider call and cannot fail the cycle. The decision itself also fails closed for such a role,
+  for its direct callers. Four tests hold it, in `apps/retrieval/tests/test_knowledge_gaps.py`:
+  - `test_on_voyage_a_role_that_reads_nothing_has_its_questions_left_out`;
+  - `test_under_rank_one_a_role_that_reads_nothing_has_its_questions_left_out`;
+  - `test_a_role_that_reads_nothing_is_left_out_with_no_passage_of_the_model_either`;
+  - `test_the_decision_itself_leaves_out_a_role_that_reads_nothing`.
+- **For a search the asker's role is not read at all, and never was.** The search is counted again
+  as the Administrator and kept only when nobody could match it. So such a role's search is left
+  out whenever any content matches, and kept when none does. The build note's "every one of its
+  rows" was never true of searches in the literal sense, and nothing changes there.
+- **Reachability.** No route creates a role: `/api/roles` only lists them, and
+  `/api/users/<id>/role` assigns an existing one. The two seeded roles are both in
+  `EFFECTIVE_ROLES`. Such a role exists only if someone creates one in the database directly.
+
+**Dated note, 15 November 2026: the task ran only on mains power.** The user registered this task
+and FR-16's retry (D-125's note of the same day) on the alpha's laptop on 15 November, and started
+each by hand: the retry at 11:46 and this task at 11:49. Neither ran. The laptop was on battery, and
+`New-ScheduledTaskSettingsSet`, called without the two switches below, gives a task Task
+Scheduler's two power conditions: start only on mains power, and stop on going to battery. Both
+tasks were still `Queued` when they were found at 14:38, and neither had written a log. So the note
+of 10 November's "daily" held only while the laptop was plugged in. Its tests could not see that:
+they read the script's text, and a default is not in the text.
+
+- **Both scripts now pass `-AllowStartIfOnBatteries -DontStopIfGoingOnBatteries`.** A task starts
+  on battery, and is not stopped when the laptop is unplugged.
+- **The alpha's two tasks were changed in place the same day.** Afterwards both read `Ready`, with
+  battery allowed, and their logs were first written at 14:41.
+- **A task registered by an earlier version of a script keeps the old conditions.**
+  - **Registering it again with this version** replaces it. Registering replaces the whole task, so
+    anything set by hand in Task Scheduler, such as "Run whether user is logged on or not", has to
+    be set again.
+  - **On the alpha,** each script's copy is the earlier version until the alpha is redeployed to a
+    `main` with this change. Registering again from it before then restores the defaults.
+  - **The conditions can instead be changed in place,** as they were on the alpha.
+  - `docs/alpha-deployment.md` sections 9 and 10 give both ways.
+- **Tests:**
+  - **Each script's text test,**
+    `test_the_schedule_starts_on_battery_and_keeps_running_when_unplugged`, pins both switches in
+    the lines of its `New-ScheduledTaskSettingsSet` call. Those lines include any comment in them.
+    So a switch inside an inline `<# #>` comment there would still pass, as the requirements audit
+    found. B5 and B6 below put the comment on a line of its own.
+  - **`apps/core/tests/test_schedule_scripts.py`** reads the conditions from the settings object
+    each script builds, and checks that the script's registration passes that object. It never runs
+    a script:
+    - PowerShell's parser finds the statements that assign `$limit` and `$settings`;
+    - the test refuses to evaluate them if they call any command but `New-TimeSpan` and
+      `New-ScheduledTaskSettingsSet`;
+    - otherwise it evaluates only those statements.
+
+    It runs only where Windows PowerShell is found, so CI's Linux runner skips it.
+- **A first version of that test registered a real task, and replaced it on every run.**
+  - **What it did:** it ran each script with `Register-ScheduledTask` replaced by a function of
+    that name, in a stand-in checkout with empty stand-ins for `python.exe`, `manage.py` and
+    `.env`, under the name "never registered". The replacement was not what the script called, for
+    a reason not established, so the real command registered the task for the current user.
+  - **Its runs:** that version ran four times, at 14:50:15, 14:51:19, 14:51:45 and 14:52:17. Each
+    run replaced the task.
+    - The first and third ran both scripts, FR-19's case first. So, by the same path, each left the
+      meeting script's task: hourly, with its first run a minute after it was registered. This is
+      inferred; no output shows it.
+    - The second and fourth ran FR-19's case alone. So each replaced it with FR-19's: daily at
+      02:00.
+  - **Found and removed:** the last task, FR-19's, was found at 14:52:39 and removed with
+    `Unregister-ScheduledTask` at 14:53.
+  - **Not known:** whether either hourly task's first run came round before it was replaced.
+    - Task Scheduler's history log is turned off on this machine, and pytest has since deleted the
+      temporary folders.
+    - Such a run would have started `cmd.exe` on the empty stand-in for `python.exe`, which cannot
+      run.
+- **Deliberate breaks.** Each change was broken on purpose and the tests run again. This table is
+  generated from those runs:
+
+  | Break | What | Tests that failed |
+  |---|---|---|
+  | B1 | FR-19's script without `-AllowStartIfOnBatteries` | `test_knowledge_gap_schedule::test_the_schedule_starts_on_battery_and_keeps_running_when_unplugged`; `test_schedule_scripts::test_the_registered_task_runs_on_battery[register_knowledge_gap_schedule.ps1]` |
+  | B2 | FR-19's script without `-DontStopIfGoingOnBatteries` | `test_knowledge_gap_schedule::test_the_schedule_starts_on_battery_and_keeps_running_when_unplugged`; `test_schedule_scripts::test_the_registered_task_runs_on_battery[register_knowledge_gap_schedule.ps1]` |
+  | B3 | FR-16's script without `-AllowStartIfOnBatteries` | `test_schedule_scripts::test_the_registered_task_runs_on_battery[register_meeting_summary_schedule.ps1]`; `test_summary_commands::test_the_schedule_starts_on_battery_and_keeps_running_when_unplugged` |
+  | B4 | FR-16's script without `-DontStopIfGoingOnBatteries` | `test_schedule_scripts::test_the_registered_task_runs_on_battery[register_meeting_summary_schedule.ps1]`; `test_summary_commands::test_the_schedule_starts_on_battery_and_keeps_running_when_unplugged` |
+  | B5 | FR-19's switches moved from the call into a comment | `test_knowledge_gap_schedule::test_the_schedule_starts_on_battery_and_keeps_running_when_unplugged`; `test_schedule_scripts::test_the_registered_task_runs_on_battery[register_knowledge_gap_schedule.ps1]` |
+  | B6 | FR-16's switches moved from the call into a comment | `test_schedule_scripts::test_the_registered_task_runs_on_battery[register_meeting_summary_schedule.ps1]`; `test_summary_commands::test_the_schedule_starts_on_battery_and_keeps_running_when_unplugged` |
+  | B7 | FR-19's registration passed default settings, not `$settings` | `test_schedule_scripts::test_the_registered_task_runs_on_battery[register_knowledge_gap_schedule.ps1]` |
+  | B8 | FR-16's registration passed default settings, not `$settings` | `test_schedule_scripts::test_the_registered_task_runs_on_battery[register_meeting_summary_schedule.ps1]` |
+  | B9 | FR-19's `$settings` calls a command other than the two allowed (`Write-Output`) | `test_schedule_scripts::test_the_registered_task_runs_on_battery[register_knowledge_gap_schedule.ps1]` |
+  | B10 | FR-16's `$limit` calls a command other than the two allowed (`Write-Output`) | `test_schedule_scripts::test_the_registered_task_runs_on_battery[register_meeting_summary_schedule.ps1]` |
+
+  B7 to B10 are caught only by the Windows test, so CI does not catch them.
+- **Both suites.**
+  - **The backend suite** passed locally at `2f5cc22`: 4,866 tests, with every protected endpoint
+    covered from both roles (47 of 47). It ran before the runbook's last wording change, which its
+    tests do not read.
+  - **After the audit,** only the Windows test changed, adding its guard. The three test files
+    above pass with it, and B1 to B10 were run again.
+  - **The front end:** no front-end file changed, so the front-end suite is unaffected.
+
+## D-108 · FR-19's permission exclusion: the top-ranked passage over the Administrator's scope decides, and a zero-result search is recounted as the Administrator
+
+**Status:** Settled by the user · **Date:** 2026-11-08 · **Concerns:** FR-19's Validation clause,
+invariant 1, FR-11, D-37, D-66, D-102 · **Builds on:** D-107
+
+**The clause.** "Queries that returned nothing because the user lacked access are excluded, since
+these represent a permission boundary rather than a documentation gap, and including them would both
+distort the list and imply the existence of restricted content." Objective 06 tests it from both
+sides: every genuinely unanswerable query must appear, and "no query returning nothing on permission
+grounds may appear in the log at all".
+
+**The constraint.** Deciding that a no-answer was caused by scope means checking the question against
+content the asker cannot see. That check runs only inside the Administrator-only cycle (D-107), on
+the server, after the fact. It never runs in the asker's request, so no reply, count, partial-match
+offer or timing differs from today for any user (invariant 1), and nothing is written that says why a
+row was left out.
+
+**The rule for a question** (an unanswered `QueryLog` row, FR-13 turns included):
+
+1. The asker's role is read from the user row now. (A role changed since the ask is a known
+   limitation: the log holds no role of its own, and FR-19 may not write one.)
+2. The question is embedded with the query prefix, as retrieval embeds it. A conversation turn is
+   embedded on its own wording, not composed with its earlier turns as the pipeline did (D-42); the
+   simpler form was chosen for the five days, and the row is aggregated either way.
+3. It is ranked over `candidate_chunks(role_name="Administrator", ...)`: the whole corpus, through the
+   one scoping helper, with no new unscoped query shape. D-66 makes the Administrator's scope every
+   chunk, so this is "what an Administrator would have found".
+4. The ranked list is admitted at `RELEVANCE_THRESHOLD`. If nothing is admitted, nobody could have
+   been answered: the row is a gap. If the **top admitted passage** is one the asker's role cannot
+   read (its `visible_to_roles` has no overlap with the asker's effective roles), the row is
+   permission-affected and left out. Otherwise the best match was readable by the asker, so their
+   no-answer was not a permission matter: the row is a gap.
+
+**The rule for a search** (a `SearchLog` row with `result_count` 0): the same keyword search is
+counted again as the Administrator, through a non-logging total in `apps/retrieval/search.py`. More
+than zero means the asker's role withheld it; zero means nobody could find it, and it is a gap.
+Keyword matching is deterministic, so this side has no error.
+
+**Why rank one, and not the alternatives.** *Any withheld passage above the threshold* would leave out
+more genuine gaps: D-102 found that in users' wording unrelated passages often clear 0.30. *A margin
+between the best withheld and the best readable score* is the most discriminating rule, costs one more
+tuned constant, and is the fallback. *Re-running generation as the Administrator* is the most literal
+reading, but it spends one model call per logged row per cycle and lets a model that over-answers
+(D-102's 8 November note) decide the exclusion.
+
+**The known risk, and how it is checked before the frozen run.** A genuine gap whose best spurious
+match over the whole corpus happens to be an Administrator-only chunk is wrongly left out. The rule is
+checked first on development material, `corpus/objective-02/dev-set-v2.json`'s no-answer and scoped
+questions and `dev-set.json`'s, asked as the Employee: scoped questions should be left out and
+no-answer questions kept. If that check fails, the margin rule is chosen on the same material before
+the thirty are run. The thirty are never used to choose.
+
+**What the Administrator can and cannot learn.** The list shows questions Employees asked, verbatim,
+without who asked them; that is FR-19's design and the proposal's example. An Administrator already
+reads every document (D-66), so a subject in the list discloses no content. An absent row is
+indistinguishable from a question nobody asked.
+
+**Not covered:** FR-13 composition in the cycle; a role recorded at ask time; re-evaluating rows when
+a document's visibility later changes.
+
+**Dated note, 10 November 2026: the development check passes, so the rank-one rule stands and no margin
+is chosen.** `scripts/exclusion_dev_check.py` called the cycle's own decision
+(`_question_explained_by_permissions`) with the cycle's Administrator scope and `embed_question`, on
+commit `3ee2d43`, FLM v0.9.39 (`embed-gemma`), `kmp_obj0506_20261101`, `RELEVANCE_THRESHOLD` 0.30,
+every question asked as the Employee; nothing was written. The evidence is
+`corpus/objective-06/runs/2026-11-10/exclusion-dev-check/`.
+
+- **Scoped questions left out: 6 of 6** (u30, u31, u32, d11, d21, d22).
+- **No-answer questions kept: 9 of 9** (u33 to u37, d24 to d27), with top passages from 0.30 to 0.49,
+  every one readable by the Employee.
+- **Ordinary questions, for information: 46 of 50 kept.** Three of the four left out are right: u28,
+  u29 and d23 have Administrator-only sources (D15, T02, D09), so for an Employee they are permission
+  boundaries. **One is the known risk, observed:** u07, "I clicked a dodgy link in an email, what
+  now?", whose answer is in D02, which the Employee can read, ranks the Administrator-only phishing
+  debrief (T05) first at 0.3485. Had an Employee's u07 gone unanswered, it would have been left out
+  of the log. That is a retrieval miss rather than a documentation gap, since the answer exists where
+  the asker can read it, so the cost is small, but it is a real false exclusion and it is recorded
+  as one.
+- **An FLM-configuration result,** like D-109's and D-110's values: repeated on the new configuration
+  before the thirty are run there (D-110's note).
+
+**Dated note, 10 November 2026 (evening): the rule now decides on the top-ranked passage even below
+the threshold.** The user's decision, after Objective 06's first cycle on the frozen thirty (D-110's
+note) kept P02: its answer exists only in the Administrator-only Atlas brief, which scored 0.2977 to
+0.2983 across the Administrator's scope, under `RELEVANCE_THRESHOLD` and inside D-40's drift, and
+step 4 above kept every row with nothing admitted.
+
+- **The rule from `333be14`:** rank the question over the Administrator's scope and take the
+  top-ranked passage, whether or not it clears the threshold. If its `visible_to_roles` has no
+  overlap with the asker's effective roles, the best evidence for an answer is where the asker cannot
+  read it, and the row is left out. If the asker may read it, the row is a gap. If no passage of the
+  question's embedding model exists, the row is a gap.
+- **Development check repeated on the new rule** (`corpus/objective-06/runs/2026-11-10/
+  exclusion-dev-check-2/`): scoped questions left out 6 of 6, no-answer questions kept 9 of 9,
+  ordinary questions kept 46 of 50, exactly as under the old rule. Both rules score 15 of 15, so the
+  development set did not choose between them: the frozen result did, and this is disclosed as such.
+- **The known cost:** a genuine gap whose weak best match happens to be a restricted passage is left
+  out. Neither the development questions nor the frozen thirty's unanswerable asks have that shape
+  (every one's top passage is readable), so its size is unmeasured.
+- **Tests:** two below-threshold cases replace the old "nothing above the threshold is kept" test;
+  the restricted one failed under a break restoring the old condition.
+
+**Dated note, 10 November 2026 (night): two additions, from the requirements audit and the security
+review of that night.**
+
+- **The second development check's table shows the top admitted passage, not the top-ranked one.**
+  Its score and readable columns came from the passages that cleared `RELEVANCE_THRESHOLD`, as the
+  script then stood, so a question the new rule decided below the threshold shows `None` in them.
+  Its outcome column calls the cycle's own function, so the 15 of 15 holds. The script now reports
+  the top-ranked passage.
+- **This entry's argument that the log discloses nothing rests on its readers reading every chunk**
+  (D-66). A test now requires every role holding `review_knowledge_gaps` to have the
+  Administrator's effective roles (D-107's note of the same night, L3).
+
+**Dated note, 11 November 2026: on voyage-4 the development check fails under rank-one, and the user
+chose threshold-first for that model (D-126).**
+
+- **The check was not repeated before the thirty ran on `anthropic`,** as this entry's note of 10
+  November and D-110's note on the FLM configuration ask. That was an oversight, owned in #86's
+  write-up. Run afterwards, on commit `9527cd7` and `kmp_obj0506_anthropic_20261110`
+  (`corpus/objective-06/runs/2026-11-10-anthropic/exclusion-dev-check-voyage/`), it fails:
+  - scoped questions left out: u30, u31, u32, d11, d21, d22, as they should be;
+  - no-answer questions kept: u33, u34, u35, u37, d24, d25, d26;
+  - **no-answer questions left out: u36 and d27.** Their top-ranked passages score 0.230 and 0.238,
+    under voyage-4's 0.2687, and are Administrator-only.
+- **That is the evening note's "known cost", now observed.** On embed-gemma no development or frozen
+  question had the shape. On voyage-4 u36, d27 and the thirty's U01 have it.
+- **The fallback was not followed as written.** This entry says the margin rule is chosen on the
+  development material when the check fails, and that the thirty are never used to choose. On
+  voyage-4 the margin rule and step 4's threshold-first both pass the check, and the user chose
+  threshold-first, informed by the thirty. D-126 records the choice and both departures.
+- **Rank-one is still the rule for every model `GAP_EXCLUSION_RULE_BY_MODEL` does not list,**
+  embed-gemma included. No FLM result in this entry changes.
+
+**Dated note, 12 November 2026: step 2's "embedded on its own wording" no longer decides a
+follow-up's exclusion (D-127).** The rule above embeds a conversation turn alone, "the simpler form
+... chosen for the five days", and lists "FR-13 composition in the cycle" under "Not covered".
+
+- **What that cost,** found by the audit and the security review of D-126: a follow-up's own
+  wording is not what retrieval ranked. On voyage-4 it can admit nothing (t03 and t06 in D-112's
+  HTTP check), and threshold-first then kept it whatever it was about. Under rank-one a weak
+  passage decided it by chance.
+- **Now** a follow-up is decided on the string retrieval ranked, the turn after its earlier turns
+  as the ask composed them, and then on its own wording; either can leave it out. D-127 records
+  the decision, the check on real threads, and what it does not cover.
+- **Unchanged:**
+  - a follow-up's subject and its grouping stay on its own wording (D-109);
+  - a one-off question is decided exactly as before, except one from a role that reads nothing,
+    which is now left out (D-107's note of 12 November).
+
+## D-109 · Gaps are grouped by cosine similarity to an Open entry's centroid, and `GAP_GROUPING_THRESHOLD` is chosen on a development paraphrase set
+
+**Status:** Settled by the user · **Date:** 2026-11-08 · **Concerns:** FR-19's Business logic clause,
+Objective 06's second clause, D-38, D-40, D-93 · **Builds on:** D-107, D-108
+
+**The clause.** "Entries are grouped by similarity rather than exact wording, so that differently
+phrased questions about one subject aggregate into a single entry", tested as "differently worded
+questions on a single subject must group into one entry with an accurate occurrence count".
+
+**The rule.** Each item that survives D-108, a question or a search term, is embedded with
+`embed-gemma`'s query prefix (D-38), the same way a question is embedded for retrieval. In timestamp
+order, each item is compared with every **Open** gap whose `embedding_model` matches: it joins the
+nearest one whose centroid cosine is at least `GAP_GROUPING_THRESHOLD`, and that gap's centroid
+becomes the normalised mean of its members' vectors, its count rises by one and `last_seen_at` moves;
+otherwise it starts a new gap with its own wording as the subject and its vector as the centroid.
+An Addressed gap is not a candidate: a subject that recurs after being addressed opens a new entry,
+which is what an Administrator needs to see.
+
+**Why a centroid and not single linkage.** Joining on any one member chains: over several cycles two
+unrelated subjects can meet through an intermediate wording. A centroid moves slowly and keeps a gap
+about one thing. *Exact normalised text* was declined because it fails the clause by construction.
+
+**How the threshold is chosen: on `corpus/objective-06/dev-paraphrases.json`, never on the thirty.**
+Twelve subjects the corpus can answer, each in two differently phrased questions and one search-style
+term; the within-subject pairs are the positives and every cross-subject pair is a negative, with six
+hard pairs (same document or shared vocabulary) reported on their own. If the lowest positive
+similarity exceeds the highest negative, the threshold is their midpoint; otherwise the value with the
+best pairwise F1. The gap between the two, against D-40's drift of 0.003, is reported either way. The
+set shares no subject with the thirty seeded queries, so the thirty remain a test set (D-93). The
+result replaces the PROVISIONAL value in `apps/core/constants.py`, with the sweep under
+`corpus/objective-06/runs/`.
+
+**Known limits.** Greedy order dependence: an item that arrives before a gap it would better fit
+starts its own. A search term of two words and a full question on one subject may sit further apart
+than two questions do; the development set includes a search term in every subject so the threshold
+accounts for it.
+
+**Not covered:** merging or splitting gaps by hand; a model-written subject; re-grouping existing
+entries after the threshold changes.
+
+**Dated note, 9 November 2026: the sweep ran, and `GAP_GROUPING_THRESHOLD` is 0.5256.** Commit
+`4a1ed3d`, FLM v0.9.39, `embed-gemma` with the query prefix, 36 items, 36 within-subject and 594
+cross-subject pairs; nothing read from or written to a database. The evidence is
+`corpus/objective-06/runs/2026-11-09/grouping-sweep/`.
+
+- **Pairwise similarities do not separate.** The lowest within-subject pair is 0.5322 ("For how many
+  years must finance records be retained?" / "When can old accounting paperwork be destroyed?"); the
+  highest cross-subject pair is 0.5876 ("password length" / "password reset window"), one of the
+  six hard pairs. A second hard pair, the two D04 subjects, reaches 0.5788. So the rule's second
+  branch applies: the best pairwise F1, **0.5256**.
+- **Centroid grouping, simulated at 0.5256 in the set's order,** forms exactly 12 entries of 3 from
+  the 36 items, none mixing subjects. The centroid does better than any single pairwise cut, because
+  a search term and a question on one subject both move towards the subject's mean.
+- **The margin is thin:** the lowest within-subject pair is 0.0066 above the threshold, about twice
+  D-40's drift. Short search terms that share a word across subjects ("password …") are the
+  near-miss case. Re-measure with the corpus, the embedding model or the prefix.
+
+**Dated note, 10 November 2026: an FLM-configuration value, and what a provider switch does to the
+log.** D-113 funds the `anthropic` provider (Claude with Voyage embeddings) and leaves the default to
+measurement.
+
+- **0.5256 is an `embed-gemma` cosine,** 0.0066 above the lowest within-subject pair. Voyage's
+  similarities are distributed differently, so before `anthropic` is relied on, the value is
+  re-derived on the same development paraphrase set by this rule, as D-113 requires for FR-12's
+  values. `scripts/grouping_dev_sweep.py` records the provider, the chat model and the embedding model
+  with its result from now on.
+- **Matching on `embedding_model` (R10) makes a switch safe but visible.** Open gaps written under
+  `embed-gemma` are never candidates for a Voyage vector, so a subject that recurs after a switch opens
+  a second entry beside the first. Two entries is the safe failure; vectors from two models are never
+  compared. An Administrator can mark the older entry addressed.
+- **FR-19 embeds only through `apps.retrieval.query_embedding`,** the one query-embedding path, and
+  never applies a query prefix itself, so a provider-specific encoding added there (Voyage's input type
+  in place of `embed-gemma`'s prefix) reaches the cycle without a change in `apps/retrieval/gaps.py`.
+  A test holds this.
+
+**Dated note, 10 November 2026: voyage-4's own value is 0.5054 (D-122).** This rule, run on the same
+paraphrase set with Voyage's query embeddings (`corpus/objective-06/runs/2026-11-10/grouping-sweep-voyage/`):
+
+- **The pairs again do not separate.** The lowest within-subject pair is 0.5157 and the highest
+  cross-subject pair 0.5297, the same password pair. So the best pairwise F1 gives **0.5054**.
+- **Centroid grouping at 0.5054** forms 12 entries of 3, none mixed.
+- **The margin is wider than FLM's:** 0.0103, about twenty times Voyage's re-embedding jitter
+  (0.00047).
+- **The threshold is now per embedding model** (`GAP_GROUPING_THRESHOLD_BY_MODEL`, read through
+  `gaps.grouping_threshold`). embed-gemma keeps 0.5256.
+
+**Dated note, 12 November 2026: the margin's multiple of Voyage's jitter was overstated.** The note
+above calls voyage-4's grouping margin of 0.0103 "about twenty times Voyage's re-embedding jitter
+(0.00047)". 0.00047 was the largest difference one earlier check saw, not a bound. The evidence of
+D-126 has differences up to 0.0012 between two passes over one question (D-126's note of 12
+November). Against 0.0012 the margin is about 8.6 times. `voyage-http-check.md` in
+`corpus/objective-02/runs/2026-11-10/voyage-http-check/` uses 2 × 0.00047 as a bound in the same
+way. Its verdicts stand, because the shifts it needed were 0.037 and more, far above 0.0024. Nothing
+here was re-run.
+
+## D-110 · Objective 06's thirty are frozen, with the unanswerable asks screened on retrieval scores; FR-12's decline weakness stays open
+
+**Status:** Settled by the user · **Date:** 2026-11-09 · **Concerns:** Objective 06, FR-12, FR-19,
+D-93, D-102, D-107 to D-109 · **Evidence:** `corpus/objective-06/runs/2026-11-08/pre-measurement/`,
+`corpus/objective-06/runs/2026-11-09/screening.md`
+
+**The risk the brief named, measured.** A question that FR-12 answers wrongly is logged as answered and
+never reaches the gap log, so Objective 06's first clause ("every genuinely unanswerable query … must
+appear in the log within one aggregation cycle") can fail for FR-12's reason alone. The pre-measurement
+ran the draft's 8 unanswerable and 6 permission-only asks through the shipped pipeline twice, at
+`711fcda`, with nothing written: **2 of 8 unanswerable asks reached a no-answer**, the other six were
+answered from readable material scoring 0.32 to 0.42 with real in-scope citations (a salary question
+cited the onboarding checklist). 4 of 6 permission-only asks reached path A. The two runs agreed on every
+question; a third was cut off by the session ending.
+
+**The user's decision: screen the ask wordings on retrieval scores, then freeze.**
+
+- **Method.** Candidate wordings for the same four genuinely unanswerable subjects (salary review,
+  corporate card, christmas shutdown, jury duty), each scored by `citation_harness.py --scores-only`:
+  embed and rank over the asking role's scope, no generation. Kept: per subject, the two
+  lowest-scoring wordings with a top in-scope score **at most 0.25**, one per role where the scores
+  allow. The floor is 0.25, not 0.28: embeddings are deterministic on FLM v0.9.39, but a re-chunk or a
+  corpus edit moves scores, and 0.05 of headroom under `RELEVANCE_THRESHOLD` (0.30) costs nothing
+  today.
+- **Three rounds,** 53 wordings in all. Round 1 (24) gave four; round 2 (17) two more; round 3 (12),
+  approved for the two subjects still short with a replacement subject as the fallback, completed the
+  eight.
+- **The kept eight and their scores:** U01 0.2125 (Employee), U02 0.2173 (Administrator), U04 0.2413
+  (Employee), U05 0.2447 (Administrator), U07 0.1913 (Employee), U08 0.2304 (Administrator), U10
+  0.2421 (Employee), U11 0.2387 (Administrator). Wordings and nearest items are in `screening.md`
+  and in `queries.json`'s `screened_top_score`.
+- **Unchanged from the lead's approval of 8 November:** the ten answerable queries (each ask clears
+  0.30 with its expected source ranked first), the four zero-result search terms (no chunk contains
+  them), and the eight permission-only queries, which were not screened.
+- **Frozen:** `corpus/objective-06/queries.json`, SHA-256
+  `e78314b71b0096b95640939374b803d19e05f3f55e5fca273637f414c66e34b7`. Nothing is tuned against it
+  from here (D-93).
+
+**What this is, and what it is not.**
+
+- **A verification choice, not a fix.** Objective 06 then tests FR-19's aggregation, exclusion and
+  grouping on queries that reach a no-answer on the shipped build. It does not show that FR-12 declines
+  the questions it should.
+- **FR-12's decline weakness stays an open finding** (D-102's 8 November note; the item 10 audit ruled
+  it carriable, not an FR breach). The screening makes the cause visible: a wording that shares the
+  corpus's vocabulary pulls a readable passage over 0.30 and generation answers from it. **In real use
+  the gap log will under-capture unanswerable questions that sit near the corpus's subject matter**
+  until generation declines reliably.
+- **The acceptance test for any future decline fix** is an unscreened re-run of the draft's original
+  eight wordings (`pre-measurement-asks.json`) and of these thirty. The thirty stay frozen either way.
+
+**Not covered:** the permission-only asks P04 and P07, answered from readable material in the
+pre-measurement, which therefore do not exercise the exclusion; the exclusion is exercised by P01,
+P02, P06, P08, the two permission-only searches and the database's five pre-existing Employee searches
+for Administrator-only phrases.
+
+**Dated note, 10 November 2026: the screening holds for the FLM configuration only** (D-113, D-114).
+
+- **The path-A guarantee is an `embed-gemma` fact.** The kept eight scored at most 0.25 on
+  `embed-gemma`, under `RELEVANCE_THRESHOLD` 0.30. Neither number carries over to Voyage and a
+  re-derived threshold. The thirty stay frozen, so on `anthropic` Objective 06's first clause becomes
+  an unscreened test, which is what this entry already names as the acceptance test for a decline fix.
+- **D-108's exclusion depends on the active provider's embeddings,** because it decides on the
+  top-ranked passage over the Administrator's scope. Its development check (D-108's known-risk
+  paragraph) is repeated on the new configuration before the thirty are run there. *(Corrected the
+  same night: as first written this bullet said the exclusion admits at `RELEVANCE_THRESHOLD`, which
+  stopped being true at `333be14`, D-108's evening note.)*
+- **If M8 runs on `anthropic`,** Objective 06 is verified again on that configuration. Generation on
+  Claude is not deterministic (no temperature, D-115), so the seeding is repeated and the outcome
+  reported per draw, as D-103 measured FLM's band.
+- **Every Objective 06 result records its configuration:** the provider, the chat model and the
+  embedding model, in the seeding, sweep and verification records.
+
+**Dated note, 10 November 2026 (evening): Objective 06's verification. The first cycle meets clauses 1
+and 2 and not clause 3; after one disclosed rule change, a second cycle meets all three.** The
+evidence is `corpus/objective-06/runs/2026-11-10/objective-06.md`, with `seed/`, `cycle/`,
+`verification/` and `rerun/`.
+
+| | Cycle 1, `ce886e7` | Cycle 2, `333be14` |
+|---|---|---|
+| status | **the independent test** | informed by cycle 1 (D-108's note) |
+| clause 1, unanswerable queries and zero-result searches in the log | 12 of 12, met | 12 of 12, met |
+| clause 2, one entry per subject, count accurate | 4 entries of 3, met | 4 entries of 3, met |
+| clause 3, no permission-only query in the log | **P02 in the log, not met** | none, met |
+
+- **The seeding** went through the shipped `answer_question` and `search` as each query's user: the 8
+  screened unanswerable asks all took no-answer path A, the 7 answerable asks were answered, and of
+  the 6 permission-only asks 4 reached a no-answer while P04 and P07 were answered from readable
+  material, as the pre-measurement found. A first attempt stopped after its first ask on a script
+  error; that ask's one logged row was deleted and the thirty were seeded once.
+- **Cycle 2 ran over the same seeded logs,** after cycle 1's 5 entries, 13 items and 1 cycle record
+  were deleted.
+- **Cycle 1 stands as the independent figure** for clause 3. The four subjects grouped correctly on
+  both cycles, and no answerable query entered the log on either.
+- **Correction to this entry's freeze line:** the SHA-256 given above, `e78314b7…`, is the file with
+  Windows line endings as written before commit. Git stores it with LF endings (`core.autocrlf
+  input`), and the committed file, which the seeding read, hashes to
+  `e40a589c91893be6cca1ccd77d175571df8090d51d9ebdcaadade95be4dc1462`. The two differ only in line
+  endings.
+
+**Dated note, 10 November 2026 (night): the rule change is a departure from D-93, and is named as
+one.** The thirty's status line says "Never tuned against again (D-93)". Since `333be14` that is
+not true of the exclusion: the first cycle on the thirty chose the rule now shipped (D-108's evening
+note). D-93 settles that the frozen sets are not tuning sets, so this was a departure from it. It
+was made once, by the user's decision, and disclosed, with the first cycle kept as the independent
+result. The file is frozen and is not edited; this note supersedes its line. The rule now shipped
+has no independent figure (the requirements audit, D-119, its finding 8). The thirty remain the
+acceptance test for a decline fix, as above.
+
+**Dated note, 11 November 2026: the thirty informed a second rule choice, for voyage-4, and it is
+named as a departure from D-93 (D-126).** The thirty's first cycle on `anthropic` left U01 out under
+rank-one (#86: clause 1 not met, clauses 2 and 3 met). The user then chose threshold-first for
+voyage-4, and the choice between it and the margin rule used the thirty's P02 and U01. So the night
+note's "made once" is true of `333be14` only. As there, the first cycle on that configuration stays
+the independent result, the rule now shipped for voyage-4 has no independent figure, and the file is
+frozen and is not edited. The repeated seeding that this entry's note on the FLM configuration asks for
+on `anthropic` was run as draws 1, 2 and 3: they are in D-126 and
+`corpus/objective-06/runs/2026-11-11-anthropic/objective-06-d126.md`. FR-12's declines are not scored
+there.
+
+**Dated note, 11 November 2026 (FR-12): on `anthropic`, the acceptance test this entry names is
+met, and FR-12's decline weakness is closed on that configuration. It stays open on FLM.**
+- **The evidence** is `corpus/objective-06/runs/2026-11-11-anthropic-draws/fr12-declines.md`.
+- **The scoring rule,** and what this note may conclude, were committed in that folder's
+  `plan.md` before any draw (`c46c38e`).
+
+| Unscreened, on `anthropic` (Claude Haiku 5.5, voyage-4 at 0.2687) | Draws | Unanswerable asks reaching a no-answer (path A / B) | Permission-only asks reaching a no-answer |
+|---|---|---|---|
+| the draft's original eight (`pre-measurement-asks.json`): a copy of D-121's harness at `3cd0726`, on a new `kmp_fr12_declines_20261111` restored `--into` from `kmp_anthropic`'s snapshot | 5 | 40 of 40 (5 / 35) | 30 of 30 |
+| the thirty (`queries.json`): the Objectives 05/06 session's seedings at `c3ac5b0` (#86) and `462e8e9` (PR #90), scored from their QueryLog exports | 3 | 24 of 24 (18 / 6) | 18 of 18 |
+
+- **Haiku proposed nothing whenever an unanswerable ask reached generation:** 41 of 41 times,
+  `rejected_count` 0, so no statement was cited, rejected or shown. On FLM, the same seven original
+  wordings reached generation, and gemma3:4b answered six of them (above).
+- **No permission-only ask was answered from readable material.** On both sets, FLM answered P04
+  and P07. In the harness's 70 runs, no restricted chunk reached a prompt.
+- **The thirty's seven answerable asks** were answered with citations in all three draws, with
+  none rejected.
+- **No draw differed from another:** every ask took the same path in every draw.
+- **What this does not show: a decline rate in general use.**
+  - The unanswerable asks are sixteen wordings of four subjects.
+  - The repeats are of the same wordings, so the evidence is 41 declined generations over nine
+    distinct wordings.
+  - Six of the thirty's eight end at path A, which tests retrieval, not generation.
+  - D-121's round recorded one underspecified cold follow-up that Haiku answered, with citations
+    about a different "that".
+- **Nothing was tuned.** No threshold or code changed, and FR-12's path is the same at all three
+  commits. D-126's change in draws 2 and 3 is to FR-19's exclusion.
+- **On FLM the weakness stays open,** as this entry and D-102's 8 November note record.
+- **Spend:** about US$0.017 of Haiku for the five draws. The thirty's seedings are counted by their
+  own session.
+
+**Dated note, 12 November 2026: "clauses 2 and 3 met" on the first draw on `anthropic`.** This
+entry's note of 11 November says #86's cycle met clauses 2 and 3. The verifier tests that each
+entry's count equals its items. The salary entry counted U02 and U03, where U01, U02 and U03 were
+seeded, because U01 was the query left out. Read strictly, that is clause 1's miss showing in
+clause 2 (D-126's note of 12 November).
+
+## D-111 · FR-13's option 3, the retrieval-only follow-up rewrite, was measured over three draws and not adopted; its code is withdrawn and its evidence kept
+
+**Status:** Settled by the user · **Date:** 2026-11-10 · **Concerns:** FR-13, D-42, D-86, D-91,
+D-103 · **Evidence:** `corpus/objective-02/runs/2026-11-09/fr13-phase4-dev/phase4.md` and
+`runs/2026-11-09/fr13-phase4/` · **Commits:** `48c20cf` (the candidate), `9226b1b` (the
+measurement), `a1fb201` (the withdrawal), on `feat/FR-13-followup-rewrite`.
+
+**Why option 3.** D-103 found the restatement failure was in generation's use of the context, while
+the spelled-out arm answered 6 of 9 frozen follow-ups. Option 3 had the model rewrite a follow-up
+into a standalone question, embedded for retrieval only. The rewrite reached no prompt, reply or
+citation, and only questions entered it (D-42).
+
+**What was built** (`48c20cf`):
+- a fourth `AIService` operation, `rewrite_followup`, with one attempt and then the composed join as
+  a fallback, so an ask never failed because the rewrite did;
+- a record-only `QueryLog.retrieval_rewrite` column;
+- the measuring tools re-running the server's stored rewrite.
+
+It came with 21 break-tested tests, and the full suite passed 2,369.
+
+**The rule, fixed before any run.** The arms were means over three draws on the development threads.
+Those were extended with seven cross-source threads, t32 to t38: their overlap check against both
+frozen sets flagged 0 of 3,136 pairs. Option 3 would be adopted only if all of these held:
+- its mean with-history match beat `main`'s by **more than 2 runs**;
+- no guard arm's mean fell by more than 1;
+- conformance held;
+- 0 passages out of scope.
+
+| arm | with-history (/19) | first-turn (/22) | spelled-out (/19) | correct declines | out of scope |
+|---|---|---|---|---|---|
+| `main`, three draws | 10, 9, 9 (mean 9.33) | 14, 14, 14 | 12, 12, 12 | 5/9, 2/6, 2/6 | 0 |
+| option 3, three draws | 10, 10, 10 (mean 10.00) | 14, 14, 14 | 12, 12, 12 | 6/9, 3/6, 3/6 | 0 |
+
+**Decision (the user's): not adopted.** The gain was +0.67 runs, inside D-103's band.
+- **No guard fell.** Correct declines were a mean of 1 better under option 3.
+- **The code is withdrawn by `a1fb201`.** It reverts `48c20cf` except the development threads, so
+  `apps/`, `scripts/`, `CLAUDE.md` and `docs/` are as they were. Retrieval migration 0004 was never
+  pushed, and `kmp_obj02_20261101` ends at 0003, as checked.
+- **Kept:** t32 to t38, and the phase 4 evidence.
+- **Restoring it is reverting `a1fb201`.** The phase 4 runner scripts under `corpus/` need it to run.
+
+**What the measurement found.**
+- **The rewrite itself was reliable in form.** All 66 with-history runs used it, with no fallback.
+  The median call took 4.1 s, p90 5.3 s, and at most 6.7 s.
+- **But gemma3:4b often failed to merge the referent.** The rewrite redistributed which follow-ups
+  resolved, rather than adding to them:
+  - **Gained:** t36 and t38, the cross-source shape that fails on the frozen set; t28 for the
+    Administrator; and t22, where a wrong-passage citation was corrected.
+  - **Lost:** t23 and t24 to rewrites that dropped the referent, and t27, its one lucky draw.
+  - **t31's "match" under `main`** was an accident of join retrieval on a previous-answer thread.
+    Option 3 declines it, as D-42 and D-86's decision 2 predict.
+- **On t32, t34 and t35, the expected source was supplied at rank 1,** and generation still answered
+  from the turn-1-adjacent passage below it. D-103's reading is reproduced with retrieval clean.
+- **The frozen nine were run once, after the rule had decided, on `main`'s configuration.**
+  - With history: **2/9**, beside 2/9 (8 November) and 3/9 (9 November) on identical code.
+  - Spelled out 6/9, first turn 7/11, cold 1/9; schema 38/38; 0 leaks.
+  - Nothing was changed after this result.
+
+**If the generation model changes,** that is a separate decision. This one's premise was
+gemma3:4b's ability to rewrite, so option 3 is a cheap candidate to measure again on the new model:
+revert `a1fb201`, then run the same rule.
+
+## D-112 · FR-13's follow-up clause is accepted as partial for NIT3003, and Stage 5 may close with it as a recorded deviation
+
+**Status:** Settled by the user · **Date:** 2026-11-10 · **Concerns:** FR-13, D-60, D-91, D-92,
+D-103, D-111, Stage 5 item 10 · **Supersedes:** D-91's "partial, with work continuing" status, for
+the FLM build
+
+**The clause.** FR-13, Server-End: "Maintains conversation context per session and passes prior
+turns alongside the new question so that pronouns and abbreviated references resolve correctly."
+
+**Its measured state on the shipped build** (FLM v0.9.39, gemma3:4b, the frozen nine threads):
+
+| | with history | spelled out | out of scope |
+|---|---|---|---|
+| 8 November (the step 7 "after") | 2/9 | 6/9 | 0 |
+| 9 November, phase 3, identical code | 3/9 | 6/9 | 0 |
+| 9 November, phase 4, identical code | 2/9 | 6/9 | 0 |
+
+- **What holds:** the history is wired (WIRED 3/3 through the server), it is re-scoped every turn,
+  and there were 0 leaks.
+- **What does not:** follow-ups that need the earlier turn mostly fail. The clause is half met: prior
+  turns are passed, but pronouns do not resolve reliably.
+
+**Three attempts, each measured under a rule fixed before it ran, and none adopted:**
+- option 1, a prompt instruction (D-103);
+- option 2, max-of-two retrieval scores (D-103);
+- option 3, a standalone rewrite for retrieval (D-111).
+
+**The evidence converges.** On several threads the right passage was supplied at rank 1, and
+generation answered from the turn-1-adjacent passage. That is the same lever as D-102's open decline
+finding: generation's use of supplied context. Its next step is one experiment, deferred:
+- isolate the cap sentence from prompt rule 8;
+- then try a prompt-level fix, under the same measurement rules.
+
+**Decision (the user's, 10 November):**
+
+- **FR-13's follow-up clause is accepted as partial for NIT3003.** The generation-side lever moves
+  to NIT3004.
+- **Stage 5's exit criterion is amended.** `M6-BUILD-PROMPT.md`'s Done line admitted only D-60's
+  decline. It now also admits this accepted deviation, with a dated amendment there.
+  - The set-level verdict can be COMPLETE with FR-13's clause presented as a deviation, giving its
+    reason and these numbers: in the closing audit, the demonstration script's deviations list, and
+    any assessment answer.
+  - It is never presented as a tick.
+- **This acceptance describes the FLM build.** If the generation or embedding provider changes
+  (that is pending as its own decision), FR-13 is measured again on the new provider under the same
+  rules. This record does not carry over to it.
+
+**Where it applies:** D-91 (a dated note), `M6-BUILD-PROMPT.md`'s Done line, and Stage 5 item 10's
+closing run.
+
+**Dated note, 11 November 2026: FR-13 was re-audited after D-122 made `anthropic` the default, and
+the verdict is recorded here verbatim.** One `requirements-auditor` run, read only, at `bd95f92`,
+which was `main` when it ran, over every FR-13 clause against the proposal's text. It edited
+nothing, and it ran no suite, server, database or provider. No measurement was made for this note.
+The verdict is recorded here because a verdict that lives only in a terminal is the failure mode
+D-61 names. Its one line: FR-13 is INCOMPLETE. The text above this note is left as written.
+
+When this note was written, `main` had moved to `d63518b`, by #85, #86 and #87. They add only run
+folders: under `corpus/objective-05/`, under `corpus/objective-06/`, and
+`corpus/objective-02/runs/2026-11-10-anthropic/`. So no file the audit read had changed.
+
+**FR-13's status after the re-audit, per provider.**
+
+- **On `anthropic`, the default (Claude Haiku 5.5 with Voyage `voyage-4`): the follow-up clause is
+  partial and unconfirmed.** It is not recorded as met.
+  - **What was measured:** with history, the frozen nine threads scored 9/9 on Haiku's draw
+    (`e04aab1`) and 9/9 on Sonnet's (`54f15cc`). Each model ran once.
+  - **Through the server:** WIRED 3/3, with turn two correct 3/3, on Sonnet only (`58b9c27`). Haiku
+    has no HTTP check.
+  - **Why it is unconfirmed:** no noise band has been measured on this provider, and D-115 says
+    FLM's is not carried over.
+  - **This entry's acceptance does not cover it.** The decision above says "This acceptance
+    describes the FLM build" and "This record does not carry over to it". So on the default build
+    the clause is neither an accepted deviation nor a confirmed pass.
+- **On `flm`, the offline alternative (gemma3:4b with EmbeddingGemma, FLM v0.9.39): the follow-up
+  clause is partial, the deviation this entry accepted for NIT3003.** That is unchanged.
+  - **The table above describes `main` run on FLM,** on 8 and 9 November.
+  - **The deployed alpha runs older code.** It is at `8598d19`. Its answer path is `2f65a8e`'s,
+    which was measured once, on 3 November: 1/9 with history
+    (`corpus/objective-02/runs/2026-11-03/threads.json`).
+- **On both providers:**
+  - **D-42 passes prior questions, never prior answers,** so "passes prior turns" is declined in
+    part. No frozen follow-up tests that cost. t09 matched on Claude because retrieval found a
+    passage that names its referent, not because the earlier answer was used.
+  - **"Reachable from any page" has no front-end test** (`CLAUDE.md` §8 condition 2, D-62). The
+    link itself is built (`frontend/src/App.jsx:72`).
+- **Every other FR-13 clause was read as satisfied.** The clause table is in the verdict below.
+
+**These sentences above are corrected by this note, and left as written** (the verdict's section
+(d), items 1 and 2):
+
+- **"Its measured state on the shipped build".** The table is `main` run on FLM. Since D-122,
+  `main` defaults to `anthropic`, and the deployed alpha runs the code measured on 3 November.
+- **"prior turns are passed".** Prior questions are passed (D-42).
+
+**What the user decided on it, 11 November.**
+
+| Question | Decided |
+|---|---|
+| The verdict says `anthropic` needs more draws before FR-13 can be recorded as met there | **Record now, draws later.** This note records the verdict as returned. The draws are a task of their own: two further Haiku draws of the frozen nine on `kmp_voyage_20261110`, and one HTTP check on Haiku, with the pass rule committed before the first draw. A further dated note here records their result |
+| The records that the verdict's section (d) lists as stale | **Listed here, fixed in a follow-up pull request.** Section (d) below is the list, by file and line. The Done line's new wording is put to the user before it is written |
+
+**What this note's commit changes, and what it leaves.**
+
+- **Changed:** this note, and `docs/stage-5-clause-audit.md`, which gains the section "After the
+  re-audit (11 November 2026)". Those answer section (d)'s items 1, 2, 3 and 16.
+- **Left for the follow-up pull request:** every other item of section (d).
+- **Left without an owner yet:**
+  - the front-end test for the Ask link (the verdict's "Missing or partial", item 4);
+  - `scripts/server_record.py:263`, which recorded process 0 as the server (section (c), defect 1);
+  - section (c)'s other defects: no snapshot record is committed for dump `80ff46d4…`, and the
+    runbook and the committed measurement scripts can only measure FLM.
+- **Left to the user: Stage 5's exit criterion.** `M6-BUILD-PROMPT.md`'s amendment of 10 November
+  admits this deviation "on the FLM build". Until the draws are read, the closing audit (item 10)
+  has neither an accepted deviation nor a confirmed pass to cite for FR-13 on the default build.
+
+**Where the report is imprecise, checked against the repository.** None of these changes its
+verdict.
+
+- **Its line numbers are against `bd95f92`.** This note sits above D-113. So every line of this
+  file that the report cites below `:8177` has moved down by this note's length: its citations of
+  D-113, D-115, D-121 and D-122.
+- **"The same ranked lists and scores"** (section (b)). The ranked lists are the same in every run
+  of the two draws, and so are the input tokens. The scores are not: they differ by up to 0.00072.
+  That is more than the 0.00047 it quotes from the frozen thirty, and more than t04's and t06's
+  margins at the context cut (0.0003 and 0.0004). So its point there is stronger than it says.
+- **"Reads seven follow-ups as 'history works'"** (section (a)). Each Claude record's
+  `summary.readings` gives that label to t01, t02, t03, t04, t05, t06 and t07 asked by the
+  Administrator, and t09. The report's list leaves out t09, which it treats separately.
+- **"t09 was 'not resolved with history', as predicted"** (section (a)). The label is as stated in
+  the FLM records of 3, 8 and 9 November. Each of them also holds `prediction_held: false` for
+  t09. The frozen prediction says t09 is correct when spelled out, and on FLM it was not.
+- **"Nothing references `TEXT.askNavLabel`"** (the clause table). Nothing under `frontend/tests`
+  does. `frontend/src/App.jsx:72` renders it.
+- **Section (d), item 19.** `apps/retrieval/conversation.py:80-82` already says that Stage 4's
+  item 9a measured the block, and that the end-to-end measurement is D-86's. What is stale is the
+  bold sentence at `:71` and "What is NOT known" at `:76-78`.
+- **Section (d), item 21.** The walk's citation is at `docs/stage-5-item-8-walk.md:228`, not
+  `:229`.
+- **Re-read and found as stated:**
+  - the scores in section (b)'s table, read from the records;
+  - the alpha's answer path against `2f65a8e`: no diff;
+  - the HTTP check record's process 0, against `server_observed.txt`'s listener (pid 44868) and the
+    machine's boot at 11:19:05Z on 9 November;
+  - no test under `frontend/tests` asserts the Ask link;
+  - D-106's repeated draws for FR-10 on Claude;
+  - no snapshot record committed for dump `80ff46d4…`. The `snapshot.json` that #87 adds is for
+    another database, `kmp_obj02_anthropic_20261110`, at dump `6e514170…`;
+  - CI run 42932385814, green on `bd95f92`;
+  - the lines it cites in D-42, D-91, D-121, `M6-BUILD-PROMPT.md`,
+    `docs/demonstration-script.md` and `docs/flm-baseline.md`.
+
+**The verdict, verbatim.** Reproduced as the auditor returned it, quoted rather than edited.
+
+> ## Audit: FR-13 Conversational Knowledge Assistant, re-audited after D-122 — 11 November 2026
+>
+> This audit covers the repository at `bd95f92`, which is `origin/main`, checked out on `docs/FR-13-follow-up-reaudit`. It is checked against the proposal's FR-13 section: `proposal.txt` lines 880–937, which is untracked and not in the repository. Nothing was edited. No suite, server, database or provider was run.
+>
+> **Verdict:** INCOMPLETE
+>
+> ### Clause coverage
+>
+> | # | Clause (proposal.txt:880–890) | Status | Evidence |
+> |---|---|---|---|
+> | FE-1a | "A conversational interface reachable from any page" | **Partial.** It is built, but no front-end test covers it (§8 condition 2, D-62) | `frontend/src/App.jsx:64-74` puts a link to `/ask` in the shell's primary navigation for every signed-in user (`App.jsx:142-154`). No test in `frontend/tests` asserts that link. Nothing references `TEXT.askNavLabel` (`frontend/src/constants.js:871`), and `frontend/tests/tabOrder.test.jsx:242` mentions the link only in a comment. |
+> | FE-1b | "…retaining the thread…" | Satisfied | The thread lives in the address (D-77): `frontend/tests/askThread.test.jsx:221`, `:300`, `:341`. A follow-up is posted to the active thread: `askThread.test.jsx:466`, `askThreadList.test.jsx:159`, `askLimits.test.jsx:240`. Server side: `apps/api/tests/test_ask.py:972`, both roles. |
+> | FE-1c | "…so follow-up questions need not restate the subject" | **flm: partial**, an accepted deviation (D-112). **anthropic: partial and unconfirmed**, with one draw per model | This is the outcome of SE-1c. See (a) and (b). |
+> | FE-2a | "Previous conversations are listed" | Satisfied | `apps/api/views.py:2165-2181`; `frontend/src/pages/Ask.jsx:183`, `:632-643`, `:762`. Tests: `apps/api/tests/test_conversations.py:196`, `:681`, `:701` (both roles); `frontend/tests/askThreadList.test.jsx:99`, `:134`. |
+> | FE-2b | "…and can be reopened" | Satisfied | `apps/api/views.py:2233-2239`; `apps/api/serializers.py:1164`. Tests: `test_conversations.py:334`, `:408`; `apps/api/tests/test_fr11_thread_scope.py:260-854`; `askThread.test.jsx:369`, `:610`; `frontend/tests/askReopened.test.jsx:112`, `:129`, `:147`. |
+> | FE-2c | "the active thread can be cleared to begin a new topic" | Satisfied | The "Start a new topic" control is at `frontend/src/pages/Ask.jsx:706`. Tests: `askThread.test.jsx:404`, `:420`, `:436`. There is deliberately no delete route: `apps/api/urls.py:77-82`, `test_conversations.py:439`. |
+> | SE-1a | "Maintains conversation context per session" | Satisfied, reading "session" as per conversation | History is read from `QueryLog` per conversation and per user (`apps/retrieval/conversation.py:136-169`, `:199-215`), so it outlives a login session. Tests: `apps/retrieval/tests/test_conversation.py:328`, `:409`, `:503`. |
+> | SE-1b | "…passes prior turns alongside the new question…" | **Declined in part (D-42):** only prior questions are passed | `conversation.py:164-168` reads `question` only, and `QueryLog.answer_text` is never read (`:10-19`). The questions are composed into the retrieval string and the labelled prompt block (`:172-196`; `apps/retrieval/pipeline.py:453`, `:460`, `:522-525`). Tests: `test_conversation.py:434`, `test_ask.py:972`. D-42's stated reason, that no model text re-enters a prompt, is what the code does. |
+> | SE-1c | "…so that pronouns and abbreviated references resolve correctly" | **flm: partial**, accepted as a deviation for NIT3003 (D-112). **anthropic: partial and unconfirmed:** 9/9, but on one draw per model | FLM: 2/9, 3/9 and 2/9 on `main`'s FLM build. The alpha's code scored 1/9. Claude: 9/9 on Haiku and 9/9 on Sonnet, and turn two 3/3 through the server on Sonnet. Files are listed in (b). |
+> | V-1 | "context is truncated to a maximum number of prior turns" | Satisfied | `apps/core/constants.py:244` (3); `conversation.py:164-168`; `test_conversation.py:475`. The value 3 was chosen for a 4B model (D-42 §5) and its effect is unmeasured (D-86). The clause asks only for a maximum. |
+> | V-2 | "The permission scope in FR-11 is re-evaluated on every turn" | Satisfied | `pipeline.py:441-446`. Tests: `test_conversation.py:549`, `test_ask.py:1004`, `apps/api/tests/test_fr11_scoping.py:610` and `:635`. On reopen: `test_fr11_thread_scope.py:298`, `:483`. |
+> | BL-1 | "each turn triggers a fresh retrieval based on the resolved question rather than reusing the previous turn's passages" | Satisfied | `pipeline.py:460-469` runs on every call, and nothing is carried between turns. Test: `test_conversation.py:613`. "The resolved question" is implemented as the plain join of the prior questions and the new one (D-42 §3). The standalone rewrite was withdrawn (D-111). |
+> | BL-2 | "Answer generation and citation verification follow FR-12 unchanged" | Satisfied | One endpoint serves both (`apps/api/views.py:2006-2116`; `pipeline.py:521-539`). An identifier that appears only in the history block is rejected: `test_conversation.py:653`, `test_ask.py:1116`. |
+> | R-1 | "200 OK with the answer and updated conversation state" | Satisfied | `views.py:2106-2116`; `apps/api/answers.py:193-195`, `:335`; `apps/api/serializers.py:723-735`, `:768-770`. `last_updated_at` is set in the log transaction (`apps/retrieval/query_log.py:294-299`). Test: `test_ask.py:944`, both roles. |
+> | DB-1 | Conversations: Create | Satisfied | `views.py:2183-2197`; `test_conversations.py:113`, both roles. |
+> | DB-2 | Conversations: Read | Satisfied | `views.py:2165-2181`, `:2233-2239`. Another user's thread is 404 (`test_conversations.py:408`); no session is 401 (`:427`). |
+> | DB-3 | Conversations: Update | Satisfied as database operations. There is no client rename route (D-43) | The title comes from the first question (`views.py:1988-2003`, `:2106-2107`), and `last_updated_at` moves every turn (`query_log.py:294-299`). Tests: `test_conversations.py:137`, `:150`, `:161`, `:172`, `:228`; `test_conversation.py:745`, `:774`. |
+> | DB-4 | QueryLog: Create | Satisfied | Every exit records: `pipeline.py:495-505`, `:555-562`, `:574-581`. Tests: `test_ask.py:930`, `:944`; `test_conversation.py:718`. |
+> | DB-5 | The fields of both tables | Satisfied | `apps/retrieval/models.py:29-35`, `:87-105`. |
+>
+> ### Missing or partial
+>
+> 1. **SE-1c on `anthropic` cannot be recorded yet.** It rests on one draw per model, and no noise band has been measured on this provider. Two more Haiku draws and one HTTP check on Haiku are needed (see (b)).
+> 2. **SE-1c on `flm` is partial, accepted for NIT3003 (D-112).** D-112's figures describe `main`'s FLM build on 8–9 November. The deployed alpha runs older code that was measured once, at 1/9. D-112's sentence "prior turns are passed" (`docs/decisions.md:8148-8149`) overstates the code, which passes prior questions only.
+> 3. **SE-1b is declined in part on both providers (D-42).** The frozen set has no follow-up whose referent exists only in an earlier answer's wording, so the cost D-42 concedes is untested on both providers.
+> 4. **FE-1a has no front-end test (D-62).** The smallest fix is one test that renders `App` signed in as each role, on a route other than `/ask`, and asserts that the primary navigation's link named `TEXT.askNavLabel` has `href="/ask"`.
+> 5. **The measurement records have defects (see (c)):**
+>    - The HTTP check's server block records process 0, with that process's start time.
+>    - The dump hash has no committed snapshot record.
+>    - The runbook has no procedure for `anthropic`, and the committed measurement scripts can only run on FLM.
+> 6. **Records about FR-13 are stale (see (d)).** In particular:
+>    - D-112 has no dated note.
+>    - `M6-BUILD-PROMPT.md:447-451` admits the deviation for the FLM build only.
+>    - `docs/demonstration-script.md:477-502` leaves out D-112's deviation, which D-112 itself requires there (`docs/decisions.md:8168-8170`).
+>    - `docs/stage-5-clause-audit.md` stops at 3 November.
+>
+> ### Invariant check
+>
+> 1. **Pass.** Filtering is before ranking:
+>    - The role predicate is in the candidate query (`pipeline.py:464`), and the history read carries both the conversation and the user predicate (`conversation.py:165`).
+>    - Another user's thread is 404, not 403 (`views.py:2127-2129`, `:2234-2236`; `test_ask.py:834`).
+>    - In the Claude runs, 0 passages were out of scope in every way of asking, and scoping was shown for t06 and t07.
+> 2. **Pass** for this slice. A reopened thread is re-scoped through the stamped chunks (`test_fr11_thread_scope.py:529`).
+> 3. **Pass.** t06's follow-up source, T02, is an Administrator-only transcript. Both Claude models declined the Employee, and nothing in `apps/retrieval/` consults attendance.
+> 4. **Pass.** The dual-role matrix lists `ask`, `conversation-list` and `conversation-detail` (`apps/api/tests/test_rbac.py:57-58`); `test_conversations.py:427` covers the 401.
+> 5. **Pass.** `pipeline.py:539`; `test_conversation.py:653`.
+> 6. **Pass.** `frontend/tests/ask.test.jsx:59`, `:103`.
+> 7. **Pass.** `pipeline.py:495-505` and `:555-562`. The Claude records split the outcomes: path A for seven cold runs, path B declined for the scoped Employee runs.
+> 8. and 9. Not applicable.
+> 10. **Pass.** Schema conformance was 37/37 on each Claude model, through the generation loop FR-12 uses.
+>
+> Set-level checks for this slice:
+> - **Owners.** django-backend has the endpoints, rag-pipeline has `conversation.py`, and react-frontend has `Ask.jsx`.
+> - **One composition.** `compose()` is the only one, pinned to the pipeline by `apps/retrieval/tests/test_compose.py:243`. The measuring tools, however, now exist as three copies of the harness (`scripts/`, `corpus/objective-02/runs/2026-11-10/voyage-frozen/`, `…/haiku/`) and two of the HTTP check.
+> - **Constants.** No literal 500, 50 or 25 appears inline in FR-13's code path. `NEW_CONVERSATION_TITLE` is defined at `apps/api/views.py:302` rather than in `apps/core/constants.py`; it is a fixed text, not a tuned value.
+> - **No AI SDK import outside `apps/ai/`.** I searched `apps/`, `scripts/`, `config/` and `corpus/`.
+>
+> ### §8 definition of done
+>
+> 1. **Not met.** SE-1c is partial on both providers, and SE-1b is declined in part.
+> 2. **Partly met.**
+>    - CI passed both suites on `bd95f92` (run 42932385814).
+>    - Server tests for every FR-13 route run from both roles (`conftest.py:275-280`).
+>    - FE-1a has no front-end test.
+> 3. **Met.** The happy path is tested, and so are the 404, 400, 401, re-scoping and no-answer paths.
+> 4. **Met**, with D-60's decline as accepted in D-92. The later FR-13 commits carry FR-13 in the subject. The Claude thread draws are committed under FR-12 (`718ccaa`, `60de33d`), which `CLAUDE.md` §7 allows for work spanning requirements.
+> 5. **Not met.** This audit reports gaps.
+>
+> ### Gate impact
+>
+> M6, on 1 November, is past. FR-13 was demonstrated on the FLM alpha and recorded as partial (D-91), and nothing here changes that.
+>
+> What this blocks now:
+> - recording FR-13 as met on the default build;
+> - Stage 5's exit criterion (`M6-BUILD-PROMPT.md:443-451`), which admits FR-13's deviation only for the FLM build — on the default build there is neither an accepted deviation nor a confirmed pass;
+> - §8 condition 2 for FE-1a.
+>
+> The smallest fix, in order:
+> 1. Two Haiku draws of the frozen nine and one Haiku HTTP check, with the rule fixed first. This costs about five cents.
+> 2. The one front-end test described above.
+> 3. Dated notes on the items in (d).
+> 4. In `scripts/server_record.py:263`, treat a returned process 0 as unknown.
+>
+> FR-10's threshold on this provider was derived over three draws (`docs/decisions.md:7599-7606`). FR-13, a MUST, has had one.
+>
+> ## (a) Per provider: is the follow-up clause met?
+>
+> ### `anthropic`: partial and unconfirmed
+>
+> This is the default since D-122: Claude Haiku 5.5, with Voyage `voyage-4` at 1024. The resolution half passed on the only draw made with each model. It cannot yet be recorded as met (see (b)), and the passing half is narrowed by D-42 here exactly as on FLM.
+>
+> **What the 9/9 shows.**
+> - Every answerable follow-up asked with history matched an expected phrase and cited an expected source. This held in-process, through the shipped `compose()` and pipeline, on both models:
+>   - Haiku: `corpus/objective-02/runs/2026-11-10/haiku/threads.json`;
+>   - Sonnet: `corpus/objective-02/runs/2026-11-10/voyage-frozen/threads.json`.
+> - Counting the two scoped Employee follow-ups that should be declined, with-history runs were correct 11/11 on both models, with 0 leaks and 0 fabricated identifiers.
+> - The frozen rule (part 10) reads seven follow-ups as "history works": correct with history and not correct cold. Each referent is named in the first question, so these seven are the evidence that pronouns resolve:
+>   - t01 ("it"), t02 ("that"), t03 ("them"), t04 ("they"), t05 ("it");
+>   - t06 and t07 asked by the Administrator ("them", "it").
+> - Spelled out also scored 9/9, so neither retrieval nor generation limited any of them.
+> - Through the server, on Sonnet only, the history was WIRED in all three threads. Turn two was correct 3/3 (`corpus/objective-02/runs/2026-11-10/voyage-http-check/http_check.json`).
+>
+> **What it does not show.**
+> - **That resolution is reliable.** Each model ran once, Claude takes no sampling parameters, and no repeat exists.
+> - **Anything from t08.** It is the topic change, answerable cold by design, and both models read it as "cold-answerable: proves nothing about history". With history, retrieval ranked T04 above D03 and the reply still came from D03. That shows carrying the first question did no harm, and nothing more.
+> - **That a reference into an earlier answer resolves.** t09's follow-up is "What do they have to approve?". "They" is the facilities team, which only the first turn's answer names, and answers are never passed.
+>   - t09's frozen prediction, that it fails with history, did not hold on either model. The rule reads it as "history works" with `prediction_held: false`.
+>   - The records show why. The joined questions ranked D20 first (0.570), and D20 names the facilities team. They admitted D17 third (0.339). Both models answered from D17's sentence: "…must be approved by the facilities team at least one week in advance."
+>   - So the match came from retrieval admitting the one approval passage that names the referent itself, not from the earlier answer (`voyage-frozen.md:103-111`; `haiku-round.md:103-104`). D-86's own note warned of this (`docs/decisions.md:5690-5691`).
+>   - On all four FLM draws, t09 was "not resolved with history", as predicted.
+> - **"Abbreviated references" beyond dropped subjects.** The nine follow-ups use pronouns and demonstratives only. None uses a shortened name or an acronym.
+> - **Threads longer than two turns.** So nothing is shown about the truncation at `MAXIMUM_CONVERSATION_TURNS`.
+> - **Haiku through the server.** The HTTP check ran on Sonnet only.
+>
+> ### `flm`: partial, an accepted deviation for NIT3003 (D-112)
+>
+> This is gemma3:4b with EmbeddingGemma on FLM v0.9.39. On `main`'s FLM build, with history matched:
+> - 2/9 on 8 November (`runs/2026-11-08/after-030/threads.json`, `19c98a8`);
+> - 3/9 on 9 November (`runs/2026-11-09/fr13-phase3/threads.json`, `b2ebba8`, whose `apps/` and `scripts/` are byte-identical to `19c98a8`'s);
+> - 2/9 on 9 November (`runs/2026-11-09/fr13-phase4/threads.json`, `48c20cf`, with the in-process passthrough pin in `run_frozen_main.py`).
+>
+> Spelled out was 6/9 each time, with 0 leaks. t08 was cold-answerable, and t09 not resolved, on every draw.
+>
+> **The deployed alpha is not that build.**
+> - `KMP_Prototype-alpha` is at `8598d19`, from 1 November. That commit defaults to `flm` and a dimension of 768.
+> - Its answer path is byte-identical to `2f65a8e`'s: there is no diff over `apps/ai/`, `apps/retrieval/`, `apps/core/constants.py` and `config/settings.py`.
+> - That code was measured once, on 3 November (`runs/2026-11-03/threads.json`): with history 1/9, spelled out 3/9, cold 1/9, first turn 7/11, 0 leaks.
+> - D-112's table therefore describes `main` on FLM, not what is deployed.
+>
+> ### D-42 on both providers
+>
+> The clause says "passes prior turns". The code passes prior questions only. That part is declined in part by D-42 on both providers.
+> - **On FLM**, the narrowing is not what limits the clause. The subject-noun follow-ups that D-42 said would resolve did not (D-91). D-103 and D-111 place the limit in how generation uses the supplied context.
+> - **On `anthropic`**, the narrowing's cost did not surface. That is only because no frozen follow-up has a referent that exists solely in an answer and in no passage the joined questions retrieve. D-42's own example is "what about the second one?" after an answer that listed three.
+> - That case is untested on both providers. By design it can resolve only when the referent is also in a passage that is retrieved again. It remains a recorded deviation, whatever further draws show.
+>
+> ## (b) How many draws does the 9/9 rest on?
+>
+> | Run | Commit | Database, dump | Model | First turn | With history | Spelled out | Cold | Leaks |
+> |---|---|---|---|---|---|---|---|---|
+> | 3 Nov (the alpha's code) | `2f65a8e` | `kmp_obj02_20261101`, `3bf98403…` | gemma3:4b | 7/11 | 1/9 | 3/9 | 1/9 | 0 |
+> | 8 Nov | `19c98a8` | same | gemma3:4b | 6/11 | 2/9 | 6/9 | 1/9 | 0 |
+> | 9 Nov, phase 3 | `b2ebba8` | same | gemma3:4b | 6/11 | 3/9 | 6/9 | 1/9 | 0 |
+> | 9 Nov, phase 4 | `48c20cf` + pin | same | gemma3:4b | 7/11 | 2/9 | 6/9 | 1/9 | 0 |
+> | 10 Nov | `54f15cc` | `kmp_voyage_20261110`, `80ff46d4…` | claude-sonnet-5-5 | 11/11 | 9/9 | 9/9 | 1/9 | 0 |
+> | 10 Nov | `e04aab1` | same | claude-haiku-5-5 | 11/11 | 9/9 | 9/9 | 1/9 | 0 |
+>
+> All six records name the same frozen set (`acfe3d47…`) and scoring rule version 2.
+>
+> **Draws per model.**
+> - **Haiku 5.5, the default:** one draw, and no HTTP check.
+> - **Sonnet 5.5:** one draw of the nine, and one HTTP check of three threads (t03 and t04 as the Employee, t06 as the Administrator; `58b9c27`).
+> - **The two thread draws are not repeats of one configuration.** Their retrieval was identical: the same ranked lists and scores, and the same 188,557 input tokens over 37 calls. Their agreement shows the result does not depend on which of the two models generates. It is not a repeat.
+>
+> **No noise band has been measured on `anthropic`.**
+> - The only repeat on this provider is of Voyage's embedding scores. Two passes over the frozen thirty differed by up to 0.00047 (`voyage-http-check.md:70-71`).
+> - That matters here: t04's and t06's composed sets sit within that jitter of the context-budget cut, with margins of 0.0003 and 0.0004 (`voyage-http-check.md:84-88`). Even the supplied passages can differ between draws.
+> - No generation repeat exists. The records say so themselves (`haiku-round.md:138`; `voyage-frozen.md:115-116`; D-121, `docs/decisions.md:9274-9275`).
+>
+> **The rules.**
+> - **D-103:** a single-pass delta of ±1–2 runs is noise, and no FR-13 delta may be read as an effect unless it clears the band. Further attempts need "repeated draws per configuration so the rule compares means, not single passes" (`docs/decisions.md:6782-6787`, `:6794-6796`).
+> - **D-112:** FLM's verdict rests on three draws on identical code (`:8140-8144`). On a provider change, FR-13 "is measured again on the new provider under the same rules" (`:8172-8174`).
+> - **D-115:** "the noise band is measured on this provider, not carried over from D-103" (`:8324-8326`).
+> - **D-113:** lists D-103's band among the FLM baselines to re-derive before `anthropic` is relied on (`:8226-8234`).
+> - **FR-10 on this provider:** the repository applies the same rule there. D-106's note requires repeated draws on Claude (`:7540-7548`), and Haiku's threshold was derived over 19 documents three times each (`:7599-7606`).
+>
+> **Conclusion: yes. The `anthropic` verdict needs more draws before it can be recorded.**
+> - "Met" claims that resolution is reliable at the ceiling. One draw per model cannot carry that claim under these rules.
+> - The comparison with FLM needs no further draw. 9/9 against 2/9, 3/9 and 2/9 is six or seven runs, far outside FLM's band.
+>
+> **The draw that would settle it.**
+> - **Two further recorded draws** of the frozen nine (`corpus/objective-02/threads.json`, sha256 `acfe3d47…`, rule version 2), on the default configuration:
+>   - `claude-haiku-5-5`, with `voyage-4` at 1024;
+>   - D-120's threshold 0.2687 and floor 0.2468;
+>   - effort `"low"`, `CLAUDE_MAX_TOKENS` 16000, `MAXIMUM_STATEMENTS` 6, `MAXIMUM_CONTEXT_TOKENS` 4000.
+> - **On `kmp_voyage_20261110` at dump `80ff46d4…`**, so they join `e04aab1`'s draw as three draws of one configuration. The HTTP check's rows there are not retrieval candidates, and the corpus gate checks the chunk set.
+> - **At a clean commit** whose answer path matches `bd95f92`'s. It has been byte-identical since `e04aab1`.
+> - **With a rule written and committed before the first draw.** For example, `haiku-round.md`'s own bar applied to every draw: with history at least 8/9, 0 leaks, 0 fabricated identifiers. The spread across the three draws then becomes this provider's first measured band.
+> - **Plus one HTTP check on Haiku** through a freshly started server, since the default model has none.
+> - **The tools.** The committed scripts cannot make these runs (see (c)).
+>   - `corpus/objective-02/runs/2026-11-10/haiku/citation_harness_haiku.py` can, unchanged, with each record in a new run folder.
+>   - The HTTP check needs a copy of `voyage-http-check/conversation_http_check_voyage.py` with the model changed.
+> - **Cost.** At the recorded rate of about $0.023 per thread draw, two draws cost about $0.05. The HTTP check costs under a cent at Haiku's prices.
+> - **Reading the result.** If every draw passes, the resolution half is recorded as met on `anthropic`, with D-42 still a recorded deviation. If any draw falls short, FR-13 is partial on `anthropic` too, with the band reported.
+>
+> ## (c) Do the Claude records carry their commit, configuration and database?
+>
+> | Field | `haiku/threads.json` | `voyage-frozen/threads.json` | `voyage-http-check/http_check.json` |
+> |---|---|---|---|
+> | `recorded_at` | 2026-11-10T19:38:27+11:00 | 15:57:36+11:00 | 16:35:42+11:00 |
+> | `commit_sha` | `e04aab1…` | `54f15cc…` | `58b9c27…` |
+> | commit exists / on `main` / ancestor of HEAD | yes / yes / yes | yes / yes / yes | yes / yes / yes |
+> | agrees with its markdown | yes (`haiku-round.md:88`) | yes (`voyage-frozen.md:10-13`; parents `8ecb2c6`, `20f4375`) | yes (`voyage-http-check.md:10-11`; parent `4c31d78`) |
+> | uncommitted changes | false, `[]` | false, `[]` | false, `[]` |
+> | dump / database | `80ff46d4…d1e4` / `kmp_voyage_20261110` | same | same |
+> | provider / chat model | anthropic / claude-haiku-5-5 | anthropic / claude-sonnet-5-5 | anthropic / claude-sonnet-5-5 |
+> | embedding model / dimension | voyage-4 / 1024 | same | same |
+> | threshold / floor | 0.2687 / 0.2468 | same | same |
+> | thread-set hash / rule | `acfe3d47…` / v2 | same | same |
+> | server | in-process, names the copy | in-process, names the copy | http: waitress 3.0.2, threads null, **pid 0, started 2026-11-09T11:19:15.787Z**, DEBUG off |
+>
+> **What was verified.**
+> - **The commits.** `git cat-file -t` returns `commit` for all three. `git branch -a --contains` lists `main` and `origin/main` for each, and `git merge-base --is-ancestor` succeeds for each. Each commit adds the copy that ran, and each copy is unchanged from its run commit to HEAD.
+> - **The thread-set hash.** The SHA-256 of `corpus/objective-02/threads.json`, at HEAD and at all three commits, is `acfe3d47afed7d97c2f1952d0528a9612cb6b9b65706f1491ad32f16cf2aee87`. The file last changed at `5314d86`, the 1 November freeze.
+> - **The configuration.** The Haiku record is today's default:
+>   - `config/settings.py:328` (`anthropic`), `:346` (1024), `:354` (`claude-haiku-5-5`) and `:356-357` (`voyage-4` and the recorded URL);
+>   - `.env.example:34`, `:43`, `:45-46`, `:64`;
+>   - `apps/core/constants.py:191-192`.
+> - **The answer path since the Haiku run.** FR-13's answer path is byte-identical between `e04aab1` and `bd95f92`:
+>   - no diff in `apps/retrieval/{pipeline,conversation,ranking,scoping,verification,query_embedding,partial_matches,query_log}.py` or `apps/ai/{prompting,generation,schema,_openai_compat}.py`;
+>   - `apps/ai/anthropic.py` changed only to add transcription (D-123);
+>   - `apps/core/constants.py` changed no value FR-13 reads.
+> - **The Sonnet records** differ from the default only in the generation model.
+>
+> **Defects found.**
+> 1. **The HTTP check's server block describes Windows' System Idle Process, not the server.**
+>    - It records `pid: 0` and `process_started_at: "2026-11-09T11:19:15.787Z"`. Process 0's start time on this machine is exactly that, and the machine booted at 11:19:05Z that day (both read on 11 November with `Get-CimInstance`).
+>    - The markdown says the server "started fresh at 16:33:46" (`voyage-http-check.md:26`) and that the record holds the pid "as unknown" (`:30`). `server_observed.txt` gives the listener as pid 44868, started 2026-11-10T16:33:43.
+>    - The cause is `scripts/server_record.py:263`, which records whatever `OwningProcess` the lookup returns, 0 included.
+>    - Read literally, the record says the server had been running since 9 November, which is the opposite of the restart step 12b requires. Nothing checks that restart (`docs/measurement-runbook.md:493-494`).
+> 2. **The server's thread count and version were not observed.**
+>    - `threads`, `listen` and `command_line` are null, and the console warned "the thread count is unknown, not 24" (`http_check.txt:5`). D-85's 24 threads are evidenced only outside the record, in `server_observed.txt`.
+>    - The version 3.0.2 came from the check's own environment (`version_source`). The markdown's "read from its replies" (`voyage-http-check.md:29`) is true of `DEBUG` and the server name only.
+> 3. **The dump hash cannot be checked from the repository.**
+>    - No snapshot record for `80ff46d4…` is committed. Step 8 says the run folder receives a copy of `snapshot.json` (`docs/measurement-runbook.md:295`, `:311`). The only committed snapshot record is FLM's, `corpus/objective-02/runs/2026-11-01/snapshot.json`.
+>    - The harness records the hash it is given without checking the database against it (`scripts/measurement_record.py:180-191`).
+> 4. **The measurement rules have no path for `anthropic`.**
+>    - Steps 9, 12a and 12b gate on `check_flm.py` and FLM v0.9.39 (`docs/measurement-runbook.md:337-338`, `:477-479`, `:532`). The section "A copy for another provider" (`:622-660`) covers only making and re-indexing the database.
+>    - The committed scripts can only run on FLM (`scripts/citation_harness.py:137`, `:1388-1400`; `scripts/conversation_http_check.py:363-396`).
+>    - All three records came from run-folder copies with a provider gate in place of the FLM gates. Each copy and its full diff are committed beside the record, so the recorded commit does name the code that ran.
+> 5. **The call parameters are in the commit, not the record.** None of these is in the records; all are fixed by the commit and unchanged at HEAD:
+>    - `CLAUDE_EFFORT` (`apps/ai/anthropic.py:60`) and `CLAUDE_MAX_TOKENS` (`:56`);
+>    - `MAXIMUM_STATEMENTS` and `MAXIMUM_CONVERSATION_TURNS`.
+>
+>    D-115 calls the call parameters provisional. The records hold the configured model name, not any identifier the API returned.
+> 6. **The recorded commit alone does not reproduce the configuration.** At the recorded commits, `config/settings.py` still defaulted to `flm` and `claude-sonnet-5-5`. Each copy set the environment before Django started (`haiku/citation_harness_haiku.diff:38-42`), so the configuration is reproducible from the commit together with its copy.
+>
+> Nothing else is missing, unknown or inconsistent.
+>
+> ## (d) What is now stale
+>
+> **In `docs/decisions.md`:**
+>
+> 1. **`:8138` (D-112)** says "Its measured state on the shipped build (FLM v0.9.39…)". Since D-122, `main` ships `anthropic` by default, and the deployed alpha measured 1/9 on older code. "The shipped build" now describes neither.
+> 2. **`:8148-8149` (D-112)** says "prior turns are passed". The code passes only prior questions.
+> 3. **`:8172-8174` (D-112)** says the provider change is "pending as its own decision". D-122 made that decision, and the re-measurement exists only as one draw per model. D-112 has no dated note.
+> 4. **`:1763` and `:1824-1827` (D-42)** say "Unmeasured: yes" and "FR-13 end to end is still unmeasured… a set… which does not exist." The set has existed since 1 November and has been run six times.
+> 5. **`:1831-1836` (D-42)** say follow-ups hold "for subject nouns and not for references into an answer's wording". That was falsified on FLM (`:1854-1872`). On Claude, subject-noun follow-ups resolved on one draw and t09 resolved through retrieval. The 2 November note there ends at D-91 and records nothing later.
+> 6. **`:6148` (D-91)** says the measured reason is "not yet run". It was measured on 3 November (`:6200`). The 10 November note at `:6219-6221` covers the FLM build only.
+> 7. **`:9282-9283` (D-121)** says "The default provider is still FLM". D-122 overtook this the same day, and there is no dated note.
+> 8. **`:9303-9305` (D-122)** counts the threads' 9/9 and the HTTP check toward the switch. It does not say that they are one draw per model, that the HTTP check was Sonnet's, or what FR-13's status is. This is silence rather than staleness.
+>
+> **In `M6-BUILD-PROMPT.md`:**
+>
+> 9. **`:443-451`.** The Done line's amendment admits the deviation "on the FLM build". The default build has neither an accepted deviation nor a confirmed pass.
+> 10. **`:494-497`** lists D-45 and D-42 as the deliberate shortfalls, and leaves out D-112's deviation.
+>
+> **In `docs/demonstration-script.md`:**
+>
+> 11. **`:298-305`** says to avoid follow-ups, that FR-13 is "partial at the gate", and that its measurement "comes after the gate". It has since been measured. The advice is still right for the FLM alpha and wrong for the default provider.
+> 12. **`:398-401`** says the cold and spelled-out runs "are step 5's" and that the measurement "comes after the gate". Step 5 and step 7 have both run since.
+> 13. **`:456-459`** says "The measurement is step 5's". That is overtaken.
+> 14. **`:477-502`.** The deviations list lacks D-112's reason and numbers, which D-112 requires there (`docs/decisions.md:8168-8170`). The script has had no amendment since 7 November.
+>
+> **In the stage records:**
+>
+> 15. **`docs/stage-5-item-8-walk.md:225-227`** says "the measured reason is step 5's", and there is no note for D-112. The walk itself remains true of the FLM alpha.
+> 16. **`docs/stage-5-clause-audit.md:500-507`.** FR-13's last entry is the 3 November FLM baseline. Nothing records 8–9 November, D-112, D-122 or the Claude runs.
+> 17. **`docs/stage-4-clause-audit.md:84`** says FR-13 "holds for subject nouns" and that previous-answer follow-ups do not resolve. This is a record at its date: it was falsified on FLM and did not hold for t09 on Claude.
+>     - `:85` was closed by item 4b (`docs/stage-5-clause-audit.md:382`).
+>     - `:86` and `:92` still hold.
+>
+> **Elsewhere:**
+>
+> 18. **`docs/flm-baseline.md:17-21` and `:611-617`** say FR-13 end to end "remains unmeasured" and that the set "does not exist". Both were overtaken on 3 November.
+> 19. **`apps/retrieval/conversation.py:71-79`** says "THE MULTI-TURN PROMPT IS UNMEASURED". It has been measured: 38/38 on FLM and 37/37 on each Claude model.
+> 20. **`docs/stage-4-open-items.md:149-151`** says previous-answer follow-ups do not resolve. That is true of the design in general; t09 resolved on Claude.
+> 21. **Line references have drifted.** `docs/demonstration-script.md:294-295` and `:457`, `docs/stage-5-clause-audit.md:478-479` and `docs/stage-5-item-8-walk.md:229` cite `test_fr11_scoping.py:608` and `:633`. At HEAD those tests begin at `:610` and `:635`.
+> 22. **`README.md` and `CLAUDE.md`** state nothing about FR-13's status, numbers or provider, so nothing in them is stale on FR-13.
+>
+> ## What I could not check
+>
+> - **I ran no suite.** The suites' result here is CI's: run 42932385814 on `bd95f92` succeeded on both jobs, and the checks on PR #84 were green.
+> - **I re-scored no run.** I read the stored scores and checked t02, t08 and t09 by eye.
+> - **I could not verify the dump, the media hash or the HTTP check's logs.** None is in the repository, and I read nothing outside it.
+> - **I read no `.env`.** So I cannot confirm which database the running alpha serves. I verified only that the alpha's worktree is at `8598d19` and what that commit's defaults are.
+> - **I did not check the provider consoles** for spend or for model snapshots.
+> - **I read the front-end tests without running them.**
+>
+> **Verdict: FR-13 is INCOMPLETE.**
+> - On `flm`, its follow-up clause is partial, an accepted deviation for NIT3003 (D-112); the deployed alpha scored 1/9.
+> - On `anthropic`, it is partial and unconfirmed: 9/9 on one draw per model, with no measured noise band.
+> - On both providers, D-42 narrows "prior turns" to prior questions, and "reachable from any page" has no front-end test.
+
+**Dated note, 12 November 2026: the draws were made on the evening of 11 November, and the
+resolving half of FR-13's follow-up clause is recorded as met on `anthropic`.** This is the
+further note the table above promised. It records a measurement, not an audit: FR-13's verdict
+stays INCOMPLETE until `requirements-auditor` reads it again. The text above this note is left as
+written.
+
+**The rule, committed before the first draw** (`049fefe`,
+`corpus/objective-02/runs/2026-11-11/haiku-draws/haiku-draws.md`). The user chose it on
+11 November from three put to him as a tabbed question. It was the recommended one.
+
+- **Three draws of the frozen nine on the default configuration:** the draw of 10 November
+  (`e04aab1`) and two new ones.
+- **Each draw:** with history at least 8/9, 0 leaks, 0 fabricated identifiers. That is
+  `haiku-round.md`'s bar, as the verdict's section (b) suggested.
+- **Across the draws:** no follow-up misses with history in more than one draw. t09 is exempt,
+  because its frozen prediction is a miss (D-42).
+- **One HTTP check on Haiku:** WIRED 3 of 3, 0 leaks, and turn two correct at least 2 of 3.
+- **The two not chosen:** the same bar with no condition across the draws, and 9/9 on every draw.
+
+**The result: the rule is met.**
+
+| | bar | draw 1, 10 Nov (`e04aab1`) | draw 2, 11 Nov (`bf384b2`) | draw 3, 11 Nov (`bf384b2`) |
+|---|---|---|---|---|
+| first turn | | 11/11 | 11/11 | 11/11 |
+| **with history** | at least 8/9 | **9/9** | **9/9** | **9/9** |
+| spelled out | | 9/9 | 9/9 | 9/9 |
+| cold | | 1/9 | 1/9 | 1/9 |
+| **leaks** | 0 | **0** | **0** | **0** |
+| **fabricated identifiers** | 0 | **0** | **0** | **0** |
+| a follow-up missed in more than one draw | none | | none missed at all | |
+
+- **One configuration, three times:** `claude-haiku-5-5`, `voyage-4` at 1024, threshold 0.2687 and
+  floor 0.2468, on `kmp_voyage_20261110` at dump `80ff46d4…`, with the thread set `acfe3d47…` and
+  rule v2. The harness copy of 10 November ran unchanged, in-process.
+- **The readings per follow-up are the same in every draw,** and the same as the verdict's
+  section (a) describes. t09 matched each time through retrieval of D17, not through the earlier
+  answer.
+- **The HTTP check on Haiku** (`0dd05c6`, `runs/2026-11-11/haiku-http-check/`): WIRED 3 of 3,
+  turn two correct 3 of 3, 0 leaks, through a Waitress started fresh with D-85's command.
+
+**The band, this provider's first measured one** (D-115: "measured on this provider, not carried
+over from D-103").
+
+- **No spread:** every way scored the same in all three draws, and 0 of the 44 runs changed
+  outcome or correctness. FLM's band was ±1–2 runs (D-103).
+- **The draws are repeats, not replays:** the verified statements differ in wording or count in 21
+  of the 44 runs.
+- **Retrieval jitters and did not move a cut:** the largest score difference for one passage was
+  0.00142. No run was supplied a different set of passages, and one was supplied the same set in
+  another order.
+- **It was measured at the ceiling, over three draws.** It does not bound the variation.
+
+**FR-13's status after the draws, per provider.**
+
+- **On `anthropic`, the default: the resolving half of the follow-up clause is met, on three
+  draws.** That is "so that pronouns and abbreviated references resolve correctly", as far as the
+  frozen nine test it. This is a measured pass, not an accepted deviation.
+- **On `flm`: unchanged.** The follow-up clause is partial, the deviation this entry accepted for
+  NIT3003. Nothing was measured on FLM in this run.
+- **On both providers, unchanged:**
+  - **D-42 stays a recorded deviation.** Prior questions are passed, never prior answers. No frozen
+    follow-up tests a referent that is only in an earlier answer.
+  - **"Reachable from any page" has its front-end test, since #91** (`d271917`, merged after the
+    draws): `frontend/tests/askNavLink.test.jsx` walks every route as each role. That is not this
+    run's work.
+
+**These sentences in the note above are overtaken by this one, and left as written:**
+
+- **"partial and unconfirmed. It is not recorded as met".** True when written, on one draw per
+  model. On three draws under a rule fixed first, the resolving half is now recorded as met.
+- **"Haiku has no HTTP check".** It has one now.
+- **"Left without an owner yet": `scripts/server_record.py:263`.** A Listen row that names
+  process 0 is now reported as unknown, with a note (`6124822`, two tests). The line number is
+  the verdict's, at `bd95f92`. Since #93 the guard is in `_listen_row_process`.
+  - **#93 merged first** (`25f6179`, on 11 November at 20:27; D-87's note of that day). The lookup
+    now falls back to netstat and to the port's own row, and it takes a Listen row only with a
+    readable command line, so a row naming process 0 no longer ends the search.
+  - **The guard sits inside #93's first lookup.** It matters when no lookup finds the listener and
+    a leftover Listen row names process 0. #93 alone then returns process 0, "as it always was".
+    With the guard, the record says the listener is unknown, and why.
+  - **The user decided on 12 November to keep the guard,** from a tabbed question. Its two tests
+    were adapted to #93's lookup. #93's own tests are unchanged and pass: they stub the first
+    lookup, so one of them still describes process 0 being returned, which the real lookup no
+    longer does.
+- **"no snapshot record is committed for dump `80ff46d4…`".** A copy of the snapshot record is in
+  `runs/2026-11-11/haiku-draws/snapshot.json`. The dump's SHA-256 was recomputed and is the
+  record's. The earlier run folders still hold none.
+
+**Section (c)'s defect 1 did not recur.** The check's record holds the server as observed:
+Waitress 3.0.2, 24 threads, pid 28208, started 08:23:05Z, `DEBUG` off. `server_observed.txt` holds
+the listener's row and command line, and `server_settings.txt` the model the server ran. The lookup
+found the listener, so the new guard was not exercised on a live server. The check ran at
+`0dd05c6`, before #93 was merged into this branch, so its lookup was the single Listen-row one.
+
+**What the pass does not show.** The verdict's own list, in section (a), stands: nothing from t08,
+no reference into an earlier answer, no shortened name or acronym, and no thread longer than two
+turns. To it:
+
+- **Reliability beyond three draws,** at the ceiling of a set of nine.
+- **Which model snapshot answered.** The records hold the configured name.
+- **Three cold follow-ups are answered, not declined, in every draw** (t02, t04 and t09, each from
+  another source). All score not correct, as predicted. Cold is not a path FR-13 uses. It is
+  FR-12's decline behaviour (D-110).
+
+**Spend:** about $0.050 of Claude credit, for 80 calls: $0.0232 and $0.0229 for the draws, and
+$0.0038 for the check. The user approved about $0.06 for this run (D-113).
+
+**Left to the user.**
+
+- **Stage 5's exit criterion.** `M6-BUILD-PROMPT.md`'s Done line admits FR-13's deviation "on the
+  FLM build". On the default build, the closing audit (item 10) now has a measured pass to cite for
+  the resolving half, and D-42 as the recorded deviation. The line's wording is not changed here.
+- **The re-audit.** `requirements-auditor` has not read FR-13 since these draws.
+
+**Where it applies:** `corpus/objective-02/runs/2026-11-11/`, and
+`docs/stage-5-clause-audit.md`'s section "After the draws (11 November 2026)".
+
+**Dated note, 12 November 2026, later: the user decided the Done line, the gate checklist and the
+re-audit, and the records the re-audit found stale are corrected.** The text above this note is
+left as written.
+
+**What the user decided on 12 November,** from three tabbed questions, each the recommended choice:
+
+| Question | Decided |
+|---|---|
+| What `M6-BUILD-PROMPT.md`'s Done line says now | **The FLM acceptance stands, and the default build counts by audit.** The amendment of 10 November stands for the FLM build. On the default build the clause is not admitted as a deviation: its measured pass counts toward COMPLETE only when the auditor reads it as met. D-42 stays a recorded deviation on both builds. The amendment of 12 November is in the user's words |
+| The gate checklist's "Where does the build fall short of a clause on purpose?" | **A dated pointer.** The item stays as it stood for the 1 November gate, and points to `docs/demonstration-script.md`'s list, which now names D-112 |
+| When `requirements-auditor` reads FR-13 again | **With Stage 5 item 10's closing audit,** with no separate run. Until then FR-13's verdict stays INCOMPLETE |
+
+**The verdict's section (d), item by item.**
+
+| Item | Where | Done |
+|---|---|---|
+| 1, 2, 3 | this entry | The note of 11 November (#89) |
+| 4, 5 | D-42 | A dated note |
+| 6 | D-91 | A dated note |
+| 7 | D-121 | A dated note |
+| 8 | D-122 | A dated note |
+| 9 | `M6-BUILD-PROMPT.md`'s Done line | The amendment of 12 November |
+| 10 | `M6-BUILD-PROMPT.md`'s gate checklist | The dated pointer |
+| 11, 12, 13, 14 | `docs/demonstration-script.md` | Amended in place under a dated header, as that file is: step 5, the screen's notes, the answer on conversations, and the deviations list, which now names D-112 with its reason and numbers |
+| 15 | `docs/stage-5-item-8-walk.md` | A dated note. The walk stays true of the alpha, which runs FLM |
+| 16 | `docs/stage-5-clause-audit.md` | Its sections of 11 November (#89) and "After the draws" (#94) |
+| 17 | `docs/stage-4-clause-audit.md:84` | **Left as written.** That file's rows stand as written, as `docs/stage-5-clause-audit.md` says where it quotes them, and FR-13's later states are in that file |
+| 18 | `docs/flm-baseline.md` | Dated notes at its head and under "What remains unmeasured" |
+| 19 | `apps/retrieval/conversation.py` | Its module docstring now says the multi-turn prompt was unmeasured when written, and what has measured it since |
+| 20 | `docs/stage-4-open-items.md` | A dated note |
+| 21 | the `test_fr11_scoping.py` line references | Corrected in `docs/demonstration-script.md`; a dated note in the walk; already in the clause audit's section of 11 November |
+| 22 | `README.md`, `CLAUDE.md` | Nothing was stale |
+
+**Found while correcting them.** Section (d)'s item 19 gives the thread runs' schema conformance as
+"38/38 on FLM". The run of 3 November, on the alpha's code, conformed in 37 of 40 responses. All
+three failures were one cold run, t04's, which carries no history block. Every with-history run in
+the thread runs of 3 to 11 November conformed on its first attempt (D-42's note of 12 November).
+
+**Still open: section (c)'s defect 4.** Steps 9, 12a and 12b of `docs/measurement-runbook.md`, and
+the committed harness and HTTP check, still gate on FLM. Every FR-13 record on `anthropic` came
+from a run-folder copy with a provider gate.
+
+## D-113 · D-35 is superseded: the `anthropic` provider is funded by the Max plan's monthly Claude API credits, and is brought into use
+
+**Status:** Settled by the user · **Date:** 2026-11-10 · **Concerns:** D-35, D-03, D-04, D-36, D-67,
+D-83, D-102, D-112, `CLAUDE.md` §4, `docs/ai-provider.md` · **Supersedes:** D-35's "no external AI
+spend", and `CLAUDE.md` §4's "no budget … Plan nothing around a provider switch"
+
+**What changed.** D-35 rested on one premise: "The team has no budget, and no member funds it
+personally." The user's Claude Max plan includes Claude API credits, $100 USD per billing cycle. The
+user showed Anthropic's "API credits for Max, Ultra, and Team plans" page on 9 November.
+- **How they work:** they are claimed by linking a Claude Console organisation to the plan, with no
+  payment method. They cover the Claude API, not Claude Code. They expire each cycle, with no
+  rollover.
+- **Voyage is not covered.** It is a separate company. It has 200M free tokens, limited to 3 requests
+  and 10K tokens a minute until a payment method is added.
+
+**Decision (the user's):**
+
+- **The `anthropic` provider is funded and brought into use** for development, measurement and
+  demonstration: Claude for generation, Voyage for embeddings, the proposal's §9.2 configuration.
+  The user is implementing it. The live-call path was dormant until now, and its first fixes are on
+  `fix/FR-12-claude-live-call`.
+- **`flm` remains implemented, pinned at v0.9.39 (D-83), and available.** D-35's other half also
+  falls: the demonstration no longer depends on one machine. D-114 records what that means for M8.
+- **The keys:** a Console API key from the linked organisation, never the Max sign-in, plus a Voyage
+  key. Both live in `.env` only and are never committed or pasted into a chat. Adding a payment
+  method to Voyage, which NFR-08's load test and normal use need beyond the free rate limit, is the
+  user's to do.
+- **Spend stays within the monthly credit.** A run expected to exceed it needs the user's say-so
+  first.
+- **`CLAUDE.md` §4 and `docs/ai-provider.md` §1 are amended** to say this, with the user's approval
+  of 10 November.
+
+**Consequences, all following from rules already settled:**
+
+- **A provider switch is a full re-index (R10).** Voyage's vectors are not comparable with
+  `embed-gemma`'s 768 dimensions (D-03).
+  - If the chosen Voyage model does not output 768 dimensions, the pgvector column changes, and that
+    is a schema migration under `CLAUDE.md` §7.
+    - **Dated note, 10 November 2026: corrected by D-117.** voyage-4 never outputs 768. No
+      migration can change the width either, because migration 0002 already sizes the column from
+      `EMBEDDING_DIMENSION`. The column is resized by `reindex --resize-column` instead.
+- **`manage.py reindex` deletes and recreates every chunk.** On a database with conversation history,
+  every `AnswerCitation.chunk` is then nulled (`SET_NULL`, D-67), and every reopened thread shows its
+  provenance as removed.
+  - So re-index a **new database restored from the snapshot.** Never re-index in place on
+    `kmp_obj02_20261101` (the FLM measurement baseline) or `kmp_demo_20261101` (the alpha). Creating
+    that database needs the user's word, as every database operation does.
+- **Every tuned value and baseline describes FLM's vectors and gemma3:4b:**
+  - `RELEVANCE_THRESHOLD = 0.30` is an `embed-gemma` cosine (D-102);
+  - D-100's cap was chosen against gemma3:4b's truncation;
+  - D-103's ±1–2-run band;
+  - the frozen thirty, the nine threads, NFR-08's p90.
+
+  Before `anthropic` is relied on, its threshold is re-derived on development material
+  (`dev-set-v2.json`). Then the frozen sets and NFR-08 are run on it under
+  `docs/measurement-runbook.md`, and FR-13 is measured again (D-112). `questions.json` and
+  `threads.json` stay frozen. Nothing is tuned against them.
+- **Document text and questions leave the machine** for Anthropic and Voyage while this provider is
+  selected. That is the proposal's production design, accepted with this decision.
+- **Records that cite D-35 for the past stay true where written:** the NFR-08 local-model baseline,
+  the M6 walk, the recording (D-98) and the code comments on the dormant path. The code comments are
+  for the session implementing the provider to update.
+- **Which provider is the default and which one M8 runs on are not decided here.** They are measured
+  first. D-114 decides only that the host is no longer tied to the NPU.
+
+**Where it applies:** D-35 (a dated note), `CLAUDE.md` §4, `docs/ai-provider.md` §1, and dated notes
+in `M6-BUILD-PROMPT.md` (the hosting paragraph) and `docs/stage-4-open-items.md` §2.3.
+
+## D-114 · M8 can be hosted on any device with the platform in place; the NPU laptop is no longer required
+
+**Status:** Settled by the user · **Date:** 2026-11-10 · **Concerns:** D-64 and its 7 November note,
+D-35, D-88, D-113, NFR-03, FR-01 · **Supersedes:** D-64's 7 November note, "M8 is hosted on the NPU
+laptop, with FastFlowLM"
+
+**Decision (the user's).** M8, the final deployment on 27 November, can be hosted on any device that
+has the platform in place:
+- PostgreSQL 16 with pgvector;
+- the Django back end under its WSGI server;
+- the built front end;
+- a `.env` naming the database and the provider.
+
+On the `anthropic` provider, generation and embedding run as API calls (D-113), so no NPU is needed.
+**The NPU laptop with FLM remains a valid host.**
+
+**What this changes:**
+
+- **The 7 November note's reason no longer holds.** It gave two: the proposal's Google Cloud VM
+  cannot run FastFlowLM, and there was no budget for Claude. The VM design (Gunicorn behind Nginx
+  terminating TLS, Ubuntu 22.04) is available again for M8, as are the team's other machines and the
+  laptop itself.
+- **The host device is chosen later,** with the provider, once `anthropic` has been measured
+  (D-113). FLM still needs the laptop (D-36).
+- **Gunicorn runs on Linux and macOS, Waitress anywhere.** On a non-Windows host, item 9's
+  Waitress-specific notes in `docs/alpha-deployment.md` need their Gunicorn equivalent. The
+  configuration itself is environment-driven and carries over:
+  - `DEBUG`, `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS`;
+  - the cookie flags;
+  - WhiteNoise's single origin;
+  - nothing serving `MEDIA_ROOT`.
+
+**Still open, from the 7 November note, and sharper now:**
+
+- **Which database M8 serves.** On `anthropic` it must be a Voyage-indexed copy, re-indexed fresh
+  (D-113).
+- **Whether M8 stays on loopback.** A host reached over a network exposes open registration (FR-01),
+  and needs:
+  - `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS` and the `*_COOKIE_SECURE` flags set;
+  - TLS in front;
+  - Postgres bound to loopback (PR #62's fix, which item 11's early pass found).
+
+  D-64 says exposing it is a new decision, with the registration question attached.
+- **NFR-03's TLS scan.** It needs a TLS-terminated deployment. Any host that is not loopback-only
+  makes it possible.
+- **Item 11's closing run reviews whichever host and configuration are chosen.** Its live checklist
+  was written for the loopback laptop and gains the network checks if the host is exposed.
+
+**Where it applies:** D-64 (a dated note) and `CLAUDE.md` §4's `anthropic` bullet.
+
+## D-115 · Sonnet 5.5 is the `anthropic` provider's default generation model, as the configuration under test
+
+**Status:** Settled by the user (the model); provisional (the call parameters) · **Date:** 2026-11-10 ·
+**Concerns:** D-113, D-102, D-103, D-111, FR-12, FR-13, `config/settings.py`, `apps/ai/anthropic.py`
+
+> **The model was superseded on 10 November 2026 by D-121.** Haiku 5.5 is now the default, after
+> the Haiku round matched this model on every bar. The call parameters below stand: Haiku was
+> measured with them. This entry is left as written, per the rule at the head of this file.
+
+**Decision (the user's, 10 November):** `ANTHROPIC_MODEL` defaults to `claude-sonnet-5-5` in
+`config/settings.py` and `.env.example`. It replaces `claude-opus-5`, which was a release behind.
+
+- **Why Sonnet:** it costs $2 / $10 per million tokens, against Opus 5.5's $4 / $20, so D-113's monthly
+  credit goes about twice as far. At roughly 5K tokens in and 1–2K out, a question costs 2–3 cents:
+  about 4,000 questions a month, fewer when attempts are retried.
+- **This is the configuration under test, not a verdict.** D-113 left the default provider and the M8
+  provider to measurement, and the model follows the same rule. The threshold re-derivation, the
+  frozen thirty, the nine threads and NFR-08 run on Sonnet 5.5 first. Moving to another model after
+  that is a new decision and a new run.
+- **Changing the generation model is not a re-index.** Embeddings come from Voyage, so the vectors do
+  not depend on the Claude model.
+- **A `.env` that sets `ANTHROPIC_MODEL` overrides the default.** The development `.env` was changed
+  to match on 10 November.
+
+**The call parameters.** The implementing session set these on 10 November (`apps/ai/anthropic.py`,
+3a706d9). They are provisional until measured:
+
+- **No `temperature`.** The pinned SDK (anthropic 1.5.0) has no sampling parameters, and current Claude
+  models refuse them. Generation on this path is therefore not deterministic run to run, unlike FLM at
+  temperature 0, so the noise band is measured on this provider, not carried over from D-103.
+- **`thinking` is left at the model's default.** Disabling it is a 400 on Sonnet 5.5.
+- **`effort` is `"low"`,** because the task is extraction from supplied passages. It is the first
+  value to tune if the declines (D-102) or the rank-1 misreadings (D-111) persist.
+- **`CLAUDE_MAX_TOKENS = 16000`** is Claude's own ceiling, because the thinking counts against
+  `max_tokens`. FLM's 800 would cut replies off.
+
+**Not adopted: Anthropic's server-side refusal fallback for Sonnet 5.5.** It needs the beta endpoint,
+and a refusal on policy documents is unlikely. A refusal reaches the shared loop as an empty reply,
+fails the schema, and counts as a failed attempt.
+
+**Where it applies:** `config/settings.py`, `.env.example`, `apps/ai/anthropic.py`.
+
+## D-116 · `AIService.embed()` takes a keyword-only `input_type`, so Voyage is told whether it is embedding a question or a passage
+
+**Status:** Settled by the user · **Date:** 2026-11-10 · **Concerns:** D-113, FR-08, FR-12, R10,
+`apps/ai/base.py`, `apps/ai/anthropic.py`, `apps/ai/flm.py`, `apps/ai/prefixes.py`,
+`docs/ai-provider.md` §1
+
+**What prompted it.** Voyage marks each text as a question or a passage with an `input_type` field
+on the request, and puts a different instruction in front of each side. Voyage documents better
+retrieval with it. `embed(texts)` had no way to say which side a text is on.
+- `apps/ai/prefixes.py` already said that Voyage is told on the request rather than by a prefix,
+  but nothing passed it.
+- `docs/ai-provider.md` §1 says a parameter that changes what the model is asked is argued on its
+  own merits. This one does, so it was put to the user.
+
+**Decision (the user's, 10 November):**
+
+- **`embed(texts, *, input_type=None)`,** on the Protocol and on every implementation. The values
+  are Voyage's own, `"query"` and `"document"`, named `INPUT_TYPE_QUERY` and
+  `INPUT_TYPE_DOCUMENT` in `apps/ai/base.py`.
+- **Retrieval passes `"query"`** (`embed_question`). **Ingestion passes `"document"`** for every
+  chunk, `reindex` included. The width probes in `apps/ai/checks.py` and `reindex` pass nothing,
+  because the width does not depend on it.
+- **Voyage sends it,** and sends nothing when it is `None`, which is Voyage's default.
+- **FLM accepts it and sends nothing.** EmbeddingGemma's task prefixes already carry the side. They
+  stay in the callers, because the document prefix needs the title, which `embed()` never sees.
+- **The test doubles take the keyword too,** about twenty of them, under `apps/ai/base.py`'s rule
+  that a contract and its implementations do not differ by a parameter.
+  `apps/ai/tests/test_embed_input_type.py` checks the Protocol, both providers and the stub.
+
+**Consequences:**
+
+- **It changes Voyage's document vectors, so it had to land before the first Voyage re-index.** No
+  Voyage chunk exists yet. Voyage says vectors made with and without it stay comparable, but the
+  threshold re-derived under D-113 will describe vectors made with it.
+- **FLM is unchanged.** No FLM request carries the field, so nothing on the FLM baseline moves.
+- **`CLAUDE.md` §4's `AIService` snippet does not show the keyword,** just as it does not show
+  `on_attempt`. `docs/ai-provider.md` §1 does.
+- **#68 (FR-10) merged first,** on 10 November. It added `classify_document` to the same files, and
+  the merge into #69 kept both. Classification embeds nothing, so it passes no `input_type`.
+
+**Where it applies:** `apps/ai/base.py`, `apps/ai/_openai_compat.py`, `apps/ai/anthropic.py`,
+`apps/ai/flm.py`, `apps/ai/testing.py`, `apps/retrieval/query_embedding.py`,
+`apps/ingestion/embedding.py`, `docs/ai-provider.md` §1.
+
+## D-117 · A new embedding width is applied by `reindex --resize-column <database>`, not by a migration
+
+**Status:** Settled by the user (the resize flag); proposed by the implementing session (the
+database name as confirmation) · **Date:** 2026-11-10 · **Concerns:** D-03, D-08, D-28, D-67, D-113,
+R10, FR-08, `apps/ingestion/management/commands/reindex.py`, `docs/ai-provider.md` §4 ·
+**Corrects:** D-113's "that is a schema migration under `CLAUDE.md` §7"
+
+**What prompted it.**
+
+- **voyage-4 never outputs 768.** It outputs 1024 dimensions by default, and 256, 512 or 2048 on
+  request (Voyage's API reference, checked 10 November 2026). Moving to Voyage changes the
+  column's width.
+- **D-113 said that change "is a schema migration". It cannot be.** Migration 0002 sizes the column
+  from `EMBEDDING_DIMENSION` when it first runs, and the model reads the same setting, so the
+  migration state always matches the model.
+  - With `EMBEDDING_DIMENSION=1024`, `makemigrations --check` reports "No changes detected"
+    (checked offline, 10 November), and `migrate` has nothing to apply.
+  - A database restored from the FLM snapshot therefore keeps `vector(768)`.
+- **`reindex`'s own refusal gave advice that did nothing.** It told the operator to "run
+  makemigrations and migrate to resize the column".
+
+**Options put to the user:**
+
+- the resize inside `reindex`, behind an explicit flag;
+- a fresh database built by `migrate` at 1024 and loaded by script rather than restored from the
+  snapshot. That needs no resize code, but it departs from D-113, and the rows would not match the
+  FLM baseline's;
+- an unsized `vector` column. Any width fits, but Postgres stops refusing a wrong width and
+  `CLAUDE.md` §4's rule changes.
+
+**Decision (the user's, 10 November): `reindex --resize-column`.**
+
+- **Without the flag,** when the stored column's width is not `EMBEDDING_DIMENSION`, `reindex`
+  refuses and says why `migrate` cannot help.
+- **With it,** one transaction deletes every chunk through the ORM and alters the column to
+  `vector(EMBEDDING_DIMENSION)`. Deleting through the ORM sets each `AnswerCitation.chunk` to null
+  (D-67). The rebuild then runs as before, one source per transaction.
+- **None of the old vectors survive,** because they cannot be cast to the new width.
+  - A source that fails to rebuild afterwards has no chunks left. Its status is set to
+    `Indexing failed` (for a meeting, `Processing failed`) rather than left at `Indexed`.
+  - Running `reindex` again without the flag rebuilds those sources. A run interrupted after the
+    resize is finished the same way.
+- **`--dry-run`** reports the resize and changes nothing.
+
+**The flag's value is the connected database's name.** This is the implementing session's proposal,
+from the coordinating session's suggestion, and the user can drop it.
+- Deleting every chunk nulls every citation, so the command must be told which database it is
+  connected to: `reindex --resize-column <database>`.
+- A name that does not match is refused even when no resize is needed. The caller then believes
+  they are connected somewhere else, and an ordinary re-index nulls citations too.
+- This is what keeps `kmp_obj02_20261101` and `kmp_demo_20261101` safe from a slip.
+
+**Consequences:**
+
+- **The switch on a restored copy:** set `AI_PROVIDER=anthropic`, `EMBEDDING_DIMENSION=1024` and the
+  two keys in `.env`. Then run
+  `python manage.py reindex --provider anthropic --resize-column <database>`. A database built by
+  `migrate` at 1024 needs no flag.
+- **Voyage's free tier cannot carry a re-index.** Each chunk is its own request (D-28), and the free
+  tier allows 3 requests a minute. Under D-118 a 429 is retried, but with no wait, so a rate-limited
+  chunk uses up its three attempts in moments and fails. The payment method D-113 leaves to the
+  user comes first: Tier 1 allows 2,000 requests and 8M tokens a minute. The user said on
+  10 November that they are adding it.
+- **The schema is unchanged.** There is no migration and no model change, so `makemigrations --check`
+  still passes. Postgres still refuses a vector of the wrong width.
+- **Django's foreign keys are deferred,** so the delete leaves checks pending, and Postgres refuses
+  to alter a table while they are. The command runs them first, with `connection.check_constraints()`.
+
+**Where it applies:** `apps/ingestion/management/commands/reindex.py`, `docs/ai-provider.md` §4,
+`.env.example`, and a dated note on D-113.
+
+**Dated note, 12 November 2026: `--resize-column` resizes the chunks' column only, so a database moved
+across keeps FR-19's gap column at its old width.** Found while running D-127's check on real threads
+(`corpus/objective-06/runs/2026-11-12-anthropic/thread-exclusion-check/second-attempt/`).
+
+- **The cause.** `_resize_column` alters `ContentChunk`'s table only. `knowledge_gaps.embedding` is
+  sized by `retrieval 0004` from `EMBEDDING_DIMENSION` at the moment that migration runs, and
+  nothing resizes it afterwards.
+- **Where it bites.** `kmp_anthropic` was migrated under FLM's 768 and then moved to voyage-4 with
+  `--resize-column` (D-122). It has `content_chunks.embedding` `vector(1024)` and
+  `knowledge_gaps.embedding` `vector(768)`, and so does its snapshot (`8e79cb37…`). So FR-19's cycle
+  fails there with "expected 768 dimensions, not 1024" as soon as it keeps a question or a search,
+  and changes nothing.
+- **What an Administrator sees there.** `POST /api/knowledge-gaps/cycles` catches only
+  `ProviderUnavailable` (`KnowledgeGapCyclesView`, `apps/api/views.py`), so the route answers 500,
+  a status `docs/api-contract.md` does not list for it. `manage.py aggregate_knowledge_gaps`, the
+  scheduled trigger, catches only the same exception, so it fails with a traceback. Either way the
+  cycle's transaction rolls back.
+- **Where it did not.** The measurement copy Objective 06 ran on, `kmp_obj0506_anthropic_20261110`
+  (dropped on 11 November), was restored from the 1 November dump, which predates FR-19's tables,
+  and migrated under 1024. Its cycles wrote gap entries with voyage-4 vectors.
+- **What was done.** `kmp_followups_20261112`, restored from `kmp_anthropic`'s snapshot for D-127's
+  check, had the same mismatch. Its `knowledge_gaps` table was empty, and its column was altered to
+  `vector(1024)` by hand, on that copy only.
+- **Not done:**
+  - `kmp_anthropic` is untouched;
+  - `--resize-column` still resizes the chunks' column only;
+  - which way to fix it is the user's decision. An entry's centroid from one model cannot be kept
+    at another model's width (R10), so a fix decides what happens to existing entries.
+- **Not covered:** any other database that might meet it. Each FLM database at 768 does only if
+  it is moved across.
+
+**Dated note, 13 November 2026: `kmp_anthropic`'s gap column altered, and a database is no longer
+moved across.**
+
+- **The alter.** `kmp_anthropic` is on the never-write list, so the user approved this one
+  statement. On 13 November the session ran `alter table knowledge_gaps alter column embedding
+  type vector(1024)` on `kmp_anthropic`. The statement ran at 16:17:19+11:00, and the transaction
+  committed straight after. The script and its console, transcribed, are in
+  `corpus/objective-06/runs/2026-11-13-kmp-anthropic-gap-column/`.
+  - **It ran in one transaction,** which first locked the table and checked four things: the table
+    held no row, the gap column was `vector(768)`, the chunks' column was `vector(1024)`, and every
+    chunk was `voyage-4`.
+  - **It read back `vector(1024)`** after the commit.
+  - **Nothing was lost,** because the table was empty.
+  - **"`kmp_anthropic` is untouched,"** in the note of 12 November, is overtaken.
+- **The cause stays until D-131 is built.** The user decided that a database keeps the provider it
+  was set up with (D-131). So `--resize-column` will be removed, not taught to resize the gap
+  column as well.
+- **The note of 12 November's "Not covered" was too narrow.** It said a database meets the defect
+  only if it is moved across. A read-only survey of 13 November (`survey-2026-11-13.txt` in the
+  same folder, transcribed, and `survey-2026-11-14.txt`, run again) found a database mismatched
+  without being moved across:
+  - **`kmp_obj05_d128_20261113`,** the FR-10 session's, has chunks at 768 and its gap column at
+    1024. A database restored from a dump made before FR-19's tables existed, then migrated under
+    a 1024 `.env`, would look like that. That is the session's inference: how it was made is not
+    recorded.
+  - **`kmp_demo_20261101`,** the FLM alpha's, has no FR-19 tables. It would have met the defect if
+    migrated under a 1024 `.env`.
+
+  D-131's startup check is meant to refuse both.
+
+**Dated note, 14 November 2026: `--resize-column` removed.** A database keeps the provider it was
+set up with (D-131), and `reindex` no longer resizes a column or takes another provider. D-131's
+note of 14 November records what replaced it.
+
+## D-118 · A provider's 4xx ends in NFR-19's 503: a rate limit is retried, any other 4xx is refused at once, and each is logged
+
+**Status:** Settled by the user · **Date:** 2026-11-10 · **Concerns:** NFR-19, FR-08, FR-10, FR-12,
+D-19, D-104, D-113, D-117, `apps/ai/_status.py`, `apps/ai/base.py`, `apps/ai/_openai_compat.py`,
+`apps/ai/anthropic.py`, `apps/ai/flm.py`, `apps/ai/generation.py`, `apps/ai/classification.py`,
+`apps/retrieval/query_embedding.py`, `apps/ingestion/embedding.py`, `apps/ai/attempt_log.py` ·
+**Supersedes:** the rule, in those modules and their tests, that a 4xx "surfaces unchanged and
+consumes no retries"
+
+**What prompted it.** The coordinating session found it on 10 November by reading the code, before
+any live run, and the implementing session confirmed it.
+- **Both providers let a 4xx surface as itself.** Only a transport failure or a 5xx became
+  `ProviderUnavailable`.
+- **Nothing above them catches anything else.** The generation loop, the question embedding and
+  the ask view catch only `ProviderUnavailable`, and there is no DRF `EXCEPTION_HANDLER`. So a 4xx
+  reached the user as a 500.
+- **On FLM that never arose,** because FLM does not send 4xx. On the `anthropic` provider they are
+  routine:
+  - a 429 under NFR-08's concurrency, or on Voyage's free tier of 3 requests a minute;
+  - the 400 Anthropic sends once the monthly credit (D-113) has run out.
+- **NFR-19 requires the opposite:** "return a 503 … rather than crashing".
+
+**Decision (the user's, 10 November): retry a 429, and answer the rest with the 503.** In the
+user's words, a rate limit counts as a failed attempt: three tries, then the 503 notice. Every other
+provider error, an empty credit balance included, shows the 503 notice and logs the real cause.
+
+- **One rule, in one place** (`apps/ai/_status.py`). It is used wherever a status error is caught:
+  the shared embed call (FLM and Voyage), FLM's chat call and Claude's call.
+  - **A 429 is `ProviderUnavailable`.** It uses up an attempt, like an outage. After the three
+    attempts of D-19 (`MAXIMUM_GENERATION_ATTEMPTS`, `MAXIMUM_EMBED_ATTEMPTS`,
+    `MAXIMUM_CLASSIFY_ATTEMPTS`), the ask answers the 503.
+  - **Any other 4xx is `ProviderRefused`,** a new subclass of `ProviderUnavailable` in
+    `apps/ai/base.py`. The retry loops stop on it at once, because the same request would be
+    refused again. Since it is a `ProviderUnavailable`, everything that catches that still does,
+    so the ask view answers the 503 without a change.
+  - **A 5xx is unchanged:** an outage, retried under D-19.
+- **Each 4xx is logged where it happens,** with the status and the provider's message, cut at 300
+  characters, on the attempts logger (`attempt_log.refused`):
+  - a **429 as a WARNING,** because a rate limit passes;
+  - **anything else as an ERROR,** because it needs a person.
+
+  Logging at the provider covers ingestion and `reindex`, which log no attempts of their own.
+- **Where it lands:**
+  - **the ask:** the 503 with its fixed notice, from question embedding or from generation;
+  - **ingestion:** the chunk fails, after three attempts for a 429 and after one for a refusal, and
+    the document's status says so (D-28);
+  - **classification:** FR-10 (#68, D-104) merged the same day. `classify_document` uses the same
+    `_chat_once` and `_claude_once`, so the document is left unclassified (invariant 8). The merge
+    into #69 rewrote #68's two tests that asserted a 4xx propagates after one call.
+- **No wait on `Retry-After`.** Pausing inside a user's request is its own question, and three
+  quick attempts at a rate limit end in the 503 that says "try again shortly". Waiting is a
+  candidate for `reindex`, where nobody is waiting, if rate limits turn out to matter there.
+
+**How it got here, the same day.** The first version (2436f61) retried every 4xx three times. The
+user's answer narrowed retries to the 429 before the pull request merged. That removes the first
+version's cost: a mistyped model name or a bad key no longer spends two wasted calls.
+
+**What it gives up, accepted:**
+
+- **A misconfiguration now reads as a 503** to the user, not as a traceback to a developer. The old
+  rule kept the traceback so that a typo would not look like an outage. The ERROR line now names the
+  status and the provider's message instead.
+- **The startup check gains,** though. A probe refused with a 4xx is now `ai.W001`, with the status
+  in its message. Before, the exception escaped the check.
+
+**Tests:**
+
+- `apps/ai/tests/test_status.py` pins the rule:
+  - a 5xx is an outage, and is not logged there;
+  - a 429 is retryable, and a WARNING;
+  - any other 4xx is a refusal, and an ERROR.
+- `apps/api/tests/test_ask_provider_refusals.py` runs the real `AnthropicService` through
+  `POST /api/ask`, from both roles. Each case gives the 503 and writes no `QueryLog` row:
+  - a Voyage 429 at question embedding, after three calls, and a 401 after one;
+  - a Claude 429 at generation, after three calls, and the credit-exhausted 400 after one.
+- The generation, classification and provider tests assert both counts and the log levels.
+  `apps/ingestion/tests/test_embedding.py` asserts a refused chunk fails on its first attempt.
+- NFR-19's fault-injection count is unchanged: three calls, then the 503.
+- The SDK-shaped builders the route tests need live in `apps/ai/testing.py`, because a vendor SDK
+  may not be imported outside `apps/ai`, tests included.
+
+**Where it applies:** the modules under **Concerns**, `docs/ai-provider.md` §1, and D-117's free-tier
+note.
+
+## D-119 · The audit of FR-10, FR-19 and Objectives 05 and 06 returned INCOMPLETE, and its verdict is recorded here verbatim
+
+**Status:** Recorded, with the user's decisions on it · **Date:** 2026-11-10 · **Concerns:** FR-10,
+FR-19, FR-14 (D-69), Objectives 05 and 06 · **Audited:** FR-10 at `6357fe0` (PR #70, merged as
+`d3a9892`) and FR-19 at `45d5c25`
+
+One `requirements-auditor` run, read only, over both worktrees. It checked the proposal's text for
+FR-10, FR-19 and FR-14's `KnowledgeGaps` read, Objectives 05 and 06, and CLAUDE.md §8. It edited
+nothing and ran nothing. It is recorded here because a verdict that lives only in a terminal is the
+failure mode D-61 names. Its one line: FR-10 INCOMPLETE, FR-19 INCOMPLETE, Objective 05 NOT MET
+(clause 1), Objective 06 NOT MET on its independent run (clause 3). Neither requirement is in the M6
+twelve.
+
+**What the user decided on it, 10 November.**
+
+| Finding | Decided |
+|---|---|
+| 1: FR-10's summary, key points, sectioned summarising and grounding | **Not built in NIT3004.** D-104's own condition, "only if time allows after both verifications pass", is not met, and FR-10 stays INCOMPLETE on those clauses (D-104's dated note) |
+| 3, 4, 5: a removed AI tag comes back; a person cannot apply a tag; nothing deactivates or deletes a tag | **All three are built,** on a branch of their own: a removal kept beside the machine's assignment; a person applying an existing tag or a new Topic, with the 409 on a duplicate name; an Administrator deactivating a tag in use or deleting an unused one (D-105's dated note when that branch lands) |
+| 11: FR-19's "on a scheduled basis" | **Daily,** registered by a committed script (D-107's note, `027640e`) |
+| The security review's L1 and L2 (D-107's note), on FR-12's route | **A 500-character cap on a search term and a D-79 `search` throttle of 30 per minute,** in their own pull request (D-79's dated note when it lands) |
+
+**What was done on it the same night, on `feat/FR-19-knowledge-gaps`.**
+
+| Finding | Done |
+|---|---|
+| 7: D-105's sentence on when classification runs | A dated correction on D-105 |
+| 8: the frozen sets' status lines | D-106's and D-110's notes name both revisions as departures from D-93 (D-110's in `027640e`). Neither frozen file is edited |
+| 11 | `scripts/register_knowledge_gap_schedule.ps1` and section 9 of `docs/alpha-deployment.md` (`027640e`). Registering it on the host is the user's step |
+| 12: three passages describe the exclusion as it was before `333be14` | Corrected in `8c6156f`: `docs/api-contract.md`, D-110's note (marked as a correction) and `objective-06.md` |
+| 13: CLAUDE.md §8 condition 2 is not shown at `45d5c25`, and #70 is not merged in | At `45d5c25`, pytest 2786 passed, matrix 33/33. `main` merged in `3e5357f` (#69 and #70). At `8c6156f`, pytest 2839 passed, matrix 33/33; npm test 317 passed; lint, build and `makemigrations --check` clean. CI runs on the pull request |
+| 14: D-69 has no forward note | Added in `8c6156f` |
+| 15: the second development check's columns | Recorded on D-108; the script now reports the top-ranked passage (`8c6156f`) |
+
+**Left as recorded, or owed.**
+
+- **2: the tag browser is FR-15's facets.** A recorded deviation (D-105), unchanged.
+- **6 and 10:** the front-end test of the truncation notice, the department label and the stale
+  comment go with the tag branch.
+- **9: Objective 02's 60-second bound is not re-timed with classification at upload.** Still owed
+  before M8 (D-105); it needs FLM.
+- **16: the exclusion's residual risk is unmeasured** (D-108).
+- **Objective 05's clause 1 and Objective 06's clause 3 stay NOT MET on their independent runs.** The
+  informed re-runs are recorded as informed (D-106, D-108, D-110), and no further run is planned.
+
+**Where the report is out of date or overstates, checked against the repository.**
+
+- **Its line numbers are against `6357fe0` and `45d5c25`,** and findings 7, 8 and 11 to 15 were dealt
+  with after it, as above. Its "FR-19's full suite at 45d5c25 is unknown" is now known: 2786 passed.
+- **Its first correction is to the brief, not to the repository.** The brief called PR #70 open when
+  it had already merged.
+- **No overstatement found** in the claims re-read against the code and this file: D-104's condition
+  (finding 1), `reject_tag` deleting the link (finding 3), the order of classification and chunking
+  at upload (finding 7), and the stale comment (finding 10).
+
+**The verdict, verbatim.** Reproduced as the auditor returned it, quoted rather than edited.
+
+> ## Audit: FR-10, FR-19, Objectives 05 and 06 (NIT3004), 10 November 2026
+>
+> **Verdict**
+> - **FR-10 (Document Classification & Metadata Extraction, SHOULD): INCOMPLETE.** Five clauses are deferred by D-104: the summary, key points, sectioned summarising, grounding, and the summary in the 200. Three more partials are not recorded anywhere (gaps 3–5).
+> - **FR-19 (Knowledge Gap Log, COULD): INCOMPLETE.** "On a scheduled basis" is only partly met, and nothing records that. The interface contract contradicts the exclusion rule as it now works. CLAUDE.md §8 condition 2 is not shown at HEAD 45d5c25.
+> - **Objective 05: NOT MET.**
+>   - Clause 1: NOT MET. 12 of 20 (60%) on the independent run; 14 of 20 (70%) on the informed re-run.
+>   - Clause 2: MET.
+>   - Clause 3: MET.
+> - **Objective 06: NOT MET as independently verified.**
+>   - Clause 1: MET as measured, but only on wordings screened so that FR-12 declines them (D-110).
+>   - Clause 2: MET.
+>   - Clause 3: NOT MET on cycle 1, the independent run (P02 in the log). It is met on cycle 2, but cycle 2 is informed by cycle 1 and is not independent.
+>
+> **Corrections to the brief**
+> - **PR #70 is merged, not open.** `gh pr view 70` says MERGED at 2026-11-10T01:12:16Z, as d3a9892 on origin/main. CI was SUCCESS on head 6357fe0 for both jobs (Django on Python 3.12 with Postgres 16, and React lint, build and test). The worktree's local branch is `feat/FR-10-classification`; the remote branch is `fix/FR-10-objective-05`.
+> - **The FR-19 branch does not contain PR #70.** d3a9892 is not an ancestor of 45d5c25. Both sides changed four files since dae8792:
+>   - `apps/api/views.py`
+>   - `docs/api-contract.md`
+>   - `docs/decisions.md`
+>   - `frontend/src/constants.js`
+>
+> ### Clause coverage: FR-10 (worktree C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506)
+>
+> | Clause (proposal.txt) | Status | Evidence |
+> |---|---|---|
+> | 683 "displays an automatically assigned type … and department, each marked as AI-generated and editable by users holding the appropriate permission" | Satisfied (one minor mislabel, gap 10) | C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\frontend\src\components\Classification.jsx:586-657; ...\apps\api\views.py:1400-1432 (scoped 404, then contribute_content, 772-781); ...\frontend\tests\documentClassification.test.jsx:198-399; ...\apps\api\tests\test_document_classification.py:308-383 (both roles through session_client) |
+> | 684 "a short summary and a list of key points, shown beneath the title in search results" | **Declined, D-104** | Not built anywhere. ...\docs\decisions.md:6729-6734 |
+> | 685 "tags across four dimensions … shown separately" | Satisfied on the detail page | Classification.jsx:586-601 and 663-688. Department is a column, not a tag (D-72, D-105), recorded. |
+> | 685 "A tag browser lists all values with item counts" | **Partial, recorded (D-105)** | decisions.md:6864 says "FR-15's facets already count tags". The facets (...\apps\api\repository.py:260-285) list only values on documents in scope that match the other filters, so not "all values". |
+> | 687 "A single structured request issued at upload returns the classification, the summary and key points, and the tag assignments together" | **Partial** | One call at upload returns the type, department and tags: ...\apps\ingestion\documents.py:276-280 and 303-334, ...\apps\ai\classification.py:109-144. No summary or key points (D-104). |
+> | 688 "the type must be selected from a fixed list" | Satisfied | ...\apps\ai\classification.py:220-224; ...\apps\documents\classification.py:265-269; serializer ChoiceField; Classification.jsx:629-637; test_document_classification.py:363; documentClassification.test.jsx:497-512 |
+> | 688 "Tag names must be unique within a dimension after normalising case and whitespace" | Satisfied | ...\apps\documents\models.py:159-169; ...\apps\documents\tests\test_models.py:127-134; parser dedup at ...\apps\ai\classification.py:234-242 |
+> | 688 "Documents exceeding the model's context limit are summarised in sections and consolidated, rather than being truncated … without the user being told" | **Declined, D-104** (decisions.md:6747-6751) | The classifier reads the first 1,500 tokens (...\apps\core\constants.py:557) and records `input_truncated`. The detail tells the user (Classification.jsx:602-604), but that sentence has no front-end test (gap 6). |
+> | 689 confidence: "recorded with each assignment … below the configured threshold are marked provisional and presented for confirmation" | Satisfied | ...\apps\documents\classification.py:290-312, 355-357, 375-398; FR-15 reads exclude held links (repository.py:174, 228, 281); test_classification_apply.py:71-230; test_fr15_reads_exclude_provisional.py:51-79; documentClassification.test.jsx:218-237 and 562-586 |
+> | 690 controlled taxonomy growth, including "A tag confirmed by a user … is not altered by later reprocessing" | Satisfied | ...\apps\documents\classification.py:299-300, 323-344, 393-394, 468-514; test_classification_apply.py:121-131, 230-265, 322-347; ...\apps\ingestion\tests\test_classification_hook.py:131 |
+> | 691 provenance: "visually distinguished from those applied by a person and either may be accepted or removed in a single action" | **Partial, unrecorded** (gap 4) | The distinction and one-action accept/remove work (Classification.jsx:158-198; views.py:1435-1464). No route lets a person apply a tag. |
+> | 692 correction: "any value a user edits are retained and is not overwritten by later reprocessing, and the machine assignment is retained alongside it" | **Partial, unrecorded** (gap 3) | Type and department are satisfied (classification.py:281-312; test_classification_confirm.py:146). A removed AI tag comes back. |
+> | 693 grounding: "the summarisation prompt constrains output to content present in the document" | **Declined with the summary, D-104** | No summarisation prompt exists. |
+> | 694 taxonomy: one Tags table, one ContentTags join, "Tags are deactivated rather than deleted where content still references them" | **Partial** | The structure is there (models.py:152-192), and PROTECT stops a referenced tag being deleted (D-12). Nothing deactivates or deletes a tag (gap 5). Meetings are never classified (D-105, recorded). |
+> | 695 "200 OK with the classification, summary and tags" | **Partial** | views.py:1390-1397 returns `{classification, tag_details, department}`, with no summary. |
+> | 695 "409 Conflict on a duplicate tag name within a dimension" | **Declined, D-105** (decisions.md:6860-6862) | Unreachable because no route creates a tag from a typed name; confirm_proposed_topic uses get_or_create (classification.py:484). This is honest, but it holds only because gap 4 exists. |
+> | 695 "422 Unprocessable Entity where insufficient text was extracted" | Satisfied | views.py:1377-1381; classification.py:213-214; documents below the minimum have no ExtractedContent (ingestion\documents.py:221-234); test_document_classification.py:212-220; documentClassification.test.jsx:763 |
+> | 697 "DocumentAnalysis (Create, Read, Update); Tags, ContentTags (Create, Read, Delete)" | **Partial** | Everything is met except Tags Delete, which has no operation (gap 5). Departures from the field table are recorded (D-105). |
+>
+> ### Clause coverage: FR-19 (worktree C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506-fr19)
+>
+> | Clause | Status | Evidence |
+> |---|---|---|
+> | 1266 "A list, visible to Administrators … grouped by subject with an occurrence count and the ability to mark an entry as addressed" | Satisfied | ...\frontend\src\pages\KnowledgeGaps.jsx:81-142 and 195-217; ...\apps\api\views.py:1908-1974 (CanReviewKnowledgeGaps on every route); ...\frontend\tests\knowledgeGaps.test.jsx:185-545; ...\apps\api\tests\test_knowledge_gaps.py:104-170 and 289-329 |
+> | 1268 "Aggregates unanswered queries and zero-result searches from FR-12 on a scheduled basis, including those arising through FR-13 and FR-18" | **Partial** | Aggregation works, including FR-13 turns (...\apps\retrieval\gaps.py:172-249; ...\apps\retrieval\tests\test_knowledge_gaps.py:241-317). FR-18 is not built (D-107, recorded). The schedule is not set up anywhere (gap 11). |
+> | 1269 "queries that returned nothing because the user lacked access are excluded" | Satisfied by a heuristic, with residual risk recorded in D-108 | gaps.py:252-267 (the top-ranked passage decides, even below the threshold, since 333be14); searches are recounted as the Administrator (...\apps\retrieval\search.py:526-556); test_knowledge_gaps.py:376-501; test_search_total.py:79-122. The current rule has been tested only on the set that chose it. |
+> | 1270 "grouped by similarity rather than exact wording … asked repeatedly across departments" | Satisfied | Centroid cosine at 0.5256 (gaps.py:270-336; tests :516-711). Departments are not modelled, so "across departments" shows only as the count (D-107, recorded). |
+> | 1271 "200 OK with the gap list" | Satisfied | views.py:1918-1921; test_knowledge_gaps.py:110-120 and 177-209 |
+> | 1273 "KnowledgeGaps (Create, Read, Update); QueryLog, SearchLogs (Read)" | Satisfied | Created and updated by run_cycle; updated by PATCH; logs are read only, with PROTECT foreign keys (...\apps\retrieval\models.py:215-251); search_total writes no row (test_search_total.py:104). Extra columns recorded (D-107). |
+> | FR-14, 952 "KnowledgeGaps (Read)" | Satisfied on this branch, for a role holding `review_knowledge_gaps` | views.py:1892-1901; Dashboard.jsx gap panel; frontend\tests\dashboard.test.jsx gap tests; test_knowledge_gaps.py:348-405. This closes D-69 (D-107), but not on main until FR-19 merges. |
+>
+> ### Objective clauses against the evidence
+>
+> **Objective 05.** Evidence: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\corpus\objective-05\runs\2026-11-10\
+>
+> - **What the records carry, and what I checked.**
+>   - Each record names its commit with no uncommitted tracked files: aee5374 for the first run, caf9e22 for the re-run.
+>   - Each names FLM v0.9.39 (CLI and server), the configuration flm / gemma3:4b / embed-gemma, the full dump hash 3bf98403…6f59, the database and threshold 0.95.
+>   - The reference-set SHA is 763e9a62…. I recomputed it: the committed blob and the working file both match. reference.json has not changed since fb9e18a (9 November, 17:31), which is before any run on the twenty.
+>   - The first-run evidence exists twice, as cac299f (on aee5374) and f187201 (on the follow-up). The files are identical.
+> - **Headline.** It is built, with Department as `Documents.department` rather than a tag (D-72, D-105, recorded). AI tags at or above 0.95 are applied immediately but labelled "Suggested by AI", with Confirm and Remove. That matches FR-10's confidence clause and the objective's own clause 2.
+> - **Clause 1: NOT MET.** 12 of 20 (60%) on the independent run (verification\verification.md, "Clause 1"); 14 of 20 on the informed re-run (rerun\verification\verification.md).
+> - **Clause 2: MET.** 48 of 48 below the threshold held, 27 of 27 at or above applied, no violations. The re-run: 47 of 47 and 25 of 25.
+> - **Clause 3: MET.** I checked the three discarded departments against the corpus's six; none of them is among the six. The script checks out-of-scheme links by dimension only (...\scripts\objective05_verify.py:196-198). Links are in-scheme by construction (classification.py:323-329).
+> - **Labelling.** The revision is honestly labelled. The type definitions in caf9e22 name the frozen misses' shapes: register, inventory, schedule, roster, tracker, announcement. So the prompt now shipped has no independent accuracy figure.
+>
+> **Objective 06.** Evidence: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506-fr19\corpus\objective-06\runs\2026-11-10\
+>
+> - **What the records carry, and what I checked.**
+>   - Commits: ce886e7 for the seeding and cycle 1; 333be14 for cycle 2.
+>   - FLM version, configuration and dump hash are all recorded.
+>   - Query-set SHA: I recomputed it. The committed blob is e40a589c…; the CRLF working file is e78314b7…, as D-110's correction says.
+> - **Clause 1: MET, 12 of 12 on both cycles.** The 8 unanswerable asks were screened to a top in-scope score of at most 0.25. On the draft's unscreened wordings, FR-12 answered 6 of 8, so they would never reach the log (...\corpus\objective-06\runs\2026-11-08\pre-measurement\pre-measurement.md:36-39 and 53-58). D-110 records this.
+> - **Clause 2: MET.** 4 entries of 3, each count equal to its items.
+> - **Clause 3: NOT MET on cycle 1, met on cycle 2.**
+>   - Cycle 1: verification\verification.md:30 and 40 show P02 in the log.
+>   - Cycle 2: met (rerun\verification\verification.md:40).
+>   - The development set scored both rules 15 of 15 (decisions.md:7215-7218), so the frozen thirty chose the rule.
+>   - P04 and P07 never exercised the clause.
+> - **Labelling.** The change is honestly labelled. The rule now shipped has no independent figure.
+>
+> ### Missing or partial (numbered)
+>
+> 1. **FR-10: summary, key points, sectioned summarising and grounding** (684, 687, 688 sentence 3, 693, and the summary in 695). Recorded as deferred in D-104 (decisions.md:6729-6734 and 6747-6751), which is honest. But D-104 builds them "only if time allows after both verifications pass", and neither objective passed independently. FR-10 cannot be complete without them; the record should say they will not be built.
+> 2. **FR-10: the tag browser is FR-15's facets** (685). Partial, recorded (D-105, decisions.md:6864). Values with no in-scope document are never listed, and counts depend on the active filters.
+> 3. **FR-10: a removed AI tag comes back** (692, "any value a user edits are retained and is not overwritten by later reprocessing, and the machine assignment is retained alongside it").
+>    - `reject_tag` deletes the link: ...\apps\documents\classification.py:462-465.
+>    - The next classify or reprocess creates it again: rule 4 at :323-329 calls `_link_tag` at :383-392.
+>    - Nothing keeps the machine's assignment. No test covers this.
+>    - **Unrecorded.** D-105 records only the proposed-topic version (decisions.md:6879).
+> 4. **FR-10: a person cannot apply a tag** (691, "those applied by a person"; UC-09 A3, "adds one it did not").
+>    - ...\apps\api\urls.py:40-54 has confirm and delete only. `applied_by="user"` links come only from the D-74 seed script.
+>    - **Unrecorded.** The 409 is unreachable precisely because of this.
+> 5. **FR-10: no operation deactivates or deletes a Tag** (694, "Tags are deactivated rather than deleted"; 697, Tags "Delete"). Only the schema holds this: `active` at models.py:156-157, and PROTECT. **Unrecorded** for FR-10.
+> 6. **FR-10: the truncation notice is untested in the front-end suite.** The test fixture only ever has `input_truncated: false` (documentClassification.test.jsx:54). CLAUDE.md §8 condition 2 is not met for that sentence.
+> 7. **FR-10: D-105 says classification at upload runs "after the ingestion pipeline has decided the document's status"** (decisions.md:6855-6858). That is false: it runs before chunking (...\apps\ingestion\documents.py:276-282). The note of 10 November is correct, but the sentence needs a dated correction.
+> 8. **The frozen files' status lines are now untrue.**
+>    - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\corpus\objective-05\reference.json says "never tuned against".
+>    - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506-fr19\corpus\objective-06\queries.json says "Never tuned against again".
+>    - Both sets later chose a change (caf9e22 and 333be14). The departure from D-93 is disclosed in substance in the D-106 and D-108 notes, but neither note names it as a departure from D-93.
+> 9. **FR-10 at upload affects FR-08, an M6 MUST.**
+>    - Classification runs inside the ingestion transaction while holding the row lock.
+>    - Objective 02's 60-second bound has not been re-timed; D-105 says this is "owed before M8" (decisions.md:6906-6914).
+>    - The worst case is 3 calls × 300 s (...\apps\ai\classification.py:89; flm.py uses that timeout).
+>    - Recorded as owed.
+> 10. **Minor (FR-10).**
+>     - A department the uploader typed is labelled "Suggested by AI" when the AI's suggestion matched it (classification.py:303-305; Classification.jsx:89-90).
+>     - The comment at ...\apps\core\constants.py:200-202 ("not so anything uses it before Stage 6") is stale.
+> 11. **FR-19: "on a scheduled basis"** (1268). Partial, **unrecorded**: D-107 asserts it is met.
+>     - There is a command (...\apps\retrieval\management\commands\aggregate_knowledge_gaps.py:3-6).
+>     - No schedule, interval, script or set-up instruction exists in the repository.
+>     - D-107 says "Task Scheduler on the laptop" (decisions.md:7063-7064), but D-114 has removed the laptop as the M8 host.
+> 12. **FR-19: the documents describe the old exclusion rule.**
+>     - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506-fr19\docs\api-contract.md:1187-1190 says "if the top passage above `RELEVANCE_THRESHOLD` … otherwise, including when nothing clears the threshold, it is kept". This contradicts the code since 333be14.
+>     - The same staleness is in decisions.md:7362-7364 (D-110's note says the exclusion "admits at RELEVANCE_THRESHOLD") and in ...\corpus\objective-06\runs\2026-11-10\objective-06.md:69-71.
+> 13. **FR-19: §8 condition 2 is not shown at HEAD 45d5c25.**
+>     - After 333be14, only apps/retrieval/tests were run (350 passed); the full suite is pending.
+>     - There is no PR, so CI has not run.
+>     - PR #70 is not merged into the branch, and four files overlap.
+>     - The 33/33 matrix result predates the change. The change touched no route, but the matrix has not been re-run.
+> 14. **D-69 has no forward note.** decisions.md:3901-3902 still says the dashboard does not read KnowledgeGaps "because the table does not exist".
+> 15. **The second exclusion check's table does not show why the current rule decided.** Its top-score and readable columns come from admitted passages only (...\scripts\exclusion_dev_check.py:102-111). So d27 shows "None" where the rule's evidence should be. The outcome column does call the cycle's own function (:100), so the pass is valid.
+> 16. **FR-19's residual risk is unmeasured.** A genuine gap whose weak nearest passage is Administrator-only is now left out. Recorded (D-108, decisions.md:7219-7221). 5 of the 25 sources are Administrator-only.
+>
+> ### Invariant check
+> - **1 (scope before ranking, no disclosure): pass.**
+>   - FR-10's scheme is built for the document's audience through scoped_documents and scoped_meetings (...\apps\documents\classification.py:101-185).
+>   - FR-19's check of Administrator scope runs only in the Administrator-only cycle. Nothing records a row that was left out.
+> - **4 (server-side authorisation): pass.** FR-10 checks contribute_content after the scoped 404 on all six routes. FR-19 checks review_knowledge_gaps on all three routes, and on the dashboard key through role_holds.
+> - **7 (two no-answer paths): pass.** Path B is aggregated (test_knowledge_gaps.py:444).
+> - **8 (a failed AI step never discards the source): pass.** test_classification_hook.py:88 and 110; a failed cycle rolls back.
+> - **9 (atomic ingestion): pass.** test_classification_hook.py:73.
+> - **10 (structured output or nothing): pass.** Non-conforming replies are retried to MAXIMUM_CLASSIFY_ATTEMPTS, then the route answers 503.
+> - **Set-level checks: pass, with two observations.**
+>   - No AI SDK is imported outside apps/ai in either worktree.
+>   - No inline threshold literals.
+>   - FR-10 and FR-19 write no chunks.
+>   - `MAXIMUM_TAG_SUGGESTIONS = 8` sits in apps/ai/classification.py:82, following GENERATION_MAX_TOKENS' precedent.
+>   - KnowledgeGap stores `embedding_model` but not a dimension; it is not a chunk.
+>
+> ### CLAUDE.md §8, per requirement
+> | Condition | FR-10 | FR-19 |
+> |---|---|---|
+> | 1. Behaves as the FR section says | No (gaps 1–5) | No (gap 11) |
+> | 2. Both suites; both roles; UI-only clauses tested in the front end | CI green on 6357fe0; both roles covered; truncation notice untested | Not shown at HEAD (gap 13) |
+> | 3. Happy path and a failure path | Yes | Yes |
+> | 4. Committed with the FR ID | Yes | Yes |
+> | 5. requirements-auditor reports no gaps | No | No |
+>
+> ### Gate impact
+> - Neither requirement is in the M6 twelve.
+> - The MUSTs this work touches:
+>   - FR-08: Objective 02's 60-second bound is not re-timed (gap 9).
+>   - FR-14: the Administrator's dashboard gains a key; this is tested.
+>   - FR-12: search.py was refactored for search_total. FR-12's tests passed in the full run before the rule change, and that change did not touch search.py.
+> - Smallest fixes:
+>   - **FR-19:**
+>     - Correct the three stale passages (gap 12).
+>     - Commit a schedule or record on-demand only (gap 11).
+>     - Merge d3a9892, run both suites and open the PR (gap 13).
+>     - Add a note to D-69.
+>   - **FR-10:**
+>     - Record that the summary will not be built, or build it (gap 1).
+>     - Make a tag removal durable (gap 3).
+>     - Add a person-applies-a-tag route, or record its absence (gap 4).
+>     - Record the Tags Delete and deactivation gap (gap 5).
+>     - Add one front-end test (gap 6).
+>     - Correct D-105 (gap 7).
+>     - Re-time Objective 02 (gap 9).
+>
+> ### Could not verify
+> - **The test counts.** I did not run them. FR-10's are corroborated by PR #70's body and green CI. FR-19's full suite at 45d5c25 is unknown.
+> - **The reference set's 8 November approval.** Its earliest commit is 9 November.
+> - **The deletions between runs.**
+> - **That the twenty were not consulted during the development sweeps.**
+> - **Live interface behaviour.** I read the code and the tests only.
+> - **Determinism.** The sweeps vary across repetitions at temperature 0 (X06, X15, and X07's first repetition failed), so the 60% is one draw. A 15-point shortfall makes it unlikely that a second draw would change the verdict.
+> - **Outside the FR text, not counted as gaps:** UC-09 E1's queue and A1's "undetermined" record; UC-10 E2 (sensitive questions kept verbatim), E3 (spurious questions), A2 (outdated knowledge) and A3 (partial answers). None of these is recorded.
+>
+> **One line:** FR-10 INCOMPLETE, FR-19 INCOMPLETE, Objective 05 NOT MET (clause 1), Objective 06 NOT MET on its independent run (clause 3).
+
+**Dated note, 10 November 2026 (night): the tag corrections were re-audited twice, and both verdicts
+are recorded here verbatim.** Two `requirements-auditor` runs, read only, on
+`feat/FR-10-tag-corrections`, after this entry's decisions on findings 3, 4, 5, 6 and 10 were built,
+together with two rounds of security fixes (D-105's dated note of the same night). Each verdict is
+recorded here, rather than left in a terminal, for the reason this entry gives.
+
+| Run | At | Its one line | What followed |
+|---|---|---|---|
+| First | `5377e3a` | The tag corrections INCOMPLETE. Findings 4, 5, 6 and 10 MET. Finding 3 PARTIAL: a tag a person applied came back on the next classify after it was removed, untested and unrecorded. Neither suite shown passing at that commit | Finding 3 took the auditor's option (a) in `88a488d`: a person's removed link is kept, as an AI link is (D-105's dated note). The stale passages it listed were corrected or marked in place in the same commit. The suites at `5377e3a`, run while it audited: pytest 3031 passed on a fresh test database, dual-role matrix 36/36; npm test 353 passed; lint and build clean |
+| Second, focused | `88a488d` | Findings 3, 4, 5, 6 and 10 MET. Not ready to merge, for two contradictions in the contract (D1, D2) and one trivial wording (D3), all in the docs. FR-10 overall INCOMPLETE only for reasons already decided | D1 to D3 fixed, and its three optional tests added, in `ece4f32`. That commit has not been re-audited. The suites at `88a488d`: pytest 3043 passed on a fresh test database, matrix 36/36; npm test 353 passed; lint and build clean |
+
+**Where FR-10 stands.** As a requirement it is INCOMPLETE, by decision: the summary, key points,
+sectioned summarising and grounding are not built (D-104's dated note), and the tag browser is FR-15's
+facets plus an Administrator-only inventory (D-105). The tag corrections decided on 10 November are MET
+on the second audit, with the doc corrections it asked for made after it.
+
+**The first re-audit, verbatim** (at `5377e3a`).
+
+> ## Audit: FR-10 tag corrections (D-119 findings 3, 4, 5, 6, 10), feat/FR-10-tag-corrections at 5377e3a, 10 November 2026
+>
+> **One line:** The tag corrections are INCOMPLETE. Findings 4, 5, 6 and 10 are MET. Finding 3 is PARTIAL: a tag a *person* applied still comes back on the next classify after it is removed. Neither suite has been shown passing at 5377e3a. FR-10 overall is INCOMPLETE.
+>
+> **Verdict:** INCOMPLETE
+>
+> Method: read only. I ran no pytest, npm, manage.py or migration. I checked against FR-10's text in `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\proposal.txt` (lines 681-697) and UC-09 A3 (lines 2067-2070). All code paths below are under `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\`, and I give each one in full.
+>
+> ---
+>
+> ### Finding 3: a removed AI tag comes back. **PARTIAL**
+>
+> **What is met: the case D-119 named, an AI link.**
+> 1. **Behaviour.**
+>    - `reject_tag` keeps an AI link with `removed=True`, leaving its confidence and provisional flag alone: `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\apps\documents\classification.py:614-637` (633-635).
+>    - `_link_tag` leaves a removed link alone (same file, 534-537).
+>    - A Topic removed from a document is not proposed for it again (432-437, 452-453).
+>    - `_link_on` treats a removed link as not found (835-854, `removed=False` at 846).
+>    - Every FR-15 read excludes removed links: `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\apps\api\repository.py:181, 215, 239, 293`. I checked every other reader of `ContentTag`: only the `classify_documents` record lists removed links, and it flags them.
+>    - The column comes from `documents 0009`.
+> 2. **Error paths.** A removed link's id gets the same 404 body as an unknown id, on both confirm and remove. The DELETE route keeps its 204.
+> 3. **Both roles.** All 11 tests in `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\apps\api\tests\test_fr10_removed_tags.py` use `session_client`, which is parametrised over `ROLE_NAMES` (`C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\conftest.py:270-275`):
+>    - keep: 106
+>    - 404: 130-140
+>    - the four reads: 146-163
+>    - re-classify: 169-185
+>    - reprocess: 188-215
+>
+>    The unit tests are in `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\apps\documents\tests\test_classification_removal.py` (6 tests, 8 cases).
+> 4. **Front end.** No interface change was needed: the URL and the 204 are unchanged. Existing Remove tests are at `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\frontend\tests\documentClassification.test.jsx:575, 583, 889`.
+> 5. **Happy path and failure path:** both tested.
+>
+> **What is not met: the correction clause (proposal.txt:692; UC-09 A3 step 3, :2070) for a link a person applied.**
+> - `reject_tag` deletes a person's link (classification.py:636-637). Nothing then records that a person took that value off the document.
+> - So the next classify route call, reprocess or `manage.py classify_documents` that suggests the value creates it again through `_link_tag`'s create branch (classification.py:524-533), now as `applied_by="ai"`:
+>   - at or above the threshold it is applied: in `tags`, in the facets, a filter hit, labelled "Suggested by AI";
+>   - below it, it is held and the person is asked again.
+> - This covers every D-74 seeded link, which is a person's link, and every link the new apply route makes.
+> - The interface offers Remove on a person's tag (`C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\frontend\src\components\Classification.jsx:253-261`). It offers "Classify now" only on an unclassified document, but the classify route and the command re-run on any document.
+> - **No test covers this.** The only person-removal tests are `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\apps\documents\tests\test_classification_confirm.py:202-209` and test_fr10_removed_tags.py:115-127, and neither re-classifies.
+> - **It is not recorded.** D-105's note (`C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\docs\decisions.md:6977-6978`) gives the choice ("it holds no machine assignment to keep"). That reason answers the clause's machine-assignment half, not its "not overwritten by later reprocessing" half.
+>
+> **Smallest fix (the lead's decision).** Either:
+> - **(a)** Have `reject_tag` mark a person's link `removed=True` too. `_link_tag`, `removed_topics` and `_apply_link` already handle a removed row correctly. This changes some expected results:
+>   - the apply–remove–apply tests' third code goes from 201 to 409, for the new name and the restricted name alike, so the two answers stay identical and the oracle stays closed;
+>   - the two person-removal tests change.
+> - **(b)** Record it in D-105 as an accepted deviation from the correction clause.
+>
+> Add a test either way: remove a person's link, then classify with that value suggested.
+>
+> ---
+>
+> ### Finding 4: a person cannot apply a tag. **MET** (open items are recorded)
+> 1. **Behaviour.**
+>    - `POST /api/documents/{id}/tags`: `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\apps\api\urls.py:49`, `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\apps\api\views.py:1503-1543`, classification.py:640-695, and `_apply_link` at 725-760.
+>    - `tag_options` on the detail: `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\apps\api\serializers.py:220, 243` and classification.py:233-283.
+>    - A new link is `applied_by "user"`, confirmed, confidence null, and gets 201. An existing link gets 200: a held one is confirmed, a removed one restored, an applied one left alone.
+>    - A person's link is shown "Added by a person" (Classification.jsx:226-230).
+> 2. **Error paths.**
+>    - 401: the route walk in `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\apps\api\tests\test_rbac.py:167-177`.
+>    - The scoped 404, then the 403: `ROUTES` in `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\apps\api\tests\test_document_classification.py:130-140`, used at 263-307.
+>    - In `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\apps\api\tests\test_fr10_person_applied_tags.py`:
+>      - one 400 body for an unknown, inactive, withheld or Department tag: 145-165;
+>      - shape 400s: 303-324;
+>      - another dimension: 291-300;
+>      - the 409 with `tag_id`: 240-251;
+>      - an existing Topic outside the scheme answered byte for byte as a new one: 254-288.
+> 3. **Both roles.** That file uses `session_client` throughout, except:
+>    - the Administrator mirror (358-368);
+>    - the function-level guard (371-376);
+>    - two Employee oracle sequences (393-412, 428-461), whose mirror runs from both roles (415-425).
+> 4. **Front end.** documentClassification.test.jsx:970-1283 has 14 tests:
+>    - the chooser, its 201 and the re-read of options;
+>    - a 200 worded differently from a 201;
+>    - a new Topic sent single-spaced;
+>    - the client-side checks;
+>    - the 409 selecting the tag and moving focus, and re-reading options without showing backend text;
+>    - a 400 on each field;
+>    - an empty dimension;
+>    - a name rendered as text;
+>    - a 403 removing the control;
+>    - a 404 and a network failure;
+>    - the 409 sentence tied to views.py.
+> 5. **Happy path and failure path:** both tested.
+>
+> **FR-10's 409 (proposal.txt:695)** is answered only for a Topic already in the document's scheme. An existing Topic outside the scheme is linked and answered 201. **Declined in part, D-105** (decisions.md:7034-7044), for invariant 1. I checked the stated reason against the code and the byte-for-byte test, and it holds. No duplicate row is created in either case (get_or_create, classification.py:693).
+>
+> **Open items, recorded:**
+> - the route is unthrottled (decisions.md:7232-7234);
+> - an Employee can reactivate a Topic the Administrator retired (residual 6, 7241-7244), which weakens finding 5 for Topics;
+> - names that differ only by look-alike Unicode get past the 409 (residual 9, 7251-7254).
+>
+> ---
+>
+> ### Finding 5: nothing deactivates or deletes a tag. **MET**
+> 1. **Behaviour.**
+>    - `GET /api/tags` and `DELETE /api/tags/{id}`: urls.py:92-93; views.py:1614-1649; `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\apps\documents\taxonomy.py:38-94`.
+>    - A tag referenced in any state is deactivated and answered 200 with its entry; an unreferenced tag is deleted, 204. The tag row is locked for the check (taxonomy.py:80-87).
+>    - A retired tag stays on the documents that carry it and leaves `tag_scheme` and `tag_options`. That is "preserving historical classification".
+>    - `manage_tags` goes to the Administrator alone (accounts 0008).
+>    - `ContentTag` is the only foreign key to `Tag` (`C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\apps\documents\models.py:185`), so the reference check is complete.
+> 2. **Error paths**, in `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\apps\api\tests\test_fr10_tag_administration.py`:
+>    - 401: 96-97;
+>    - 403 before the lookup: 83-93, 140-152, 198-206;
+>    - 404 for an unknown tag and for a Department tag: 198-218;
+>    - 200 again for a tag already retired: 186-195.
+> 3. **Both roles.** Tests at 83, 140, 198, 224 and 250 use `session_client`. The Administrator-only behaviour tests (100, 155, 186, 209) are matched for the Employee by the 403 tests. The seed test holds every holder of `manage_tags` to the Administrator's scope: `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\apps\accounts\tests\test_manage_tags_seed.py:120-133`.
+> 4. **Front end.** `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\frontend\tests\tags.test.jsx` has 14 tests covering:
+>    - the list: order, count, name as text;
+>    - the confirmation's wording;
+>    - the rows and notices after a 200, 204 and 404;
+>    - one DELETE per confirmation;
+>    - a 403 withdrawing every action;
+>    - a 500 in fixed words;
+>    - the empty, loading, failed and retry states, and a 403 on the list;
+>    - the guards for each role.
+> 5. **Happy path and failure path:** both tested.
+>
+> **Note:** a retired Project or Process tag has no way back except the shell. A reactivation route was declined (decisions.md:7107-7111).
+>
+> ---
+>
+> ### Finding 6: the truncation notice had no front-end test. **MET**
+> documentClassification.test.jsx:285-299:
+> - `input_truncated: true` shows `TEXT.classificationTruncated`;
+> - `false` does not, and the test checks the assignments rendered so the absence is real.
+>
+> The component is Classification.jsx:818-820. This clause belongs to the interface alone, so no server test is needed.
+>
+> ---
+>
+> ### Finding 10: the department label and the stale comment. **MET** (with a recorded residual)
+> - **Server.** `documents 0009` adds `department_applied_by`. It is set by rule 3 (classification.py:401-422, `_department_provenance` at 497-513) and by `confirm_classification` (588-596), and serialised at serializers.py:301.
+> - **Both roles.** test_fr10_removed_tags.py:221-256 checks the classify, confirm and detail replies. The unit tests are in `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\apps\documents\tests\test_classification_department_provenance.py` (9 tests, 10 cases).
+> - **Front end.** Classification.jsx:150-158. documentClassification.test.jsx:301-327 tests three cases:
+>   - `"user"` reads "Given by a person…" and not "Suggested by AI";
+>   - `"ai"` and `null` keep "Suggested by AI".
+> - **Stale comment.** Fixed at `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\apps\core\constants.py:219-222`, which now carries §5's "1 initial call + 2 retries", and in `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\apps\core\tests\test_constants.py:145-146`.
+> - **Residual, recorded** (decisions.md:7010-7016):
+>   - rows classified before 0009 read `null`, so they keep the old mislabel until their next run or confirmation;
+>   - a department a run wrote into a blank before 0009 reads `"user"` after its next run.
+>
+>   The note's "should hold none" covers the Objective 05 twenty only, checked against git history. Other databases are not addressed.
+>
+> ---
+>
+> ### FR-10 overall, after this branch
+> | Clause | Status |
+> |---|---|
+> | 683 type and department, AI-marked, editable | Satisfied (label fixed) |
+> | 684 summary and key points | **Declined, D-104** (dated note, 10 Nov night) |
+> | 685 four dimensions shown separately | Satisfied |
+> | 685 tag browser | **Partial, recorded (D-105).** An Administrator-only inventory now lists every value with its count; Employees still have FR-15's scoped facets |
+> | 687 one request returns classification, summary and tags | Partial: no summary (**D-104**) |
+> | 688 fixed type list; unique names | Satisfied (residual 9 accepted) |
+> | 688 sectioned summarising | **Declined, D-104.** The notice is now tested in the front end |
+> | 689, 690 | Satisfied |
+> | 691 provenance | Satisfied |
+> | 692 correction | **Partial, unrecorded** (finding 3's residual) |
+> | 693 grounding | **Declined, D-104** |
+> | 694 deactivate rather than delete | Satisfied |
+> | 695 the 200 | Partial: no summary (**D-104**) |
+> | 695 the 409 | Satisfied for an offered name; **narrowed by D-105** for invariant 1 |
+> | 695 the 422 | Satisfied |
+> | 697 CRUD | Satisfied. Tags Delete now exists. Removing an AI link is a soft delete, as the correction clause requires |
+>
+> ### Decision log and contract against the code
+> **Accurate**, checked against the code:
+> - the guard order;
+> - the one-body 400;
+> - the 409 rule and the byte-for-byte 201;
+> - the new link's fields and the 200 cases;
+> - "no read lists a removed link";
+> - `tag_options` is `tag_scheme`'s tags;
+> - the final `tag_scheme` rule (classification.py:208-212), as the contract's `tag_options` bullets state it;
+> - `grown` is set only on create or reactivate (`_bring_into_use`, 698-722), by 0011 and by the seed script's linked mode;
+> - 0011's frozen literals equal constants.py:531-545, and its overlap predicate matches `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\apps\retrieval\scoping.py:114-126`;
+> - the `DELETE /api/tags` semantics and `manage_tags`;
+> - `docs\schema-v1.md`'s rows for `grown`, `removed` and `department_applied_by`.
+>
+> **Stale or wrong: the docs claim what the code does not do.**
+> 1. **decisions.md:7060-7069** (D-105 note, the `tag_options` bullet) says:
+>    - "A linked value is offered only if every role in the audience reads a source carrying it";
+>    - "true of linked values only… holds for unlinked tags that are not grown".
+>
+>    Since 824c536, a tag that is not grown is offered whatever its links. By design, that includes a seeded value carried only by Administrator-only material. Neither sentence was corrected in place, unlike the two that 824c536 did correct (7149-7150, 7154-7156). Add a dated line.
+> 2. **decisions.md:7128-7134** states 84b5771's rule ("…or if nothing links it and it is not grown") with no superseded marker. The code follows the vocabulary rule at 7192-7196.
+> 3. **decisions.md:6985-6988.** The reason given for counting a removed link ("would turn a value… into vocabulary") no longer holds under the final rule. The behaviour itself is still true.
+> 4. **decisions.md:7036-7038** leaves out a grown Topic that nothing links. classification.py:652-655 and the contract both include it.
+> 5. **decisions.md:6968** says "server side only; the interface half follows". The interface has landed (1641693, c6f59d4, 607feaa, 4d53cb7), and the note does not say so.
+> 6. **`C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\frontend\src\api\documents.js:220`** says "Nothing in it is on material a reader… may not see". That is false for vocabulary linked on restricted material. The contract's wording, "discloses nothing", is the right one.
+> 7. **`C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\apps\documents\tests\test_classification_scheme.py:4-7`**: the module docstring states the original rule.
+>
+> **The reverse: the code does what the docs do not say.** Finding 3's residual. The contract truthfully says a person's link "is deleted", but not that reprocessing then brings it back.
+>
+> **Trivial.** The contract lists a `dimension` 400 only for "a dimension other than Topic". A missing `dimension` gives the same key (serializers.py:411).
+>
+> ### Migrations
+> - **documents 0009** is additive: two AddFields, plus a RunPython that does nothing forwards. It is reversible, tested through the executor (`C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\apps\documents\tests\test_migration_0009_tag_corrections.py:72-116`). The reverse deliberately deletes removed links (decisions.md:7235-7240).
+> - **The 0009 edit in place (880448b) is consistent with §7's wording.** §7 forbids editing a *pushed* migration.
+>   - No remote-tracking ref contains eb203ba, 880448b or 5377e3a. The only FR-10 remote branch is `origin/fix/FR-10-objective-05` at 6357fe0.
+>   - The appended operation does nothing forwards.
+>   - The edit is logged in the docstring (lines 26-29) and in D-105.
+>   - "Applied only to test databases" cannot be verified, and does not matter given the no-op forward.
+>   - Note: the worktree `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506-fr19` sits at 8c06f13, which has the 0009 from before the edit.
+> - **documents 0010** is one AddField, reversible and tested.
+> - **documents 0011** is a data UPDATE with a no-op reverse. Django can reverse it, and the test asserts the marks survive the reverse. It is not strictly additive, and reversing it does not restore the old values. The docstring explains why, and I confirmed that direction is safe for invariant 1. Its new dependency on meetings 0002 creates no cycle.
+> - **accounts 0008** has a real reverse, tested through the executor (test_manage_tags_seed.py:81-117).
+>
+> ### Overstatement
+> - **Test counts in the commit messages match the files:** 11/22, 6/8, 9/10, 13/38, 14 and 14. The npm totals (322, 325, 339, 353) are consistent with the tests added.
+> - **Run claims are honest, and they show the gap.**
+>   - The last full pytest run is claimed at 11a610f: 2965 passed, matrix 36/36.
+>   - Every later commit claims targeted runs only: 728, 422, 789, 796, 108.
+>   - npm is last claimed at 4d53cb7: 353 passed.
+>   - So **at 5377e3a neither suite is shown, and CI has not run**: nothing is pushed, and there is no PR.
+> - The "every test failed under a deliberate break" claims cannot be verified read-only.
+> - I found no other overstatement.
+>
+> ### Invariant check
+> - **1 (no disclosure): pass**, on what I read. The one-body 400, the byte-for-byte 201, the apply–remove–apply tests and the vocabulary-movement tests (`C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\apps\api\tests\test_fr10_tag_vocabulary.py`) all support it.
+> - **3 (meetings by role): pass.** Meetings are scoped through `scoped_meetings`.
+> - **4 (server-side authorisation): pass.**
+> - **8 and 9: pass.**
+> - **2, 5, 6, 7 and 10:** not applicable.
+> - **Set-level: pass.**
+>   - No AI SDK is imported outside `apps/ai`.
+>   - No tuned literal sits inline. The front end's `TAG_NAME_MAXIMUM_LENGTH = 255` is tied by pytest to `NAME_MAX_LENGTH`.
+>   - This slice writes no chunks.
+>   - Nothing is enforced only in the interface.
+>   - 0011 and the seed script's `mark_restricted_only_values_grown` compute the same set in two places. That is necessary, because a migration cannot import app code, and each is tested.
+>
+> ### CLAUDE.md §8
+> | | 3 | 4 | 5 | 6 | 10 |
+> |---|---|---|---|---|---|
+> | 1. Behaves as specified | No (person-link residual) | Yes | Yes | Yes | Yes |
+> | 2. Both suites pass, both roles, front-end tests where needed | Both roles and tests exist; **passing not shown at HEAD** | same | same | same | same |
+> | 3. Happy path and failure path | Yes | Yes | Yes | Yes | Yes |
+> | 4. Committed with the FR ID | Yes | Yes | Yes | Yes | Yes |
+> | 5. Auditor reports no gaps | No | Yes | Yes | Yes | Yes |
+>
+> ### Gate impact
+> - FR-10 is not in the M6 twelve, and M6 has passed.
+> - The branch does change FR-15 (a MUST):
+>   - every repository read gains `removed=False`;
+>   - `GET /api/documents/{id}` now computes `tag_scheme` for every reader, and its cost grows with the total number of links (residual 11).
+> - FR-15's regression evidence at HEAD is targeted runs only until the full run finishes.
+>
+> **Smallest fixes:**
+> 1. Decide finding 3's residual and add its test.
+> 2. Add dated corrections to D-105's stale lines (items 1-5 above).
+> 3. Run full pytest and npm at 5377e3a, then open the PR so CI runs.
+>
+> ### Could not check
+> - Any test result. The full run was in progress, and I did not read its output.
+> - The deliberate-break claims.
+> - Any database: where 0009 was applied, and the pre-0009 rows.
+> - Live interface behaviour.
+> - Pushes from another clone.
+>
+> **One line:** The tag corrections are INCOMPLETE: findings 4, 5, 6 and 10 are MET, and finding 3 is PARTIAL because a removed person's tag returns on re-classification, unrecorded and untested. Neither suite is shown passing at 5377e3a. FR-10 overall is INCOMPLETE.
+
+**The second re-audit, verbatim** (at `88a488d`).
+
+> ## Audit: FR-10 tag corrections, follow-up on finding 3 at 88a488d (10 November 2026)
+>
+> **Verdict.** Findings 3, 4, 5, 6 and 10 are MET against FR-10's text at 88a488d, but the branch is not ready to merge: 88a488d left the contract contradicting itself in two places (defects D1 and D2 below). Both are doc-only fixes. Finding 3 now satisfies the correction clause and is tested from both roles. Findings 4, 5, 6 and 10: 88a488d changed only docstrings on their paths, so they stand as MET from my 5377e3a audit. FR-10 overall stays INCOMPLETE, and only for reasons already decided: the summary clauses the user declined (D-104's dated note) and the recorded tag-browser deviation (D-105). I did not run or see the suites at 88a488d.
+>
+> Read-only throughout. HEAD is 88a488d and the tree is clean. Root: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506
+>
+> ---
+>
+> ### Check 1: finding 3 against proposal.txt:692 and UC-09 A3 — MET
+>
+> proposal.txt is at C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\proposal.txt. Line 692 says a user's value "is not overwritten by later reprocessing". UC-09 A3 (lines 2071-2074) says "retains both" and "The corrected classification governs how the document is found from that point".
+>
+> | Clause | Status | Evidence |
+> |---|---|---|
+> | `reject_tag` keeps a person's link, marked removed | Satisfied | ...\apps\documents\classification.py:632-635. Every link is set `removed=True`; there is no longer a branch on `applied_by`. The route still answers 204 (...\apps\api\views.py:1546-1562). Test: ...\apps\api\tests\test_fr10_removed_tags.py:119-137 checks the same pk, `removed`, `applied_by` "user" and empty `tag_details`. Unit test: ...\apps\documents\tests\test_classification_confirm.py:202-212 |
+> | A later classify does not link it again | Satisfied | The route (views.py:1428) calls `classify_document_now`. An in-scheme suggestion reaches `_link_tag` (classification.py:443-449), which finds any existing row, removed ones included (519-523), and returns a removed one untouched (534-537). The create branch (524-533) runs only when no row exists. `tag_scheme` counts removed links (195-200 has no `removed` filter), so a typed grown Topic stays in its own document's scheme. Test: test_fr10_removed_tags.py:248-285, classify case, for a seeded Process value and a typed Topic |
+> | …and does not propose it again | Satisfied | An in-scheme suggestion stops at line 449. An out-of-scheme Topic (retired, or withheld from the scheme) is skipped through `removed_topics` (432-437, no `applied_by` filter; skip at 452-453). The test asserts there is no proposal (test_fr10_removed_tags.py:283-285) |
+> | A reprocess does not undo it | Satisfied | Reprocess deletes only `ExtractedContent` and chunks, never `ContentTag` (...\apps\ingestion\documents.py:181-184), then classifies through `classify_document_now` (:323). Test: the same test's reprocess case asserts one classify call |
+> | A `classify_documents` run does not undo it | Satisfied by construction; no test for a person's link | ...\apps\documents\management\commands\classify_documents.py:221 calls the same `classify_document_now`. Its own test covers a removed AI link only (...\apps\documents\tests\test_classify_documents_command.py:166-185) |
+> | Re-applying restores the link | Satisfied | The restore branch of `_apply_link` (classification.py:740-748) returns `created=False`, which the view answers 200 (views.py:1542). Test, both roles: ...\apps\api\tests\test_fr10_person_applied_tags.py:423-447 asserts 201, 204, 409, then 200 by `tag_id` with the same pk, `removed` False, `confirmed` True and `applied_by` "user". Re-applying by name is a 409 that names the tag; the screen then selects it so one press restores it (...\frontend\src\components\Classification.jsx:691-699, 721-733) |
+> | Nothing else overwrites the removal | Satisfied | `ContentTag` rows are deleted only with their source: ...\apps\documents\deletion.py:75-77 and ...\apps\meetings\deletion.py:72-74. The seed script's `get_or_create` (...\scripts\seed_objective02_tags.py:122-127) finds a removed row and leaves it removed |
+> | Reads exclude a person's removed link | Satisfied | Every reader filters `removed=False` whatever `applied_by` says: ...\apps\api\repository.py:174-185, 208-216, 236-240 and 288-300, and ...\apps\documents\taxonomy.py:53 |
+> | The change is recorded | Satisfied | D-105's closing bullet (...\docs\decisions.md:7315-7342), the contract's DELETE row (...\docs\api-contract.md:1082), and ...\docs\schema-v1.md:237 and 253-261 |
+> | Tested from both roles, happy path and a failure path | Satisfied | `session_client` runs every test as both roles (...\conftest.py:270-275). Failure paths from both roles: the 409 on re-applying by name (test_fr10_person_applied_tags.py:423-447), and the 404 for confirming or removing a link that is already removed (test_fr10_removed_tags.py:140-150). That 404 test uses an **AI link only**. A person's link goes through the same filter (classification.py:845) but has no 404 test of its own. Minor gap |
+>
+> Reading the code, the new classify/reprocess test would fail at 5377e3a: the Topic case would propose "night shifts", and the Process case would create an AI link. I did not re-run the commit's mutation checks.
+>
+> ### Check 2: the stale passages
+>
+> | Passage (5377e3a line numbers) | At 88a488d |
+> |---|---|
+> | decisions.md 6968, "server side only; the interface half follows" | Marked at 6970-6971. The four commits it names (1641693, c6f59d4, 607feaa, 4d53cb7) each touch `frontend/`. Accurate |
+> | 6985-6988, counting a removed link "for invariant 1" | Marked at 6993-6997. The new reason matches `tag_scheme` (classification.py:208-212) |
+> | 7036-7038, what an out-of-scheme Topic can be | Marked at 7047-7051. Matches the code and the `apply_tag` docstring (classification.py:648-653) |
+> | 7060-7069, "linked value" | Marked at 7083-7087. Acceptable. The substitution it asks for is loose: "readable through no source at all" doesn't fit every non-grown tag, and the heading "every value in it is readable" is still broad. The next bullet qualifies both |
+> | 7128-7134, the rule change | Marked superseded at 7158-7161. Accurate |
+> | frontend\src\api\documents.js:220 | Corrected. It now matches the `tag_options` docstring (classification.py:250-261) |
+> | Module docstring of test_classification_scheme.py | Corrected. It matches the fixtures: grown Project at line 80, grown held Topic at line 86. It omits the retired-Project fixture at line 89, which is harmless |
+> | The contract's 400 for a missing dimension | Corrected at api-contract.md:1083. Matches serializers.py:411-412. The test checks only the status code, not the `dimension` key (test_fr10_person_applied_tags.py:308, 315-324). Minor gap |
+> | The four more passages 88a488d marked: person link deleted (6978), the residual (7088), the oracle's step 2 (7137), the review's finding 1 (7202) | All four marked: at 6981-6983, 7096-7098, 7137-7138 and 7203-7205 |
+>
+> ### Check 3: contradictions or overstatement 88a488d introduced
+>
+> **What holds:**
+> - **The oracle stays closed.** All three variants answer 201, 204, 409 and list the name in `tag_options` after the removal. That works because the document's own removed link counts, and `scoped_documents` has no status filter (...\apps\retrieval\scoping.py:143-159), so every role in the audience reads the document. I also traced a retired Topic that restricted material still links, and it gives the same answers. The options before step 1 are the same in every variant. The 409's `tag_id` is a uuid4 the Employee has never seen in any other reply.
+> - **`DELETE /api/tags/{id}` with only removed links answers 200 and deactivates the tag, and the contract says so.** api-contract.md:1201 says any reference "in any state (held and removed links included)", and `item_count` excludes removed links (:1210-1211). The new test is ...\apps\api\tests\test_fr10_tag_administration.py:198-214. The Tags page already expects this (...\frontend\src\pages\Tags.jsx:97-105).
+>
+> **Defects:**
+>
+> **D1. The contract's "Removed links" paragraph still describes AI links only.** api-contract.md:1179-1183 reads "An AI link a person removed is in **no** read … It stays in the database only so that the machine's assignment is kept beside the person's decision." That contradicts the DELETE row at :1082 and D-105's closing bullet. A person's removed link has no machine assignment; it is kept so that a later run neither links it again nor proposes it. The same stale wording is in:
+> - ...\apps\api\repository.py:43-46 and :208
+> - ...\apps\core\tests\test_schema.py:83-84
+> - ...\apps\documents\migrations\0009_fr10_tag_corrections.py:3 (a historical description; fixing it is optional)
+>
+> Fix: cover both kinds of link, and give both reasons.
+>
+> **D2. The claim that a retired Topic, typed again, is answered 201 no longer holds on an ordinary path.**
+> 1. A person types T on document D: 201.
+> 2. They remove it: 204, and the link is kept.
+> 3. The Administrator deletes T on the Tags page. It shows `item_count` 0, but the removed link still references it, so the answer is 200 and T is deactivated. Before 88a488d this was 204 and T was gone.
+> 4. The person types T on D again:
+>    - classification.py:690-694 fetches the inactive T;
+>    - `_bring_into_use` reactivates it (711-721);
+>    - `_apply_link` restores the removed row (740-748);
+>    - the answer is **200**.
+>
+> These places still say 201:
+> - api-contract.md:1163-1165 ("or inactive) is linked and answered `201` exactly as a new Topic is") and :1219-1221
+> - decisions.md:7053 and 7128-7129
+> - classification.py:655-656
+> - the docstring at test_fr10_tag_administration.py:270-272. The test itself types the name on a different document (`other`, :275-287), so it cannot catch this.
+>
+> Nothing is disclosed: the 200 depends only on D's own links, which the caller can read. Fix: add "unless this document already holds a link to it, live or removed, which is restored: 200" to each statement, and optionally add a test for the same-document sequence.
+>
+> **D3. Trivial wording.** "disappears only when the last such source is deleted" (api-contract.md:1155; classification.py:266-268). The "only" leaves out retirement, which is stated nearby at :1151 and :1158.
+>
+> **Usability (not an FR-10 clause).** Restoring a removed tag is now the normal result of re-adding one a person just removed. The screen announces it as "“X” was already on this document and is among its tags." (...\frontend\src\constants.js:647, chosen at Classification.jsx:657). The models.py comment says a removed link "is no longer a tag of its document".
+>
+> I found no other contradiction in the code, in schema-v1.md, or in the front-end client's comments (documents.js:311-330 already describes the 200 restore).
+>
+> ### Check 4: suites
+> I did not run them, as instructed, and I cannot see the run in progress, so I am not counting it as a gap. Two things I could check by reading:
+> - 88a488d changes only comments in models.py, so it should not affect migrations.
+> - No test outside the files 88a488d changed expects a person's removed link to be deleted. The removal tests elsewhere all use AI links: test_document_classification.py:429-441, test_fr15_reads_exclude_provisional.py:79-90 and test_classify_documents_command.py:166-185.
+>
+> ### Invariant check
+> - 1 (filter before ranking, no disclosure): pass. `tag_scheme` is unchanged, the oracle stays closed, and D2's 200 depends only on a document the caller can read.
+> - 4 (server-side authorisation): pass. No route changed; the order is still the scoped 404, then the 403 (views.py:1556-1557).
+> - 9 (atomic writes): pass. `reject_tag` runs inside `transaction.atomic` (classification.py:632).
+> - 8: not touched. No new literal constants in app code, no AI SDK import, no chunk writes.
+>
+> ### Gate impact
+> FR-10 is a SHOULD for NIT3004 and not one of the M6 twelve, so there is no M6 impact. The smallest fix before merge is doc-only: rewrite api-contract.md:1179-1183 (D1) and add the qualification to the D2 statements. Optional additions:
+> - a test for typing a retired Topic again on the same document;
+> - a 404 test for removing a person's link a second time;
+> - an assertion on the `dimension` key in the missing-dimension 400.
+>
+> ### What I could not check
+> - pytest, npm test, lint, build, `makemigrations --check` and CI at 88a488d.
+> - The commit's mutation checks ("breaks").
+> - D2's 200 comes from tracing the code. I did not run it, and no test exercises it.
+
+**Dated note, 12 November 2026: two lines of this entry have been overtaken.**
+
+- **Finding 16, "the exclusion's residual risk is unmeasured".** It was then observed. On voyage-4
+  the rank-one rule left out U01 of the frozen thirty (#86) and u36 and d27 of the development
+  questions, each a genuine gap whose weak best match is Administrator-only. The rule became per
+  embedding model (D-126), and a follow-up turn is now decided on the string retrieval ranked
+  (D-127).
+- **"No further run is planned."** Further runs were made, on the `anthropic` provider:
+  - **Objective 05, on three draws (#85):** clause 1 met on each. They ran the type definitions
+    D-106's note revised on the same twenty, so they are not an independent figure either, as #85's
+    write-up says.
+  - **Objective 06, on three draws:** one on rank-one (#86), two on D-126's rule (#90).
+- **Objective 06 still has no independent pass on either provider.** On FLM the independent cycle
+  did not meet clause 3, and on `anthropic` it did not meet clause 1. Each rule change was made with
+  the thirty in view. An independent test on a fresh question set is planned (D-126's note of 12
+  November).
+
+## D-120 · The relevance threshold and the partial-match floor are per embedding model: `voyage-4` gets 0.2687 and 0.2468, and EmbeddingGemma keeps 0.30 and no floor
+
+**Status:** Settled by the user · **Date:** 2026-11-10 · **Concerns:** FR-12, D-37, D-56, D-101,
+D-102, D-113, D-117, R10, `apps/core/constants.py`, `apps/retrieval/ranking.py`,
+`apps/retrieval/partial_matches.py`, `apps/retrieval/pipeline.py`, `scripts/citation_harness.py`,
+`scripts/conversation_http_check.py`, `CLAUDE.md` §5
+
+**What prompted it.** D-113 requires the threshold to be re-derived on development material before
+the `anthropic` provider is relied on. `RELEVANCE_THRESHOLD = 0.30` and `PARTIAL_MATCH_FLOOR = 0.0`
+were chosen on EmbeddingGemma's scores (D-102). A cosine value means something only for the model
+whose scores it was chosen on (R10).
+
+**The measurement used D-101's and D-102's procedure, unchanged.** The evidence is in
+`corpus/objective-02/runs/2026-11-10/voyage-threshold/`.
+
+- **The database** is `kmp_voyage_20261110`, the 1 November snapshot re-indexed with Voyage (D-117,
+  PR #71).
+- **Scores:** dev-set-v2's 40 runs, each embedded three times, with D-101's margin rule
+  (`m = 0.006`).
+  - It gave T 0.2687 and F 0.2468.
+  - It declines 4 of 8 no-answer runs with margin (EmbeddingGemma: 1 of 8) and keeps all 32
+    answerable runs.
+  - The floor holds (F ≤ T − m), which it could not on EmbeddingGemma.
+- **End to end:** both values against 0.30 with no floor, on v2, with Claude Sonnet 5.5 (D-115)
+  and the cap of 6. Every ask was rolled back.
+
+| dev-set-v2 | EmbeddingGemma 0.30 (D-102) | Voyage 0.30 | **Voyage 0.2687 / 0.2468** |
+|---|---|---|---|
+| answered where expected | 29/32 | 31/32 | **32/32** |
+| declined where no answer is expected | 7/8 | 8/8 | **8/8** |
+| match with an expected source | 22/32 | 31/32 | **32/32** |
+| median seconds per ask | 16.1 | 2.8 | **2.6** |
+
+- **The difference between the two Voyage settings is u07,** whose expected source scores 0.2968.
+  0.30 declines it before generation.
+- **The floor stops unrelated offers.** At 0.30 with no floor, every no-answer run was offered its
+  five nearest items, down to 0.12. At 0.2468, the four runs declined before generation were offered
+  nothing.
+
+**Decision (the user's, 10 November): adopt Voyage's values, as values of the embedding model.**
+
+- **The tables:** `RELEVANCE_THRESHOLD_BY_MODEL = {"voyage-4": 0.2687}` and
+  `PARTIAL_MATCH_FLOOR_BY_MODEL = {"voyage-4": 0.2468}`, in `apps/core/constants.py`.
+- **The default:** a model not listed, EmbeddingGemma included, keeps `RELEVANCE_THRESHOLD = 0.30`
+  and `PARTIAL_MATCH_FLOOR = 0.0`. Both are unchanged, so FLM's behaviour and its measurements are
+  untouched.
+- **The code:** `ranking.admit()` and `partial_matches.partial_matches()` take the embedding model as
+  a required keyword and look the value up (`relevance_threshold`, `partial_match_floor`).
+  - The pipeline passes the model the question was embedded with, which is the model every
+    candidate chunk was recorded against (R10).
+  - The keyword is required, so a caller cannot forget it and quietly use EmbeddingGemma's value
+    for Voyage's scores.
+- **The measurement scripts:** the citation harness and the HTTP check pass the model too. The
+  harness's default threshold is now the model's own, and `--threshold` still overrides it.
+- **The key is the model name the provider answers with** (`settings.VOYAGE_MODEL`). Another Voyage
+  model falls back to the default until it is measured, because these values are `voyage-4`'s.
+
+**What it costs, and what remains:**
+
+- **A small, contaminated set.** It is 40 runs, and v2 was written after the frozen results were
+  seen (D-101's note). So the frozen thirty does not independently test this value.
+- **The scores still overlap.** Three no-answer runs score above an answerable one. Generation
+  declined them on this set.
+- **D-56 is narrowed on Voyage and stays open on EmbeddingGemma.**
+- **Next:** the frozen thirty, the nine threads, the HTTP check and NFR-08 on Voyage with these
+  values (D-113), within D-113's spend rule.
+- **FR-19's exclusion check** (`scripts/exclusion_dev_check.py`, on its branch) calls `admit`, and it
+  needs the model once the two branches meet.
+
+**Where it applies:** the modules under **Concerns**, `CLAUDE.md` §5 (both rows, with the user's
+adoption of 10 November) and `docs/ai-provider.md` §4.
+
+## D-121 · Haiku 5.5 is the `anthropic` provider's default generation model, after it matched Sonnet 5.5 on every bar
+
+**Status:** Settled by the user · **Date:** 2026-11-10 · **Concerns:** D-115, D-113, D-102, D-120,
+FR-10, FR-12, FR-13, `config/settings.py`, `.env.example`
+
+**Decision (the user's, 10 November):** `ANTHROPIC_MODEL` defaults to `claude-haiku-5-5` in
+`config/settings.py` and `.env.example`, replacing D-115's `claude-sonnet-5-5`. The development
+`.env` was changed to match. Sonnet stays one setting away: `ANTHROPIC_MODEL=claude-sonnet-5-5`.
+
+- **Why:** the user asked whether Haiku could cut cost without losing performance. The Haiku round
+  (`corpus/objective-02/runs/2026-11-10/haiku/haiku-round.md`) measured no loss. Haiku costs a
+  twentieth of Sonnet per token ($0.10 / $0.50 against $2 / $10 per million) and was faster.
+- **The bar was fixed before any Haiku call,** in `0f184ca`, from Sonnet's own results. Only the
+  model changed: the embedder stayed Voyage `voyage-4`, with D-120's values, effort `"low"`, and
+  the same database and dump.
+
+| | Sonnet 5.5 | Haiku 5.5 |
+|---|---|---|
+| dev-set-v2 end to end: answered / declined / matched | 32/32 · 8/8 · 32/32 | 32/32 · 8/8 · 32/32 |
+| frozen thirty: runs right | 34/34 | 34/34 |
+| threads: follow-ups with history | 9/9 | 9/9 |
+| fabricated identifiers, leaks | 0, 0 | 0, 0 |
+| frozen thirty: answered question, median | 2.5 s | 1.7 s |
+| Claude spend for the three sets | $1.04 | $0.055 |
+
+- **D-115's call parameters stand.** They are effort `"low"`, thinking at the model's default, no
+  sampling parameters, and `CLAUDE_MAX_TOKENS` 16000. Haiku was measured with them, and Haiku 5.5
+  accepts all four.
+- **Changing the generation model is not a re-index,** as D-115 says: the vectors are Voyage's.
+
+**What it costs, and what remains:**
+
+- **There was one behavioural difference.** Asked t02's follow-up cold ("How often does that get
+  reviewed?"), Sonnet declined and Haiku answered from another document, with genuine citations.
+  - Both score as not correct, and a cold follow-up is predicted to fail, so no bar moved.
+  - It is still the failure the round was watching for: answering an underspecified question.
+- **The sets cannot separate the two models further.** Both scored at the ceiling, each set ran
+  once, and Claude takes no sampling parameters.
+- **FR-10 classification moves to Haiku too, unmeasured.**
+  - `classify_document` reads the same setting.
+  - Classification has not been measured on either Claude model; FR-10's records (D-106) are
+    FLM's.
+  - Measure it, or give it a setting of its own, before relying on it on this provider.
+- **NFR-08 has not run on either Claude model.**
+- **The default provider is still FLM** (D-113). This decision sets the `anthropic` provider's
+  model; it does not choose the provider.
+
+**Where it applies:** `config/settings.py`, `.env.example` and the development `.env`. D-115
+carries a dated note.
+
+**Dated note, 12 November 2026: "The default provider is still FLM" is overtaken.** It was true when
+written. D-122 made `anthropic` the default the same day, and this entry is left as written. The
+table's "threads: follow-ups with history 9/9" was one draw per model. FR-13 was re-audited on
+11 November, and Haiku 5.5 was drawn twice more on the frozen nine (D-112's notes of 11 and
+12 November).
+
+## D-122 · `anthropic` (Claude Haiku 5.5 + Voyage `voyage-4`) is the default provider, after FR-10's and FR-19's tuned values were re-derived on it
+
+**Status:** Settled by the user · **Date:** 2026-11-10 · **Concerns:** D-113, D-114, D-117, D-120,
+D-121, D-106, D-109, FR-08, FR-10, FR-12, FR-13, FR-19, `config/settings.py`, `.env.example`,
+`.github/workflows/ci.yml`, `README.md`, `CLAUDE.md` §3 and §4
+
+**Decision (the user's, 10 November):** `AI_PROVIDER` defaults to `anthropic` and
+`EMBEDDING_DIMENSION` to 1024. This applies in `config/settings.py`, `.env.example` and CI. FLM stays
+as the offline alternative: `AI_PROVIDER=flm`, `EMBEDDING_DIMENSION=768`, and a database indexed by
+FLM.
+
+**A measured switch, as `CLAUDE.md` §4 requires.** Every tuned value was re-derived on this provider
+before the default moved:
+
+- **Answers and retrieval:**
+  - D-120's threshold and floor for voyage-4;
+  - the frozen thirty (34/34), the nine threads (9/9 with history) and the HTTP check (WIRED 3/3),
+    in #75 and #76;
+  - Haiku 5.5 matching Sonnet 5.5 on every bar, in D-121.
+- **The two values that were still FLM's, re-derived first by their own fixed rules (the user's
+  choice):**
+  - **FR-19's grouping threshold: 0.5054 for voyage-4,** where embed-gemma has 0.5256. This is
+    D-109's rule on the development paraphrases, with 12 entries of 3 and none mixed (D-109's dated
+    note).
+  - **FR-10's confidence threshold: 0.72 for claude-haiku-5-5,** where gemma3:4b has 0.95. This is
+    D-106's rule on the 19 development documents, with all 57 typed right (D-106's dated note).
+  - **Both are per model** (`..._BY_MODEL`), as D-120's are. The code reads the value for the
+    model that produced the vector or the classification, and FLM keeps its own values.
+
+**The local setup (the user's choice): a fresh database, `kmp_anthropic`.**
+
+- **How it was made:** restored from the 1 November snapshot (dump `3bf98403…`) with
+  `restore --into`, migrated, and re-indexed by Voyage with `--resize-column`: 25 sources rebuilt,
+  3 skipped as in every copy, 0 failed, 43 chunks.
+- **Its files:** media in `C:\kmp-dev\kmp_anthropic\media`, and its own snapshot (dump `8e79cb37…`)
+  in `C:\kmp-dev\kmp_anthropic\snapshot`, so it resets without a re-index.
+- **The development `.env`** now points at it, on the `anthropic` provider at 1024. `kmp` is
+  untouched and stays FLM-indexed at 768.
+
+**CI runs on the default too:** `AI_PROVIDER=anthropic`, `EMBEDDING_DIMENSION=1024`. It holds no key,
+so the startup check warns ("ANTHROPIC_API_KEY is not set") and calls nothing. The suite uses the
+stub provider and passed locally under that configuration.
+
+**What it costs, and what remains:**
+
+- **The spend:** about $0.02 for FR-10's sweep (57 Haiku calls). The Voyage embeddings fall within
+  its free allowance.
+- **FLM databases are not converted.** These stay at 768 and run with `AI_PROVIDER=flm` and
+  `EMBEDDING_DIMENSION=768`:
+  - the alpha, `kmp_demo_20261101`;
+  - the FLM measurement baseline, `kmp_obj02_20261101`;
+  - `kmp_obj0506_20261101`;
+  - `kmp`.
+
+  A database moves across with `reindex --resize-column` (D-117), onto a copy.
+- **`MAXIMUM_STATEMENTS` (6) was tuned on FLM's generation and is not re-swept.** On Claude, the
+  development set and the frozen sets show no ceiling hit, no cap violation and no 503 at 6, with
+  every expected answer matched. That is the rule's first test passing; caps 3 to 5 were not
+  compared.
+- **`MAXIMUM_CONTEXT_TOKENS` (4000, still PROVISIONAL) now binds on Voyage for broad questions.**
+  The HTTP check's t04 and t06 had 21 and 22 passages above the threshold, of which 8 and 9 fit.
+  Every result above was measured with it at 4000, so it stands. It is no longer untested merely
+  because it never binds.
+- **`TOP_K` (25) still does not bind.** The most passages seen above the threshold is 22.
+- **NFR-08 has not run on this provider.** Its rate limits depend on the Anthropic account's tier.
+- **Objectives 05 and 06 stay as verified, on FLM.** Re-running their verification on this provider
+  is separate work.
+- **Old gaps are not joined across the switch.** Open knowledge-gap entries written under
+  embed-gemma are never joined by a Voyage vector (R10), so a recurring subject opens a second entry
+  (D-109's note).
+
+**Where it applies:**
+
+- **Configuration:** `config/settings.py`, `.env.example`, `.github/workflows/ci.yml`.
+- **Code:** `apps/core/constants.py` (the two maps), `apps/retrieval/gaps.py`,
+  `apps/documents/classification.py`, `scripts/objective05_verify.py`.
+- **Documentation:** `README.md`, `CLAUDE.md` §3 and §4, `docs/ai-provider.md`. D-106 and D-109
+  carry dated notes.
+
+**Dated note, 12 November 2026 (FR-13): what this entry's FR-13 evidence rested on.** It counts "the
+nine threads (9/9 with history) and the HTTP check (WIRED 3/3)" toward the switch. Those were one
+draw per model, and the HTTP check ran on Sonnet 5.5, not on Haiku 5.5, the model this entry makes
+the default. Since then:
+
+- **FR-13 was re-audited** on 11 November, at `bd95f92`, and returned INCOMPLETE (D-112's note of
+  11 November).
+- **Haiku 5.5 was measured again,** under a rule fixed first: two further draws of the frozen nine,
+  and one HTTP check through a fresh server. The resolving half of the follow-up clause is recorded
+  as met on `anthropic`, as a measurement (D-112's note of 12 November).
+
+This note changes nothing in the decision.
+
+**Dated note, 12 November 2026 (FR-19): one check was not run before the default moved, and the
+exclusion rule is a per-model setting this entry does not list.**
+
+- **"Every tuned value was re-derived on this provider before the default moved."** The list under
+  it names:
+  - D-120's threshold and floor;
+  - the frozen thirty, the nine threads and the HTTP check;
+  - D-121's comparison of Haiku with Sonnet;
+  - FR-19's grouping threshold;
+  - FR-10's confidence threshold.
+
+  It leaves out D-108's development check of the permission exclusion, which D-108's and D-110's
+  notes require on a new configuration before the thirty run there.
+  - It was not run before 10 November's switch.
+  - Run on 11 November, it failed on voyage-4.
+  - The exclusion rule then became per embedding model (D-126), chosen after the default had moved.
+- **"Objectives 05 and 06 stay as verified, on FLM."** Both were then run on this provider: #85, and
+  #86 with #90. Objective 06 has no independent pass on either provider (D-126's note of 12
+  November).
+- **`README.md`'s list is corrected.** `CLAUDE.md` §4 carries the same sentence. It is the user's
+  to change and is not edited here.
+
+**Dated note, 12 November 2026: FR-10's value for claude-haiku-5-5 is now 0.80 (D-128).** D-128
+revised the classification prompt, and D-106's rule, re-run on it, gives 0.80. The user chose to
+follow it. The 0.72 above was derived on the earlier prompt.
+
+**Dated note, 13 November 2026 (later): 0.72 again (D-129).** D-129 reverses D-128 and restores the prompt
+that 0.72 was derived on.
+
+## D-123 · A meeting recording is transcribed by Whisper on FLM into a draft that a person must confirm, then ingested through FR-09 unchanged; live transcription stays out of scope
+
+**Status:** Settled by the user · **Date:** 2026-11-10 · **Concerns:** FR-09, the proposal's §1.9,
+NFR-19, NFR-20, D-19, D-79, D-83, D-85, D-113, D-114, D-118, D-122, `apps/ai/base.py`,
+`apps/ai/transcription.py`, `apps/ai/flm.py`, `apps/ai/anthropic.py`, `apps/ai/testing.py`,
+`apps/ai/__init__.py`, `apps/ai/checks.py`, `apps/ingestion/audio.py`, `apps/api/views.py`,
+`apps/api/transcription_slot.py`,
+`apps/core/constants.py`, `config/settings.py`, `frontend/src/pages/Meetings.jsx`,
+`frontend/src/components/RecordingTranscriber.jsx`, `frontend/src/utils/audio.js`,
+`docs/api-contract.md`, `docs/ai-provider.md`, `README.md`, `CLAUDE.md` §4 and §5 · **Area:**
+meeting intelligence, Sagarika Dey's (`CLAUDE.md` §1), built from Benjamin Morovan's session at his
+request
+
+**What prompted it.** On 10 November the user asked for the app to transcribe meetings with Whisper
+on FLM. The proposal does not provide for that:
+
+- **§1.9 "Out of scope"** lists "Live, real-time transcription during an active meeting" and
+  "Native video conferencing/meeting recording capture (assumes recordings are uploaded)". The
+  conclusion repeats that live meeting transcription was left out on purpose.
+- **FR-09** takes "a transcript file or paste transcript text", and nothing else.
+
+`CLAUDE.md` §1 says a behaviour the proposal does not contain is raised, not built, so it was put to
+the user before any code.
+
+**What was measured first** (6 November, FLM v0.9.39, the D-83 pin, model `whisper-v3:turbo`):
+
+- **Setup.** `flm pull whisper-v3:turbo` is 623 MB. One server holds `gemma3:4b`, `embed-gemma` and
+  `whisper-v3:turbo` together: `flm serve gemma3:4b --embed 1 --asr 1`. `scripts/check_flm.py` still passes with speech loaded.
+- **Speed.** 0.24–0.31× real time: 2.5 minutes took 40–47 s, 5 minutes 79 s, 11 minutes 157 s. The
+  text was the same on every run. FLM took WAV and MP4/AAC directly.
+- **Accuracy.** About 4% of words wrong on synthesised speech, and 9.6% on the user's own voice
+  through the laptop microphone. One garbled sentence there ("from 1 March" became "from 1st to
+  March") produced a cited wrong answer three times out of three. Whisper writes US dates ("March 1,
+  2027").
+- **Silence.** A recording whose audio track was silent (-90 dBFS) came back as invented text ("E
+  ai E ai...").
+
+**Decision (the user's, 10 November):**
+
+- **An uploaded recording, after the meeting. Not live.** In the user's words: "Uploaded recording
+  but not an audio file, it will transcribed by whisper and be text file." The platform never
+  records, so §1.9's exclusions of live transcription and of native recording capture stand. The change is narrower: a person who already has a
+  recording can have the platform turn it into a transcript.
+- **A draft first.** Nothing is indexed until a person has ticked that they reviewed and corrected
+  the draft, and confirmed it. The tick is the interface's to ask for; it cannot prove the reading
+  (see "What it does not cover").
+  The confirmed text goes in through `POST /api/meetings` as pasted text: FR-09's own route,
+  unchanged, and still the only path into the index.
+- **Its own setting.** `TRANSCRIPTION_PROVIDER`, `none` or `flm`, independent of `AI_PROVIDER` and
+  `none` by default. In the user's words: "the transcription needs this laptop's NPU, but the
+  result is just a text file. The platform, hosted anywhere under D-114, ingests it the same way."
+- **Video recordings are accepted as well as audio.** The user's own recordings on 6 November were
+  Game Bar MP4s.
+- **No audio is kept on the server.** The user stated no preference, so this is the default
+  proposed to them: the server transcribes each segment and keeps nothing, and the browser holds the
+  recording until the transcript is submitted or the page is left.
+
+**Why each part:**
+
+- **An uploaded recording, because it sits inside the proposal's own assumption.**
+  - §1.9 rules out live transcription and native recording capture. Its capture line assumes that
+    recordings are uploaded, and nothing in it excludes transcribing one that was.
+  - Live transcription from the microphone, the other reading put to the user, would have
+    overturned those exclusions, live transcription and native recording capture.
+  - It is still an addition, not a requirement the proposal contains: no FR transcribes audio, and
+    FR-09 takes a transcript.
+- **The draft, confirmed through FR-09, because that keeps one path into the index.**
+  - The transcription route stores nothing.
+  - What is indexed is the text a person confirmed, sent to `POST /api/meetings` with FR-09's
+    validation, the visibility rule (D-29) and FR-08's chunking and embedding unchanged.
+- **The review, because of the measurements above.**
+  - On the user's real voice, 9.6% of words came back wrong.
+  - One misheard date became a cited wrong answer three times out of three. An answer cites its
+    source, so a transcription error indexed unread comes back as a cited fact.
+  - Whisper writes dates the US way, which needs a person on its own.
+  - At about 0.25× real time, an hour's meeting is a draft in about fifteen minutes. The review
+    asks a person to read that draft and correct it, not to transcribe the meeting themselves.
+- **The setting, because only FLM has speech-to-text.** Claude and Voyage (D-113, the default since
+  D-122) have none. D-114 wants M8 hostable on any device, so transcription is off unless the host
+  runs FLM. A host without it still ingests a transcript made elsewhere, as a TXT file, through
+  FR-09's file option.
+- **Off by default, because a page offering a control that cannot work is worse than no control.**
+  With the setting `none`, the recording option says plainly that transcription is not enabled on
+  this server.
+
+**How it is built.** This is the shape the decision fixes; the code comments cite this entry.
+
+- **`AIService` gains `transcribe` and `transcription_health`** (`apps/ai/base.py`;
+  `docs/ai-provider.md` §1).
+  - `transcribe` takes one WAV segment and returns its text and the model that produced it.
+  - `transcription_health` is a report that never raises, as `health` is. It lets the page say
+    before a long run starts that FLM cannot be reached.
+  - The FLM and Anthropic providers implement them through `apps/ai/transcription.py`. It calls FLM's
+    OpenAI-compatible `/v1/audio/transcriptions` with `FLM_ASR_MODEL` (`whisper-v3:turbo`) through
+    the `openai` client, whichever `AI_PROVIDER` is set. No vendor SDK is imported outside
+    `apps/ai/`.
+  - **Attempts:** `MAXIMUM_TRANSCRIBE_ATTEMPTS` is 3 (1 initial call + 2 retries), as D-19's other
+    attempt totals are. D-118's rule applies: a transport failure, a 5xx or a 429 is retried; any
+    other 4xx is `ProviderRefused` and is not.
+  - **With the setting `none`,** `transcribe` raises `TranscriptionDisabled`, a
+    `ProviderUnavailable`, on either provider, and `transcription_health` reports transcription
+    unavailable without raising.
+- **The browser cuts the recording into segments.** Each is a 16 kHz mono 16-bit PCM WAV of at most
+  `TRANSCRIPTION_SEGMENT_SECONDS` (30 s), cut at the quietest tenth of a second in its last third, so
+  that a cut rarely falls inside a word. The last segment may run up to a second longer rather than
+  leave a sliver to be sent alone, which the server's 60 s ceiling admits. The reasons for cutting in
+  the browser:
+  - **Request length.** At 0.25× real time, an hour's recording is about fifteen minutes of
+    transcription. One request that long would hold a Waitress thread throughout and lose everything
+    if it failed near the end.
+  - **Decoding.** Nothing in the stack decodes MP4, M4A or MP3 (there is no ffmpeg), and the
+    browser decodes every common audio and video format. The server accepts only what the page
+    sends, a 16-bit PCM mono WAV at 16 kHz, which Python's `wave` reads. It accepted any rate from
+    8 to 48 kHz, mono or stereo, until the security review of 11 November measured a 60 s, 48 kHz
+    stereo segment at about thirteen times the CPU of the page's own.
+- **The routes** (`docs/api-contract.md`, "Recording transcription"):
+  - `GET /api/transcriptions/status`: whether transcription is enabled here, and whether FLM
+    answered.
+  - `POST /api/transcriptions`: one segment in, its text out. It creates nothing: no meeting, no
+    chunk, no row.
+  - **Each needs a session and `contribute_content`** (FR-06), and each is tested from an Employee
+    and an Administrator session (Objective 01).
+  - **Each is throttled per user in one scope,** `transcription` (`TRANSCRIPTION_THROTTLE_RATE`,
+    D-79). The status is in it because each request asks FLM for its model list.
+  - **The POST holds one transcription in flight per user** (`apps/api/transcription_slot.py`,
+    D-85's mechanism under its own key), **and `MAXIMUM_TRANSCRIPTIONS_IN_FLIGHT` (2) across the
+    server.** FLM's one NPU takes segments in turn, so without the server's cap, accounts
+    registered for the purpose could hold every Waitress thread with one segment each (the
+    security review of 11 November, finding 2). Past it a segment is answered 429
+    `transcription_busy` with a Retry-After, which the page waits out by itself.
+  - **Each segment is held to `MAX_UPLOAD_BYTES`** (the answer is 413) **and to
+    `MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS` of audio** (400), and no more than one frame past that
+    is ever read from it. The size is checked against the declared length and again against the
+    bytes that arrived, as on the upload; the second check is for a client that understates its
+    length, which the test client cannot send, so it is untested, as the upload's is.
+- **Silence never reaches Whisper.** The server measures each segment's loudest half second. Below
+  `TRANSCRIPTION_SILENCE_DBFS`, the segment is answered `200` with `"status": "silent"` and no text,
+  and the provider is not called. A segment with no audio frames at all is a `400`.
+- **The recording itself never reaches the server**, so `MAX_UPLOAD_BYTES` does not bound it.
+  `MAXIMUM_RECORDING_BYTES` bounds what the browser will decode, since the whole file and its
+  decoded audio sit in the page's memory. Only the client enforces it, and the agreement test ties
+  the client's copy.
+- **Invariant 8 and NFR-20: a failed transcription discards nothing.**
+  - **A failed segment stops the run and keeps it.** The decoded recording and the draft stay in
+    the page, through a look at another source as well, and Resume retries from the failed segment.
+    The exception is the 503 that says transcription has been switched off on the server: the draft
+    is kept, and there is nothing to resume until it is switched on again.
+  - **The draft can be saved as a TXT file at any point,** while segments are still arriving too.
+  - **The browser asks before a tab holding an unadded draft is closed or reloaded.** It cannot ask
+    on a move within the app (see "What it does not cover").
+  - **The server keeps nothing,** so nothing on it can be lost. Nothing persistent, that is: a
+    segment larger than Waitress's in-memory buffer (512 KB; a 30 s segment is about 960 KB)
+    passes through the web server's own self-deleting temporary file while the request is read.
+- **The review is the interface's to enforce.** A transcript from a recording cannot be submitted
+  until the person ticks that they have reviewed it, and any text Whisper adds after the tick takes
+  it back, so a run stopped, ticked and resumed cannot carry its later segments in unread (the
+  requirements audit of 11 November found that it could). The notice above the draft names what Whisper
+  gets wrong: names, numbers and US dates. The server cannot tell a reviewed transcript from a
+  pasted one, so the front-end suite holds this clause (`CLAUDE.md` §8 item 2).
+
+**What it does not cover:**
+
+- **Live transcription, microphone capture and native recording capture.** Still out of scope
+  under §1.9.
+- **Speaker labels and timestamps.** Still out of scope under FR-09. Whisper's text carries none,
+  and nothing parses them.
+- **A CPU Whisper (for example faster-whisper) for hosts without the NPU.** It would be another
+  `TRANSCRIPTION_PROVIDER` value. It is not built and is untested here; the user named it as the
+  route for a host without the laptop.
+- **Provenance on the meeting.** A stored meeting does not record that its transcript came from
+  Whisper, because schema v1 has no column for it.
+- **Whether the person actually corrected anything.** The tick box proves a person was asked; it
+  cannot prove they read.
+- **Whether Whisper is loaded.** FLM's `/v1/models` lists its chat catalogue and names neither
+  `whisper-v3:turbo` nor `embed-gemma`, so the status check proves that FLM is reachable, not that
+  it was started with `--asr 1`. A server without it fails the first segment, which the page
+  reports as unavailable.
+- **Recordings too large to decode in the page.** The cap is set from what a browser tab can hold,
+  not measured on every browser.
+- **Leaving the page within the app.** The app's router (`BrowserRouter`) offers no way to stop a
+  move to another page, so following a link inside the app leaves an unadded draft and a paused run
+  behind without asking. Only closing or reloading the tab asks. Saving the draft as a text file is
+  the way to keep it.
+- **Real recordings in a real browser, before the end-to-end trial.** The suites replace the
+  browser's decoder. In Chromium on 11 November a 44.1 kHz stereo WAV and a WebM/Opus recording
+  decoded to 16 kHz at their full length, but an MP4/AAC file recorded by the browser itself decoded
+  to 1.06 s of 2 s, which may be the recorder's doing rather than the decoder's. A Game Bar or Voice
+  Recorder file is the trial's to check.
+- **What a request body costs before it is refused.** The size check orders the answers, not the
+  reading. A session that sends its CSRF token, as the page always does, has its whole multipart
+  body parsed by DRF while authenticating, because DRF's CSRF check reads `request.POST`, and so
+  before the 403, the 429, the 503 and the 413 (the security review of 11 November found it,
+  driving the view with CSRF enforced). What bounds the reading is the web server's own body
+  limit, which the alpha's `waitress-serve` line leaves at Waitress's default of 1 GB. **This is
+  not the transcription route's alone:** `POST /api/documents` and `POST /api/meetings` share the
+  cause, and `config/settings.py` and D-30 claim the declared-length check refuses a body "before
+  it is parsed". Fixing it for every route (a body limit on the web server, or a length check
+  ahead of DRF) and correcting those claims is a separate change, proposed on 11 November and not
+  made here.
+- **Retries and a busy NPU.** A segment that times out is retried at once. Whether FLM goes on
+  working on the abandoned request, so that the retry queues behind it, is not measured.
+- **The silence threshold is a starting value.** `TRANSCRIPTION_SILENCE_DBFS` is *tune*: set from
+  the -90 dBFS silent track above and ordinary speech levels, and to be checked on the user's real
+  recordings in the end-to-end trial.
+
+**The end-to-end trial, 11 November 2026** (`docs/recording-transcription-trial.md`):
+
+- **The path worked end to end on real audio.** A narrated recording of between 9.3 and 14.5
+  minutes went from the page to a cited answer under the `anthropic` provider, transcribed by
+  Whisper on FLM.
+- **The transcription:** 28 segments in 2 min 45 s, every one answered 200, one skipped as silent,
+  and no invented text in the draft.
+- **The review did not stop the errors.** The person ticked the review and added the draft
+  uncorrected, so its errors went into the index: an inverted "cannot", a wrong upload limit and
+  garbled terms. That is this entry's conceded limitation of the tick, observed rather than
+  predicted.
+- **Not measured:** the per-segment levels, so the margin of `TRANSCRIPTION_SILENCE_DBFS` is
+  unchecked, and the recording's exact length and format.
+
+**Dated note, 11 November 2026: "What a request body costs before it is refused" is closed by
+D-124.**
+
+- **What changed:** the CSRF check reads its token from the header only, so nothing reads a body
+  before the view. `POST /api/transcriptions`' declared-length 413, and its 403, 429 and 503 before
+  it, now refuse a body unread. That is tested by counting the bytes read
+  (`apps/api/tests/test_request_body_bound.py`). Waitress's `--max-request-body-size` caps
+  receiving at `MAX_REQUEST_BODY_BYTES`. The claims this item named, in `config/settings.py` and
+  D-30, are corrected.
+- **The item understated the old defect in two ways:**
+  - **The CSRF cookie alone was enough.** The body was parsed before the header was looked for,
+    so a session that did not send its token had its body parsed too, and was then refused.
+  - **Django ran the same check on login, `/api/auth/me` and the SPA's catch-all,** signed out
+    and on a made-up cookie. D-124 removed it there too.
+- **Still this entry's own question:** the route accepts a segment of up to `MAX_UPLOAD_BYTES`,
+  where a valid one is about 1.92 MB, and reads the whole part into memory.
+- **The view's docstring and the contract's section** were corrected on the same day.
+
+## D-124 · Request bodies are bounded before they are read: no CSRF check reads a body, and Waitress caps every body at 54,525,952 bytes
+
+**Status:** Settled by the user · **Date:** 2026-11-11 · **Concerns:** FR-08, FR-09, FR-02, FR-06,
+D-21, D-30, D-85, D-123, `apps/api/authentication.py`, `apps/api/views.py`, `config/spa.py`,
+`apps/core/constants.py`, `config/settings.py`, `scripts/server_record.py`,
+`scripts/ingest_objective02.py`, `docs/api-contract.md`, `docs/alpha-deployment.md`,
+`docs/measurement-runbook.md`, `tests/load/README.md`, `apps/api/tests/test_transcriptions.py`
+
+**The defect.** The security review of `feat/FR-09-recording-transcription` found it (D-123). That
+branch recorded it as open and left the shared fix out of its scope. It was verified again here.
+
+- **Django's CSRF check reads `request.POST`**, looking for a `csrfmiddlewaretoken` form field,
+  before it falls back to the `X-CSRFToken` header. That read parses the body. The check ran on two
+  paths.
+  - **DRF's session authentication** (`SessionAuthentication.enforce_csrf`), on every request from a
+    signed-in session. There `request.POST` runs the view's parser.
+    - A multipart upload was parsed whole, its files spooled to temporary files past
+      `FILE_UPLOAD_MAX_MEMORY_SIZE`.
+    - A JSON body was read and parsed if it was within Django's `DATA_UPLOAD_MAX_MEMORY_SIZE`
+      (2.5 MiB). DRF 3.18 parses JSON from `request.body`, which refuses a larger declared length
+      unread, with a 400.
+  - **Django itself, before DRF ran,** signed in or not.
+    - **Where:** `ensure_csrf_cookie` ran it on `POST /api/auth/login` and `/api/auth/me`, and
+      `CsrfViewMiddleware` ran it on the SPA's catch-all, which was not exempt.
+    - **What it took:** a well-formed `csrftoken` cookie, which a client can make up.
+    - **What it read:** Django parses a multipart body whole to answer `request.POST`.
+- **So a body was parsed before any refusal:**
+  - the 401, the 403 and the 429;
+  - the upload routes' declared-length 413;
+  - CSRF's own 403 for a missing header.
+
+  Only a multipart body's files had no ceiling of their own. Their only limit was Waitress's, which
+  the alpha's serve command left at its default, 1 GB. A signed-in Employee could send 1 GB uploads
+  again and again, each received, spooled and parsed before it was refused. On the three routes
+  Django checked, anyone could, signed in or not.
+- **The suite did not see it.** The test client enforces CSRF only when asked, and with CSRF off
+  Django's check returns before it reads anything. The one test that claimed the body went
+  unparsed used such a client.
+- **Measured here,** by running the new tests against the old CSRF paths:
+  - the whole 52,428,801-byte upload was read on all three upload routes, before the 403, the 429
+    and the 413 (and the transcription route's 503), from both roles;
+  - the whole upload was read on login, `/api/auth/me`, `/` and `/documents`, from a client with a
+    made-up cookie and no session;
+  - 2,048-byte JSON bodies were read on reprocess, and on the ask route before its 429.
+
+**The options weighed.** The choice touched FR-08's documented order of refusals, which §7.2
+`validateUpload()` fixes as permission first, so the user decided it (`CLAUDE.md` §9).
+
+- **(a) Waitress's `--max-request-body-size` on the serve command.** It bounds receiving, on every
+  route. A body under the cap was still parsed before the 403.
+- **(b) A middleware ahead of DRF** that answers 413 when the declared length is over the route's
+  ceiling.
+  - It bounds parsing only above the ceiling.
+  - It puts that 413 before the 401, the 403 and the 429, which changes FR-08's documented order.
+  - It does not bound what Waitress receives.
+- **(c) Both (a) and (b).**
+- **(d) The CSRF check takes its token from the header only,** so nothing parses a body before the
+  view. Offered together with (a).
+
+**The user chose (a) with (d), on 11 November 2026.** The three Django-checked routes came to light
+in review, after the choice. Removing the check there is (d) carried to its end, and changes no
+documented answer except the one in decision 2.
+
+**Decision.**
+
+1. **DRF's CSRF check reads the `X-CSRFToken` header only** (`apps/api/authentication.py`).
+   - **How:** the project's `SessionAuthentication` runs DRF's own `enforce_csrf` on a stand-in
+     for the request whose `POST` is empty. Django's check then goes straight to the header.
+   - **Unchanged:** everything else Django checks, which is the CSRF cookie, the token's match
+     against it, and the Origin and Referer headers.
+   - **Given up:** the `csrfmiddlewaretoken` form field as a second place for the token. Nothing
+     uses it. The SPA, the measurement scripts and the load test all send the header, which is
+     what D-21 and the contract already describe.
+2. **Django no longer runs its own check on the three routes that had it.**
+   - **Login and `/api/auth/me` drop `ensure_csrf_cookie`.** `SendsCsrfCookieMixin` in
+     `apps/api/views.py` keeps what the decorator was there for: the `csrftoken` cookie, sent with
+     every response, a 401 or 429 included. It calls `get_token()` in `finalize_response`.
+   - **Why that loses nothing:** the check the decorator ran never refused anything, because
+     `ensure_csrf_cookie` does not reject. A session's unsafe request to these views is still
+     checked by DRF.
+   - **The SPA's catch-all (`config/spa.py`) is `csrf_exempt`.** It makes no write: `require_safe`
+     answers every unsafe method 405, and that 405 now comes first. The contract's "or Django's
+     `403` page first" for such a request goes with it.
+3. **So nothing reads a body before the view, on any route, under Waitress** (runserver is below).
+   - **DRF views:** decision 1.
+   - **Login, `/api/auth/me` and the catch-all:** decision 2.
+   - **A path that matches no route:** never reaches a view or a CSRF check.
+   - **A built file:** WhiteNoise answers an unsafe method 405 without reading the body.
+   - **The upload's order:** FR-08's order now holds for reading as well as for answering: 401,
+     403, 429, the declared-length 413, then the rest of §7.2. The upload's 403 is now "the
+     cheapest rejection" in fact (D-30's dated note).
+   - **Unchanged since Stage 3:** the declared-length 413 still comes before the signature's 415,
+     because the signature cannot be read without reading the body. The contract now says so.
+4. **`POST /api/meetings` gets the upload's declared-length check.**
+   - **The answer:** a body over `MAX_UPLOAD_BYTES` is 413 `TRANSCRIPT_TOO_LARGE_MESSAGE`. It comes
+     after the 403 and the 429, and before the body is read.
+   - **A *convention*:** FR-09 enumerates only 201 and 400, and a body refused unread has no field
+     to report an error on.
+   - **A transcript file** had no ceiling before this but Waitress's 1 GB.
+   - **A pasted transcript** was already held to 2.5 MiB by Django. Between 2.5 MiB and 50 MB it is
+     `400 {"detail": "Bad request."}`, refused unread, which the contract now lists. Above 50 MB the
+     new 413 replaces that 400.
+   - **One helper serves every upload route:** `declares_a_body_over_the_upload_ceiling` in
+     `apps/api/views.py`. That is the document upload, the meeting ingest and, since D-123 merged,
+     the transcription route, which had its own copy of the check.
+5. **`POST /api/documents/{id}/reprocess` takes no body, and now reads none,** so it needs no
+   ceiling of its own.
+6. **Waitress caps every request body at `MAX_REQUEST_BODY_BYTES`, 54,525,952 bytes,** which is
+   2 MiB over `MAX_UPLOAD_BYTES`.
+   - **Where:** `--max-request-body-size=54525952` is on every documented serve command:
+     `docs/alpha-deployment.md`, `docs/measurement-runbook.md`, `tests/load/README.md`, and
+     `scripts/server_record.py`'s `D85_COMMAND` (D-85's dated note).
+   - **How Waitress refuses:** a declared length at or over the cap is refused at the headers,
+     before the body is read, with Waitress's own plain-text 413, and the connection is closed. A
+     chunked body declares no length, so Waitress counts it as it arrives and refuses it at the
+     cap.
+   - **Why 2 MiB of margin:** a body a little over the upload ceiling still gets the API's JSON
+     413. That includes the Objective 02 ingestion's oversized item I02, which is generated 1 MiB
+     past the ceiling, so its recorded outcome is unchanged.
+
+**Claims corrected, each with its date:**
+
+- the `FILE_UPLOAD_MAX_MEMORY_SIZE` comment in `config/settings.py`;
+- D-30, in a dated note: the 403 came first among the answers, but not before the reading;
+- `docs/api-contract.md`:
+  - Stage 3's "The size ceiling is applied twice: once against the declared `Content-Length`,
+    before the body is parsed";
+  - item 9's "or Django's `403` page first";
+- in `apps/api/views.py`:
+  - `DocumentsView`'s docstring and its `post` comment;
+  - `MeetingsView._transcript_from`'s "the transcript path cannot answer 413";
+- the docstring of `test_an_oversized_body_is_refused_before_it_is_parsed` in
+  `apps/api/tests/test_document_upload.py`;
+- the comment in `scripts/ingest_objective02.py` that had the view's 413 answer "before reading
+  the whole body". Under Waitress, the view answers only after the whole body has been received.
+
+**What it covers:**
+
+- **Every route, for reading before the view, under Waitress** (decision 3).
+- **The three upload routes' bodies over `MAX_UPLOAD_BYTES`,** refused unread by their declared
+  length:
+  - `POST /api/documents`;
+  - `POST /api/meetings`;
+  - `POST /api/transcriptions`, merged with D-123 on 11 November after this entry was first
+    written. It now uses the same helper, and D-123's dated note closes its open item.
+- **Every route's body declared at or over `MAX_REQUEST_BODY_BYTES`,** refused by Waitress before
+  it is received, where the server is started as documented. A chunked one is refused when it
+  reaches the cap.
+
+**What it does not cover:**
+
+- **A server started without the flag.** The cap is a command-line option, so nothing in the
+  application can enforce it.
+  - `scripts/server_record.py` records the observed command line, which shows the flag when it is
+    there, but it checks only the server and the thread count.
+  - A server started with an old command still takes bodies up to 1 GB. The application still
+    refuses such a body unread past the upload ceiling, but Waitress has already received it and
+    spooled it to a temporary file.
+- **Receiving under the cap.** Waitress reads a body of up to 54,525,952 bytes before Django sees
+  it, whatever the route, and whether or not the body is then refused. A chunked body is received
+  up to the cap before Waitress refuses it.
+- **Django's runserver.** After the response, runserver's handler reads whatever the application
+  left unread, in a single read, and runserver has no body limit. So "refused unread" holds under
+  Waitress only. Runserver is for development.
+- **JSON bodies under Django's ceiling.**
+  - **The cost:** a JSON body of up to 2.5 MiB is read and parsed in memory, now in the view, after
+    the 403 and the 429. The security review measured `json.load`'s peak at about 25 times the
+    body for a body of many small objects: 126 MB for a 5 MB body, measured outside the app. That
+    is about 60 MB at the ceiling.
+  - **Who can send them:** a route without a throttle takes such bodies as fast as it answers them.
+    Login and registration take them from signed-out clients, within the auth throttle's 20 a
+    minute per address.
+  - **Not part of this change:** a smaller JSON ceiling.
+- **`POST /api/transcriptions`' own ceiling.** Whether the route should accept a segment of up to
+  `MAX_UPLOAD_BYTES` is D-123's own question, raised in its dated note. A valid segment is about
+  1.92 MB, and the route reads the whole part into memory.
+- **The response above the cap.** Waitress's 413 is plain text, not the contract's JSON, and a
+  client still sending when Waitress closes the connection may see a reset instead. The SPA never
+  sends that much: the upload and meeting forms screen a file's size before sending it.
+- **The meeting form's answers.** It shows its generic refusal for the 413, which the page reaches
+  only with a pasted transcript over 50 MB, and for Django's 400 between 2.5 MiB and 50 MB.
+- **A file within a few hundred bytes of 50 MB.** The declared-length check refuses it, because the
+  body adds the multipart framing to the file. That is unchanged since Stage 3.
+
+**Tests:** `apps/api/tests/test_request_body_bound.py`.
+
+- **How each request is sent:** as the SPA sends it, with CSRF enforced and the `csrftoken` cookie
+  from `GET /api/auth/me` returned in `X-CSRFToken`, from an Employee session and an Administrator
+  session. The exceptions are signed-out requests carrying a made-up cookie.
+- **How a read is detected:** the body is a stream that counts what is read from it, installed as
+  `wsgi.input`, so it sees any reader. A multipart body is a well-formed upload of one file. Bytes
+  read are asserted before status.
+- **What they check:**
+  - an oversized body gets a 413 and is not read, on all three upload routes: documents and
+    meetings, multipart and JSON, and transcriptions;
+  - a pasted transcript between 2.5 MiB and 50 MB gets Django's 400, unread;
+  - no body is read before the 401, the 403 or the 429 on any upload route, nor before the
+    transcription route's 503 while transcription is off, and the 403 comes before the 413;
+  - reprocess reads no body, and `/api/ask` reads none before its 429;
+  - login, `/api/auth/me`, `/` and `/documents` read nothing, signed out with a made-up cookie or
+    signed in, and login and `/api/auth/me` still send the cookie;
+  - the CSRF check still refuses, without reading: no header, a wrong token, the token only in a
+    form field, a foreign Origin, no cookie;
+  - an upload and a transcript sent with the header are stored;
+  - Waitress refuses a body at the cap at its headers, without calling the application;
+  - every documented serve command carries the flag, `D85_COMMAND` included, and I02 stays under
+    the cap.
+- **Checked against the code before the fix:** the old `apps/api/authentication.py`, the two
+  `ensure_csrf_cookie` decorators and the old `config/spa.py` were put back, on the code merged
+  with D-123. Then 40 of the 72 tests fail.
+  - 38 fail because the body was read: 52,428,801, 2,048 or 136 bytes.
+  - 2 fail because Django answered its own 400 where the 413 is expected, for a JSON transcript
+    over 2.5 MiB, which it refused unread even then.
+
+**Reviewed on 11 November 2026.** A security review and a requirements audit ran on the first
+version of this change, and found the three Django-checked routes and a false premise about JSON.
+This entry and the code carry both corrections, and the tests above were re-run against the old
+code.
+
+## D-125 · FR-16's meeting summary: one structured call after FR-09 stores a transcript, numbered passages checked by set membership, the summary indexed as the meeting's own chunks, and an hourly retry queue
+
+**Status:** Settled by the user (the four choices below, 11 November 2026) · **Date:** 2026-11-11 ·
+**Concerns:** FR-16, UC-04, NFR-14, NFR-15, NFR-20, NFR-21, Objective 04, FR-09, FR-11, FR-12,
+invariants 1, 2, 3, 5, 7, 8, 9 and 10, D-07, D-16, D-17, D-19, D-31, D-45, D-47, D-79, D-93, D-104,
+D-105, D-107, D-118, D-121, D-123, `apps/ai/base.py`, `apps/ai/summarisation.py`,
+`apps/meetings/`, `apps/documents/models.py` (`ContentChunk`), `apps/core/constants.py`,
+`docs/api-contract.md`, `docs/schema-v1.md`, `docs/ai-provider.md` · **Stage:** NIT3004,
+Objective 04 due 13 November 2026 · **Area:** meeting intelligence, Sagarika Dey's (CLAUDE.md §1)
+
+**What the proposal asks for, in its words.**
+
+- **FR-16, Front-End:** "A "Summary" panel on the meeting page shows a concise paragraph-length
+  summary once processing completes." "A "Regenerate Summary" button lets the user re-run generation
+  if the result is unsatisfactory." "An "Action Items" panel lists each extracted item with
+  description, suggested owner and due date, all editable. Users can edit, delete or manually add
+  items the extraction missed; deletion requires confirmation."
+- **FR-16, Server-End:** "Sends the stored transcript to the language model in a single structured
+  request returning both the summary and the action items against a defined schema rather than
+  prose." "transcripts below a minimum length are rejected rather than submitted, since short
+  transcripts produce unreliable output. The response is schema-validated before storage, and a
+  malformed response triggers one retry. Failures are retried twice before the summary is marked
+  unavailable." "summary failure never blocks the transcript from being stored or searched." "a
+  named owner is matched against the user list, and where no confident match exists the item is
+  stored as unassigned rather than attributed to the wrong person. Relative dates such as "next
+  Friday" are converted using the meeting date as reference." "202 Accepted while processing, 200
+  OK with the summary and item list once ready, an empty item list being a valid result, 422
+  Unprocessable Entity where the transcript is too short to summarise."
+- **FR-16, Database:** "MeetingSummaries (Create, Read); ActionItems (Create, Read, Update,
+  Delete)", with one field table, MeetingSummaries': `summary_id`, `meeting_id`, `summary_text`,
+  `status` ("Ready"), `generated_at`.
+- **UC-04, on success:** a summary "holding a narrative account of the meeting, the decisions
+  reached, the action items raised, and the highlights of discussion"; "Every element of the summary
+  carries a reference to the passage of the transcript it was drawn from"; it is "stored as generated
+  content ... carrying a record of the model that produced it and the date of production"; and "The
+  summary is available to UC07 Query Organisational Knowledge as source material, subject to the
+  permission scope applying to the parent document." **On failure:** "in the failed state it is
+  never presented to a user nor cited as a source." **A1:** "The system records the action item
+  section as empty rather than omitting it." **E1:** "the system marks the summary as pending and
+  queues the transcript for a later attempt".
+- **NFR-15:** "All AI-generated content (summaries, action items, extracted knowledge) must be
+  visually distinguished from human-authored content using one consistent convention".
+- **NFR-20:** "the raw transcript must still be stored, retrievable, and flagged for automatic
+  retry"; its test: "Simulate summary-generation failure; confirm the raw transcript persists, is
+  searchable, and appears in a retry queue."
+- **Objective 04:** a "reference set of ten transcripts for which summaries, action items and
+  decisions have been prepared manually in advance: at least 80% of the action items present in the
+  reference must be extracted, no more than 10% of extracted items may be items absent from the
+  reference, and every extracted item carrying a named owner must either resolve to a user on the
+  system or be recorded as unassigned rather than attributed to the wrong person."
+
+**Two gaps in the proposal, recorded rather than filled silently.**
+
+- **ActionItems has no field table.** The CRUD line names the table and nothing defines its
+  columns. They are taken from FR-16's and UC-04's words: a description, a suggested owner, a due
+  date, the person "or role" it was assigned to, and the passage it came from (the schema below).
+- **UC-04's trigger is UC-12 A2, "the extracted text has the character of a meeting record", and
+  its E2 is a misidentified file.** Neither is built. A meeting reaches FR-16 through FR-09's own
+  route, where a person declares it a meeting; an FR-08 upload is never inspected for being a
+  transcript, and nothing reclassifies a meeting as a document.
+
+### The user's four choices
+
+**1. The summary reaches retrieval as the meeting's own chunks.** A Ready summary is chunked and
+embedded as `ContentChunks` rows with `source_type` "meeting" and `source_id` the meeting's id,
+plus a new boolean column, `ContentChunk.ai_generated`, true only for them (`documents` migration,
+additive, default false).
+
+- **Invariants 1 and 2 hold by construction.** The rows are stamped with the meeting's
+  `visible_to_roles`, read under `SELECT ... FOR UPDATE` on the meeting row in the transaction that
+  writes them, so a visibility change either waits for the write or is seen by it. D-47's cascade
+  re-stamps every chunk of the source, which includes these, in the same transaction; meeting
+  deletion removes chunks by source, which includes these. Both get their own tests.
+- **No new `SOURCE_TYPES` value.** A third value would need a second branch in the cascade,
+  deletion, `reindex`, search grouping, citation links and the dashboard.
+- **What is indexed** is the summary record: the narrative, the decisions and the highlights,
+  under a first line saying it is an AI-generated summary of the named meeting and date. **Action
+  items are not indexed:** they are the editable table (ActionItems: CRUD), and an index entry that
+  disagreed with the record a person had corrected would be the defect.
+- **Only a Ready summary is indexed,** in the same transaction that marks it Ready, so a Ready
+  summary is always searchable and a failed one never is (UC-04, on failure). If every summary
+  chunk fails to embed, the transaction is rolled back and the run fails.
+- **Regenerating replaces the summary's chunks** in that transaction. `reindex` rebuilds them from
+  the current Ready summary's stored text, beside the transcript's.
+- **Every surface that shows a passage from them carries the AI badge (NFR-15):** a citation in an
+  answer and a search snippet each say the passage is from the AI-generated summary.
+
+**2. Summarisation runs automatically after FR-09 commits, again on Regenerate, and a failure is
+retried hourly.** There is no task queue in the stack, so:
+
+- **The run is a background thread in the server process,** started by `transaction.on_commit`
+  after the meeting's ingestion transaction or the Regenerate request commits. No provider call is
+  made inside the ingestion transaction, and no provider call is made while a database lock is
+  held, except the summary's own embedding (point 1). At most `MAXIMUM_SUMMARIES_IN_FLIGHT` (2)
+  runs call the provider at once; a third waits. The suite and the management commands run it
+  inline.
+- **One run in flight per meeting.** A Regenerate while a run is Processing answers 202 with that
+  run and starts nothing.
+- **The retry queue (NFR-20, UC-04 E1)** is every summary marked Unavailable with
+  `queued_for_retry` set. A run that fails for any reason is queued. `manage.py
+  retry_meeting_summaries` runs each queued summary again, inline, oldest first, and
+  `scripts/register_meeting_summary_schedule.ps1` registers it in Windows Task Scheduler hourly,
+  FR-19's pattern (D-107's note of 10 November 2026). A summary leaves the queue when it is Ready, or
+  after `MAXIMUM_SUMMARY_RETRY_RUNS` (3) queued runs have failed, when it stays Unavailable until a
+  person presses Regenerate. A run left Processing by a server restart, older than
+  `SUMMARY_STALE_AFTER_SECONDS`, is treated as failed and queued by the same command.
+- **Registering the task is the user's step,** since it changes the host's settings.
+
+**3. Every element names numbered transcript passages, and application code checks them.**
+
+- **The transcript is sent as FR-09's own passages:** `split_into_overlapping_chunks`, the chunker
+  that indexed it, labelled `[P1]` to `[Pn]`. The label syntax in transcript text is neutralised as
+  D-45 neutralises `[chunk_id: ...]`: its square brackets become round ones.
+- **Every narrative sentence, decision, highlight and action item must name at least one passage.**
+  An element with no `passages` array, or an empty one, breaks the schema.
+- **Verification is set membership, in `apps/meetings`, never a model judgement (invariant 5):** a
+  reference outside the passages sent is removed, and an element left with none is dropped. If no
+  narrative sentence survives, the run fails as path (b) does for FR-12 (invariant 7's distinction):
+  it is logged as its own reason and queued.
+- **The text of each referenced passage is stored with the summary,** so a reference survives a
+  change to the chunker and works when indexing failed (UC-04's precondition is extracted text, not
+  an index).
+
+**4. Objective 04's reference set is prepared by people.** This session drafts ten candidate
+transcripts, a roster, a blank reference template and a separate development set. The user and
+Sagarika write the reference summaries, decisions and action items by hand and freeze them. Nothing
+is tuned against the frozen ten (D-93); prompt changes are judged on the development transcripts.
+
+### The session's choices where the brief was silent
+
+Recorded so the user can overrule any of them; each is application code with its own tests.
+
+- **The AI operation:** `summarise_meeting(title: str, passages: list[str]) ->
+  MeetingSummaryDraft`, the fifth operation on `AIService`, in its own module
+  (`apps/ai/summarisation.py`), FR-10's shape (D-104): prompt, schema, tolerant parser and attempt
+  loop together, both providers calling the loop with their one-call function. The reply is one
+  JSON object with exactly four keys, `summary` (1 to `MAXIMUM_SUMMARY_SENTENCES` narrative
+  sentences), `decisions`, `highlights` and `action_items`, each element carrying `passages`. All
+  four keys are required and the last three may be empty arrays, so an omitted action-item section
+  is a schema violation and an empty one is a result (UC-04 A1). An action item is `{description,
+  owner, due, passages}`, `owner` and `due` copied as the transcript says them, or null.
+- **Attempts:** `MAXIMUM_SUMMARY_ATTEMPTS` = 3 in total (1 initial call + 2 retries) for failed
+  calls, a 429 included (D-118); any other 4xx ends the run at once. A malformed reply gets exactly
+  one retry (FR-16's "a malformed response triggers one retry"): `MAXIMUM_MALFORMED_SUMMARY_REPLIES`
+  = 2, the first triggering the retry and the second ending the run, within the three.
+- **The minimum length:** `MINIMUM_SUMMARY_TRANSCRIPT_LENGTH`, 200 whitespace tokens (D-31's
+  token), *tune*. FR-09's own floor is 50. Below it nothing is sent: no run is started at
+  ingestion, and both summary routes answer 422.
+- **A long transcript:** one request, as FR-16 says, of whole passages up to
+  `SUMMARY_INPUT_TOKENS` (10,000, *tune*); the passages after are left out, `input_truncated` is
+  recorded, and the panel says how much of the transcript the summary covers. No silent fragment.
+- **Owners (attribution):** names are compared after case folding and collapsing spaces. A
+  match is (a) exactly one user whose full name equals the name, or (b) for a single word, exactly
+  one of the meeting's recorded attendees whose first name equals it. Anything else is
+  unassigned: no match, several matches, a surname alone, a title such as "Ms Nguyen", a team or a
+  role. The name as the transcript gives it is kept beside the empty owner, so "the Finance team"
+  stays readable. Attendance is used here as a participation record, never for access (invariant 3).
+- **Due dates:** the model copies the phrase; `apps/meetings/due_dates.py` converts it from the
+  meeting date. An absolute date (2026-11-14, 14/11/2026, 14 November, the 14th) is the next such
+  date on or after the meeting where the year is not said. "Today", "tomorrow", "in N days" or
+  "weeks", "this Friday" or a bare "Friday" (the first Friday after the meeting), "next Friday" (the
+  Friday of the calendar week after the meeting's, weeks starting on Monday), "end of the week"
+  (that week's Friday), "end of next week", "end of the month", "end of next month". Anything
+  vaguer ("next week", "soon", "after the audit") keeps its phrase and no date: a date is never
+  invented.
+- **Regenerate** keeps every action item a person added or edited and replaces the AI items nobody
+  touched. The previous Ready summary stays shown until the new run is Ready; if it fails, the old
+  one stays.
+- **Who may do what:** anyone who can see the meeting reads its summary and items; generating,
+  regenerating and adding, editing or deleting an item need `contribute_content` (FR-10's rule,
+  D-105; both roles hold it, D-30), checked after the scoped 404 (D-73's order). Throttled in the
+  "ingestion" scope (D-79), like FR-10's classify.
+- **Statuses:** `SUMMARY_STATUS_VALUES = ("Processing", "Ready", "Unavailable")`, FR-16's words,
+  plus the `queued_for_retry` flag, NFR-20's. A summary row's status moves from Processing to Ready
+  or Unavailable during its own run; `summary_text` is written once, when it is Ready, and never
+  edited, so the table is Create and Read in substance.
+- **The routes,** exact bodies in `docs/api-contract.md`: `GET` and `POST
+  /api/meetings/{id}/summary` (202 while the latest run is Processing or queued for retry, 200
+  otherwise, 422 too short, 404 out of scope); `POST /api/meetings/{id}/action-items` (201);
+  `PATCH` and `DELETE /api/meetings/{id}/action-items/{item_id}` (200, 204). An item outside the
+  meeting named is 404.
+- **NFR-15:** FR-10's convention, the words "Suggested by AI" beside the content and its
+  `tag--ai` style, for the summary, each AI action item ("Suggested by AI, edited by a person"
+  once edited) and every passage from the summary. A hand-added item carries none.
+
+### The schema (`meetings` migration, additive and reversible)
+
+- **`MeetingSummary`** (`meeting_summaries`): the proposal's `summary_id`, `meeting_id`,
+  `summary_text`, `status`, `generated_at`; plus `narrative`, `decisions`, `highlights` (JSON lists
+  of `{text, passages}`), `passages` (JSON, the referenced passages' text by number), `model`,
+  `input_truncated`, `action_items_extracted` (the number the run extracted, 0 being UC-04 A1's
+  recorded empty section), `requested_by` (null for an automatic run), `requested_at`,
+  `started_at`, `queued_for_retry`, `retry_runs`, `failure_reason`.
+- **`ActionItem`** (`action_items`): `action_item_id`, `meeting_id`, `summary_id` (the run that
+  extracted it; null for a hand-added item), `description`, `owner_id` (null is unassigned),
+  `owner_name` (as said), `due_date`, `due_text` (as said), `passages`, `origin` ("ai" or "user"),
+  `edited`, `created_at`, `updated_at`.
+
+**Not covered:** UC-12 A2 and UC-04 E2 (above); a history of regenerated summaries beyond their
+rows; summarising FR-08 documents (FR-10's summary clauses, D-104's note); multi-language
+summaries (§1.9 out of scope); scheduling follow-up meetings from action items (§1.9 out of scope).
+
+**Dated note, 11 November 2026 (evening): what the build changed from this entry as first written.**
+Recorded the day it was built, so the entry and the code agree. Each item is the session's own
+correction or addition; none changes the user's four choices.
+
+- **Correction to choice 1, "What is indexed": the summary's passages carry no first line.** This
+  entry said the indexed text sat "under a first line saying it is an AI-generated summary of the
+  named meeting and date". Built that way, a test showed the defect: every word of a chunk is found
+  by FR-12's keyword search, so a search for a meeting's title matched the summary's own first line
+  and showed the summary's text where FR-12 shows the opening of the transcript, and a word such as
+  "summary" would have matched every summarised meeting. The indexed text is now the summary's own
+  sentences and nothing else: the narrative, then each decision and each highlight, one to a line,
+  with no title, date or label (`apps/meetings/summaries.py::summary_index_text`). That a passage
+  is AI content is said by `ContentChunk.ai_generated` alone, which every surface reads.
+- **How the two existing payloads say so (NFR-15).** Each consulted passage in `POST /api/ask` and
+  in a reopened thread gains `ai_generated`, and each search result gains `snippet_ai_generated`.
+  Keyword search orders a meeting's matching passages with the transcript's first, so a summary
+  supplies the snippet only where nothing else of the meeting matched, and FR-12's title-only
+  snippet never takes a summary passage for the opening of the item. A meeting found through its
+  summary alone is one result, counted once.
+- **Seven existing tests pinned the old payload shapes and were amended** to carry the new field
+  with the value `false`: `test_ask.py`, `test_conversations.py` (two), `test_fr11_thread_scope.py`
+  (`PASSAGE_FIELDS`), `test_provenance_removed_turn.py`,
+  `test_null_chunk_citations_on_a_reopened_turn.py` and `test_search.py`. Each change is the one
+  key; no assertion was loosened.
+- **Four columns this entry's schema list did not name.** `MeetingSummary.run_number`, 1, 2, 3 per
+  meeting and unique with it, given under the meeting's row lock: "latest" means the highest, so
+  nothing depends on two timestamps differing (Windows clocks tick at about 15.6 ms).
+  `ActionItem.position`, the panel's order, for the same reason. `MeetingSummary.passages_sent`
+  and `passages_total`, which are how the panel says how much of a long transcript was read.
+- **`reindex` re-embeds a meeting's Ready summary with the meeting,** in the same transaction and
+  from its stored text. Nothing is summarised again. If none of the summary's chunks can be
+  embedded, the meeting fails and rolls back as a whole.
+- **The two commands.** `manage.py retry_meeting_summaries` reclaims orphans, runs the queue once,
+  prints ids and never titles or content, and exits 1 while any summary is still unavailable.
+  `manage.py summarise_meetings --missing | --meeting <uuid> [--out <json>]` is Objective 04's
+  instrument and the backfill for meetings stored before FR-16; it creates each run with
+  `request_summary(start=False)` and carries it itself, so a meeting costs one run's calls and
+  never a second in a background thread. Its record takes the token counts from the attempts log's
+  own lines.
+- **`SUMMARY_RUNNER`** (`thread` by default, `inline` in the suite) chooses where a run happens
+  (`apps/meetings/summary_runner.py`).
+- **The 422 carries the body too.** A transcript under the minimum has no summary, but it can have
+  hand-added action items, so both summary routes answer the 422 with the same keys plus `detail`.
+- **Due dates gained one form:** "end of January" is that month's last day. The full list is the
+  module docstring of `apps/meetings/due_dates.py`.
+- **Open, recorded rather than built:**
+  - an extracted item a person deleted is extracted again by a later Regenerate, because nothing
+    remembers a deletion;
+  - a kept item's passage numbers still name the transcript's passages after a Regenerate, but the
+    new summary stores the text only of the passages it cites itself, so the page shows the number
+    without the text where it has none;
+  - a summary run for a meeting whose visibility is later widened is not regenerated: its passages
+    are re-stamped with the meeting, which is all invariant 2 asks.
+- **Not verified at the time of this note:** no live provider call had been made for FR-16. The
+  suite runs on the stub and on fake provider clients. The development run on the `anthropic`
+  provider and Objective 04's measurement are recorded in their own notes when they are made, and
+  the FLM path (`gemma3:4b`) is not run for FR-16 at all.
+
+**Dated note, 12 November 2026: the second day's work, and the requirements audit.** The note above
+was written on the evening of 11 November and is overtaken in four places: the development runs,
+the due-date rules, two defects, and the audit below.
+
+- **Live runs, development set only.** Three draws of `X01`, `X02` and `T01`–`T06` on the
+  `anthropic` provider (Haiku 5.5, voyage-4). They are scored against a development reference
+  Claude wrote: recall 94.9%, 100% and 94.9%; extras 2.6%, 9.3% and 5.1%; no owner given to the
+  wrong person. All 24 summaries were ready on the first attempt, for $0.0162 of summarisation.
+  The record is `corpus/objective-04/runs/2026-11-11/`, which says it is not the objective's
+  result. The prompt was not changed. **Objective 04 itself has not been measured**: it waits for
+  the reference set people are writing (choice 4, reaffirmed by the user on 12 November).
+- **Due dates.** A time of day no longer hides the day it belongs to: "by end of day tomorrow" and
+  "Friday close of business" now resolve. A deadline no calendar holds ("in 99999999999 weeks")
+  now resolves to nothing. Before, it raised inside the storing transaction, which would have cost
+  a meeting its summary on every attempt; a test written before the fix found it.
+- **Order of action items.** After a Regenerate, the items a person added or edited follow the new
+  run's items, in the order they already had. Before, they could sit among the newly extracted
+  ones; a test found this too.
+- **`MeetingSummaries.requested_by`** takes that column name, as `uploaded_by` and `triggered_by`
+  do. `meetings 0003` had not been pushed, so it was regenerated rather than followed by another.
+- **`main` was merged in** (`e97d5ff`). D-125 sits between D-124 and D-126. main's every-page
+  route walk needed the meeting page's second request, the summary, answered.
+- **Checked in a browser** against the development database: both panels; Regenerate through the
+  background thread (POST 202, then GET 202, then GET 200); an edit, an addition and a confirmed
+  deletion.
+- **Both suites** pass on the merge: pytest 4,289 tests, every protected endpoint covered from
+  both roles; Vitest 583 tests.
+
+**The requirements audit of `e97d5ff` returned INCOMPLETE.** Every FR-16 clause was found built
+and tested from both roles, or recorded here as a deviation. What it found, and what was done:
+
+1. **A false sentence.** `docs/ai-provider.md` §5d said Objective 04 had been run on the
+   `anthropic` provider. It had not. **Corrected:** only the development set has been run.
+2. **NFR-15 on the answer surface.** "All AI-generated content ... applied system-wide", tested by
+   a "visual audit of every AI output surface". FR-12's answer, the system's main AI output,
+   carried no mark. The commit that brought the mark (`b7c5d08`) said "one AI mark everywhere",
+   and that was not true.
+   - **Done:** the answer now carries the mark under its heading and the dashed boundary, live
+     and in a reopened thread, which share one component.
+   - **Done:** so does UC-04 A1's sentence recording that a meeting raised no action items.
+   - **Open:** the draft transcript a recording produces (D-123) carries that feature's own
+     machine-transcript notice, not this mark. Whether it should carry both is for the team.
+     `AiMark.jsx` now lists the surfaces the mark is on, and names this one.
+3. **The 202 rule was in two places.** **Done:** both summary routes read the latest run once and
+   report it through `reported_state`, and `is_in_progress` decides the 202 from it.
+4. **CLAUDE.md §7, "Tests for a requirement land in the same commit as the requirement".**
+   `6f7e7fc` (the operation) and `56f5613` (the apply layer and routes) carried a smoke test and
+   no suite. Their tests landed in `84d4f7f`, the next day. **Recorded as a departure:** every
+   later commit carries its tests, and the branch has never been pushed. A squash merge of the
+   pull request would also close it, and that is the user's choice.
+5. **This record was stale.** This note brings it up to date. The retry command's exit status is
+   restated in the command and the runbook: it is 1 when a summary that run retried is still
+   unavailable. An empty queue is 0, whatever summaries left it earlier.
+6. **The deviations.** The audit found each stated honestly. Two corrections:
+   - **(a) Not a gap in the proposal.** The second item under "Two gaps in the proposal" is not
+     one. UC-12 A2, which identifies a transcript among FR-08 uploads, and UC-04 E2 are parts of
+     the proposal that are not built. The consequence, stated plainly: a transcript uploaded
+     through FR-08 is never summarised, so UC-12's post-condition "where the file was a meeting
+     transcript, a summary has been produced" is unmet on that path.
+   - **(g) Partial, now recorded.** UC-04 E1.04's report, that the transcript is stored and
+     searchable while its summary is not yet available, is made on the meeting page, where the
+     summary's state is shown. FR-09's upload confirmation does not make it, because the summary
+     runs after the upload has answered 201, and nothing has failed at that moment.
+7. **Robustness.**
+   - **A stale run left the page waiting.** A server stopped mid-run left the row Processing, so
+     the page polled with Generate disabled until the hourly retry ran, or forever if the task
+     was never registered. **Done:** a run older than `SUMMARY_STALE_AFTER_SECONDS` is reported
+     as Unavailable and queued, which is what the next retry makes of it. The page stops asking
+     and offers Generate, and a POST closes the stale run and starts a new one. A read writes
+     nothing.
+   - **A waiting run could be run twice.** A run was timed from its request, so a background run
+     waiting for one of `MAXIMUM_SUMMARIES_IN_FLIGHT` places could go stale, be reclaimed and run
+     beside itself. **Done:** the clock restarts when the run's work starts.
+8. **Open: the tuned retrieval values predate summary passages.** D-120's thresholds, D-122's and
+   D-126's values, and Objectives 03 and 06 were measured on databases with no summaries.
+   - Their recorded results stand for those databases.
+   - Once summaries exist (`summarise_meetings --missing`, runbook section 10), AI-written passages
+     compete in FR-12's ranking and in FR-19's exclusion. Whether the tuned values still hold
+     with them present has not been measured.
+9. **Constants.** Noted, unchanged: `SUMMARY_STALE_AFTER_SECONDS` restates the attempt count and
+   the timeout as numbers, and a test holds them equal. The reply's limits stay in
+   `apps/ai/summarisation.py`, D-104's precedent.
+
+**Not yet done:** the security review. It gets its own note.
+
+**Dated note, 13 November 2026: the security review of 12 November, and what it changed.** The
+security-reviewer agent reviewed `a02797c`. It found no path by which an Employee learns anything
+of an Administrator-only meeting's summary, its action items or its existence, and invariants 1
+and 2 held on every surface it traced. It found two medium and two low issues, all about
+integrity, availability or cost; none discloses content. Each is fixed below in a commit of its
+own, with its tests.
+
+1. **Medium: an account anyone can register could take over action-item owners** (`08ddd31`).
+   - **What it found.** Rule 1 matched a full name against every user. Registration is open and a
+     name is free text. So an account registered as "Alex" took every item a transcript gave
+     "Alex", even where the attendee was Alex Morgan, and an account named "The Finance Team"
+     took "the Finance team"'s. Registering a copy of a colleague's full name turned that
+     colleague's items unassigned. Nothing lists items by owner, so nothing leaked. But no owner
+     was ever checked against the meeting's scope, by the matcher or by a hand-picked `owner_id`.
+   - **The fix.** An owner is one of the meeting's recorded attendees, matched by full name or
+     lone first name, and only if their role can read the meeting (`scoped_meetings`, FR-11's own
+     predicate). Who a name means is decided among all the attendees first, so two attendees
+     called Alex stay ambiguous even where only one can read. A hand-picked `owner_id` is refused
+     with a 400 on the same test. Only an Administrator can meet that refusal: every role reads
+     what an Employee can reach (D-66), and Administrators read every user's role through FR-05.
+   - **Further than the review proposed.** It proposed the users who can read the meeting,
+     attendees first. A newly registered account is an Employee, and an Employee reads every
+     meeting marked for Employees. So that pool would still have let "The Finance Team" take "the
+     Finance team"'s items on any such meeting. Attendees are recorded by the person who ingests
+     the transcript (FR-09), and nobody can add themselves.
+   - **The cost, and a departure from FR-16's words.** FR-16 says "matched against the user
+     list". A task the transcript gives by full name to a colleague who was not recorded as
+     attending is now stored unassigned, with the transcript's words beside it; before, it was
+     theirs. That is the bias Objective 04's third criterion asks for, since an unassigned item
+     passes and a wrong owner fails. The narrowing is recorded here rather than presented as the
+     requirement's own rule. On the development set's re-run of 13 November,
+     every item whose reference owner is a user was still given to that user
+     (`corpus/objective-04/runs/2026-11-13/`).
+2. **Medium: action items without bound** (`985b3d1`).
+   - **What it found.** Any account could add items to a meeting it reads without end, each up to
+     1,000 characters, and every reader of the meeting loads them all.
+   - **The fix.** POST, PATCH and DELETE share a throttle scope, "action_items", at 30 a minute,
+     checked before the meeting is looked up. A meeting holds at most
+     `MAXIMUM_ACTION_ITEMS_PER_MEETING` (200) items; an addition past it is 409 and writes nothing,
+     and the page says so from its own copy. Each item records `created_by` and `updated_by`, never
+     returned, as the review asked.
+   - **What remains, stated.** The cap counts every item but refuses only a person's addition. A
+     Regenerate adds at most 25 extracted items and replaces its own untouched ones, and an
+     extracted item a person edits is kept. So Regenerate-and-edit cycles can still grow a meeting
+     past 200, at the pace the ingestion and action-item throttles allow. Who deleted an item is
+     not recorded.
+3. **Low: failures retrying cannot fix, and an input cap in words** (`f824420`).
+   - **What it found.** The parser refused replies over limits the prompt never stated (12
+     decisions, 25 action items, 6 passages an element, 600 and 120 characters). A meeting with
+     about thirty agreed tasks would fail both attempts as malformed, and the hourly queue would
+     run it three more times: eight calls, and no summary. And `SUMMARY_INPUT_TOKENS` counts
+     whitespace-separated words, which have no length limit.
+   - **The fix.** The prompt states all seven limits, and what to do when a meeting reached more.
+     A run that failed "malformed" is queued once (`MAXIMUM_MALFORMED_RETRY_RUNS`): at most four
+     calls. `summary_input` also caps the passages at `SUMMARY_INPUT_CHARACTERS` (100,000); a
+     first passage over it alone is cut to it and recorded as truncated.
+   - **The cap was measured, not guessed.** The repository's meeting transcripts run 5.7 to 6.3
+     characters a word, counting spaces and line breaks (Objective 04's ten and its development
+     pair, Objective 02's five, the demonstration corpus's). A transcript at the token ceiling is
+     therefore about 63,000 characters at most, and the cap does not bind on real speech. The
+     token ceiling's tests had used the test builder's words, "budget0" to "budget9999", about
+     10.9 characters each, a density no transcript here has, at which the character cap binds
+     first. They now use words of speech length through the builder's `seed`, with every
+     assertion unchanged, and the dense case is a test of its own.
+   - **The prompt changed after the development runs of 11 November**, so the development set was
+     run again on 13 November. Recall was 39 of 39, no owner
+     was wrong and every due date agreed. All eight summaries were ready on the first attempt, for
+     $0.0051. Extras were 5 of 44 (11.4%), one item over the bar. Four are the finer splits the
+     earlier draws showed, and the fifth is a plan reported as in hand, which rule 7 already
+     excludes. One draw cannot tell the change from noise: the earlier draws ranged from 2.6% to
+     9.3% on one prompt. The prompt was not tuned in response.
+   - **Not changed:** a summary is still requested when FR-09 refused to index the transcript or
+     could not embed it. That is invariant 8 applied both ways, since the summary and the
+     transcript's indexing are independent. The character cap now bounds what such a transcript
+     sends.
+4. **Low: waiting runs without bound, and a run that could run twice** (`899d849`).
+   - **What it found.** Every run waited for one of `MAXIMUM_SUMMARIES_IN_FLIGHT` places in a
+     thread of its own, with no limit. A run that waited past `SUMMARY_STALE_AFTER_SECONDS` could
+     be reclaimed and retried by the hourly command, then call the provider again when its place
+     came. `_store` made the second write a no-op, so the cost was a duplicate call, not bad data.
+   - **The fix.** Each run carries a claim, the row's `retry_runs` when it was started, and starts
+     its attempt with an update conditional on it. A run reclaimed and retried meanwhile has a
+     later count, so the late thread makes no call. Past 22 live threads (2 in flight and
+     `MAXIMUM_SUMMARIES_WAITING`, 20, waiting) a run is not started: it is closed Unavailable and
+     queued under a new failure reason, "busy", for the hourly retry. A thread the operating
+     system refuses is queued the same way rather than raised from the commit callback.
+   - Both fixes were broken on purpose, and their tests failed. So was the page's 409 in item 2.
+
+**The informational items.**
+
+- **Model output in the log:** fixed for this parser (`8a2eec1`). A summary schema violation now
+  names the schema's own keys and counts the reply's. FR-12's statement parser
+  (`apps/ai/schema.py`) and FR-10's classification parser quote an unexpected key name the same
+  way. They are not FR-16's, and are left open for their owners.
+  - **Fixed in `c016bbe` on 13 November 2026** (branch `fix/FR-12-violation-messages`). Both
+    parsers now name only the schema's own keys and count the reply's, with the same wording as
+    this parser. Each has a test that a key name made of a sentence never reaches the message, and
+    each attempt loop a test that no attempt line and no final failure quotes one.
+- **The stale comment** in `apps/meetings/deletion.py`: corrected (`8a2eec1`).
+- **Unchanged, as the review rated them:**
+  - Revocation waits while `_store` holds the meeting's row lock through the summary's embedding.
+    Recorded above as an exception.
+  - `GET .../summary` reads the transcript on every poll, which is every 3 seconds while a run is
+    Processing. That is the cost profile of `GET /api/meetings/{id}`.
+  - `scripts/objective04_verify.py` writes model text to the adjudication sheet without
+    neutralising spreadsheet formulas. Its inputs are the team's own transcripts.
+
+**Migrations.** `meetings 0003`, never pushed, was regenerated twice more: for `created_by` and
+`updated_by`, and for "busy". The development database `kmp_fr16` was rolled back to
+`meetings 0002` before the first and migrated again after the last. Its summaries of 11 November
+went with it; `corpus/objective-04/runs/2026-11-11/` keeps their results.
+
+**Both suites** on the code of `8a2eec1` (`c0a3980` adds only the run record): pytest 4,347 tests, all passing, with
+every protected endpoint covered from both roles (43 of 43);
+Vitest 588 tests in 45 files, all passing, and oxlint clean.
+
+**Not re-audited.** The requirements audit was of `e97d5ff`. The changes since it are these
+security fixes, and the requirements auditor has not checked them against FR-16's text.
+
+**Dated note, 15 November 2026: the retry ran only on mains power,** as FR-19's task did, and it is
+fixed the same way: D-107's note of the same day. Started by hand on the alpha's laptop at 11:46
+that day, it was still `Queued` on battery when found at 14:38. Its last run time stayed at that start, so its
+hourly runs in that time did not start either.
+
+**Dated note, 15 November 2026: Objective 04 measured on the frozen set. NOT MET, on attribution.**
+
+- **The reference.** Benjamin Morovan and Sagarika Dey wrote and checked it. Claude checked its
+  format only, never its answers (choice 4): each owner a roster name or `unassigned`, each quote
+  word for word, refs and dates well formed. The writers fixed every problem themselves over five
+  checks. It was frozen as `corpus/objective-04/reference.json` (`06bfe73`), and Benjamin approved
+  the README's measurement method the same day.
+- **The run** (`caa0b99`). The ten transcripts were ingested through FR-09 into a database made
+  empty for it, and each was summarised once on `anthropic` (Haiku 5.5, voyage-4).
+  - Ten of ten summaries were ready on the first attempt; 51 items were extracted; $0.0068.
+  - A person completed the adjudication sheet, and 7 of its 51 decisions differ from the script's
+    proposals.
+
+| Criterion | Bar | Result | |
+|---|---|---|---|
+| Reference action items extracted | at least 80% | 48 of 50 (96.0%) | met |
+| Extracted items absent from the reference | at most 10% | 3 of 51 (5.9%) | met |
+| Named owners given to the wrong person | none | 2 of 47 | **NOT met** |
+
+- **The two wrong owners.**
+  - **`O01-A4`: two rules Claude wrote disagree. It is not a model error.**
+    - The model's owner phrase is the reference's own: a lone first name that two roster users
+      share and one attendee has.
+    - This decision's owner rule, as the security review left it, gives such a name to that
+      attendee.
+    - The README's instructions for writing the reference, which Claude wrote on 11 November, say a
+      name that fits more than one roster user is `unassigned`, and the writers followed them.
+    - Claude's own development reference had resolved such a name to the attendee (`X02-A3`), so
+      the development draws could not show the disagreement.
+    - It is the only extracted item stored for a first name that two roster users share.
+  - **`O07-A8`: a model error.** The reference records two people jointly, so `unassigned`. The
+    model named one person who is neither of them, and the owner rule resolved that name to an
+    attendee.
+- **Reported, not scored.**
+  - 28 decisions were extracted, against 59 in the reference.
+  - No matched reference item sets an expected due date, so no date was compared.
+  - The misses are `O03-A5` and `O07-A7`. The extras are one in `O07` and two in `O08`.
+  - All are quoted in `corpus/objective-04/runs/2026-11-15/frozen/results.md`.
+- **Nothing was changed in response, and nothing may be (D-93).** The result stands as measured.
+  - Changing `O01-A4`'s expected owner would be a correction made to fit a result, which the
+    reference's README forbids.
+  - Changing the owner rule and re-running these ten transcripts would tune against the frozen
+    set.
+  - **For the team to decide:**
+    - which of the two rules the system should follow for a first name that two roster users share;
+    - whether any re-measurement uses a new frozen set.
+
+    Either is judged on the development set first, with a reference that follows the chosen rule.
+
+## D-126 · FR-19's permission exclusion is per embedding model: voyage-4 is threshold-first, D-108's rule as first written, and EmbeddingGemma keeps rank-one
+
+**Status:** Settled by the user · **Date:** 2026-11-11 · **Concerns:** FR-19, Objective 06, D-108,
+D-110, D-93, D-120, D-122, `apps/core/constants.py`, `apps/retrieval/gaps.py` · **Departs from:**
+D-93 and D-108's fallback, both disclosed below
+
+**What prompted it:** Objective 06's verification on the `anthropic` provider (#86,
+`corpus/objective-06/runs/2026-11-10-anthropic/`).
+
+- **The thirty's first cycle on voyage-4** met clauses 2 and 3, and not clause 1: U01 was missing
+  from the log.
+  - U01 ("Will my salary rise with inflation?", asked by the Employee) is a genuine gap, and D-108's
+    rank-one rule left it out.
+  - Its top-ranked passage over the Administrator's scope scores 0.197 and is Administrator-only.
+    The best readable one scores 0.1875.
+- **D-108's development check came after that cycle.** D-108's note of 10 November and D-110's note
+  on the FLM configuration ask for it on a new configuration before the thirty run there. On
+  voyage-4 it was not run first, an oversight owned in #86's write-up.
+  - Run afterwards, it fails. The scoped questions are all left out, as they should be. Of the
+    no-answer questions, u36 and d27 are left out too, in U01's way (0.230 and 0.238,
+    Administrator-only).
+  - On embed-gemma it passed (D-108's notes of 10 November).
+- **The cause:** the rank-one rule meets Voyage's lower scores for out-of-corpus questions. A
+  genuine gap's best match is weak, and it can fall on restricted material. This is the "known cost"
+  of D-108's evening note. It was unmeasured on embed-gemma, where no question had the shape.
+
+**The options put to the user.** D-108 says that when the check fails, the margin rule is chosen on
+the development material. On voyage-4 two rules pass the check
+(`corpus/objective-06/runs/2026-11-11-anthropic/exclusion-rule-exploration/`):
+
+- **The margin rule.** A row is left out when its restricted top passage beats the best readable
+  one by at least m. Here m = 0.0939, the midpoint between d27's margin (0.0659, the larger of the
+  no-answer margins, u36's and d27's) and d21's (0.1218, the smallest scoped margin).
+- **Threshold-first,** step 4 of D-108's rule as first written, at the model's own threshold
+  (0.2687, D-120). It needs no new constant.
+
+The development questions cannot choose between them. On the frozen thirty they differ. That is
+arithmetic on the diagnosis of #86's cycle (`exclusion_diagnosis.txt` there), not a new run:
+
+- the margin rule would keep P02, whose margin is 0.0448, so a permission-only question would be in
+  the log and clause 3 would not be met;
+- threshold-first leaves P02 out (0.2812, above 0.2687) and keeps U01 (0.197, below it).
+
+**Decision (the user's, 11 November): threshold-first for voyage-4.**
+
+- **The map:** `GAP_EXCLUSION_RULE_BY_MODEL = {"voyage-4": "threshold-first"}`. Any model not
+  listed, embed-gemma included, keeps `GAP_EXCLUSION_RULE = "rank-one"` (`333be14`).
+  `gaps.exclusion_rule()` reads both at call time, as `grouping_threshold()` reads its map.
+- **The rule:** if no passage reaches the model's own relevance threshold (`ranking.admit`), nobody
+  could have been answered, and the row is a gap. Otherwise the top admitted passage decides, as
+  before.
+- **Why embed-gemma keeps rank-one:** threshold-first kept P02 there, at 0.2977 to 0.2983 against
+  0.30 (D-108's evening note). Nothing was measured again on embed-gemma for this entry.
+
+**Two departures, disclosed.**
+
+- **From D-93.** The choice between the two passing rules used the frozen thirty's P02 and U01. The
+  earlier departures on frozen sets are named in D-106's and D-110's notes of 10 November (night);
+  this one is on the same thirty as D-110's, which now carries its own note. The thirty's first
+  cycle on voyage-4 (#86) stays the independent result. The rule now shipped for voyage-4 has no
+  independent figure.
+- **From D-108's fallback.** D-108 says the margin rule is chosen when the check fails, and that the
+  thirty are never used to choose. The margin rule was not chosen, and the thirty were used. D-108
+  carries a dated note.
+
+**Verified** on `fix/FR-19-exclusion-voyage`. The evidence is
+`corpus/objective-06/runs/2026-11-11-anthropic/`, and `objective-06-d126.md` there is the write-up.
+
+- **Tests,** in `apps/retrieval/tests/test_knowledge_gaps.py`, each named with the deliberate
+  breaks of `gaps.py` under which it fails. The breaks are listed after the table.
+
+  | Test | Fails under |
+  |---|---|
+  | `test_the_exclusion_rule_is_the_embedding_models_own` | A, B |
+  | `test_on_voyage_a_restricted_best_match_under_the_threshold_is_a_gap` (U01's shape) | A, D |
+  | `test_on_voyage_a_readable_best_match_under_the_threshold_is_a_gap` | D |
+  | `test_on_voyage_a_restricted_top_admitted_passage_is_left_out` | E |
+  | `test_on_voyage_a_restricted_answer_between_the_two_thresholds_is_left_out` (P02's shape) | C, E |
+  | `test_on_voyage_the_top_admitted_passage_decides_when_both_are_admitted` | E |
+  | `test_on_voyage_an_administrators_question_is_always_kept` | D, F |
+  | `test_rank_one_still_decides_below_the_threshold_for_a_model_not_listed` | B |
+
+  - A: voyage-4 forced back to rank-one.
+  - B: every model forced to threshold-first. The existing
+    `test_a_question_whose_best_passage_is_restricted_is_left_out_below_the_threshold` fails too.
+  - C: threshold-first judged by EmbeddingGemma's threshold instead of the model's own.
+  - D: threshold-first, with nothing admitted meaning left out.
+  - E: threshold-first never leaving an admitted row out.
+  - F: every asker judged as an Employee. The existing
+    `test_an_administrators_unanswered_question_is_always_kept` and
+    `test_the_asker_role_is_read_from_the_user_row_at_cycle_time` fail too.
+  - **A correction to `b854288`'s message.** It says every new test failed under a deliberate
+    break. Under its two breaks, A and B, that was true of the first, second and last rows above
+    only. The test for P02's shape and breaks C to F were added afterwards, in `14d9629`.
+- **D-108's check on the shipped code,** run twice at `462e8e9`
+  (`exclusion-dev-check-threshold-first/`): it passes both times. Scoped questions left out: u30,
+  u31, u32, d11, d21, d22. No-answer questions kept: u33, u34, u35, u36, u37, d24, d25, d26, d27.
+- **Objective 06 on `anthropic`, three draws** (D-110's note asks for repeated seeding there, and
+  the user asked for three):
+  - draw 1, on rank-one (#86): clause 1 not met, U01 missing; clauses 2 and 3 met;
+  - draws 2 and 3, on this rule at `462e8e9`: all three clauses met on each. Every expected query
+    is in the log, each of the four subjects has one entry counting its three queries, and no
+    permission-only query is in the log;
+  - generation's outcome was the same on the three draws: A01 to A07 answered; U04, U05, P07 and
+    P08 declined after generation (path B); every other ask a no-answer on path A.
+
+**What it costs:**
+
+- **A possible leak.** A permission-only question whose restricted answer scores under 0.2687 would
+  be kept, so its wording would reach the gap log, which FR-19's validation clause forbids. Neither
+  the development questions nor the thirty have one: their restricted answers score from 0.2812
+  (P02) to 0.56 (u32). P02 sits 0.0125 above the threshold, about 27 times Voyage's jitter of
+  0.00047. The size of this cost beyond this corpus is unmeasured.
+- **A coupling to D-120.** The rule rests on voyage-4's relevance threshold, so re-tuning that
+  value moves the exclusion too. The test for P02's shape is designed from the threshold, not a
+  literal, and follows it.
+
+**Not covered:**
+
+- embed-gemma, or any model other than voyage-4, under threshold-first: not measured for this entry.
+- An independent test of the voyage-4 rule: none exists, as above.
+- A permission-only question scoring under 0.2687: none in either set, so the leak's rate is not
+  known.
+- The zero-result search side: unchanged. D-108's recount as the Administrator does not use this
+  rule.
+- FR-12's declines on these draws: not scored here. Each draw's rows are exported
+  (`draw-N/export.json`) for that scoring.
+- D-108's own "Not covered" list (FR-13 composition, a role recorded at ask time, re-evaluation
+  after a visibility change): it stands.
+
+**Where it applies:** `apps/core/constants.py`, `apps/retrieval/gaps.py` and
+`apps/retrieval/tests/test_knowledge_gaps.py`. D-108 and D-110 carry dated notes.
+
+**Dated note, 12 November 2026: the audit and the security review, run after the merge, and what
+they changed.**
+
+- **Run late.** `CLAUDE.md` §8 condition 5 requires the requirements-auditor before a requirement
+  is called done. #90 was opened and merged on 11 November without it, and without a security review
+  of a permission change. Both ran on 12 November, on `25f6179`.
+  - The audit's verdict: INCOMPLETE.
+  - The security review: nothing critical or high, and invariant 1 holds. Nothing an asker can
+    observe changed. A gap's subject is read only by a role holding `review_knowledge_gaps`: only
+    the Administrator holds it, and a test requires any role that holds it to read every chunk.
+- **The code matched this entry and the contract.** What follows corrects the record, the tests
+  and two behaviours.
+- **Follow-up turns: this entry's cost paragraph covered single questions only.** "Neither the
+  development questions nor the thirty have one" is true, and neither holds a conversation turn
+  either. A development thread set with three scoped threads exists (`dev-threads.json`: t28, t29,
+  t37) and was not used. The cycle judged a follow-up on its own wording, which on voyage-4 can
+  admit nothing (t03 and t06 in D-112's HTTP check), so threshold-first kept it whatever it was
+  about. D-127 changes that.
+- **A role that reads nothing** was kept on voyage-4 when its question admitted nothing. D-107
+  carries the note, and the role is now read first.
+- **Voyage's jitter was understated, so P02's headroom was overstated.** This entry says P02 sits
+  "about 27 times Voyage's jitter of 0.00047" above the threshold. 0.00047 is the largest
+  difference one earlier check saw, not a bound. This change's own evidence has larger differences
+  between two passes over the same question:
+  - d18's top score, 0.5271 and 0.5259, a difference of 0.0012
+    (`corpus/objective-06/runs/2026-11-10-anthropic/exclusion-dev-check-voyage/`, passes 1 and 2);
+  - u05's top score, 0.4642 and 0.4634, a difference of 0.0008
+    (`corpus/objective-06/runs/2026-11-11-anthropic/exclusion-dev-check-threshold-first/`);
+  - u30's best readable score, 0.1846 and 0.1857, a difference of 0.0011 (`first-run.json` and
+    `rows.json` in `exclusion-rule-exploration/`).
+
+  Against 0.0012, P02's 0.0125 is about 10 times, and the 0.0559 between the margins is about 47
+  times, where the write-up said 119. P02 itself read 0.2812 on each of the three diagnosis draws,
+  so the direction holds. The yardstick was also the wrong one for comfort: it covers the same
+  wording re-embedded against the same index, and says nothing about a paraphrase, a re-chunked
+  document or another corpus.
+- **The coupling to D-120 is now guarded.** D-120's rule was indifferent anywhere in
+  [0.2467, 0.2908], and P02's 0.2812 lies inside that interval. Any threshold above 0.2812 and up to
+  0.2908 fits D-120's evidence as well, and would log P02.
+  - `test_a_threshold_first_model_has_its_own_threshold_at_or_under_its_lowest_restricted_answer`
+    (`apps/core/tests/test_constants.py`) fails if voyage-4's threshold rises past 0.2812, or if a
+    model is given threshold-first with no threshold of its own.
+  - The test for P02's shape is designed from the threshold, so it follows a re-tune and could not
+    detect one.
+- **A hole in the tests is closed.**
+  `test_on_voyage_the_top_admitted_passage_decides_when_both_are_admitted` had one question
+  admitting both chunks, with the restricted one first. A rule leaving a row out on any admitted
+  restricted passage, which D-108 declined, would have passed all eight tests (the audit's reading;
+  it was not run against them). The test now has a second question admitting both with the
+  readable one first, and it fails under that rule (D-127's break G).
+- **The development check's record shows a threshold the rule did not use.** Both passes record
+  `relevance_threshold` 0.3, the constant for a model not listed, which the script writes. The
+  decision it calls admits at 0.2687. No development question's restricted top passage falls
+  between the two, so the check cannot show which was used. P02 on draws 2 and 3 does, and so does
+  the test for P02's shape under break C.
+- **Objective 06's status, said fully.**
+  - **Draw 1's "clause 2 met".** The verifier tests that each entry's count equals its items. The
+    salary entry counted U02 and U03, where U01, U02 and U03 were seeded, because U01 was the query
+    left out. Read strictly, that is clause 1's miss showing in clause 2.
+  - **"The independent result."** Draw 1 is independent of the choices made on `anthropic` only.
+    Its rank-one rule had itself been chosen on the same thirty on FLM (`333be14`).
+  - **No configuration has an independent pass.** On FLM the independent cycle did not meet clause
+    3, and on `anthropic` it did not meet clause 1.
+  - **An independent test is planned.** The user will supply a fresh question set that no rule was
+    chosen on. One cycle on the shipped rule, against a fresh database, will be recorded as the
+    independent result. Until then Objective 06 is not independently met on either provider.
+- **"Where it applies" was incomplete.** `5366026`, later on the same branch, also changed
+  `docs/api-contract.md` and added `test_the_gap_exclusion_rules_are_d108s_and_d126s`
+  (`apps/core/tests/test_constants.py`).
+- **`b854288`'s message says "Six tests".** It added seven: every row of the table above except
+  the one for P02's shape.
+- **Why `scripts/exclusion_dev_check.py` was left.** `5366026` gives the reason "is not edited in
+  place", and that is wrong: `8c6156f` edited those lines in place on 10 November. The reason that
+  holds is that the script is FLM-gated, so it only runs under rank-one, which its comment
+  describes.
+- **Not covered, still:**
+  - D-108's check has no committed, runnable instrument for the default provider. The two runs
+    used run-folder copies.
+  - How often a real question about restricted material scores under voyage-4's threshold. A
+    scores-only screen of paraphrases per restricted document would measure it, and has not been
+    run.
+  - `CLAUDE.md` §4's sentence that every tuned value was re-derived before the default moved
+    (D-122's note of 12 November).
+- **Notes of 12 November from the same audit are also on** D-107, D-108, D-109, D-110, D-119 and
+  D-122. D-117's note of that day came from D-127's check.
+
+## D-127 · FR-19's cycle decides a follow-up on the string retrieval ranked and on its own wording, and either can leave it out
+
+**Status:** Settled by the user · **Date:** 2026-11-12 · **Concerns:** FR-19, FR-13, D-42, D-79, D-107,
+D-108, D-109, D-126, `apps/retrieval/gaps.py`, `apps/retrieval/conversation.py` · **Supersedes:** step
+2 of D-108's rule for a follow-up turn, and D-108's "Not covered: FR-13 composition in the cycle",
+for the exclusion only
+
+**What prompted it:** the requirements audit and the security review of D-126, run on 12 November
+after #90 had merged (D-126's note of that day). Both found the same gap.
+
+- **The cycle embedded a conversation turn on its own wording** (D-108's step 2). Retrieval embeds
+  the composed string: the earlier questions of the conversation, then the turn
+  (`conversation.compose`, D-42).
+- **A follow-up's own wording can score low.** In D-112's HTTP check on voyage-4, the bare
+  follow-up admitted no passage in its asker's scope for t03 (asked as the Employee) and t06 (the
+  Administrator), and eight for t04 (the Employee)
+  (`corpus/objective-02/runs/2026-11-10/voyage-http-check/history_effect.txt`). The cycle ranks
+  over the Administrator's scope, so t06 is the one that measures it directly.
+- **Threshold-first (D-126) reads "nothing admitted" as "nobody could have been answered".** So
+  such a follow-up was kept, including one about restricted material. Under rank-one it was
+  decided by whichever weak passage ranked first, in either direction.
+- **These rows are in FR-19's scope.** Its Server-End clause includes queries "arising through
+  FR-13". Neither D-108's development questions nor the frozen thirty contain a conversation turn,
+  so no check had covered them.
+
+**The decision, in two steps, both the user's on 12 November:**
+
+1. **Decide on the composed string.** The options were the composed string, recording the
+   limitation only, or rank-one for follow-ups.
+2. **Decide on both strings.** The security review of this branch, run before its pull request,
+   found the composed string alone keeps an explicit question about restricted material asked
+   after a readable turn, which main leaves out. The Ask screen puts every later question into the
+   thread, so that turn is ordinary use. The options were both strings, or the composed string with
+   both wrong cases recorded.
+
+**The rule:**
+
+- **A one-off question, and a thread's first turn,** is decided on its own wording, as before.
+- **A follow-up** is decided first on `compose(row.question, prior_questions_before(row))
+  .for_retrieval`. If that string's deciding passage is one the asker cannot read, the row is left
+  out. Otherwise it is decided on its own wording, and left out if that string's deciding passage
+  is one the asker cannot read. A follow-up that is kept is grouped, and shown as a subject, on its
+  own wording (D-109).
+- **Each string is decided by the model's rule** (D-108, D-126).
+- **No row is kept that deciding on the question's own wording alone, as main did before this
+  decision, would have left out.**
+- **The history.** `prior_questions_before(row)` returns the turns the row was composed with: the
+  same conversation and the same user, the rows that sort before it, the newest
+  `MAXIMUM_CONVERSATION_TURNS`, oldest first. It is `prior_questions`'s query with one more bound.
+- **In the same change,** from the same reviews:
+  - a role that reads nothing is left out before anything is embedded (D-107's note);
+  - a test ties the exclusion to voyage-4's threshold (D-126's note).
+
+**Verified on real threads** (`corpus/objective-06/runs/2026-11-12-anthropic/thread-exclusion-check/`):
+
+- **The check.** `thread_exclusion_check.py`, at `4c36a38`, on `kmp_followups_20261112`, was run
+  twice. Each pass wrote every thread of `corpus/objective-02/dev-threads.json`, a development set,
+  into one transaction: an answered opener, then an unanswered follow-up. It then ran the shipped
+  `run_cycle` on voyage-4's real embeddings and rolled the transaction back. Five row counts, of
+  query logs, conversations, gap entries, gap items and cycles, were 0 before and after each pass.
+- **The copy's gap column was altered by hand before the passes.** This record left it out until
+  the re-audit on `a7d11bb` found it missing. The second attempt stopped on D-117's gap-column
+  defect. By 21:50:05 on 12 November, before the first pass, whose record was written at 21:50:47,
+  the session ran `alter table knowledge_gaps alter column embedding type vector(1024)` on
+  `kmp_followups_20261112` alone, through `psql`. The command ran it only if the table held no
+  row, and the table held none. The user had approved creating the copy and running this check,
+  not this statement; it was the session's decision. A fresh restore of the snapshot needs the
+  same statement before the script will run (D-117's note of 12 November).
+- **The scoped threads, t28, t29 and t37,** have a readable opener and a follow-up whose answer is
+  only in Administrator-only material.
+  - Asked as the Employee, all three were left out, on both passes.
+  - Asked as the Administrator, all three were kept.
+- **The other sixteen threads,** t20 to t27, t30 to t36 and t38, were all kept, asked as the
+  Employee (for information).
+- **Which string decided.** On each scoped thread the composed string's top admitted passage is
+  readable, at 0.48 to 0.53. The follow-up's own wording's is restricted, at 0.33 to 0.38. So:
+  - the composed string alone, this decision's first step (`b3d6a47`), would have kept all three;
+  - the own wording alone, as on main, leaves all three out;
+  - the composed check changed no outcome on these threads.
+
+  Its benefit, a follow-up about restricted material whose own wording admits nothing, is shown
+  on designed vectors only. No scoped development thread has that shape.
+
+  For each string the record holds how many passages it admitted, its top-ranked and top admitted
+  scores, and whether the asker can read the top admitted passage, not which passage or source
+  that is. It keeps one vector per text, the last one embedded, so a scoped thread's Employee and
+  Administrator rows show the same figures. The outcomes are the cycle's own, read from the gap
+  items it wrote.
+- **Two earlier attempts stopped and changed nothing** (`first-attempt/`, `second-attempt/`). Each
+  folder holds two consoles, and the two are identical:
+  1. a user filter named a field the User model does not have;
+  2. writing a gap entry failed, because the restored copy's gap column was 768 wide (D-117's note
+     of 12 November). The column was then altered, as above.
+
+**Verified by tests with designed vectors.** Each test is named with the deliberate breaks under
+which it fails, and the breaks are listed after the table. The tests are in
+`apps/retrieval/tests/test_knowledge_gaps.py` unless another file is named.
+
+| Test | Fails under |
+|---|---|
+| `test_a_conversation_turn_is_aggregated_on_its_own_wording` (changed) | H, J |
+| `test_on_voyage_a_follow_up_about_restricted_material_is_left_out` | H, J |
+| `test_on_voyage_a_follow_up_nobody_could_answer_is_kept_on_its_own_wording` | H, I, J |
+| `test_on_voyage_a_follow_up_whose_composed_best_match_is_readable_is_kept` | J |
+| `test_on_voyage_a_restricted_question_asked_mid_thread_is_left_out` (two cases) | H, J, W |
+| `test_under_rank_one_a_follow_up_whose_own_wording_ranks_a_restricted_passage_first_is_left_out` | J, W |
+| `test_under_rank_one_a_follow_up_is_decided_on_the_composed_string_too` | H, J |
+| `test_a_follow_up_is_composed_from_the_turns_retrieval_composed_it_from` | H, J, K, L, M, N |
+| `test_a_turn_whose_conversation_is_gone_is_decided_on_its_own_wording` | V |
+| `test_on_voyage_the_top_admitted_passage_decides_when_both_are_admitted` (changed) | G, V |
+| `test_on_voyage_a_role_that_reads_nothing_has_its_questions_left_out` | X |
+| `test_under_rank_one_a_role_that_reads_nothing_has_its_questions_left_out` | X |
+| `test_a_role_that_reads_nothing_is_left_out_with_no_passage_of_the_model_either` | X |
+| `test_the_decision_itself_leaves_out_a_role_that_reads_nothing` | O, U |
+| `test_every_considered_text_goes_through_embed_question_and_nothing_reaches_the_provider` (`test_gaps_embedding_path.py`, changed) | H, J, L |
+| `test_the_history_of_a_logged_turn_is_the_history_it_was_asked_with` (`test_conversation.py`) | J, M, N |
+| `test_a_logged_one_off_has_no_history` (`test_conversation.py`) | V |
+| `test_a_logged_turns_history_is_its_own_conversations_and_its_own_users` (`test_conversation.py`) | J, K, L |
+| `test_two_turns_at_one_instant_are_ordered_as_the_ask_path_orders_them` (`test_conversation.py`) | J, P |
+| `test_a_threshold_first_model_has_its_own_threshold_at_or_under_its_lowest_restricted_answer` (`apps/core/tests/test_constants.py`) | Q, R |
+
+The breaks were run against five files:
+- `apps/retrieval/tests/test_knowledge_gaps.py`;
+- `apps/retrieval/tests/test_gaps_embedding_path.py`;
+- `apps/retrieval/tests/test_conversation.py`;
+- `apps/core/tests/test_constants.py`;
+- `apps/retrieval/tests/test_ranking.py`.
+
+Unbroken, the five pass: 214 tests. X was run again against the knowledge-gap file's tests for a
+role that reads nothing, after three of them gained an assertion on what was embedded:
+`test_on_voyage_a_role_that_reads_nothing_has_its_questions_left_out` and
+`test_under_rank_one_a_role_that_reads_nothing_has_its_questions_left_out` assert that nothing was,
+and `test_a_role_that_reads_nothing_is_left_out_with_no_passage_of_the_model_either` that only the
+Employee's question was.
+
+- G: threshold-first leaves a row out when any admitted passage is restricted, the rule D-108
+  declined.
+- H: the composed string is not used, so a follow-up is decided on its own wording only, as before
+  this decision.
+- I: a kept follow-up is grouped on the composed string's vector, not on its own wording's.
+- J: a row's history includes the row itself and the turns after it.
+- K: a row's history ignores whose row it is.
+- L: a row's history ignores which conversation it is in.
+- M: a row's history has no limit.
+- N: a row's history is returned newest first.
+- O: the decision itself does not settle a role that reads nothing first.
+- P: two turns at one instant are not ordered by the primary key.
+- Q: voyage-4's relevance threshold is raised to 0.285, past P02's 0.2812. The existing
+  `test_each_embedding_model_gets_its_own_threshold` (`test_ranking.py`) fails too.
+- R: a second model is given threshold-first with no threshold of its own. The existing
+  `test_the_gap_exclusion_rules_are_d108s_and_d126s` (`test_constants.py`) fails too. The guard
+  test's pin, that voyage-4 is the only threshold-first model, catches R before its check that each
+  such model has a threshold of its own, so no break here exercises that check alone.
+- U: the decision itself fails open for a role that reads nothing.
+- V: a row with no conversation is composed from its user's earlier one-off questions. Every test
+  in the five files that has two one-off questions of one user embedded in a cycle on designed
+  vectors fails too, because a designed vector service raises on any text no test designed. So V
+  is caught broadly, and most of those catches say nothing about the failing test's own subject.
+  Two tests put such questions through a cycle and do not fail under V, because a role that reads
+  nothing is left out before anything is composed or embedded:
+  `test_on_voyage_a_role_that_reads_nothing_has_its_questions_left_out` and
+  `test_under_rank_one_a_role_that_reads_nothing_has_its_questions_left_out`. The tests of V itself
+  are `test_a_turn_whose_conversation_is_gone_is_decided_on_its_own_wording` and
+  `test_a_logged_one_off_has_no_history`.
+- W: a follow-up's own wording is not decided, as in this decision's first step (`b3d6a47`).
+- X: `run_cycle` does not leave out a role that reads nothing before embedding its question.
+
+**What it costs:**
+
+- **Embedding calls.** A follow-up left out by its composed string costs one. Any other follow-up
+  costs two, as a kept one already did under the first step. A question from a role that reads
+  nothing costs none.
+- **The cycle reads other rows of the asker's conversation,** which it did not before: the same
+  user's, in the same conversation, their questions only.
+- **Wrong cases that remain, named as cases, not rates:**
+  - **A genuine gap asked after a turn about restricted material can be left out.** The composed
+    string's deciding passage can be the earlier turn's restricted material. The gap is
+    under-reported, the fail-closed direction. No development thread has a restricted opener, so
+    it was not measured.
+  - **A follow-up about restricted material is still kept when neither string shows it.** Under
+    threshold-first, that is when each of the two strings either admits nothing or has a readable
+    top admitted passage, in any combination, both admitting nothing included. Under rank-one, it
+    is when each string's top-ranked passage is readable. On the three scoped development threads,
+    the own wording's top admitted passage was one the Employee cannot read, each time.
+  - **Under rank-one, a follow-up whose own weak top-ranked passage is restricted is left out,** as
+    on main before this decision.
+  - **D-108's proxy, the top admitted passage, applies to each string.** A compound question, a
+    readable topic and a restricted one in one sentence, can be kept here as on main.
+
+**Not covered:**
+
+- **Real threads beyond the development set.** The frozen `threads.json` holds two scoped threads,
+  t06 and t07, and was not used.
+- **A turn whose conversation has been deleted.** `QueryLog.conversation` is SET_NULL, so its
+  earlier turns cannot be told from any other row, and it is decided on its own wording.
+  `test_a_turn_whose_conversation_is_gone_is_decided_on_its_own_wording` pins that.
+- **A history that has changed since the ask:**
+  - a deleted turn;
+  - a changed `MAXIMUM_CONVERSATION_TURNS`;
+  - two turns of one conversation at the same instant, where the primary key decides the order, as
+    it does in `prior_questions`;
+  - a turn of the same conversation logged while this one was being answered. One ask in flight
+    per user (D-79's ask slot) prevents that on the single-process server; a multi-process server,
+    or a slot that lapsed after 45 minutes, would not;
+  - a clock stepped back between turns.
+- **What the Administrator reads.** The subject is still the follow-up's own wording, which may
+  not make sense alone, and two threads' identical follow-ups still join one entry (D-109).
+- **Rows already decided.** A row an earlier cycle kept is not decided again. A row it left out is
+  decided again only if it falls in the next cycle's grace of `CYCLE_GRACE_SECONDS`. Otherwise it
+  is not looked at again, so a change to its history or to the rule does not reach it.
+- **A zero-result search.** A search has no thread, and its side of the exclusion is unchanged.
+- **embed-gemma.** The rule applies to every model and was not measured on FLM.
+- **A passage exactly on voyage-4's threshold.** `admit` takes it (`>=`). No voyage-4 exclusion test
+  puts a passage there.
+- **A configured `VOYAGE_MODEL` other than `"voyage-4"`.** Four maps in `apps/core/constants.py` are
+  keyed by the literal, and such a model gets each one's default:
+  - `GAP_EXCLUSION_RULE_BY_MODEL`: rank-one, the rule that failed D-108's check on voyage-4;
+  - `RELEVANCE_THRESHOLD_BY_MODEL`: 0.30, not 0.2687;
+  - `PARTIAL_MATCH_FLOOR_BY_MODEL`: 0.0, no floor, not 0.2468;
+  - `GAP_GROUPING_THRESHOLD_BY_MODEL`: 0.5256, not 0.5054.
+
+  No test ties the setting to the maps.
+- **What the guard test bounds.** It bounds the constants, not scores. These are not caught:
+  - a restricted answer under 0.2812 in another corpus;
+  - a change to how text is embedded, or a re-index;
+  - another model served under the name voyage-4, because the configured name is recorded, not
+    the server's echo of it;
+  - an edit to the test's own figure.
+- **An independent Objective 06 test.** The user will supply a fresh question set. It is planned on
+  `kmp_followups_20261112`, not yet run.
+- **The gap column on a database moved across with `--resize-column`.** It is unfixed; see D-117's
+  note of 12 November.
+
+**Where it applies:**
+
+- **Code:** `apps/retrieval/gaps.py`, `apps/retrieval/conversation.py`, and a comment in
+  `apps/core/constants.py`.
+- **Tests:** `apps/retrieval/tests/test_knowledge_gaps.py`,
+  `apps/retrieval/tests/test_gaps_embedding_path.py`, `apps/retrieval/tests/test_conversation.py`,
+  `apps/core/tests/test_constants.py`, and a docstring in `apps/retrieval/tests/test_ranking.py`.
+- **Evidence:** `corpus/objective-06/runs/2026-11-12-anthropic/thread-exclusion-check/`.
+- **Documents:**
+  - `docs/api-contract.md` and `README.md`;
+  - corrections to the two Objective 06 write-ups in
+    `corpus/objective-06/runs/2026-11-10-anthropic/` and
+    `corpus/objective-06/runs/2026-11-11-anthropic/`;
+  - dated notes of 12 November on D-107, D-108, D-109, D-110, D-117, D-119, D-122 and D-126.
+
+## D-128 · FR-10: the classifier creates Project, Process and Topic values at or above the confidence threshold, holds every new value below it for a person, and an Administrator can add a value
+
+**Status:** Settled by the user · **Date:** 2026-11-12 · **Concerns:** FR-10, UC-09, Objective 05,
+D-104, D-105, D-106, D-119, D-122, invariant 1, `apps/ai/classification.py`,
+`apps/core/constants.py`, `apps/documents/classification.py`, `apps/documents/models.py`, `documents 0012`,
+`apps/documents/taxonomy.py`, `apps/api/` (serializers, views, urls), `scripts/objective05_verify.py`,
+`frontend/src/components/Classification.jsx`, `frontend/src/pages/Tags.jsx` · **Departs from:** FR-10's
+controlled-taxonomy-growth clause, UC-09 step 4 and E2, Objective 05 clause 3, and D-105's "A retired
+Project or Process tag stays retired", all named below
+
+**Its number.** It was written as D-127. It became D-128 the same evening, because D-127 was already
+committed on `fix/FR-19-exclusion-follow-ups` (FR-19, not yet pushed). Three records keep the first
+number, because each records what happened at the time:
+
+- the message of commit `5dcb6ff`;
+- the development sweep's folder, `corpus/objective-05/runs/2026-11-12/dev-sweep-haiku-d127/`;
+- that folder's driver and console.
+
+**What prompted it.** On 12 November the user reported: "each document currently needs manually
+tagging when they should be automatically classified across department, project, process, and
+topic." The diagnosis was read-only, on the database the development server serves, `kmp_anthropic`
+(D-122):
+
+- **Most documents had never been classified.** The database was restored from the 1 November
+  snapshot, before FR-10 existed, and nothing classifies an existing document unless someone runs
+  the backfill or presses Classify. 16 of the 20 indexed documents had no `DocumentAnalysis`. The four
+  that had one were classified on 12 November: three when the user pressed Classify, one at upload.
+- **The vocabulary was empty.** The scheme held no Project or Process value and three Topics, each
+  created when the user confirmed a proposal. So every Project or Process suggestion was discarded,
+  and every Topic arrived as a proposal for a person to confirm. That was the manual tagging the
+  user saw.
+- **Held suggestions:** the threshold (0.72 on Haiku) held several departments and tags on those
+  four documents.
+- **Classification was not failing.** The key is set (its presence was checked, nothing printed),
+  and every classification attempt in the development server's attempts log parsed at the first
+  attempt.
+- **Not the alpha.** The user's server is the main checkout's, on `kmp_anthropic`. The alpha
+  (`8598d19`, `kmp_demo_20261101`) predates FR-10.
+
+**Done on `kmp_anthropic` with the user's yes, before any code:**
+
+- **The seed:** `scripts/seed_objective02_tags.py --scheme-only`. It added 14 Tag rows (Project 4,
+  Process 4, Topic 6), unlinked vocabulary, the scheme Objective 05 was measured with. The Project
+  value `atlas`, which in the manifest only Administrator-only documents carry, is vocabulary there
+  like the other 13: that is what `--scheme-only` means (D-105's vocabulary rule), and every role is
+  offered it.
+- **The backfill:** `manage.py classify_documents --all` from the main checkout, under the rules
+  before this decision. 20 classified, 0 failed, at about $0.007 (20 calls, estimated from the metered
+  draws of 10 and 11 November).
+  - 15 of the 20 documents now carry at least one applied tag (an applied AI tag, or one of the
+    user's three confirmed Topics).
+  - The AI links: 16 applied (Process 6, Project 2, Topic 8) and 28 held (Process 6, Project 1,
+    Topic 21).
+  - One Topic was proposed.
+  - The four documents the user had confirmed kept his type and department (`user_edited`). One of
+    them, "Asset Inventory Melbourne Office", lost its pending proposal "asset inventory", because
+    each run replaces the proposals and this one was not suggested again.
+
+**The questions put to the user (tabbed, one recommended answer each) and his answers:**
+
+1. Seed the 14 values: yes (recommended).
+2. Backfill all 20 indexed documents: yes (recommended).
+3. An Administrator's "Add tag" (`POST /api/tags`): yes (recommended). FR-10's CRUD line gives Tags
+   "Create", and its Responses name "409 Conflict on a duplicate tag name within a dimension". Until
+   now only a script could define a Project or Process value.
+4. **Which of FR-10's rules change.**
+   - The recommendation was to change none. On the three metered Haiku draws of Objective 05
+     (`corpus/objective-05/runs/2026-11-10-anthropic/`), the tags applied at or above 0.72 were 93
+     to 95% in the manifest, and the held ones about 45%, so the gate separates well.
+   - The question was put twice, at the user's request, after a first answer he said was a mistake.
+     His answer: keep below-threshold holding, AND "New Topics without confirmation", AND "AI creates
+     Project/Process".
+   - **Follow-up, how it ships:** "On for everyone, always". It was put as a choice against a setting
+     that was off by default, with the consequence stated: Objective 05's third clause is recorded as
+     not met by the shipped build, the day before the objectives are due.
+   - **Follow-up, the threshold:** "Gate, and hold Project/Process". At or above the threshold a new
+     value in any of the three dimensions is created and applied. Below it, a new Topic is proposed
+     for a person, as before, and a new Project or Process is proposed too, where it used to be
+     discarded.
+   - **Follow-up, the prompt:** a revised prompt, and D-106's rule re-run on the development documents
+     on Haiku (57 calls, about $0.02), with the result brought to the user before any threshold
+     changes. The frozen twenty are not re-run.
+
+**The rule as built.** `apply_classification`, rule 4, for each tag suggestion:
+
+1. **Out of range: ignored, as before.** A dimension other than Project, Process or Topic, or an empty
+   name.
+2. **A person removed it: left alone, in every dimension.** If this document holds a link a person
+   removed to that dimension and name, the suggestion is not linked, created or proposed. Until now
+   only a removed Topic was checked, because nothing else outside the scheme could come back.
+   - **The same holds for a proposal a person rejected** on this document (`rejected_tags`). It is
+     skipped before the in-scheme match, so it stays out even after the value enters the scheme.
+     This was added after the requirements audit of 13 November, by the user's choice (below).
+3. **In the document's scheme: as before** (`_link_tag`). Applied at or above the threshold, held
+   below it, and a person's decision is left alone.
+4. **Outside the scheme, or retired since the scheme was built:**
+   - **Discarded** (`discarded_suggestions`): a name too long for the column; and, since the security
+     review below, a name of more than three words, or carrying a control, format or lone-surrogate
+     character (Cc, Cf, Cs) or ";".
+   - **At or above the threshold, created and applied.** The Tag is fetched or created.
+     - One created becomes active and **grown**.
+     - A retired one fetched becomes active and grown too, but only through a document every role
+       can read. Through any other document it stays retired (the security review, finding 1).
+     - The document gets an AI link, unconfirmed, not provisional, shown "Suggested by AI".
+   - **Below the threshold, a proposal** `{dimension, value, confidence}` in `proposed_tags`, which a
+     person confirms (the Tag is created then, or fetched, and linked) or rejects (nothing is
+     created).
+
+Departments are unchanged: one outside the scheme is discarded (D-72: a department is the documents
+column, not a tag).
+
+**Choices made in building it,** none of which changes what the user decided:
+
+- **Out-of-scheme suggestions of one dimension and name are merged first,** at their highest
+  confidence, before the value is applied or proposed. So no value is both linked and proposed in
+  one run. The parser already drops a repeated tag, so this matters only for a classification built
+  by hand.
+- **Values are created in one order, by dimension then name.** Two concurrent runs creating the same
+  values then wait on each other rather than deadlock.
+- **`confirm_proposed_tag` keeps a link the document already holds as it is,** with its confidence
+  and `applied_by`, as `confirm_proposed_topic` did. A new link takes the proposal's confidence.
+- **`POST /api/tags`'s 409 reads:** "A tag with this name already exists in this dimension. A retired
+  tag is not added again here."
+- **`scripts/objective05_verify.py` counts a Topic in `discarded_suggestions` (one too long to be a
+  tag) as a clause 3 violation,** since the clause says an out-of-scheme Topic is proposed.
+
+**Why an existing value is handled exactly as a new one (invariant 1).** Seen from a reader of the
+document, a value outside its scheme can be one of three things, which the reader must not be able
+to tell apart:
+
+- no Tag has it;
+- an active grown Tag carried only by material some reader of the document cannot see;
+- a retired Tag.
+
+So all three get the same treatment, and nothing a reader sees says whether a Tag row was created:
+the interface has no "new value" mark, and no reply carries a `created` flag. This is D-105's
+precedent for a person's name form and a confirmed proposal: "a retired value is in no scheme, so a
+409 would disclose it".
+
+**Grown is what keeps a created value from readers of other material.** A value the classifier
+creates from an Administrator-only document is grown and carried by that document alone. So
+`tag_scheme` offers it only where every role in the audience reads a carrier: never to an
+Employee-visible document, and never in its prompt.
+
+**For a retired tag, grown is not enough.** An Employee-readable document may already carry it, so
+reactivating it through an Administrator-only document would put it back in front of Employees.
+Hence the rule the security review added (below): a retired tag is reactivated only through a
+document every role can read.
+
+**Consequences, stated rather than discovered:**
+
+- **Retiring a tag no longer keeps it out of classification of a document every role can read.** A
+  suggestion of a retired value at or above the threshold reactivates it, grown, and a person
+  confirming a proposal of it does too. That now includes Project and Process, where D-105's note
+  said "A retired Project or Process tag stays retired". The alternative, treating a retired value
+  differently, would tell a reader that a value of that name exists.
+  - On a document some role cannot read, the tag is linked and stays retired (the security review,
+    finding 1, below).
+- **The scheme grows by itself.** Each document can add up to `MAXIMUM_TAG_SUGGESTIONS` (8) values,
+  at the ingestion rate. The scheme the prompt lists has no cap (deferred since D-105's security
+  review). Near-synonymous values, the fragmentation FR-10's clause was written to prevent, are now
+  possible in all three dimensions. A person can retire one, and the classifier can bring it back
+  (above).
+- **An uploaded document can steer the classifier into creating a value.** A body that instructs the
+  model ("tag this as Project X") can now have X created and applied at a high confidence. Before
+  this decision the application held every tag value to the scheme.
+  - **Bounds:** a created value is grown, so it reaches only readers of its carrier; at most eight
+    per reply; the ingestion throttle; a name over the column is discarded. "One to three words" was
+    then only the prompt's instruction. Since the security review (below) it is checked, with ";"
+    and control, format and lone-surrogate characters.
+  - `docs/ai-provider.md` ("Untrusted text") states it.
+- **A person's own "add a tag" name form stays Topic-only** (`POST /api/documents/{id}/tags`). The
+  user chose what the classifier may do and was not asked about this. So the classifier can create
+  a Project value that a person cannot type.
+
+**What it departs from:**
+
+- **FR-10, controlled taxonomy growth:** "A value that does not match may be proposed only in the
+  Topic dimension and requires user confirmation before it is created; suggestions falling outside
+  the scheme in the Department, Project or Process dimensions are discarded". At or above the
+  threshold no confirmation is asked, and Project and Process are no longer discarded. Department
+  still is.
+- **UC-09:**
+  - **Step 4** ("discards any term returned that does not correspond to a term held in the scheme")
+    no longer holds for tags.
+  - **E2** ("Every term returned ... falls outside the classification scheme", so the document is
+    "marked unclassified") becomes a document whose values are created or proposed.
+- **Objective 05, clause 3** ("must be discarded in the Department, Project and Process dimensions
+  while being proposed for confirmation in the Topic dimension only"):
+  - **Recorded as not met by the shipped build from this decision on, by the user's choice.**
+  - #85's evidence and D-106's notes stand for the build they ran on.
+  - `scripts/objective05_verify.py` now counts a proposed Project or Process value, and an AI link to a
+    value the classifier created (a grown Tag, on a measurement database where no person acts), as
+    clause 3 violations. A future run reports the departure rather than hiding it.
+- **D-105:** the retired-tag sentence above, the proposal record (below) and "only Topic may grow"
+  wherever the code and the contract said it.
+
+**The record, and the migration (`documents 0012`).**
+
+- **`DocumentAnalysis.proposed_topics` becomes `proposed_tags`,** each entry
+  `{"dimension", "value", "confidence"}`, replaced by each run.
+- **The column keeps the name `proposed_topics`** (`db_column`), so the migration changes no column
+  and stays additive, as every migration here is (CLAUDE.md §7).
+- **The data:** existing proposals are stamped `"dimension": "Topic"`. The reverse moves any Project or
+  Process proposal into `discarded_suggestions`, which is what the old rule recorded for one.
+- **`discarded_suggestions` now holds only a value that may not become a Tag:** one too long for the
+  column; and, since the security review (below), one of more than three words, or holding ";" or a
+  control, format or lone-surrogate character.
+- **`rejected_tags` (`documents 0013`, the requirements audit below)** keeps each proposal a person
+  rejected, with the machine's confidence.
+
+**The routes.**
+
+- **The proposal routes:** `POST /api/documents/{id}/proposed-tags/confirm` and `/reject`, body
+  `{"dimension", "value"}`, replace the `proposed-topics` pair.
+- **`POST /api/tags`,** behind `manage_tags`, throttled in the `tagging` scope:
+  - it creates a vocabulary value (not grown), offered to every document and listed in every
+    prompt;
+  - it answers 409 with the existing tag's id for a duplicate name within a dimension, active or
+    retired. There is still no route that reactivates a tag, and grown is never unset.
+- `docs/api-contract.md` has the detail.
+
+**The prompt.**
+
+- **Rule 6** now allows a new value of one to three words in Project, Process or Topic when no listed
+  value fits, and never a new department.
+- **Rule 7** follows it.
+- **The worked example is unchanged.** It still shows listed values only (the comment above
+  `EXAMPLE_SCHEME` says why).
+- **The prompt is one for both providers.**
+
+**The security review (12 November, before the pull request), and what changed because of it.** The
+`security-reviewer` agent reviewed the prompt and the server change and confirmed its main findings
+by executing probe tests against its own test database.
+
+1. **HIGH: a retired value brought back through Administrator-only material reappeared to every
+   Employee (invariant 1).** Confirmed by execution, 6 of 6.
+   - **The leak.** A retired value that an Employee-readable document still carries is not offered.
+     When a run on an Administrator-only document reactivated it, it was offered again on every
+     readable document, though nothing an Employee can read had changed. So an Employee learned
+     that restricted material had been classified with that value.
+   - **The paths:** the classifier's reactivation, a person's confirmation of a proposal, and a
+     person's Topic name form. The last is D-105's own path, which had the same leak for one
+     dimension.
+   - **Fixed for all three by one change:** a retired tag is reactivated only through a document
+     every role can read, decided through `scoped_documents` for each role (D-53). On a document
+     some role cannot read, the link is made and the tag stays retired: its only readers are
+     Administrators, who already see retired tags in `GET /api/tags`.
+   - **On a document every role reads,** the three cases stay indistinguishable, and a retired value
+     comes back as before.
+   - **The residual, stated in the code:** on a document some role cannot read, its readers can tell
+     a retired value from a new one. With today's two roles they are Administrators, who read every
+     source and the retired inventory, so nothing is disclosed.
+   - **"Retiring a tag no longer keeps it out of classification"** (above) therefore holds only
+     through documents every role can read.
+   - **The tests:** the regression test inverts the reviewer's probe. The probe's leak cases now
+     fail on their own assertions.
+2. **MEDIUM: uploaded text planted in Administrator-only documents' prompts.** A value the classifier
+   created from an Employee-readable document could be up to 255 characters of any words. It is
+   carried by a document every role reads, so it joined every scheme and was listed verbatim in
+   later prompts, Administrator-only ones included.
+   - **Fixed by enforcing rule 6** in the application, for a value the classifier creates or
+     proposes: more than three words is discarded (`MAXIMUM_CREATED_TAG_WORDS`).
+   - **Also discarded:** a value carrying a control, format or lone-surrogate character (Unicode Cc,
+     Cf or Cs), or the prompt's list separator ";" (finding 5). Cs was added in building the fix: a
+     lone-surrogate escape in a reply decodes to one, and it made the classify route answer 500 as a
+     NUL did.
+   - **Residual:** a value of up to three words still reaches other documents' prompts verbatim.
+     Rendering the scheme lists as JSON was declined, because it would change the prompt the sweep
+     measured.
+3. **LOW: the scheme grows without bound.**
+   - **The rate:** up to 8 values a reply, at the ingestion rate, is up to 480 an hour for one
+     account, and registration gives the Employee role. Every value is listed in every later prompt.
+   - **Not changed here.** A per-run cap and a per-dimension prompt cap are options for the user;
+     neither is a requirement.
+4. **LOW: any uploader can now create Project and Process values,** which neither the name form nor
+   `POST /api/tags` lets them do. On a document every role reads, an uploader can also reverse an
+   Administrator's retirement through content. Recorded, not changed.
+5. **LOW: names kept bidirectional and zero-width characters and ";", and a NUL in a suggested tag
+   value gave a 500.** Fixed for values the classifier creates or proposes, by item 2's discard,
+   recorded with each offending character replaced by U+FFFD. The NUL 500 predates D-128. A person's
+   name form keeps its existing rules.
+6. **LOW: a tag row the classifier creates or reactivates stays locked until the upload commits,**
+   since classification runs inside the upload's transaction. A concurrent request for the same
+   value waits; there is no deadlock, because creation is sorted. Recorded, not changed.
+
+**Found, and older than D-128; not fixed here, and follow-ups:**
+
+- **The race.**
+  - If `DELETE /api/tags/{id}` deletes an unreferenced tag while an upload's classification links it,
+    the database checks the link at the upload's final commit, outside the classification
+    savepoint. The whole upload then rolls back and its stored file is deleted, which breaks
+    invariant 8.
+  - D-128 adds only one more way for a classification to fetch such a tag.
+- **A NUL or lone surrogate in a suggested department** still answers 500 on the classify route,
+  because rule 3 writes `machine_department` unchecked. It is the same defect as item 5, on a path
+  D-128 does not change.
+  *Closed by #106, merged on 13 November: the parser now refuses a reply holding a NUL or an
+  unpaired surrogate anywhere. Such a reply is retried, and after three attempts the classify route
+  answers 503 (D-129's notes of 14 November).*
+
+**Checked and sound by the review:**
+
+- **The three cases are indistinguishable** on a document the Employee reads (executed: the classify,
+  confirm and detail replies, `tag_options` and the facets).
+- **Created values stay out of view:** a value created from Administrator-only material is never
+  offered, listed or counted for an Employee-visible document.
+- **The removed-link rule** reads this document's links only.
+- **The proposal routes** match dimension and value together. The order is the scoped 404, then the
+  403, then the body.
+- **`POST /api/tags`** answers 401, 403, 429, 400, 409, in that order, and never reactivates.
+- **Names:** the 255-character limit is checked after normalising, and `grown` is never unset.
+- **`documents 0012`** emits no column SQL.
+- **`objective05_verify.py`** reports the departure; its caveats over-report rather than hide.
+
+**The development sweep on the revised prompt, and the threshold: 0.80 for claude-haiku-5-5 (the
+user's choice, 12 November).** D-106's rule ran on the 19 development documents, three times each,
+through the shipped `classify_document` on Haiku 5.5
+(`corpus/objective-05/runs/2026-11-12/dev-sweep-haiku-d127/`). The driver is the 10 November copy,
+unchanged but for its opening paragraph.
+
+| | 10 November, old prompt (`ffdd5cb`) | 12 November, D-128's prompt (`5dcb6ff`) |
+|---|---|---|
+| classifications, failed | 57, 0 | 57, 0 |
+| types right | 57 | 57 |
+| lowest confidence on a right type | 0.72 (one draw of X17) | 0.80 |
+| what the rule gives | 0.72 | **0.80** |
+| tag suggestions, outside the scheme | 136, 4 | 152, 5 |
+| new values suggested (distinct) | Topic: "customer satisfaction", "energy use" | the same two, each at 0.90 |
+| new Project or Process values | none | **none** |
+| Claude | 57 calls | 57 calls, about $0.018 |
+
+- **Every type was right both times, so the rule's fallback applied,** as on 10 November: the lowest
+  confidence on a right type. That moved from 0.72 to 0.80. The confidences still cannot be shown to
+  separate right from wrong, because there was nothing wrong to separate.
+- **On these documents 0.72 and 0.80 differ by one tag.** At 0.80 one in-scheme Process suggestion
+  of the 152 is held instead of applied, and the departments and Topics come out the same. The
+  question put to the user said "of 147"; the record says 152.
+- **The user chose 0.80, the rule's result** (recommended), over keeping 0.72 as a recorded
+  departure. `CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL["claude-haiku-5-5"]` is 0.80 from this
+  decision on, superseding D-122's 0.72. D-106 and D-122 carry dated notes.
+- **Haiku proposed no new Project or Process value in 57 classifications,** though rule 6 now allows
+  one. On documents like these, the Project and Process half of D-128 does not come into play.
+  The two new Topics, at 0.90, would be created and applied where they used to be proposed.
+- **The record names `5dcb6ff` with uncommitted tracked changes.** That was the other agents' work
+  in progress, in `apps/api`, `apps/documents`, `scripts` and tests. `tree-at-run.txt` in the run
+  folder lists them and shows none in `apps/ai`, `apps/ingestion` or `config`, the code the sweep
+  runs.
+
+**Not covered:**
+
+- **gemma3:4b's threshold (0.95)** was derived on the earlier prompt and is not re-derived on this
+  one. FLM is the offline alternative.
+- **The scheme the prompt lists is unbounded** (above). On FLM's 4B model a large scheme will crowd
+  its window before it does Haiku's.
+- **The documents backfilled on 12 November were classified under the old rules.** A re-run after
+  this merges, about $0.007, gives them the new ones.
+- **An independent accuracy figure for created values:** none. The development sweep above reports
+  how many new values Haiku proposes; nothing scores them against a reference.
+- **Objective 05 on the frozen twenty at 0.80:** not re-run, by the user's choice of the sweep option
+  ("the frozen twenty are not touched"). Its clause 1 counts every suggested type, held or not, so
+  the threshold does not move it. Its clause 2 holds by construction at any threshold.
+
+**The requirements audit of `556cd37` (13 November 2026), verbatim.** The `requirements-auditor` agent's report, quoted whole and unedited, extracted mechanically from the agent's transcript. What changed because of it follows the quotation.
+
+> ## Audit: FR-10 on feat/FR-10-automatic-tagging (D-128) at 556cd37, 13 November 2026
+>
+> **Verdict: INCOMPLETE**
+>
+> **What I checked, and how.**
+> - **Read only.** Nothing in the worktree was edited, and `git status` is clean at the end.
+> - **The diff:** `git diff a668a08..735226e` (5dcb6ff, d98ddf3, 735226e) plus `git show 556cd37 -- docs/decisions.md`.
+> - **Measured against:** FR-10 at C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\proposal.txt:681-725; UC-09 in the same file at 2028-2082; D-104, D-105 and its notes, D-106 and its notes, D-119, D-122 and D-128; CLAUDE.md §6 and §8.
+> - **The merge.**
+>   - 556cd37 changes no FR-10 file: `git diff 735226e 556cd37 -- apps/documents apps/ai apps/api apps/core` is empty.
+>   - Its decisions.md resolution keeps both 12 November notes on D-122: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\docs\decisions.md:10264-10280.
+>   - No D-127 and no second D-128 heading exists at HEAD.
+> - **One probe test was executed.**
+>   - The file is C:\Users\mozza\AppData\Local\Temp\claude\415e7131518f8d68\b98e2cf8-f5bb-411a-b107-62e245fd5851\scratchpad\probe\test_probe_rejected_proposal.py, outside the worktree.
+>   - It ran twice, at 735226e and at 556cd37, against `test_kmp_fr10auto_audit`, which pytest-django created and destroyed. `test_kmp_fr10auto` was not touched.
+> - Every line number below is at 556cd37.
+>
+> ### (a) The departures D-128 records, and one it does not
+>
+> **A1. FR-10's controlled-taxonomy-growth clause (proposal.txt:690): MET as a recorded departure, and no wider than recorded.**
+> - **Recorded:** C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\docs\decisions.md:11043-11047.
+> - **The code is the departure as named:** C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\classification.py
+>   - Suggestions are still matched against the scheme first (534-540).
+>   - A Project, Process or Topic value outside the scheme, at or above the classifying model's threshold, is created and linked as an unconfirmed, non-provisional AI link (560-569). Below the threshold it is held in `proposed_tags` (557-559).
+>   - A department outside the scheme is still discarded (492-493).
+> - **The prompt** allows a new value of one to three words in Project, Process or Topic, and never a new department: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\ai\classification.py:403-409.
+> - **Tests:**
+>   - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\tests\test_classification_d128.py:69-100 and 141-174
+>   - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\tests\test_classification_apply.py:395-420
+>   - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\api\tests\test_fr10_proposed_tags.py:100-146
+>
+> **A2. UC-09 step 4 and E2 (proposal.txt:2053 and 2078-2082): MET as recorded.**
+> - **Recorded:** decisions.md:11048-11052.
+> - **Step 4** still holds for departments (classification.py:492-493).
+> - **For tags,** a value outside the scheme is created or proposed (classification.py:545-572). So a document whose every term falls outside the scheme is classified, not marked unclassified.
+>
+> **A3. Objective 05 clause 3: MET as recorded.**
+> - **Recorded:** decisions.md:11053-11059 records it as not met by the shipped build.
+> - **The verifier reports it:** C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\scripts\objective05_verify.py
+>   - The module docstring explains the counting (20-37).
+>   - A proposed Project or Process value is counted as a clause 3 violation, and so is an AI link to a grown tag (232-258).
+>   - The clause fails on any violation (277).
+> - **Tested** in C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\tests\test_objective05_verify.py.
+>
+> **A4. D-105's "A retired Project or Process tag stays retired" (decisions.md:7453-7454): MET as recorded.**
+> - **Recorded:** decisions.md:11060-11061 and 11016-11029.
+> - **The code:** `_bring_into_use` (classification.py:881-925, the guard at 912-916) reactivates a fetched retired tag only when every role reads the document. It marks the tag grown when it does.
+>   - "Every role reads it" is decided by `_every_role_reads` (868-878), through `scoped_documents`.
+>   - On any other document the tag is linked and left retired.
+> - **Tests:**
+>   - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\api\tests\test_fr10_reactivation_scope.py:151-170: nothing an Employee reads moves.
+>   - The same file, 173-189: reactivated on a document every role reads, from both roles.
+>   - test_classification_apply.py:353-370.
+>
+> **A5. PARTIAL, and unrecorded: a proposal a person rejects is not retained. A later run creates and applies it at or above the threshold.**
+> - **The code path.**
+>   - `reject_proposed_tag` only drops the entry (classification.py:1029-1036).
+>   - Rule 4b skips a value only when this document holds a removed ContentTag for it (519-523, 531-533). A rejected proposal leaves no such row.
+>   - So the next classify, reprocess or `classify_documents` run that suggests the value at or above the threshold creates it and links it as an unconfirmed AI tag (557-569).
+>   - FR-15's facets and filters then read that link. C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\api\tests\test_fr10_d128_invariant1.py:202 shows an applied created value counted in the browse facets.
+>   - Below the threshold, the value is proposed again.
+> - **Executed, not only traced.** The probe:
+>   1. classified a document with a Project value just below the threshold, which was proposed;
+>   2. rejected that proposal;
+>   3. classified again with the same value at ABOVE_THRESHOLD.
+>
+>   The result was an AI link: applied_by "ai", confirmed False, provisional False, removed False. Classified a third way, below the threshold, the value was proposed again. Both cases passed at 556cd37.
+> - **The screen offers both kinds of held suggestion under one heading, with the same "Reject".** File: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\frontend\src\components\Classification.jsx.
+>   - **On a held link,** Reject sends DELETE (260-268, 653-660). That keeps the link marked removed (classification.py:776-797), which blocks the value in every dimension.
+>   - **On a proposal,** Reject calls the reject route (317-325, 669-682), which records nothing.
+> - **What the spec says.**
+>   - proposal.txt:692: "any value a user edits are retained and is not overwritten by later reprocessing, and the machine assignment is retained alongside it".
+>   - proposal.txt:689: "presented for confirmation rather than applied silently".
+>   - UC-09 A3 (proposal.txt:2067-2070): "The corrected classification governs how the document is found from that point".
+>   - Here neither the person's rejection nor the machine's rejected assignment is kept. On this path the code contradicts the correction clause as worded.
+> - **What is recorded.**
+>   - D-105's build note records the earlier, milder form as open: "a rejected proposed topic is proposed again by a later run" (decisions.md:7238).
+>   - D-128 widens it to Project and Process, and turns re-proposal into creation and application. It says only that a rejection creates nothing (decisions.md:10971-10973).
+>   - D-128's consequences (11016-11040) do not mention it.
+>   - No test covers reject-then-reclassify.
+> - **Smallest fix,** either of:
+>   - record it in D-128, with a dated line on D-105:7238, as an accepted consequence;
+>   - or make a rejection durable: a per-document record of rejected `(dimension, value)` pairs, added by an additive migration, which rule 4 skips as it skips a removed link.
+>
+>   Add the reject-then-reclassify test either way.
+>
+> **Checked, and not departures:**
+> - A person's name form stays Topic-only (classification.py:809-812; decisions.md:11037-11040), which FR-10's text allows.
+> - `POST /api/tags` implements FR-10's CRUD "Create" and its 409 (decisions.md:10928-10951, question 3).
+>
+> ### (b) What FR-10 requires that D-128 did not change
+>
+> **B1. A confidence is recorded with each assignment: MET.**
+> - An in-scheme link carries it (classification.py:678-705).
+> - A created value's link carries it (564-569).
+> - A proposal carries it (557-559), and confirming the proposal copies it to the link (998-1017).
+> - A discard records it (550-556).
+> - The threshold is the classifying model's own (582-599). The values are in C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\core\constants.py: 692 (the default) and 707 (claude-haiku-5-5 at 0.80, by D-128).
+> - D-106 and D-122 carry the dated notes for 0.80 (decisions.md:7860-7868 and 10277-10280).
+>
+> **B2. Below the threshold, provisional and presented for confirmation: MET for a first presentation.** After a rejection, see A5.
+> - An in-scheme held link is provisional; that path is unchanged (classification.py:678-705).
+> - An out-of-scheme value is held in `proposed_tags` (557-559).
+> - It is shown under "Suggested tags awaiting confirmation", with Confirm and Reject, and each row names its dimension (Classification.jsx:294-330 and 1076-1085).
+> - The wording is in C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\frontend\src\constants.js:681-688.
+> - **Tests:**
+>   - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\frontend\tests\documentClassification.test.jsx:1300-1342 and 1344-1409
+>   - test_fr10_proposed_tags.py:100-165
+>
+> **B3. Provenance shown, and accept or remove in a single action: MET.**
+> - A value a run created reads exactly as any AI tag: "Suggested by AI", with Confirm and Remove, and no "new" mark (Classification.jsx:225-231).
+> - documentClassification.test.jsx:1411-1463 compares that row element for element with an AI tag on a listed value.
+> - Confirm and Reject on a proposal are one request each (1344-1409).
+>
+> **B4. Correction kept and not overwritten: PARTIAL.** This is A5.
+> - **Met for the type and department:** `user_edited` (classification.py:481-510).
+> - **Met for a removed link, in every dimension:** classification.py:519-533. Tests: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\tests\test_classification_removal.py:121-151, and C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\api\tests\test_fr10_removed_tags.py.
+> - **Not met for a rejected proposal.**
+>
+> **B5. The type from a fixed list: MET, unchanged.**
+> - classification.py:456-460.
+> - The parser is unchanged, and the prompt changed only in rules 6 and 7.
+>
+> **B6. Tag names unique within a dimension after normalising case and whitespace: MET.**
+> - The model normalises and constrains names: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\models.py:147-149 and 172-182.
+> - `create_tag` normalises, and refuses a duplicate: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\taxonomy.py:84-123.
+> - The classifier and the confirmation call `get_or_create` on the normalised name (classification.py:565 and 996).
+> - **Tests,** in C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\api\tests\test_fr10_tag_create.py:
+>   - 197-261: active or retired, after normalising, a concurrent create included.
+>   - 218-232: the same name in another dimension is not a conflict.
+> - D-105's accepted residual 9, look-alike Unicode names, is unchanged. Rule 4d's discard of control and format characters narrows it for values the classifier creates, and for nothing else.
+>
+> **B7. 409 on a duplicate name within a dimension: MET.**
+> - `POST /api/tags` answers 409 `{detail, tag_id}` for any duplicate, active or retired, and changes nothing:
+>   - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\api\views.py:275-277 and 2000-2011
+>   - taxonomy.py:105-120
+> - **Tests:** test_fr10_tag_create.py:197-261, and in the front end C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\frontend\tests\tags.test.jsx:508-555.
+> - The name form's 409 stays narrowed by D-105 for invariant 1, unchanged.
+>
+> **B8. 422 where insufficient text was extracted: MET, unchanged.**
+> - views.py:1755-1759.
+> - Tested at C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\api\tests\test_document_classification.py:226-231 and documentClassification.test.jsx:755.
+>
+> **B9. The taxonomy design: MET, unchanged.**
+> - Tags are deactivated rather than deleted.
+> - One Tags table carries a dimension.
+> - One ContentTags join is keyed on source type and identifier.
+> - Evidence: models.py:152-199; `retire_tag` is unchanged.
+> - Retirement is no longer permanent through a document every role reads. That is A4.
+>
+> **B10. "A tag confirmed by a user is marked confirmed and is not altered by later reprocessing": MET.**
+> - classification.py:700-701.
+> - Tested at test_classification_apply.py:277-311.
+>
+> **B11. Four dimensions shown separately: MET.**
+> - Each proposal row names its dimension (B2).
+> - Department is a column, not a tag (D-72, D-105), as recorded.
+>
+> **B12. Unchanged and recorded, so not counted against this branch.**
+> - **Declined, D-104's dated note (decisions.md:7113-7126):** the summary, the key points, sectioned summarising, the summarisation prompt's grounding, and the summary in the 200.
+> - **Partial and recorded:** the tag browser (D-105; decisions.md:9684-9687).
+> - **CRUD (proposal.txt:697):** Tags "Create" now has an Administrator route.
+> - The departures from the field table stay recorded (D-105).
+> - `proposed_tags` on the `proposed_topics` column is recorded in D-128 and at C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\docs\schema-v1.md:282.
+>
+> ### (c) CLAUDE.md §8, the definition of done
+>
+> **C1. Condition 1, behaves as specified: No.** A5.
+>
+> **C2. Condition 2, both suites and both roles: PARTIAL.**
+> - **Both roles, by inspection of the tests.**
+>   - `POST /api/tags` is sent from both sessions (test_fr10_tag_create.py:91-109).
+>   - The Employee's 403 comes before the body is read (122-132) and before the throttle counts (296-306).
+>   - Anonymous is 401 (135-139).
+>   - Both proposed-tags routes are exercised from both sessions throughout test_fr10_proposed_tags.py.
+>   - Their scoped 404 is tested at test_document_classification.py:142-143 and 517-529, and in C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\api\tests\test_source_rows_fail_closed.py:509-514.
+>   - The 401 walk covers them: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\api\tests\test_rbac.py:70, 79 and 177-187.
+>   - The dual-role matrix enumerates each route and method (C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\api\tests\dual_role_matrix.py:124-157). It gives its verdict only on a full run (235-245).
+> - **The front-end clauses are tested in the front-end suite:** documentClassification.test.jsx:1300-1463; tags.test.jsx:429-660 (the add form) and 661 onward (the guards for each role).
+> - **Not shown: neither suite at 556cd37.**
+>   - d98ddf3 claims "986 passed across the FR-10 files", which is not a full run. The full run had not reported.
+>   - 735226e claims npm 486 passed, lint clean and build succeeding, under vitest 5.0.2.
+>   - 556cd37 moves to vite 8.3.5 and vitest 5.0.5 (C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\frontend\package.json:26-27). So the front-end suite is not shown at HEAD either.
+>   - There is no pull request, so CI has not run.
+>
+> **C3. Condition 3, happy and failure paths: MET.**
+> - **`POST /api/tags`:** 201, against 400, 401, 403, 409 and 429.
+> - **The proposed-tags routes:** 200, against 400, 403 and 404.
+> - **Rule 4d:** creating and proposing, against discarding (test_classification_d128.py:103-118 and 198-273; C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\api\tests\test_fr10_created_value_limits.py:37-61).
+> - **The Tags page:** the 201, against the 400, 403, 409 and 429.
+>
+> **C4. Condition 4, committed with the FR ID: MET.**
+> - 5dcb6ff, d98ddf3 and 735226e are each `feat(FR-10): ...`, on `feat/FR-10-automatic-tagging`, and each carries its tests.
+> - 5dcb6ff's "(D-127)" is explained at decisions.md:10880-10887.
+> - The test counts in the commit messages match the files: 21 reactivation-scope cases and 35 created-value-limit cases.
+>
+> **C5. Condition 5, the auditor reports no gaps: not met.** This audit reports gaps.
+>
+> ### (d) The records against the code
+>
+> **D1. PARTIAL: the old rule is still asserted, with no pointer to D-128.**
+> - **docs/schema-v1.md:302-305** says a Topic outside the scheme "may be proposed only in the Topic dimension and requires user confirmation before it is created", and that "a Project or Process outside the scheme is 'discarded'". This contradicts the same file's 282-283 and classification.py:545-572.
+> - **D-104 and D-105 carry no dated note,** though D-128 departs from them:
+>   - D-104 at decisions.md:7096-7098: "allowing a new value in Topic only";
+>   - D-105 at 7159-7163 (the proposal record) and 7191-7197 (rule 4 as first built);
+>   - D-105 at 7453-7454: "A retired Project or Process tag stays retired".
+>
+>   D-128 names these departures (11060-11061) but gave dated notes only to D-106 and D-122. D-106's evening note (7805-7814) still reads "clauses 2 and 3 are met", with no forward pointer.
+> - **classification.py:786-788:** `reject_tag`'s docstring cites `apply_classification`'s `removed_topics`, which no longer exists. It also says only that a removed Topic is not proposed again; since D-128 a removed value is neither proposed, created nor reactivated, in any dimension (519-533).
+> - **C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\api\tests\test_fr10_person_applied_tags.py:8:** "(only Topic may grow)".
+>
+> **D2. PARTIAL: the discard rule is stated as it was before the security review, which contradicts the code.**
+> - **The code:** rule 4d discards a value that is over the column, has more than `MAXIMUM_CREATED_TAG_WORDS` (3) words, or holds ";" or a Cc, Cf or Cs character (classification.py:612-632; constants.py:709-716).
+> - **These records say otherwise:**
+>   - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\docs\ai-provider.md:481-482: "'One to three words' is the prompt's instruction, not a check." This is false.
+>   - decisions.md:11033-11035 repeats that sentence in D-128, contradicting D-128's own 11123-11128.
+>   - decisions.md:11071: "`discarded_suggestions` now holds only a value too long to be a Tag". This contradicts D-128's own 10963-10965.
+>   - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\docs\api-contract.md:1169-1171 says the same, contradicting the contract's own 1118-1120.
+>   - models.py:243-245 and 294-295 say the same.
+>   - apps\ai\classification.py:34-37: "unless a person removed it from the document or its name is too long for the column".
+>
+> **D3. PARTIAL: the `tagging` throttle's routes.**
+> - **The code:** `POST /api/tags` spends the `tagging` budget (views.py:1993-1995; constants.py:461-469). Tested at C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\api\tests\test_configuration.py:196 and test_fr10_tag_create.py:267-282.
+> - **The records:**
+>   - D-79's note says the scope is "on that route alone (`DocumentTagsView`)" and "The other tag routes stay unthrottled" (decisions.md:4961-4963 and 4972-4975).
+>   - The contract's rate table lists only `POST /api/documents/{id}/tags` (api-contract.md:1015).
+>
+> **D4. PARTIAL, minor: the delete dialog overstates.**
+> - frontend\src\constants.js:1214-1215 says: "A retired tag comes back if the AI or a person adds the same value to a document again."
+> - Through a document some role cannot read, the tag is linked and stays retired (classification.py:912-916).
+> - A person cannot re-apply a retired Project or Process value by its id.
+>
+> **D5. MET: accurate against the code.**
+> - **The contract:** api-contract.md:1108-1131 (the rule), 1150-1151 (the proposed-tags routes), 1291 (`POST /api/tags`) and 1305-1334 (retirement).
+> - **The schema:** schema-v1.md:223, 282-283 and 547-548.
+> - **The provider document:** ai-provider.md:441-447 and 514-526.
+> - **D-128 itself:** "The rule as built" (10953-10973), and its routes and migration paragraphs.
+> - **Docstrings:** `apply_classification`, `tag_scheme`, `_bring_into_use`, `confirm_proposed_tag`, taxonomy.py, the serializers and the views.
+> - **The front-end client comments.**
+> - **D-128's sweep table agrees with the run record:** C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\corpus\objective-05\runs\2026-11-12\dev-sweep-haiku-d127\sweep\dev-sweep.md:65-69 and dev-sweep.json in the same folder.
+>   - 57 of 57 types were right.
+>   - D-106's rule gives a threshold of 0.80.
+>   - Five suggestions fell outside the scheme, all Topic and all at 0.90; no new Project or Process value was suggested.
+>
+> ### D-119's status
+>
+> **Unchanged: FR-10 stays INCOMPLETE by decision.**
+> - The summary, key points, sectioned summarising, grounding and the summary in the 200 are not built (D-104's dated note, decisions.md:7113-7126).
+> - The tag browser is FR-15's facets plus the Administrator's inventory (D-105; decisions.md:9684-9687).
+> - This branch builds none of them and withdraws none.
+> - It adds clauses declined by the user's decision: the controlled-taxonomy-growth clause, and UC-09 step 4 and E2 (D-128). Objective 05 clause 3 is recorded as not met by the shipped build.
+>
+> ### Invariant check
+>
+> - **1, scope before ranking and no disclosure: pass.**
+>   - Five starting states give an Employee byte-identical observations:
+>     - no Tag has the value;
+>     - an active grown Tag that only restricted material carries;
+>     - an active grown Tag that nothing carries;
+>     - a retired Tag carried by restricted material;
+>     - a retired Tag carried by nothing.
+>   - The observations compared are the classify reply, the detail, the browse, the confirm reply and the scheme shown in the prompt (test_fr10_d128_invariant1.py:145-218).
+>   - A value created from Administrator-only material is withheld from every Employee-readable document and from its prompt (224-252).
+>   - A retired value is reactivated only from a document every role reads (classification.py:868-925; test_fr10_reactivation_scope.py:151-170).
+>   - The residual on a document some role cannot read is stated (decisions.md:11112; classification.py:444-449): with today's two roles, its readers are Administrators.
+> - **4, server-side authorisation: pass.**
+>   - `POST /api/tags` is behind `manage_tags` as a permission class. The order is 401, 403, 429, then 400 and 409 (views.py:1971-2011).
+>   - The proposed-tags routes check the session, then the scoped 404, then `contribute_content`'s 403, then the body (views.py:1911-1946).
+> - **8, a failed AI step never discards the source: pass for this branch's code, with two older residuals recorded.**
+>   - Classification at upload still runs in its own savepoint.
+>   - The 500 that a NUL or lone surrogate in a tag value caused is gone (test_fr10_created_value_limits.py:37-61).
+>   - Older residual: a `DELETE /api/tags/{id}` racing an upload's classification can roll back the upload and delete its stored file, which breaks invariant 8. D-128 adds one more path by which a classification fetches such a tag.
+>   - Older residual: a NUL in a suggested department still answers 500 on the classify route.
+>   - Both are recorded in decisions.md:11148-11158.
+> - **9, atomic writes: pass.**
+>   - `apply_classification` runs in one transaction (classification.py:464-572).
+>   - documents 0012 renames the field over an explicit `db_column`, so no column changes, and it is reversible both ways (C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\migrations\0012_proposed_tags.py:30-83).
+>   - Tested in C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\tests\test_migration_0012_proposed_tags.py.
+> - **10, structured output or nothing: pass, unchanged.**
+> - **2, 3, 5, 6 and 7: not applicable.** No chunk, meeting scope or answer path changed.
+>
+> ### Set-level checks
+>
+> - No AI SDK import was added outside `apps/ai`, and no chunk is written.
+> - Constants live in apps\core\constants.py (461-469, 707 and 709-716). No threshold is written inline.
+> - **Observation:** the prompt's "one to three words" (apps\ai\classification.py:403-405) is written as a literal, where rule 5 interpolates `MAXIMUM_TAG_SUGGESTIONS` (401). A test pins the constant at 3 (test_classification_d128.py:201), so any drift fails loudly.
+> - Nothing is enforced only in the interface.
+> - Nothing is implemented twice: `_every_role_reads` and `tag_scheme` both go through `scoped_documents`.
+> - Nothing is misplaced.
+> - **Observation, not an FR-10 clause:** `POST /api/tags` applies none of rule 4d's character checks. An Administrator can add a vocabulary value holding ";" or a zero-width character, and every later prompt lists it. That is the concern of D-128's security finding 5, for an Administrator's own input.
+>
+> ### Gate impact
+>
+> - **Not an M6 requirement.** FR-10 is NIT3004 work, outside the M6 twelve, and M6 (1 November) has passed.
+> - **It touches two MUST paths:**
+>   - **FR-08:** classification inside the upload's transaction can now create or reactivate Tag rows. That includes the recorded race above.
+>   - **FR-15:** the facets and filters now show values the classifier created. This is tested.
+>
+>   Their regression evidence is the full pytest, which is not yet shown.
+> - **One MUST is open:** FR-13 is recorded INCOMPLETE until Stage 5 item 10's closing audit (decisions.md:9028-9038). This branch does not touch it.
+>
+> **Smallest fixes, in order:**
+> 1. Decide A5: record it in D-128 and on D-105:7238, or make a rejection durable. Add the reject-then-reclassify test.
+> 2. Correct the records, doc-only: D1 to D4.
+> 3. Run the full pytest, with its matrix line, and npm test, lint and build at 556cd37. Then open the pull request so CI runs.
+>
+> **One line:** INCOMPLETE.
+> - Every departure D-128 names is built as named, and FR-10's other rules hold, with one exception: a proposal a person rejects is created and applied by a later run at or above the threshold. That breaks the correction clause and is unrecorded (executed).
+> - Records in four places contradict the code.
+> - Neither suite is shown passing at 556cd37.
+> - FR-10 stays INCOMPLETE by decision, as D-119 recorded.
+>
+> ### Could not check
+>
+> - **The full pytest and the dual-role matrix verdict at 556cd37.** I did not run them, as instructed, and the coordinator's run had not reported.
+> - **npm test, lint and build at 556cd37, after the vitest bump.** Not run, to keep the audit read-only.
+> - **`makemigrations --check`.** Not run. By reading, models.py:293 matches 0012's end state (0012_proposed_tags.py:72-81).
+> - **CI.** There is no pull request.
+> - **The commits' "failed under a deliberate break" claims, and the security reviewer's own probes (decisions.md:11097-11147).** I read the regression tests, not the probes.
+> - **The 12 November diagnosis, seed and backfill on `kmp_anthropic` (decisions.md:10888-10926), and the user's answers (10928-10951).** Database state and the conversation are outside the repository.
+> - **Live interface behaviour.** I read the code and the tests only.
+> - **The sweep's provider calls.** The run record agrees with D-128, but the calls themselves were not re-run.
+
+**What changed because of the audit (13 November).**
+
+- **A5: a proposal a person rejected was created and applied by a later run (PARTIAL; the auditor
+  executed it).** It was put to the user as a tabbed question. He chose "Make a rejection stick"
+  (recommended) over recording it as accepted.
+  - **The record:** `DocumentAnalysis.rejected_tags`, added by `documents 0013`, one additive
+    `AddField` whose reverse drops the column. Each entry is `{dimension, value, confidence}`, the
+    machine's confidence kept beside the person's decision. It is not exposed.
+  - **The route:** `reject_proposed_tag` drops the proposal and records the rejection in one save.
+    Rejecting the same value again replaces the entry, with the latest confidence.
+  - **Rule 4b** skips a rejected value as it skips a removed one: in every dimension, at any
+    confidence, and before the in-scheme match. It reads only this document's row.
+    - A person may still apply the value themselves.
+    - No route clears a rejection.
+  - **The lock:** `apply_classification` now locks the analysis row (`select_for_update`), so a
+    rejection committed while a run is classifying is not overwritten by the run's copy. A run
+    takes the document row, then the analysis row; a person's decisions take only the analysis
+    row's lock, so there is no deadlock.
+    - *Corrected the same day, after the focused re-audit of `5c60564` (its finding N1, below):
+      that last clause was false.* `confirm_classification` took the analysis lock and then wrote
+      the document row, the opposite order, and the auditor executed the deadlock against a run.
+      It predates `5c60564`. It is now fixed: `confirm_classification` takes the document row
+      first, so every path takes the document, then the analysis, then the tags.
+      *Narrowed after the re-audit of `7377d38` (its finding N3, below): every path takes the
+      document before the analysis row. Tags and links are taken value by value within a run,
+      which cannot cycle, for the reasons the module docstring gives.*
+  - **Rejections made before `documents 0013` were never recorded,** because the old route wrote
+    nothing. So they are not honoured: 0013 starts every row at `[]`, and none is guessed (D-105's
+    precedent for rows before 0009). That includes the re-run planned for `kmp_anthropic` after this
+    merges (finding N2, below).
+  - **Tests: 46 new,** each failing under a deliberate break (13 breaks), every break reverted. 1,032
+    passed across the FR-10 files.
+    - `test_fr10_rejected_proposals.py`: 32, from both roles;
+    - `test_classification_rejected.py`: 11;
+    - `test_migration_0013_rejected_tags.py`: 3.
+  - **D-105's open item** ("a rejected proposed topic is proposed again by a later run") is closed by a
+    dated note there.
+- **D1 to D4, the records:**
+  - **D1:**
+    - dated notes on D-104 and D-105;
+    - D-106's note of 12 November extended to clause 3;
+    - `docs/schema-v1.md`'s paragraph on the JSON lists;
+    - `reject_tag`'s docstring;
+    - the module docstring of `test_fr10_person_applied_tags.py`.
+  - **D2: the discard rule is stated in full** in `docs/ai-provider.md`, this entry,
+    `docs/api-contract.md`, `apps/documents/models.py` and `apps/ai/classification.py`.
+  - **D3:** a dated note on D-79, and the contract's rate table, name `POST /api/tags` in the
+    `tagging` scope.
+  - **D4: the delete dialog** now says a retired tag "can come back later, if the AI suggests it again
+    or a person confirms or names it again, on a document everyone can read."
+- **C2, the suites at `556cd37`:**
+  - the full pytest: 3,570 passed, with the dual-role matrix at 39/39;
+  - the front-end suite, under vite 8.3.5 and vitest 5.0.5: 486 passed, lint clean, the build
+    succeeding.
+- **The audit's observation that `POST /api/tags` applies none of rule 4d's character checks: not
+  changed.** It is an Administrator's own input, and the security review's finding 5 concerned values
+  that uploaded content can create. Recorded as open.
+- **Still open, unchanged:**
+  - a NUL in a suggested department answers 500 (*closed by #106 on 13 November; see the note
+    above*);
+  - the race between deleting a tag and an upload;
+  - the scheme's growth (all above).
+
+A focused re-audit of the fixes follows.
+
+**The focused re-audit of `5c60564` (13 November 2026), verbatim.** The `requirements-auditor` agent's report, quoted whole and unedited, extracted mechanically from the agent's transcript. What changed because of it follows the quotation.
+
+> ## Focused re-audit: FR-10 (D-128), findings A5 and D1 to D4, at 5c60564 — 13 November 2026
+>
+> **Verdict: INCOMPLETE**
+>
+> **What I checked, and how.**
+> - **Read only.** Nothing in the worktree was edited, and `git status` was clean afterwards.
+> - **The diff:** `git show 5c60564` and `git diff 556cd37..5c60564`.
+> - **Measured against:**
+>   - FR-10's correction clause, C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\proposal.txt:692;
+>   - UC-09 A3, at 2067-2070 of the same file;
+>   - the findings of the audit of 556cd37, now quoted in D-128.
+> - **Three probe tests were executed** from the scratchpad, against `test_kmp_fr10auto_audit`, which pytest-django created and destroyed. The full run's `test_kmp_fr10auto` was not touched.
+>   - C:\Users\mozza\AppData\Local\Temp\claude\415e7131518f8d68\b98e2cf8-f5bb-411a-b107-62e245fd5851\scratchpad\probe\test_probe_rejected_proposal.py is the first audit's A5 probe.
+>   - C:\Users\mozza\AppData\Local\Temp\claude\415e7131518f8d68\b98e2cf8-f5bb-411a-b107-62e245fd5851\scratchpad\probe\test_probe_rejection_sticks.py
+>   - C:\Users\mozza\AppData\Local\Temp\claude\415e7131518f8d68\b98e2cf8-f5bb-411a-b107-62e245fd5851\scratchpad\probe\test_probe_lock_order.py
+> - **Every line number below is at 5c60564.**
+>
+> ### A5. A rejected proposal stays rejected: MET
+>
+> **The record.**
+> - `DocumentAnalysis.rejected_tags` is at C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\models.py:311-315, and its docstring bullet at 252-260.
+> - It is added by C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\migrations\0013_rejected_tags.py, one `AddField` that is additive and reversible.
+> - The model and the migration declare the same field, so `makemigrations --check` should agree, by reading.
+> - It is not exposed:
+>   - `ClassificationSerializer` gains no field (C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\api\serializers.py:296-298 and 314);
+>   - a route test asserts it is absent from the reply (C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\api\tests\test_fr10_rejected_proposals.py:87).
+>
+> **Recording the rejection.** `reject_proposed_tag` (C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\classification.py:1047-1076):
+> - drops the proposal;
+> - writes `{dimension, value, confidence}` into `rejected_tags`, carrying the proposal's confidence, replacing any earlier entry for that pair;
+> - saves both lists in one locked transaction (1066-1076).
+>
+> **Rule 4b.** The skip set is this document's removed links plus `_rejected(analysis)` (classification.py:536-540; `_rejected` at 1122-1129). The skip happens at 549-550.
+> - It comes before the in-scheme match (551).
+> - It covers every dimension and any confidence, because nothing about the confidence is checked before it.
+> - It reads this document's links and its own analysis row only.
+> - The rule's docstring states this (404-413).
+>
+> **The lock.** `apply_classification` takes the analysis row with `select_for_update` (480-485), after the document row (477). So a rejection committed during a run is neither missed nor overwritten by the run's save. No test drives that race; it rests on reading the code.
+>
+> **Tests.**
+> - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\api\tests\test_fr10_rejected_proposals.py, 32 cases, all through `session_client`, so from both roles:
+>   - 91-108: every dimension, at the threshold and below it;
+>   - 111-129: still not linked after the value enters the scheme through `POST /api/tags`;
+>   - 132-154: another document is unaffected;
+>   - 157-177: a person may still apply it by id;
+>   - 180-197: a person may still name a rejected Topic, and a later run leaves that link alone.
+> - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\tests\test_classification_rejected.py, 11 cases:
+>   - 50-60: recorded with the machine's confidence;
+>   - 63-77: one entry kept, with the latest confidence;
+>   - 80-90: a value not proposed records nothing;
+>   - 93-113: skipped while in the scheme, at the threshold and below it, with the record and the Tag untouched.
+> - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\tests\test_migration_0013_rejected_tags.py, 3 tests, through the migration executor, forward and back.
+> - The commit's counts of 32, 11 and 3 match the files.
+>
+> **Executed.**
+> - The first audit's A5 probe now fails on its own assertions, in both cases:
+>   - at the threshold, no link exists (`ContentTag.DoesNotExist`);
+>   - below it, `proposed_tags` is `[]`.
+> - The new probe passed. The rejection is recorded with its confidence, and afterwards:
+>   - at the threshold no Tag or link is made, and below it nothing is proposed;
+>   - after the value becomes vocabulary, it is still not linked;
+>   - the same value in another dimension is proposed in its own right;
+>   - another document links the value normally;
+>   - a person can still apply a rejected Topic by name.
+>
+> **Against the spec.**
+> - proposal.txt:692 is met on this path. The person's decision is retained and not overwritten by later reprocessing, and the machine's assignment, its dimension, value and confidence, is retained beside it.
+> - UC-09 A3 step 3 is met: no run links the rejected value on that document again, so it never reaches that document's facets or filters.
+> - The model that made the suggestion is not kept per entry. Removed links do not keep it either, so this is consistent and not counted.
+>
+> ### D1. The old rule no longer asserted without a pointer: MET
+>
+> - **D-104** has a dated note at C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\docs\decisions.md:7139-7143. It matches the prompt's rules 6 and 7 (C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\ai\classification.py:403-409) and `_may_become_a_tag` (classification.py:629-649).
+> - **D-105** has a dated note at decisions.md:7717-7737. It supersedes rule 4 as first built, the proposal record and the retired-tag sentence. Its close, at 7735-7737, ends the open item at 7255, which stays as written, per this file's convention.
+> - **D-106's 12 November note** is extended to clause 3 (decisions.md:7905-7908).
+> - **docs/schema-v1.md:** the rewritten JSON-lists paragraph is at C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\docs\schema-v1.md:303-314, the `rejected_tags` row at 284, and the migration plan at 557-558.
+> - **`reject_tag`'s docstring** no longer names `removed_topics` and states the rule for every dimension (classification.py:800-806).
+> - **The test module docstring** is corrected at C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\api\tests\test_fr10_person_applied_tags.py:7-10.
+>
+> `removed_topics` now survives only in historical text: D-105's dated note of 10 November (decisions.md:7667) and D-119's quotation (decisions.md:10014).
+>
+> ### D2. The discard rule stated in full: MET
+>
+> Each of these now matches the code, `_may_become_a_tag` (classification.py:629-649) with `MAXIMUM_CREATED_TAG_WORDS` at C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\core\constants.py:716:
+> - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\docs\ai-provider.md:481-485;
+> - D-128 at decisions.md:11079-11082 and 11118-11122;
+> - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\docs\api-contract.md:1170-1173;
+> - models.py:237-260 and 306-309;
+> - apps\ai\classification.py:37-41.
+>
+> No "not a check" or "only a value too long" statement survives outside historical text.
+>
+> ### D3. The `tagging` scope names `POST /api/tags`: MET
+>
+> - **D-79** has a dated note at decisions.md:4991-5000.
+> - **The contract's rate table** names it at api-contract.md:1015.
+> - **Both match the code:** C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\api\views.py:1995-1997, permission classes before the throttle, so the 429 comes after the 401 and the 403.
+>
+> ### D4. The delete dialog: MET
+>
+> - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\frontend\src\constants.js:1215 now reads: "A retired tag can come back later, if the AI suggests it again or a person confirms or names it again, on a document everyone can read."
+> - That matches `_bring_into_use`'s guard (classification.py:930-934).
+> - The test reads the constant, and its two patterns, "deleted" and "deactivated", still match: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\frontend\tests\tags.test.jsx:250-252.
+>
+> ### New findings introduced by 5c60564
+>
+> **N1. PARTIAL: a claim the code contradicts, executed. "A person's decisions take only the analysis row's lock, so there is no deadlock" is false.**
+> - **Where it is claimed:**
+>   - classification.py:462-466: "A person's decision takes only the analysis lock, so the two orders cannot deadlock";
+>   - D-128 at decisions.md:11612-11615.
+> - **Why it is false.** The two functions take the same two locks in opposite orders.
+>   - `confirm_classification` (classification.py:728) takes the analysis lock (757). It then writes the document row through `_write_department` (768 or 773, then 666-673), and that UPDATE waits on a document lock held elsewhere.
+>   - `apply_classification` takes the document lock (477), then the analysis lock (483).
+> - **When it can happen.** Reprocess holds the document lock while classification runs: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\ingestion\documents.py:177-180 and 321-323. A person confirming the department meanwhile completes the cycle.
+> - **Executed.** The lock-order probe ran the real `apply_classification` and `confirm_classification`, in that interleaving. Result: `{'A run': 'OperationalError: deadlock detected', 'B person': 'committed'}`.
+> - **It predates 5c60564.** At 556cd37 the run read the analysis row unlocked and saved it at the end, which closed the same cycle (by reading). 5c60564 introduced the claim, not the deadlock.
+> - **What it costs:**
+>   - It is rare. Reprocess refuses an Indexed document, and on the classify route the window is between two consecutive statements.
+>   - When it happens, one transaction is aborted. If the run is the victim, the ingestion hook swallows the error in its savepoint (apps\ingestion\documents.py:321-334), so invariant 8 holds. If the person's confirm or the classify route is the victim, that request answers 500.
+>   - Nothing is corrupted.
+> - **Smallest fix,** either of:
+>   - lock the document row first in `confirm_classification`, as `apply_classification` and `apply_tag` (classification.py:865) do;
+>   - or correct both sentences to state this residual.
+>
+> **N2. MISSING record, low: a rejection made before documents 0013 is not honoured, and nothing says so.**
+> - 0013 fills existing rows with `[]` (0013_rejected_tags.py:11-13).
+> - At 556cd37, `reject_proposed_tag` recorded nothing. So a value rejected before this migration will be proposed again, or created and applied at the threshold, by the next run. That includes the post-merge re-run D-128 plans for `kmp_anthropic`.
+> - Neither 0013's docstring, models.py nor D-128 states this. D-105's note on 0009 rows is the precedent: "Their history is recorded nowhere, so none is guessed".
+> - **Fix:** one sentence.
+>
+> ### C2, the suites
+>
+> - **At 556cd37:** 3,570 passed with the matrix at 39/39, and npm 486, lint clean and the build succeeding, under vite 8.3.5 and vitest 5.0.5. That is as reported by the coordinator and recorded at decisions.md:11636-11639. I did not observe those runs.
+> - **At 5c60564:** the full pytest is not yet shown; it was running. The commit claims 1,032 passed across the FR-10 files.
+> - **The front end at 5c60564** is not re-run. It changed one string, and the test that reads it still matches.
+> - **No route was added,** so the matrix's set of endpoints is unchanged.
+>
+> **One line:** INCOMPLETE.
+> - A5 is MET: executed, the first audit's probe now fails on its own assertions, and a rejected value is neither proposed, created nor linked, in or out of the scheme, while a person may still apply it.
+> - D1 to D4 are MET.
+> - 5c60564 adds one claim the code contradicts. "No deadlock" is executed false against `confirm_classification`; the deadlock predates the commit.
+> - A rejection made before documents 0013 goes unhonoured, unstated.
+> - The full pytest at 5c60564 is not yet shown.
+>
+> ### Could not check
+>
+> - **The full pytest and the matrix at 5c60564.** It was running, and I did not run it, as instructed.
+> - **npm test, lint and build at 5c60564.** Not run.
+> - **The 556cd37 suite results.** These are taken from the coordinator and D-128, not observed.
+> - **CI.** There is no pull request.
+> - **The commit's "13 breaks".**
+> - **Whether any rejection was made before 0013 on `kmp_anthropic`.** I did not inspect the database.
+> - **How often N1's deadlock would occur in use.** The probe shows it can happen, not how often.
+
+**What changed because of the focused re-audit (13 November).**
+
+- **N1: a deadlock between a classification run and a person confirming the department (PARTIAL;
+  the auditor executed it).**
+  - **The fix:** `confirm_classification` now takes the document row first, then the analysis row.
+  - **The order,** stated in a "Lock order" section of `apps/documents/classification.py`'s module
+    docstring: the document, then the analysis, then tags, then links. A function may skip a level
+    but never goes back to an earlier one.
+    - *Narrowed after the re-audit of `7377d38` (N3):* the order holds for the document and the
+      analysis row. Within a run, rule 4 takes tags and links value by value, so a link can be
+      locked before a later tag. The module docstring now says so, and why no cycle follows.
+  - **The false docstring claim** is replaced by what is now true.
+  - **The cost:** a person confirming a department during a long reprocess now waits for it instead
+    of deadlocking.
+- **A second deadlock, found while checking every writer against that order, and fixed.**
+  `delete_document` deleted the document's tag links before the cascade reached the analysis row.
+  `confirm_proposed_tag` takes the analysis row, then a tag, then the document's link. The deletion
+  now takes the analysis row right after the document. It predates D-128: D-105's confirmation of a
+  proposed Topic took the same locks.
+- **N2: a rejection made before `documents 0013` was never recorded,** so it is not honoured. Stated
+  in the `rejected_tags` comment in `apps/documents/models.py`, in `docs/schema-v1.md` and in this
+  entry, above. The pushed migration is not edited.
+- **Tests:** `apps/documents/tests/test_classification_lock_order.py`, 2 tests.
+  - **How they run:** two threads on separate connections call the real functions. The order is
+    forced by reading the waiting lock in `pg_locks`, not by sleeping, with a lock timeout so that a
+    regression fails instead of hanging.
+  - **Each deadlocked** under its break, without the new lock: `OperationalError: deadlock detected`.
+    Each passes with it, both transactions committing.
+  - **They are transactional tests** (`serialized_rollback=True`), and pytest-django runs those last.
+    - *Corrected after the re-audit of `7377d38` (N4):* they run after the other database tests,
+      and tests that use no database follow them. The module now says that any transactional test
+      added must also use `serialized_rollback`.
+- **The results:**
+  - 1,056 passed across the FR-10 files, with the deletion tests;
+  - the full pytest at `5c60564`, before this fix: 3,616 passed, with the dual-role matrix at 39/39.
+
+**The merge with FR-16 (13 November).** FR-16 (D-125, #101) reached `main` with
+`documents 0012_content_chunk_ai_generated`. That is a second migration numbered 0012 on `documents 0011`,
+beside this entry's `0012_proposed_tags` and `0013_rejected_tags`.
+
+- **The fix:** `documents 0014_merge_fr16_and_d128`, a merge migration with no operations that depends
+  on both branches, gives the app one leaf again.
+- **Why not renumber:** both pushed migrations stay unedited and unrenumbered, as CLAUDE.md §7 asks of
+  migrations.
+- **Where it is recorded:**
+  - `apps/core/tests/test_schema.py`'s plan lists the executor's real order: 0012_proposed_tags,
+    0013, 0012_content_chunk_ai_generated, 0014, then `meetings 0003`;
+  - `docs/schema-v1.md` names both 0012s.
+- **Throughout this entry, "`documents 0012`" means `0012_proposed_tags`.**
+
+**The focused re-audit of `7377d38` (13 November 2026), verbatim.** The `requirements-auditor` agent's report, quoted whole and unedited, extracted mechanically from the agent's transcript. What changed because of it follows the quotation.
+
+> ## Focused re-audit: FR-10 (D-128), N1, N2, the deletion lock and the lock-order tests, at 7377d38 — 13 November 2026
+>
+> **Verdict: INCOMPLETE.** All four points checked are MET. One new records finding remains: the module docstring states a tags-then-links lock order that `apply_classification` does not keep (N3). No deadlock follows from it.
+>
+> **What I checked, and how**
+> - **Read only.** I read `git show 7377d38` and `git diff 5c60564..7377d38`: six files. apps\api, apps\ingestion, the migrations and the front end are unchanged. `git status` stayed clean throughout.
+> - **What I ran,** on `test_kmp_fr10auto_audit`, which pytest-django created and destroyed. The full run's `test_kmp_fr10auto` was not touched. Each run was a separate session:
+>   - **The two committed lock-order tests:** 2 passed, in two sessions.
+>   - **A break probe,** C:\Users\mozza\AppData\Local\Temp\claude\415e7131518f8d68\b98e2cf8-f5bb-411a-b107-62e245fd5851\scratchpad\probe\test_probe_lock_breaks.py. It removes each new lock by monkeypatching that module's own name for the model, so `select_for_update()` takes no lock, then calls the committed test unchanged. 2 passed: each committed test failed with `OperationalError: deadlock detected`.
+>   - **The first re-audit's probe,** C:\Users\mozza\AppData\Local\Temp\claude\415e7131518f8d68\b98e2cf8-f5bb-411a-b107-62e245fd5851\scratchpad\probe\test_probe_lock_order.py, run alone. It now fails only on its own "deadlock" assertion, with `{'A run': 'committed', 'B person': 'committed'}`.
+>   - **The existing deletion tests:** C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\api\tests\test_document_delete.py and C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\tests\test_deletion.py. 22 passed.
+> - **Line numbers are at 7377d38.**
+>
+> ### N1. A run, and a person confirming the department: MET
+>
+> **The fix.** File: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\classification.py
+> - `confirm_classification` now locks the document row (795) before the analysis row (797).
+> - That is `apply_classification`'s order: document at 507, then analysis at 514.
+> - `confirm_classification`'s docstring says so (780-785).
+>
+> **The false claim is replaced.**
+> - `apply_classification`'s docstring is corrected (488-496).
+> - D-128 keeps its original sentence with an inline italic correction after it, per the log's convention: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\docs\decisions.md:11616-11620.
+>
+> **Executed.**
+> - The first re-audit's probe now shows both transactions committing.
+> - Committed test 1, C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\tests\test_classification_lock_order.py:132-161, passes.
+> - With the document lock removed, test 1 fails with a deadlock (break probe 1).
+>
+> **Is the order true for every writer, as stated (classification.py:53-77)?**
+> - **Yes, for the half the two deadlocks needed.** Every writer that takes both the document and the analysis row takes the document first:
+>   - `apply_classification` (507, then 514);
+>   - `confirm_classification` (795, then 797);
+>   - `delete_document` (C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\deletion.py:77, then 80);
+>   - reprocess, through `apply_classification` (C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\ingestion\documents.py:177-180 and 321-323).
+> - **No writer now takes the analysis row and then the document:**
+>   - `confirm_proposed_tag` (1050) and `reject_proposed_tag` (1108) never lock the document;
+>   - `apply_tag` (905) never locks the analysis row.
+> - **No, for the tags-then-links half.** That is N3.
+>
+> ### The deletion lock: MET
+>
+> **The change.**
+> - deletion.py:80 locks the analysis row after the document (77) and before chunks and links (81-86).
+> - The docstring describes it at 44-49 and 61-62.
+>
+> **Sound.**
+> - `confirm_proposed_tag` takes the analysis row, then a tag, then the link (classification.py:1050, 1054).
+> - The deletion now waits for it at the analysis row, instead of holding the links that confirmation needs.
+> - In the other order the person waits instead. Once the deletion commits, the person finds the analysis row gone: `NotOnThisDocument`, which the route answers 404.
+>
+> **Executed.**
+> - Committed test 2 (test_classification_lock_order.py:164-199) passes.
+> - With the deletion's analysis lock removed, test 2 fails with a deadlock (break probe 2).
+>
+> **FR-15's deletion (D-73) is unchanged.**
+> - The only change is the extra lock. What is deleted is the same, still in one transaction, and the file is still removed on commit.
+> - The routes (apps\api) are untouched.
+> - The 22 existing deletion tests pass.
+>
+> ### N2. Rejections made before documents 0013: MET
+>
+> - **The statement** is in three places:
+>   - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\models.py:311-316;
+>   - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\docs\schema-v1.md:284;
+>   - D-128, at decisions.md:11621-11624.
+> - **It is accurate:**
+>   - the old `reject_proposed_tag` wrote nothing;
+>   - 0013 starts every row at `[]`, and nothing is guessed;
+>   - the planned `kmp_anthropic` re-run is named.
+> - **0013 is unedited.**
+>
+> ### The tests: MET
+>
+> All references are to test_classification_lock_order.py.
+> - **Real functions, on two separate connections** (94-129).
+> - **Deterministic.**
+>   - The order is forced by polling `pg_locks` for an ungranted lock held by the second connection's process (80-91).
+>   - The first transaction waits on an event, not a timer (141, 183).
+>   - The 10 ms pause is a polling interval, not an ordering.
+> - **Bounded.** Each transaction sets `lock_timeout` to 10 s (56, 138, 149, 178, 188). Event waits are 10 s and joins 30 s, so a regression fails instead of hanging.
+> - **Not vacuous.** Each test asserts that:
+>   - the second transaction was seen waiting (155, 194);
+>   - both transactions committed (154, 193);
+>   - the end state is right (157-161, 196-199).
+> - **Each fails under its break.** Executed, by the break probes.
+> - **Isolated within the suite.**
+>   - They are marked `transaction=True, serialized_rollback=True` (53).
+>   - They are the suite's only transactional tests: no other `transaction=True`, `transactional_db`, `live_server` or `TransactionTestCase` appears in apps or conftest.py.
+>   - pytest-django 4.14.0 runs db tests first, then transactional tests, then non-db tests, and no non-db test unblocks the database.
+>   - So within a run, no other test meets the database these tests leave flushed. N4 gives the limits of that.
+>
+> ### New findings
+>
+> **N3. PARTIAL, a records error: the stated lock order is not kept by `apply_classification` for tags and links.**
+> - **The claim,** at classification.py:53-57: "the document row, then its `DocumentAnalysis` row, then `Tag` rows, then `ContentTag` links. It skips any level it does not need and never goes back to an earlier one".
+> - **The same claim restated in D-128:**
+>   - decisions.md:11821-11823: "A function may skip a level but never goes back to an earlier one";
+>   - decisions.md:11616-11620: "every path takes the document, then the analysis, then the tags".
+> - **What the code does.**
+>   - Within one run, rule 4c can update an existing unconfirmed AI link (classification.py:587, through `_link_tag` to 752). That happens before rule 4d creates or reactivates a Tag (613, 616).
+>   - Rule 4d then takes each value's tag and then its link, value after value.
+>   - So a link can be locked before a tag.
+> - **Why no cycle follows,** a reason the docstring does not give:
+>   - Every other writer that takes tags and this document's links first takes the document (`apply_tag`, 905) or its analysis row (`confirm_proposed_tag`, 1050). The run holds both for its whole transaction.
+>   - `confirm_tag` and `reject_tag` take one link and wait on nothing after it.
+>   - `retire_tag` and `create_tag` take one tag.
+>   - Concurrent runs take tags in one sorted order (612).
+>   - I found no deadlock.
+> - **Smallest fix,** either of:
+>   - state that rule 4 takes tags and links value by value, and why that cannot cycle;
+>   - or narrow the claim to the document-then-analysis order.
+>
+> **N4. Observation, low: what the transactional tests leave behind.**
+> - **What happens.** A `serialized_rollback` teardown flushes every table with post_migrate inhibited, so after these tests the database is empty. That is harmless as the suite stands, with a fresh database for each run.
+> - **Two limits.** I reproduced both by mixing my own unserialized probe into one session:
+>   - a later transactional test without `serialized_rollback` meets an empty database (`Role.DoesNotExist`);
+>   - its own teardown then recreates the content types, so a serialized test after it fails to reload them (`IntegrityError` on `django_content_type`).
+> - **A third limit, by reading:** a `--reuse-db` run would leave the test database empty for the next run. No workflow in the repository uses `--reuse-db`.
+> - **A small inaccuracy.** decisions.md:11841 says pytest-django runs transactional tests "last", and so does test_classification_lock_order.py:48-52. In fact non-db tests run after them, harmlessly, since they cannot use the database.
+> - **Optional fix:** one sentence in that module saying any transactional test added must also use `serialized_rollback`.
+>
+> ### C2
+>
+> - **Reported to me, not observed:**
+>   - the full pytest at 5c60564: 3,616 passed, with the matrix at 39/39;
+>   - 1,056 passed across the FR-10 and deletion files at 7377d38.
+> - **Not yet shown:**
+>   - the full pytest at 7377d38, which is in progress;
+>   - the front-end suite since 5c60564's one-string change. 7377d38 does not touch the front end.
+>
+> **One line:** INCOMPLETE.
+> - N1, the deletion lock, N2 and the lock-order tests are MET, each executed: both deadlocks are gone, and each test fails with a deadlock when its lock is removed.
+> - FR-15's deletion is unchanged.
+> - But the module docstring and D-128 state a tags-then-links order that `apply_classification` does not keep (N3). No deadlock follows from it.
+> - The full pytest at 7377d38 is not yet shown.
+>
+> ### Could not check
+>
+> - **The full pytest and the matrix at 7377d38.** The run is in progress.
+> - **The front-end suite after 5c60564.** Not run.
+> - **CI on PR #102.**
+> - **The implementer's own breaks.** I reproduced "each deadlocked under its break" by monkeypatching the locks away, not with the implementer's breaks.
+> - **scripts\seed_objective02_tags.py against the lock order.** It is an offline tool, not run alongside the server by design, so I did not analyse it.
+> - **How often the old deadlocks would have occurred in use.**
+
+**What changed because of the re-audit of `7377d38` (13 November).** It marked N1, the deletion
+lock, N2 and the lock-order tests MET, each executed, and found two records points.
+
+- **N3, a records error:** the stated lock order claimed tags then links throughout. The module
+  docstring of `apps/documents/classification.py` now states:
+  - the order every writer keeps: the document before the analysis row;
+  - that rule 4 takes tags and links value by value;
+  - why that cannot cycle.
+
+  `apply_classification`'s docstring follows it. The two sentences above carry inline corrections.
+  No code changed.
+- **N4, an observation:** the lock-order test module now says the transactional tests run after the
+  other database tests, with only tests that use no database following them. It also says that
+  any transactional test added must also use `serialized_rollback`. The sentence above carries an
+  inline correction.
+- **The merge with FR-16 (#101)** came after this re-audit; it is recorded above.
+- **The suites at the merge `e0a0938`:** the front end, 604 passed with lint and build clean. The full
+  pytest's result is in the pull request.
+
+**Dated note, 13 November 2026: D-128's creation of values is reversed by D-129.** At the user's
+decision, FR-10 meets Objective 05's clause 3 as written again.
+
+- **What goes back to what #85 measured:**
+  - the prompt (rules 6 and 7);
+  - claude-haiku-5-5's threshold of 0.72;
+  - the rule for values outside the scheme. A Topic is proposed, never created; a Project or
+    Process is discarded.
+- **What stays from this entry,** because none of it depends on creation:
+  - `POST /api/tags`;
+  - the proposal record and its routes;
+  - kept rejections;
+  - the reactivation guard on a person's actions;
+  - the lock-order fixes.
+- This entry's text above stays as written.
+
+## D-129 · D-128's creation of values is reversed so FR-10 meets Objective 05's clause 3 as written, departments get a confidence threshold of their own, and an Administrator keeps the department list on the Tags page
+
+**Status:** Settled by the user · **Date:** 2026-11-13 · **Concerns:** FR-10, Objective 05, D-128,
+D-104, D-105, D-106, D-122, `apps/ai/classification.py`, `apps/core/constants.py`,
+`apps/documents/classification.py`, `scripts/objective05_verify.py`,
+`frontend/src/constants.js` · **Reverses:** D-128's rule change, its prompt revision and its
+threshold of 0.80
+
+**What prompted it.** The user, on 13 November, relayed by the coordinating session:
+
+- **First,** on a proposal to rewrite Objective 05's clause 3 to match D-128: "No, lets keep the
+  objective as is was."
+- **Then:** "okay so revert FR-10 to stick to objective 05 clause 3. BUT the ACTUAL issue was AI was not
+  even tagging the documents that fit the schema".
+
+**The rewrite that came first, and why it is not in the record.** The coordinating session proposed
+rewriting clause 3 to match D-128. The user approved that wording in a tabbed question that morning,
+then withdrew it the same day in the words above. None of it was committed.
+
+**The decision: clause 3 is met as written again.** The clause reads: "suggested values falling outside
+the established scheme must be discarded in the Department, Project and Process dimensions while being
+proposed for confirmation in the Topic dimension only".
+
+- **The prompt** is #85's: `apps/ai/classification.py` and its two test files are restored from `main`,
+  byte-identical to #85's commit `a9934eb`. Since then one sentence of the module's docstring names the
+  department threshold below; the prompt text is unchanged. Rule 6 allows a new Topic only, and never a new Project,
+  Process or department.
+  *Since the merge of `main` on 13 November (`bc0b5b6`), `apps/ai/classification.py` and
+  `test_classification_schema.py` are no longer byte-identical to `a9934eb`. They carry #105 and
+  #106's parser changes, as does `test_classification_loop.py`, which D-129 did not restore.
+  `test_classification_prompt.py` is still byte-identical, and the prompt text is unchanged. This
+  note first named the loop test in place of the prompt test; it was corrected on 14 November,
+  after the re-audit of `d909537` (C9).*
+- **The threshold:** `CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL["claude-haiku-5-5"]` is 0.72 again
+  (D-122). The 0.80 of D-128 was derived on the revised prompt, which no longer ships.
+- **Rule 4 for a value outside the scheme,** or retired since the scheme was built:
+  - **Topic:** proposed for a person, at any confidence. Never created, linked or reactivated by the
+    classifier.
+    *Since 15 November 2026 (D-134, the user's decision), a Topic longer than a tag name, 255
+    characters once normalised, is discarded instead, because no Tag could hold it. That is a second
+    literal departure from clause 3, recorded in D-134.*
+  - **Project or Process:** discarded, at any confidence.
+  - **One exception:** a value that cannot be stored, because it holds U+0000 or a lone surrogate, is
+    discarded with U+FFFD in its place. A reply carrying one made the classify route answer 500 before
+    D-128, and this keeps that fixed.
+    *Since the merge of `main` (`bc0b5b6`) this branch is not reached on the shipped path. #106's
+    parser refuses a reply holding a NUL or an unpaired surrogate anywhere, the department included
+    (`apps/ai/schema.py`). Such a reply is retried. After `MAXIMUM_CLASSIFY_ATTEMPTS` the classify
+    route answers 503, and ingestion leaves the document unclassified. Only a direct call of
+    `apply_classification` reaches this branch now.*
+  - **D-128's other refusal rules go,** with `MAXIMUM_CREATED_TAG_WORDS`: more than three words, ";",
+    and other control or format characters. They guarded values the classifier created, so a long or
+    many-worded Topic is proposed again, as `main` did.
+- **Departments:** unchanged. One outside the scheme is discarded.
+
+**What stays from D-128,** because none of it depends on creation:
+
+- `POST /api/tags`, an Administrator's Add tag on the Tags page: vocabulary, a 409 for a duplicate.
+- The proposal record `proposed_tags` (`documents 0012`) and the proposed-tags confirm and reject
+  routes. In practice every proposal is now a Topic.
+- **Kept rejections:** `rejected_tags` (`documents 0013`), skipped by rule 4b, as is a link a person
+  removed, in any dimension.
+- **The reactivation guard:** a retired tag is reactivated only through a document every role can
+  read. Since the classifier no longer reactivates anything, this now guards a person's confirmation
+  of a proposed Topic and a person's Topic name form. It closes a leak that predates D-128.
+- **The lock order:** the document before the analysis row, in `confirm_classification` and
+  `delete_document`, and the analysis-row lock in `apply_classification`.
+- **The verifier's strict reading of clause 3.** A proposed Project or Process value, an AI link to a
+  grown tag, or a discarded Topic is a violation.
+- **The screen:** proposal rows that name their dimension, and AI tags never marked "new".
+- `documents 0014`, the merge migration with FR-16.
+
+**What the screen and records now say:**
+
+- **The Tags page's note on the AI:** it adds no values of its own. A new topic waits for a person,
+  and a project or process outside the list is discarded.
+- **The delete dialog:** a retired topic can come back only through a person, on a document everyone
+  can read, and a retired project or process stays retired.
+- **The name form's hint** is `main`'s again.
+- **Dated notes** sit on D-104, D-105, D-106, D-122 and D-128.
+
+**Objective 05 on the shipped build.**
+
+- **Clause 3 is met again by construction.** The shipped prompt, threshold and rule for values outside
+  the scheme are those #85 measured.
+- **D-128's additions that stay act only on:**
+  - a person's decisions, which never occur on a measurement database;
+  - values that cannot be stored, which Haiku's replies on the twenty did not contain.
+- **So #85's three draws describe the shipped build for clauses 1 and 3:** clause 1 met on each (19,
+  18 and 18 of 20), and clause 3 met on each.
+- **For departments they do not.** #85 held departments at 0.72, and the shipped build applies them at
+  0.30 (below), from the department list (below). Departments are not in clause 1. Clause 2 holds by
+  construction at any threshold, because a suggestion below its kind's threshold is held. A
+  re-verification on the shipped build would show more departments applied. It has not been run.
+- **Two records stay, describing builds that do not ship:**
+  - D-128's development sweep (`corpus/objective-05/runs/2026-11-12/dev-sweep-haiku-d127/`), on the
+    revised prompt;
+  - the 13 November classification of the twenty on D-128's build, on the new database
+    `kmp_obj05_d128_20261113` ($0.0066). It was not scored and not committed. The database is left for
+    the user to keep or drop.
+
+**What "the ACTUAL issue" was, and where it stands.** The user's report of 12 November was that
+documents were not tagged automatically.
+
+- **The cause on `kmp_anthropic`** (D-128's diagnosis):
+  - 16 of the 20 documents had never been classified;
+  - the scheme held no Project or Process value.
+- **What fixed it:** the seed and the backfill of 12 November. They ran under `main`'s rules and 0.72,
+  the same as the reverted build, so `kmp_anthropic` needs no re-run.
+- **What it left:** 15 of the 20 documents carry an applied tag, and 28 suggestions that fit the scheme
+  are held below 0.72.
+- **Open, and put to the user by the coordinating session:**
+  - whether tags and departments should get a threshold of their own, tuned on the development
+    documents, since D-106's rule tunes the one threshold on types alone;
+  - whether departments belong on the Tags page.
+
+**Choices made in building it,** none of which changes what the user decided:
+
+- **The one literal departure from clause 3: a Topic holding a NUL or a lone surrogate is discarded,**
+  because it cannot be stored. The verifier counts it as a clause 3 violation ("discarded a Topic
+  value"), so a measurement would show it. Haiku's replies on the twenty never contained one.
+  *Since the merge of `main` (`bc0b5b6`) this departure does not occur on the shipped path: such a
+  reply is refused and retried as a whole (the note on the one exception, above).*
+  *Since 15 November 2026 there is a second literal departure: a Topic longer than a tag name is
+  discarded (D-134, the user's decision). The verifier counts it the same way.*
+- **A Topic over 255 characters is proposed,** as on `main`, and can only be rejected: confirming it
+  is the existing 400.
+  *Corrected on 14 November, after the re-audit of `d909537` (C15): it can be neither confirmed nor
+  rejected.*
+  - *Both proposed-tags routes validate the value with `ProposedTagSerializer`, capped at 255
+    characters, as #85's `ProposedTopicSerializer` was. So both answer 400.*
+  - *The proposal stays until a run replaces the list. With no rejection recorded, a later run can
+    propose it again.*
+  - *It is recorded under "Not covered".*
+
+  *Fixed on 15 November 2026 by D-133: the reject route reads a value up to 100,000 characters
+  (`MAXIMUM_PROPOSED_TAG_LENGTH`), so such a proposal can be rejected. Confirming it is still 400.*
+
+  *Superseded later on 15 November 2026 by D-134, the user's decision: a run discards a Topic over
+  255 characters into `discarded_suggestions` instead of proposing it, so every proposal a run makes
+  can be confirmed. A proposal stored before D-134 can still be rejected through D-133's route.*
+- **The proposal record keeps D-128's shape:** `proposed_tags` on the `proposed_topics` column, with a
+  dimension on each entry. Migration 0012 is pushed, and the routes and the screen read that shape.
+- **A database classified under D-128 keeps what D-128 made.** Its grown tags and AI links are not
+  cleaned up, and the verifier counts those links as violations, so a measurement needs a fresh
+  database. A Project or Process proposal left by D-128 is dropped by the next run, which replaces
+  the list. `kmp_anthropic` was never classified under D-128.
+- **The test files `test_classification_d128.py` and `test_fr10_d128_invariant1.py` keep their names**
+  and test D-129's rules.
+- **Tests:** every new or changed assertion failed under a deliberate break first, 23 breaks in all,
+  each reverted. 990 passed across the FR-10, lock-order and deletion files.
+
+**The tag and department threshold: the run, and the result awaiting the user's decision.** The user
+chose, relayed on 13 November, to tune a threshold of its own for tags and departments, by D-106's
+rule on the development documents.
+
+- **The reference.** He approved it as drafted, over a stricter one-value-each variant: for each of
+  the 19 development documents, the right department and scheme tags
+  (`corpus/objective-05/dev-documents/tag-reference.json`).
+- **The order.** The reference and the rule (`tag_threshold_rule.py`, which calls D-106's
+  `choose_threshold` unchanged) were committed in `0d3b334`, before any call.
+- **The run:** 57 Haiku classifications on the shipped prompt, $0.018
+  (`corpus/objective-05/runs/2026-11-13-tag-threshold/`). A first attempt failed at import, before
+  any call; its console is kept.
+- **What the rule gives:**
+
+| | right, wrong | best split, before the cap | the rule's result |
+|---|---|---|---|
+| tags and departments together | 122, 66 | 0.50 | **0.25**, capped at the lowest right confidence, 0.30, minus 0.05 |
+| tags alone (information) | 66, 65 | 0.70 | 0.25 |
+| departments alone (information) | 56, 1 | none | 0.30, the lowest right confidence |
+
+- **Departments and tags behave differently.**
+  - **Haiku's department suggestions** were right 56 times in 57, many at low confidence.
+  - **Its tag confidence separates well.** At 0.72 the run applied 43 right tags and none wrong; at
+    0.70, 48 right and 3 wrong; at 0.25, 66 right and 62 wrong.
+- **The cap is D-106's own recorded flaw:** it defeats a separation found high in the range. The user
+  kept it on 10 November.
+- **His choice (13 November, a tabbed question):** "Departments 0.30, tags 0.72" (recommended), over
+  the rule as fixed (0.25 for both) and no change (0.72 for all).
+  - **Departments:** `CLASSIFICATION_DEPARTMENT_CONFIDENCE_THRESHOLD_BY_MODEL["claude-haiku-5-5"]` is
+    0.30. That is D-106's rule run on departments alone, where no split exists, so it is the lowest
+    right confidence.
+  - **Types and tags** keep the shared 0.72.
+  - **A model not in the department map** uses its shared value, so gemma3:4b keeps 0.95.
+  - **It departs from the one shared value for tags and departments** that he approved before the run.
+    The run showed the two kinds behave differently, and he chose on that evidence.
+  - **On his 20 documents** (the confidences recorded on `kmp_anthropic`), a re-classification would
+    apply 15 departments instead of 7. Tags are unchanged: 16 applied, 28 held.
+- **Clause 2 is read per kind.** Objective 05's clause 2 says "the configured confidence threshold", and
+  D-129 reads that as one configured threshold per kind of assignment. A department below 0.30, or a
+  type or tag below 0.72, is still held for a person, so clause 2 holds. `scripts/objective05_verify.py`
+  checks each kind against its own threshold.
+  - **On Haiku, the department half of clause 2 is rarely exercised** (the re-audit of `6e77913`,
+    B4).
+    - No department suggestion among the 57 development classifications fell below 0.30: departments
+      alone score 56 at both 0 and 0.30 (`tag-threshold.json`).
+    - So a Haiku department is held almost only when it differs from a department already on the
+      document.
+    - That is the rule's fallback outcome, as 0.72 is for types, and clause 2 is still met as written.
+
+**The department list on the Tags page (the user's choices of 13 November).**
+
+He asked for it in his words: "This scheme should be available for modification under the Tags page".
+He answered three tabbed questions, each with the recommended option:
+
+- **The source:** the list is the department scheme the classifier reads.
+  - `documents 0015` seeds it from the departments already in use.
+  - A department carried only by documents some role cannot read is seeded hidden (`grown`). It is
+    offered only for a document whose whole audience reads a document with that department, as a
+    hidden tag is.
+    *Changed the same day by the security review (F1, below): a hidden department is offered only
+    for a document whose whole audience reads everything, today an Administrator-only document, and
+    no document carrying it admits it anywhere else.*
+- **The upload field stays free text.** FR-08's form and the classification confirm/edit control are
+  unchanged. A department typed there that is not in the list stays on the document, and the
+  classifier suggests only listed departments.
+  *Read "assigns" for "suggests" (14 November, the re-audit of `d909537`, C7). Only a listed
+  department admitted for the document's audience is applied or held. The model may name any other,
+  which is discarded and shown as "not one of the known departments".*
+- **Retiring keeps a department on its documents,** and in FR-14 and FR-15's filters, which read
+  `Documents.department` unchanged (D-72). A department no document uses is deleted.
+
+**How it is built:**
+
+- **A table of its own, `Department`, not Tags rows.** `Tag` lower-cases its names, while a department
+  keeps its case on documents ("Human Resources"). The classifier writes the scheme's spelling into a
+  blank department, so lower-cased department tags would split FR-14 and FR-15's filters by case.
+  `name` keeps its case, with whitespace collapsed, and is unique ignoring case.
+- **`tag_scheme`'s `departments`** are the active list's names admitted for the audience:
+  - one that is not grown always;
+  - a grown one only when every audience role reads, through `scoped_documents`, a document whose
+    department equals it.
+
+  *Changed the same day by the security review (F1, below): a grown one only when every audience
+  role reads everything (`reads_everything`, a helper in `apps/retrieval/scoping.py`). No carrier is
+  consulted.*
+
+  This replaces the derivation from the departments of documents the audience can read, so a
+  department in use but not listed is no longer offered.
+- **The routes.** `GET` and `POST /api/departments` and `DELETE /api/departments/{id}`, behind
+  `manage_tags`. POST is in the `tagging` throttle, sharing one budget with `POST /api/tags`.
+  - **A retired name added again is reactivated (200),** keeping its stored spelling and its `grown`.
+    That differs from `/api/tags`, which answers 409: a department has no other way back, and only an
+    Administrator, who reads every source, can do it.
+  - **An active duplicate, ignoring case,** answers 409.
+  - **A department in use** is retired (200); an unused one is deleted (204).
+- **The screen:** a Departments section on the Tags page with the list, Retire or Delete, an "Add a
+  department" form, and help text saying:
+  - the AI suggests a department only from this list;
+    *since `44743ce` the screen says the AI assigns a department only from this list (C7);*
+  - the upload form still accepts any department;
+  - a retired department stays on its documents.
+
+**Choices made in building it:**
+
+- **"Equals" means exactly equal,** in case and spacing. That is how `item_count`, "in use" on DELETE,
+  and admitting a grown department compare `Documents.department` with a name.
+  *Changed the same day by the security review (F1 and F3, below): `item_count` and "in use" compare
+  ignoring case, as the list's uniqueness does, and still exactly in spacing. Admitting a grown
+  department no longer compares with any document.*
+- **The seed.**
+  - It keeps the spelling most documents use; a tie goes to the first by code point.
+  - It decides `grown` on that exact spelling, so seeding makes nothing newly visible to any audience.
+  - On data whose departments differ only in case, an Employee-visible document can lose a
+    department the old derivation offered it.
+- **A fresh database starts with an empty list.** The seed runs at migration time, from the documents
+  then present, so an Administrator adds departments on the Tags page. A measurement database is
+  restored from a snapshot and then migrated, so its documents are present when 0015 runs.
+  `seed_objective02_tags.py` does not seed departments.
+  *The alpha, checked read-only on 15 November at the user's request ("re-check the alpha on the
+  incoming branch and main for seeding"; `corpus/objective-05/runs/2026-11-15-alpha-seed-check/`):*
+  - *`kmp_alpha_20261113` holds the full tag seed (14 values, `atlas` hidden) and is at `documents`
+    0012 of `main`.*
+  - *Its next `migrate` seeds six departments, Projects hidden.*
+  - *Every classified document carries a typed department, so nothing needs classifying again.*
+  - *Building it again would migrate before the ingestion and seed nothing. So the runbook
+    (`docs/alpha-deployment.md`) now applies 0015 again after the ingestion. That keeps the hidden
+    marking, which a department added by hand on the Tags page would lose.*
+- **`machine_department` still records what the model said** (rule 1, unchanged). A hidden department
+  never reaches a prompt it must not, and a reply naming one anyway is discarded exactly as an unknown
+  name is.
+  *Corrected the same day, after the security review (F1, below): as first built that was not true. A
+  document an Employee gave the department to carried it itself, so the name reached that document's
+  prompt. It is true since the fix: a hidden department is admitted only for an Administrator-only
+  audience.*
+- **On the screen:**
+  - each row offers Retire or Delete according to `item_count`, the server's own test;
+  - a 403 on either list withdraws every control on the page, since both need `manage_tags`;
+  - `tagsNotPermitted` now names tags and departments;
+  - the copy says "the AI", as the page already did.
+- **Tests:**
+  - server: 63 new test items, each failing under a deliberate break (38 breaks), every break
+    reverted. 552 passed across the 19 files touched, and the dual-role matrix credits both roles on
+    the three routes;
+  - front end: 31 new tests under 38 scripted breaks, each reverted. 635 passed; lint and build
+    clean.
+
+**The security review of the department list (13 November, before the pull request), and what changed
+because of it.** The `security-reviewer` agent reviewed `e04a746` and `ce4e9d3` and confirmed each
+finding with probe tests against its own test database.
+
+1. **HIGH: an Employee could learn whether a hidden department exists (invariant 1).**
+   - **How:** give a document they can read that department as free text, at upload or through the
+     confirm/edit control.
+   - **Why it worked:** the document is saved before it is classified, so it counted as its own
+     readable carrier. `tag_scheme` admitted the hidden name for its audience, the prompt listed it,
+     and the reply said "applied" where an unlisted name would have been "discarded". The name also
+     reached the AI service in that prompt.
+   - **D-129 introduced it:** before the list, a readable carrier alone put a department in the scheme.
+   - **Fixed:** a hidden department is admitted only for an audience in which every role reads
+     everything, today an Administrator-only document. So a document an Employee can read is never
+     offered one, and what an Employee sees no longer depends on whether a hidden row exists.
+   - **The cost:** a hidden department is never suggested for an Employee-visible document, even after
+     such documents come to carry it. "Grown is never unset", so there is no route that makes it
+     vocabulary; that would need a decision.
+     *Qualified after the re-audit of `6e77913` (B8): this holds while some document uses the name,
+     compared ignoring case and exactly in spacing. See finding 3's note.*
+     *Read "never assigned" for "never suggested" (14 November, C7). Such a department is never
+     offered to the model, applied or held there. The model may still name it from the text, and it
+     is then discarded and shown as "not one of the known departments".*
+   - **Kept:** the user's three choices.
+2. **LOW: a department retired or deleted while a classification's provider call was running was
+   still written** into a blank department. Fixed: at apply time, a department with no active row is
+   outside the scheme and discarded, the same answer as for an unknown name.
+   - **What is left** (found by the summary checks of 14 November): the check is one unlocked read
+     just before writing. A department retired after it, but before the classification's transaction
+     commits (an upload's embedding included), is still written, as `_still_listed`'s docstring
+     says.
+3. **LOW: "in use" and `item_count` compared exactly, while the list is unique ignoring case.** A
+   hidden department whose remaining carriers spelled it differently counted as unused, could be
+   deleted, and could come back as vocabulary. Fixed: both compare ignoring case.
+   - **Still compared exactly in spacing** (the re-audit of `6e77913`, B8).
+     - The seed collapses inner spacing when it picks a name, and "in use" does not.
+     - The upload and confirm routes trim a department but do not collapse its spacing.
+     - So a department seeded from a value with a double space lists `item_count` 0 and is offered
+       Delete. Once it is deleted, adding the name again makes it vocabulary.
+     - Only an Administrator can do that, by deleting and then adding the name. Nothing reaches an
+       Employee without that act.
+     - It is recorded rather than changed: collapsing whitespace in the database would compare by
+       PostgreSQL's idea of whitespace where the seed used Python's.
+4. **LOW, an Administrator's own input: a name could hold control or format characters, or ";", the
+   separator the prompt lists departments with.** Fixed: `POST /api/departments` refuses them (400).
+   A tab or line break inside a name is a control character and is refused too. Until this fix it was
+   collapsed to a space. Whitespace around a name is still trimmed.
+
+**Tests for the fixes:**
+
+- **21 new server test items.** Each fails under at least one of 11 deliberate breaks, and every
+  break was reverted:
+  - F1: 4 breaks;
+  - F2: 1;
+  - F3: 2;
+  - F4: 4.
+- **Three existing tests** changed their expectations with the fixes, and the breaks fail them too:
+  - the list's count;
+  - a new department's count;
+  - the scheme's independence from the scoping helpers.
+- **The front end is unchanged.** It shows the server's 400 message as it already did.
+- **The first full run after the fixes failed 26 apply-layer tests,** in four files the focused runs
+  had not included. Their hand-built scheme (`apps/documents/tests/classification_builders.py`)
+  listed departments with no `Department` row behind them, and F2 discards a listed department with
+  no active row.
+  - **Production was right.** `classify_document_now`, the only caller of `apply_classification`,
+    passes `tag_scheme(document)`, whose departments are always active rows.
+  - **The fix (`140014c`):** the builder makes each department it lists an active row, unless a row
+    of that name exists already, ignoring case.
+  - **Its limit:** a listed name whose existing row differs in case, or is retired, still reads as
+    discarded, because `_still_listed` compares exactly and needs an active row. A test that meets
+    this fails loudly.
+  - **The full pytest at `bc0b5b6`,** with the fix and the merge of `main`: 4,815 passed, the
+    dual-role matrix at 47/47.
+
+**Checked and sound by the review:**
+
+- **The routes:** 401, 403, 429 in that order, and CSRF.
+- **`manage_tags`:** held only at the Administrator's scope.
+- **The seed** errs toward hidden, and only the seed sets `grown`.
+- **Create and retire** handle a race.
+- **FR-14 and FR-15** read scoped documents, unchanged.
+- **No model output can widen scope.**
+- **The threshold** changes only whether an admitted suggestion is written, never what is admitted.
+- **Names render as text.**
+
+**Not covered:**
+
+- **gemma3:4b:** its 0.95 stands, and the prompt it was derived on is the shipped one again.
+- **The scheme's growth:** only a person confirming a Topic, or an Administrator adding a value, grows it
+  now. D-128's growth finding is moot for the classifier.
+- **UC-09 E1's queue:** "Where it still fails, the system marks the document unclassified and queues it
+  for a later attempt." It is not built.
+  - A document whose classification fails at upload stays unclassified until someone presses
+    Classify, reprocesses it, or runs `classify_documents`.
+  - This predates D-129. D-119's audit named it among things "not counted as gaps", and the re-audit
+    of `6e77913` found it recorded nowhere for FR-10. It is recorded here.
+- **Which departments are hidden** is not shown on the Tags page: `GET /api/departments` carries no
+  `grown`. That is an observation of the re-audit, not an FR-10 clause.
+- **A proposed Topic over 255 characters** can be neither confirmed nor rejected. Both
+  proposed-tags routes cap the value at 255 characters, as #85's routes did. Rejecting needs no such
+  cap, since `reject_proposed_tag` writes only JSON. Letting the reject route take a longer value,
+  with tests from both roles, is a follow-up for the user to decide. It predates D-128 and D-129.
+
+  *Fixed on 15 November 2026 by D-133, the user's decision: the reject route reads a value up to
+  100,000 characters, tested from an Employee and an Administrator session. Confirm keeps its 255.
+  Since D-134, the same day, no run proposes such a Topic: it is discarded.*
+
+**The re-audit of `6e77913` (13 November 2026), verbatim.** This is the `requirements-auditor` agent's
+report, quoted whole and unedited, and extracted mechanically from the agent's transcript. Its line
+numbers are at `6e77913`, before the merge of `main` and the notes above shifted this entry. What
+changed because of it follows the quotation.
+
+> ## Re-audit: FR-10 (D-129) at 6e77913 — 13 November 2026
+>
+> **Verdict:** INCOMPLETE. At 6e77913 the pytest suite fails: F2 broke 26 apply-layer tests, and none of the runs after F2 included their files. So CLAUDE.md §8 condition 2 is not met, although D-129's rules are otherwise built as recorded.
+>
+> ### What I checked, and how
+>
+> - **Read only.** I edited nothing in the worktree. My probes and run outputs are in C:\Users\mozza\AppData\Local\Temp\claude\415e7131518f8d68\b98e2cf8-f5bb-411a-b107-62e245fd5851\scratchpad\audit2\.
+> - **The head moved during the audit.**
+>   - The coordinator committed `140014c`, the test-builder fix, and merged `origin/main` as `bc0b5b6`.
+>   - `docs/decisions.md` is now modified in the working tree by the coordinator, not by me.
+>   - Every finding is at 6e77913, which I read with `git show 6e77913:<path>`. Where I ran something at `bc0b5b6`, I say so and checked that the files involved are identical to 6e77913.
+> - **D-129 is eight commits, not five.** `fa58690` (the prompt revert), `0d3b334` (the reference and the rule), `9365084` (the driver moved), `5ab1bd5`, `4e37112`, `e04a746`, `ce4e9d3` and `6e77913`. Each has FR-10 in its subject.
+> - **Measured against:**
+>   - FR-10: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\proposal.txt:681-725;
+>   - UC-09: the same file, 2028-2082;
+>   - Objective 05: the same file, 178;
+>   - D-104, D-105, D-106, D-128 with the audits quoted in it, and D-129;
+>   - CLAUDE.md §6 and §8.
+> - **Line numbers** are at 6e77913, `docs/decisions.md` included. The merge shifts D-129's lines by four.
+>
+> ### Clause coverage (the clauses D-129 touches)
+>
+> | Clause | Status | Evidence (6e77913) |
+> |---|---|---|
+> | FR-10: "a confidence value is recorded with each assignment" | MET | classification.py:565-567, 798, 806, 650-657 |
+> | FR-10 and UC-09 step 6: below "the configured threshold", provisional and presented for confirmation | MET in code; its department tests are red (B1) | 574-579, 586-588, 797, 807 |
+> | FR-10: suggestions "matched against values already held in the scheme" | MET | 629-635 |
+> | FR-10: a non-matching value "may be proposed only in the Topic dimension and requires user confirmation before it is created" | MET | 652-654; a Tag is created only in `confirm_proposed_tag` (1111) and `apply_tag` (978) |
+> | FR-10 and UC-09 step 4: outside the scheme in Department, Project or Process, discarded | MET | 583-585, 655-657 |
+> | Objective 05 clause 2 | MET, read per kind (B4) | as above; objective05_verify.py:161-218 |
+> | Objective 05 clause 3 | MET, with one recorded literal departure (B2, B11) | 644-659 |
+> | Tag names unique within a dimension after normalising case and whitespace (departments) | MET | models.py:195-197, 246-254 |
+> | 409 on a duplicate name within a dimension (departments) | MET for an active name. A retired name answers 200: DECLINED, D-129 (decisions.md:13431-13433) | views.py:2276-2286 |
+> | Deactivated rather than deleted where content references it (departments) | MET for case; spacing is compared exactly (B8) | taxonomy.py:319-348 |
+> | CRUD: Tags Create, Read, Delete (departments) | MET | views.py:2234-2310 |
+> | Invariant 1 for departments (F1) | MET | B6 |
+>
+> ### Findings
+>
+> **B1. CONTRADICTED (CLAUDE.md §8 condition 2; §7, "main stays runnable"): pytest fails at 6e77913.**
+> - **What breaks.**
+>   - F2 added `_still_listed` to rule 3. A listed department with no active `Department` row is discarded: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\classification.py:583, 713-723.
+>   - The apply-layer tests build their scheme with `scheme()`, which creates no row: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\tests\classification_builders.py:55-65 at 6e77913.
+>   - So every department those tests list is discarded, and each test that expects "applied" or "provisional" fails.
+> - **Executed at 6e77913.**
+>   - `test_classification_apply.py`: 17 failed, 26 passed.
+>   - 13 further FR-10 files: 9 failed and 201 passed. The failures are `test_classification_confirm.py` 2, `test_classification_department_provenance.py` 6 and `test_objective05_verify.py` 1.
+>   - These are the same 26 the coordinator's full run reports: 26 failed, 4742 passed, the matrix at 47/47. That run is reported to me, not observed.
+> - **The cause, shown by a probe** (`test_probe_f2_hand_built_scheme.py`): the same suggestion and the same hand-built scheme give "discarded" and a blank department with no row, and "applied" and "Finance" with an active row.
+> - **What the 26 include.**
+>   - Every behavioural test of the department's own threshold: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\tests\test_classification_apply.py:247-276 and 295-369.
+>   - The verifier's per-kind clause 2 test: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\tests\test_objective05_verify.py:191-215.
+>   - So at 6e77913, neither the 0.30 threshold nor the verifier's per-kind check has a passing behavioural test.
+> - **Production is not affected.**
+>   - All three callers reach `apply_classification` only through `classify_document_now`: views.py:1946, C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\ingestion\documents.py:323, and classify_documents.py:228.
+>   - `classify_document_now` passes `tag_scheme(document)`, whose departments are active rows (classification.py:293, 331).
+> - **D-129 does not record it.** "Tests for the fixes" (C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\docs\decisions.md:13507-13519) names 21 new items and "Three existing tests". The 26 are absent.
+> - **Fix.** `140014c` is reported to me and is not part of 6e77913. In it, `scheme()` makes each listed department an active row unless one exists ignoring case. I ran the four files at `bc0b5b6`: 84 passed. Still to do:
+>   1. the full pytest, with its matrix line, at the head that will be pushed;
+>   2. a dated line under D-129's "Tests for the fixes" recording:
+>      - that F2 broke 26 apply-layer tests the focused runs never included;
+>      - the full run that found them;
+>      - `140014c`;
+>      - the new full result.
+>   3. one sentence on the builder's limit. A listed name whose existing row differs in case, or is retired, still reads as discarded, because `_still_listed` compares exactly and needs an active row. A test that meets this fails loudly, which is acceptable.
+>
+> **B2. MET: the clause 3 revert.**
+> - **Values outside the scheme.**
+>   - A Topic is proposed at any confidence (classification.py:652-654).
+>   - A Project or Process value is discarded at any confidence (655-657).
+>   - A department is discarded (583-585).
+> - **A run creates, links and reactivates no Tag.**
+>   - The apply path only reads tags (630-632).
+>   - `_link_tag` creates only a `ContentTag` (782-809).
+>   - `_bring_into_use` is called only from `apply_tag` (979) and `confirm_proposed_tag` (1112).
+> - **The prompt.**
+>   - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\ai\classification.py at 6e77913 differs from `a9934eb` only by the docstring sentence (25-32). `a9934eb` is the commit #85's record names as the one it measured (objective-05-anthropic.md:26).
+>   - `test_classification_prompt.py` and `test_classification_schema.py` are identical to `a9934eb`. The revert is `fa58690`.
+>   - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\core\constants.py:721 is 0.72 again.
+> - **Kept from D-128.**
+>   - Rule 4b skips a removed or rejected value (614-618, 627-628).
+>   - `reject_proposed_tag` records the rejection (1144-1174).
+>   - `MAXIMUM_CREATED_TAG_WORDS` and `_may_become_a_tag` are gone from the code, the contract, the schema doc and `ai-provider.md`.
+> - **The one literal departure** (a Topic holding a NUL or a lone surrogate is discarded, 646-651) is recorded at decisions.md:13335-13337. See B11 for what the merge does to it.
+> - **Passing at 6e77913:** `test_classification_d128.py`, `_rejected.py`, `_removal.py`, `_grown.py` and the eleven API FR-10 files.
+>
+> **B3. MET as recorded: the thresholds. "Chosen by D-106's rule" overstates it.**
+> - **The values.**
+>   - constants.py:731 is `{"claude-haiku-5-5": 0.30}`, 721 is 0.72 and 710 is 0.95.
+>   - `department_threshold` (classification.py:682-694) falls back to the model's shared value. Rule 3 uses it (586, 707-710). The type and the tags use `_is_provisional` (574, 697-704, 797, 807).
+>   - The key matches the default model string: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\config\settings.py:331 and 365, and anthropic.py:245.
+> - **The run.**
+>   - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\corpus\objective-05\dev-documents\tag-reference.json has one commit, `0d3b334`, at 11:51:48.
+>   - The run's tree is `9365084`, captured at 11:53:12, and its record says 11:53:18. It read no database.
+>   - The classifier module at `9365084` is byte-identical to `a9934eb`.
+>   - D-129's table matches C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\corpus\objective-05\runs\2026-11-13-tag-threshold\threshold\tag-threshold.json:
+>     - pooled: 122 right, 66 wrong, uncapped 0.5, result 0.25;
+>     - tags alone: 66 and 65, uncapped 0.7, result 0.25;
+>     - departments alone: 56 and 1, no split, result 0.30.
+>   - The figures 43 right and 0 wrong at 0.72, 48 and 3 at 0.70, and 66 and 62 at 0.25 follow from the score tables.
+> - **The frozen reference.** C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\corpus\objective-05\reference.json has one commit, `fb9e18a` on 9 November. No D-129 commit touches it, and the run used only the 19 development documents.
+> - **The wording.**
+>   - The rule committed before the run named the pooled 0.25 as its result. It reported departments alone "for information only".
+>   - The user chose 0.30 for departments and kept 0.72 for tags after seeing the run, as D-129 records at 13384-13385.
+>   - The tags' 0.72 is D-122's value, derived on types; this run did not produce it.
+>   - This is tuning on the development set, so it does not breach D-93.
+> - **Tests:** the behavioural ones are among B1's 26 at 6e77913. They pass at `bc0b5b6`.
+>
+> **B4. MET: clause 2 read per kind. The reasoning holds, with one point the record should state.**
+> - **Why it holds.**
+>   - The clause fixes a behaviour: an assignment below the threshold is held. It does not fix how many thresholds there are.
+>   - D-122 had already made the threshold per model.
+>   - Every assignment is compared with the value configured for its kind, so clause 2 holds by construction.
+>   - The verifier implements the reading: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\scripts\objective05_verify.py:10-16 and 161-218. Its one test is red at 6e77913 (B1).
+> - **What the record should say.** On Haiku at 0.30, the department half of clause 2 is nearly never exercised.
+>   - No department suggestion among the 57 development classifications fell below 0.30: `departments_only` scores 56 at both 0 and 0.30.
+>   - So a Haiku department is held almost only when it differs from a department already on the document.
+>   - This is the rule's fallback outcome, as 0.72 is for types, and clause 2 is still met as written.
+>   - **Fix:** one sentence after decisions.md:13391.
+> - **Not measured.** No run of the shipped build covers departments. D-129 says so at 13307-13310.
+>
+> **B5. MET: the department list, with the lead's three choices built.**
+> - **The table and migration.**
+>   - The model: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\models.py:195-257.
+>   - The migration: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\migrations\0015_departments.py:103-124, a `CreateModel` and a seed whose reverse does nothing to the rows before the table is dropped.
+>   - The seed decides `grown` on the exact kept spelling (99).
+>   - `makemigrations --check --dry-run` reports "No changes detected".
+> - **The list is the only department source.** `tag_scheme` reads only `Department` (classification.py:293, 309-331).
+> - **The upload field stays free text:** C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\api\serializers.py:270-271, unchanged.
+> - **A retired department stays on its documents:** retiring never touches a document (C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\taxonomy.py:319-348).
+> - **The routes.**
+>   - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\api\views.py:2234-2310, and urls.py:114-115.
+>   - `[IsAuthenticated, CanManageTags]` on both views (2266, 2301).
+>   - The `tagging` throttle on the POST only (2267-2268).
+> - **Server tests from both roles:** C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\api\tests\test_fr10_departments.py:128-142, 177-192, 218-236, 373-385 and 416-426. The matrix at 47/47 is reported.
+> - **Front-end tests:** C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\frontend\tests\departments.test.jsx, including a 403 withdrawing every control (760-863) and the Employee's route guard (892 onward).
+>
+> **B6. MET: F1.**
+> - **The fix:** classification.py:309-321 and 331, and C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\retrieval\scoping.py:114-124, which fails closed for a role it does not know.
+> - **No new oracle.** `_still_listed` is reached only for a name already in the scheme (583 short-circuits).
+> - **Tests.**
+>   - test_fr10_departments.py:553-601: a planted carrier, by upload and by the confirm/edit control, from both roles, gives identical results with and without the hidden row.
+>   - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\tests\test_classification_scheme.py:410-450: Employee-only, both roles, an unknown role, an empty audience and Administrator-only.
+> - **The saved breaks** SB1 to SB4 target committed test names (reported).
+> - **The cost is recorded** at decisions.md:13492-13494.
+>
+> **B7. MET: F2, in code and with its own test (583-585, 713-723; test_fr10_departments.py:607-631). It is also the cause of B1.**
+>
+> **B8. MET for case; PARTIAL in the record of the residual: F3.**
+> - **The fix:** taxonomy.py:221-253 and 340, tested at test_fr10_departments.py:637-665.
+> - **Spacing is still compared exactly.** D-129 says so in one phrase (13447) and does not state the consequence.
+>   - The seed collapses inner spacing when it picks a name (0015:59-62, 69-75), while `documents_using` does not (221-229).
+>   - The upload and confirm routes trim a department but do not collapse its spacing (serializers.py:270-271 and 378-381; classification.py:845-846).
+>   - So a department seeded from a value with a double space lists `item_count` 0 and is offered Delete. It is deleted, and once added again it is vocabulary. Only an Administrator can do this, and nothing reaches an Employee.
+>   - D-129's "there is no route that makes it vocabulary" (13493-13494) therefore holds only while some document uses the name, ignoring case and exactly in spacing.
+> - **Fix, either of:**
+>   - compare after collapsing whitespace on both sides in `documents_using` and `department_item_counts`;
+>   - or add one sentence to D-129's F3 entry stating this consequence, and qualify 13493-13494.
+>
+> **B9. MET: F4.**
+> - **The fix and its tests:** serializers.py:440-481, tested at test_fr10_departments.py:670-707.
+> - **Executed by my probe** (`test_probe_f4_breaks.py`, 13 passed). It applied each of F4's four breaks to the committed tests. All nine break cases were caught: NB1 (4 targets), NB2 (3), NB3 (1) and NB4 (1). The unbroken tests pass.
+> - **What the saved results lack.** `break_results2.json`'s NB4 targets a test name that does not exist at 6e77913. The probe fills that gap.
+>
+> **B10. PARTIAL: the records.**
+> - **D-129, `docs/api-contract.md` and `docs/schema-v1.md`** hold no stale F1 to F4 claim.
+>   - The corrections are at decisions.md:13403-13405, 13423-13425, 13446-13448 and 13461-13464.
+>   - Also in the contract's Departments section and at schema-v1.md:311.
+>   - D-129 omits B1.
+> - **Two statements elsewhere have been false since F1:**
+>   - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\ai\base.py:72-74, in the `TagScheme` docstring: "a hidden (grown) one only while every role in the audience reads a document carrying it".
+>     - **Fix:** replace it with "a hidden (grown) one only for an audience every role of which reads everything (`reads_everything`; D-129's security review, finding F1)".
+>   - 0015_departments.py:20-25: "A grown department is offered only for a document whose whole audience reads a document with that department … that is the test `tag_scheme` applies to a grown department at run time".
+>     - 0015 is pushed: `e04a746` is on origin.
+>     - **Fix:** a dated line in D-129 naming 0015:20-25 as the rule before F1. A docstring-only correction would also do: §7 forbids editing a migration's operations, not its comments. If made, log it in D-129.
+> - **Wording, low.**
+>   - Two places say the AI suggests a department only from the list:
+>     - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\frontend\src\constants.js:1524: "The AI suggests a department for a document only from this list";
+>     - the contract: "suggests a department only from it", and "never suggests it".
+>   - The detail page says otherwise: "The AI suggested “X”, which is not one of the known departments, so it was not applied" (constants.js:698-701; C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\frontend\src\components\Classification.jsx:176-180).
+>   - **Accurate wording:** the AI applies or holds a department only from this list.
+> - **An observation, not an FR-10 clause.** `GET /api/departments` carries no `grown` (serializers.py:428-437), so the Tags page cannot show which departments are hidden.
+>
+> **B11. PARTIAL, after the merge (applies to `bc0b5b6`, not 6e77913): what #105 and #106 change for D-129.**
+> - **The prompt text is unchanged.** Only the parser and its messages change.
+> - **No longer byte-identical.** D-129's "byte-identical to #85's commit `a9934eb`… one sentence of the module's docstring" (13254-13256) stops being true: `apps/ai/classification.py`, `test_classification_loop.py` and `test_classification_schema.py` now carry #105 and #106's parser changes.
+> - **The "one exception" no longer happens on the shipped path.** This is D-129's 13264-13266 and 13335-13337.
+>   - `loads_reply` now refuses any reply holding a NUL or an unpaired surrogate: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\ai\schema.py:128-147 and 150-197 at `bc0b5b6`.
+>   - Such a reply is retried. After `MAXIMUM_CLASSIFY_ATTEMPTS` the classify route answers 503, and ingestion leaves the document unclassified.
+>   - Rule 4d's U+FFFD branch (646-651) can now be reached only by calling `apply_classification` directly, so the literal clause 3 departure no longer occurs.
+> - **D-128's open residual is closed** by the same change: "a NUL in a suggested department answers 500" (decisions.md:12386-12388, 12835).
+>   - It is still open at 6e77913, where rule 1 writes `machine_department` unchecked (566).
+>   - #106 tests it at test_classification_schema.py:377-380 at `bc0b5b6`.
+> - **Fix:** a dated note on D-129 after the merge stating these four points.
+>
+> ### The summary for the lead, line by line
+>
+> | Line | Verdict | What is true at 6e77913 |
+> |---|---|---|
+> | Type: fixed list; applied at 0.72 or more, else provisional and held | Correct, but needs a qualifier | 0.72 is the threshold for Claude Haiku 5.5, the default. On FLM's gemma3:4b, or any model not in the map, it is 0.95 (constants.py:710). A type outside the list is no reply at all: it is retried, and after three attempts the document is left unclassified. |
+> | Department: suggested only from the active list | Wrong as worded | **What holds:** only a name on the active list that is admitted for the document's audience can be applied or held (classification.py:331, 583).<br>**Where the wording fails:** the model can return any name. It is told to name the document's own department whenever the admitted list is empty: a fresh database, or an Employee-visible document whose listed departments are all hidden (apps/ai/classification.py:388-390).<br>**What the page shows:** that name is recorded and shown on the detail page as "not one of the known departments" (constants.js:698-699).<br>**Matching:** exact in case and spacing, after trimming. |
+> | Written only into a blank department, at 0.30 or more | Correct, but needs a qualifier | 0.30 on Haiku, 0.95 on gemma3:4b. The department must also still be listed when the reply is applied (F2). |
+> | A typed, confirmed or edited department is never replaced | Correct for the AI, but incomplete | A different listed suggestion at 0.30 or more is held as provisional, not discarded (593-596). The page says "Confirming replaces X with Y" (constants.js:694), and a person who confirms does replace it (867-871). |
+> | Below 0.30 provisional, department unchanged | Correct, but misleading on its own | A suggestion is also provisional at 0.30 or more when the document already has a different department. |
+> | Outside the list: discarded | Correct | Two more cases are discarded: a hidden department, for any audience an Employee is in; and a department retired or deleted while the provider call ran. |
+> | A hidden department is never suggested for an Employee-readable document | Wrong as worded | **What holds:** for such a document it is never offered to the model, applied or held, even when documents an Employee reads carry it (309-321).<br>**Where the wording fails:** the model can still name it from the text. It is then discarded and shown as "not one of the known departments".<br>**What an Administrator can see:** the Tags page cannot show which departments are hidden. |
+> | Project and Process | Correct, but needs a qualifier | 0.72 on Haiku, 0.95 elsewhere. "The scheme" is the scheme for the document's audience. A grown value that only restricted material carries counts as outside it, and is discarded. |
+> | Topic | Correct at 6e77913, with two exceptions | **A NUL or a lone surrogate:** a Topic holding one is discarded. After #106 the whole reply is refused and retried instead (B11).<br>**Over 255 characters:** a Topic this long is proposed, but can only be rejected: confirming it answers 400 (1109-1110).<br>**The cap:** at most eight tag suggestions per document. |
+> | Needs a person: confirm or correct provisional assignments; confirm or reject proposed Topics; a department whose only listed match is hidden | Correct | The hidden case has to be typed, at upload or in the confirm/edit control. |
+> | Needs a person: a new Project, Process or department (the Tags page) | Needs an Administrator | **Who:** only `manage_tags`, which the Administrator alone holds (views.py:2188, 2266).<br>**Topics:** any contributor can bring in a new Topic, by name on a document or by confirming a proposal.<br>**Typed departments:** a department typed on a document stays on it, but is never suggested until an Administrator lists it. |
+> | Missing | Omitted | (a) **Applied values still need reviewing.** They stay marked "Suggested by AI" until a person confirms or removes them.<br>(b) **A failed classification is not retried.** If classification fails at upload, the document stays unclassified until someone presses Classify, reprocesses it, or runs `classify_documents` (ingestion/documents.py:303-334). UC-09 E1's "queues it for a later attempt" is not built and is recorded nowhere for FR-10. This predates D-129.<br>(c) **The list starts empty on a fresh database.** No department is applied until an Administrator adds some. |
+>
+> ### Invariant check (CLAUDE.md §6)
+>
+> - **1:** pass for D-129's changes (B6). A hidden department never enters a scheme an Employee is in, and an Employee-visible outcome is the same with or without a hidden row.
+> - **4:** pass. The department routes use `manage_tags` as a permission class, in the order 401, then 403, then 429.
+> - **8:** pass. Classification at upload keeps its own savepoint, and F2 adds one read.
+> - **9:** pass. `apply_classification` runs in one transaction, and 0015 is additive and reversible.
+> - **10:** pass. The parser is unchanged at 6e77913.
+> - **2, 3, 5, 6 and 7:** not applicable. No chunk, meeting scope or answer path changed.
+> - **Set-level:**
+>   - no AI SDK import outside `apps/ai`;
+>   - the thresholds are in constants.py only, and the remaining literals are in docstrings;
+>   - no chunk writes;
+>   - nothing is enforced only in the interface;
+>   - `reads_everything` and `_every_role_reads` answer different questions, and both sit in scoping's home.
+>
+> ### Gate impact
+>
+> - **Not an M6 requirement.** FR-10 is NIT3004 work, and M6 has passed.
+> - **The red suite blocks the merge of #102** under CLAUDE.md §7 until a full pytest passes at the pushed head.
+> - **Two MUST paths are touched:**
+>   - FR-08's upload gains one read, and its department field is unchanged;
+>   - the FR-14 and FR-15 filters still read `Documents.department` (test_fr10_departments.py:432-458).
+> - **FR-10 stays INCOMPLETE by decision** (D-104's dated note; D-119), whatever this audit finds.
+> - **Smallest fixes, in order:**
+>   1. the full pytest with `140014c` and the merge, with its matrix line;
+>   2. the B1 record;
+>   3. `base.py:72-74`, and the 0015 line;
+>   4. the merge note (B11);
+>   5. optionally, the B4 and B8 sentences and the B10 wording.
+>
+> ### What I ran
+>
+> Every pytest run used the wrapper, on `test_kmp_fr10auto_audit2`, which pytest-django creates and destroys. I did not run the full suite.
+>
+> | Run | Content | Result |
+> |---|---|---|
+> | `test_classification_apply.py` | 6e77913 | 17 failed, 26 passed |
+> | 13 FR-10 files: the documents tests and `test_fr10_tag_vocabulary.py` | 6e77913 | 9 failed, 201 passed |
+> | The lock-order tests, the ingestion hook, and 11 API FR-10 files | 6e77913 | 461 passed |
+> | Probe: F2 against a hand-built scheme | 6e77913 | 2 passed: no row gives "discarded", a row gives "applied" |
+> | vitest: `departments.test.jsx` and `tags.test.jsx` | `bc0b5b6`, whose front end is identical to 6e77913 | 57 passed |
+> | Probe: F4's four breaks against the committed tests | `bc0b5b6`, whose serializer and test file are identical to 6e77913 | 13 passed: 9 break cases caught, 4 unbroken cases pass |
+> | Probe: `makemigrations --check --dry-run`, on the test database | `bc0b5b6`, whose models, migrations and settings are identical to 6e77913 | No changes detected |
+> | The four failing files, after `140014c` | `bc0b5b6` | 84 passed |
+>
+> The probes are in C:\Users\mozza\AppData\Local\Temp\claude\415e7131518f8d68\b98e2cf8-f5bb-411a-b107-62e245fd5851\scratchpad\audit2\: `test_probe_f2_hand_built_scheme.py`, `test_probe_f4_breaks.py` and `test_probe_makemigrations_check.py`. Each run's output is in the `run_*.txt` file beside them.
+>
+> **Final `git status`:**
+> - `M docs/decisions.md`: the coordinator's change, not mine;
+> - `?? corpus/objective-05/runs/2026-11-13-d129/`;
+> - HEAD is `bc0b5b6`.
+>
+> The runs may have refreshed ignored caches (`__pycache__`, and vitest's under `node_modules`).
+>
+> ### Could not check
+>
+> - **The full pytest and the matrix at 6e77913.** I was told not to run them. The coordinator's result is reported, not observed; my focused runs reproduce the 26 failures.
+> - **The suites at `140014c` or `bc0b5b6`:** the full pytest, and npm test, lint and build. 635 passed at `8483735` is reported; the front end is unchanged since `ce4e9d3`.
+> - **CI on 6e77913.** It has not run, and I had no network.
+> - **Other breaks.** The F1 to F3 breaks I read only from the saved results. I did not re-run the 38 and 38 breaks of `e04a746` and `ce4e9d3`, or the 23 of `5ab1bd5`.
+> - **The user's side.** I could not see his answers or the tabbed questions. In particular, I could not tell whether the `kmp_anthropic` projection ("15 departments instead of 7", decisions.md:13386-13387) was in front of him before he chose. It uses the twenty documents' recorded confidences, not `reference.json`'s labels, and the repository does not say when it was shown.
+> - **Database figures:** those for `kmp_anthropic` and the alpha's state.
+> - **The security reviewer's probes.**
+> - **Live interface behaviour.**
+>
+> **One line:** INCOMPLETE. D-129's rules, the department list and F1 to F4 are built as recorded, but pytest is red at 6e77913 (26 tests F2 broke and no run after F2 covered), two in-code records still state the hidden-department rule F1 replaced, and the lead's summary misstates three department lines, gives a person an Administrator's task, and leaves out three tasks.
+
+**What changed because of the re-audit of `6e77913` (13 November).** It found D-129's rules, the
+department list and F1 to F4 built as recorded, and returned INCOMPLETE for the points below.
+
+- **B1, the red suite:** fixed in `140014c` before the report arrived. The full pytest at `bc0b5b6`
+  passed: 4,815, with the matrix at 47/47. It is recorded under "Tests for the fixes", with the
+  builder's limit.
+- **B3, "chosen by D-106's rule":** the overstatement was in the coordinating session's brief to the
+  auditor, not in this entry, which records the user's choice after the run. The correct account:
+  - D-106's rule, pooled as committed before the run, gave 0.25.
+  - Run on departments alone, reported for information, it gives 0.30.
+  - The user chose 0.30 for departments and kept D-122's 0.72 for types and tags.
+
+  The pull request says the same. Its description was updated on 14 November, after the re-audit of
+  `d909537` found it had not been (C2).
+- **B4:** a note on how rarely Haiku's department half of clause 2 is exercised, under "Clause 2 is
+  read per kind".
+- **B8:** recorded under finding 3, with a qualification on finding 1's cost.
+- **B10:**
+  - **`apps/ai/base.py`:** the `TagScheme` docstring now states F1's rule.
+  - **`documents 0015`:** its docstring carries a dated correction. The migration is pushed, and only
+    its comment changed, never its operations: CLAUDE.md §7 forbids editing a pushed migration's
+    operations.
+  - **"Suggests" is now "assigns"** on the Tags page's department copy (ten strings in
+    `frontend/src/constants.js`, and the comments in `Departments.jsx`) and in `docs/api-contract.md`.
+    - The model can name any department. Only a listed one, admitted for the document's audience, is
+      applied or held. A name outside the list is shown on the detail page as "not one of the known
+      departments".
+    - This entry's own "suggests only listed departments" (the upload-field choice, and the screen's
+      help text) is to be read as "assigns" in the same sense.
+    - The four assertions that quote the copy were updated. They are in three tests, and were first
+      recorded here as "four tests" (corrected on 14 November, C8). Each failed when its old string
+      was put back: four breaks, each reverted.
+  - **Which departments are hidden:** recorded under "Not covered".
+- **B11, the merge of `main`:** dated notes on "byte-identical", on the one exception and on the
+  literal departure. #106 also closes D-128's open residual, a NUL in a suggested department answering
+  500, on the merged head.
+- **UC-09 E1's queue:** recorded under "Not covered".
+- **The summary for the lead** was corrected, line by line as the report gives it, before it was
+  sent.
+
+**The focused re-audit of `d909537` (14 November 2026), verbatim.** This is the `requirements-auditor`
+agent's report, quoted whole and unedited. It was extracted mechanically from the agent's transcript,
+and checked against the workflow's own record of its result. Its line numbers are at `d909537`,
+before the corrections above shifted this entry. What changed because of it follows the quotation.
+
+> ## Focused re-audit: FR-10 (D-129) at d909537 — 14 November 2026
+>
+> **Verdict:** INCOMPLETE. D-129's code is as recorded, and every test I ran at d909537 passes, but four records are wrong or unsupported:
+> - `12e2ff8` added two false statements: documents 0015's "F1 only narrows what any audience is offered", and a merge note that names the wrong three files.
+> - "The pull request says the same" is not supported by any evidence I could find.
+> - D-129 still says a Topic over 255 characters "can only be rejected", but both proposed-tags routes refuse it.
+>
+> ### Scope and method
+>
+> - **Read only.** I edited, created, staged and deleted nothing in the worktree. The final `git status` shows only `?? corpus/objective-05/runs/2026-11-13-d129/`, which was there before I started. HEAD is `d909537`.
+> - **Where my probes and outputs are:** C:\Users\mozza\AppData\Local\Temp\claude\415e7131518f8d68\b98e2cf8-f5bb-411a-b107-62e245fd5851\scratchpad\audit3\r2\.
+> - **The scratch front-end copy** at C:\Users\mozza\AppData\Local\Temp\claude\415e7131518f8d68\b98e2cf8-f5bb-411a-b107-62e245fd5851\scratchpad\audit3\fe was made by an earlier attempt at this audit.
+>   - I checked that it is identical to the worktree's `frontend/src`, `tests`, `public` and `package.json`.
+>   - Its `vite.config.js` adds only a `cacheDir`, and its `node_modules` is a junction to the worktree's.
+>   - I re-ran everything myself.
+> - **Line numbers** are at `d909537`.
+>
+> ### Findings
+>
+> **C1. B1, the red suite and its record: MET.**
+> - **The builder:** C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\tests\classification_builders.py:56-68. Each listed department becomes an active row unless one exists ignoring case (67-68).
+> - **The record:** C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\docs\decisions.md:13553-13565.
+>   - Production's single caller holds: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\classification.py:436 is the only call of `apply_classification` outside tests.
+> - **The builder's limit, executed (probe R2):**
+>   - with no row, a row is made and the department is applied;
+>   - with a row "FINANCE", it is discarded;
+>   - with a retired "Finance", it is discarded.
+>   - This is as recorded: `_still_listed` compares exactly and needs an active row (classification.py:713-723).
+> - **"Before the report arrived":** `140014c` is 09:22:04Z, and the report was handed back at 09:38:05Z.
+> - **The four files B1 named pass at `d909537`** (within the 878 below).
+> - **Not observed:** a full pytest at `d909537` (see "Could not check").
+>
+> **C2. B3, the account of the department threshold: PARTIAL.**
+> - **D-129's own text is accurate:** decisions.md:13380-13400, and C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\core\constants.py:723-730.
+> - **"The pull request says the same" (decisions.md:13888) is unsupported.**
+>   - In the coordinator's transcript, PR #102's body was last replaced at 00:33:55Z on 13 November, from `pr-body.md`. That was before the threshold run at 00:53Z. The only later edit, at 10:04:27Z, changed the title.
+>   - The one D-129 body draft is C:\Users\mozza\AppData\Local\Temp\claude\415e7131518f8d68\b98e2cf8-f5bb-411a-b107-62e245fd5851\scratchpad\pr-body-d129.md, written at 09:07Z and applied in no transcript. Its line 33 says "It was set by D-106's rule on the 19 development documents". That is the wording B3 called an overstatement.
+> - **The same overstatement is in code:** classification.py:686-687, `department_threshold`'s docstring, says "claude-haiku-5-5's 0.30, chosen by D-106's rule on departments alone".
+> - **Fix:**
+>   - Give PR #102's body the three-point account at decisions.md:13884-13886, or delete "The pull request says the same."
+>   - Make classification.py:687 read "claude-haiku-5-5's 0.30, D-106's rule's result on departments alone, which the user chose over the pooled 0.25 (D-129)".
+>
+> **C3. B4: MET.**
+> - **The note:** decisions.md:13407-13413.
+> - **The evidence:** C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\corpus\objective-05\runs\2026-11-13-tag-threshold\threshold\tag-threshold.json, `departments_only`:
+>   - right 56, wrong 1;
+>   - lowest right 0.30;
+>   - no department outside the scheme;
+>   - a score of 56 at both 0.0 and 0.30.
+> - **What that means:** the table scores right-at-or-above plus wrong-below (it gives 1 at 1.0). So all 57 suggestions are at or above 0.30, as the note says.
+>
+> **C4. B8: MET.**
+> - **The record:** decisions.md:13517-13518 and 13526-13534.
+> - **Each fact holds:**
+>   - **The seed collapses spacing:** C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\migrations\0015_departments.py:66-69 and 80.
+>   - **It decides `grown` on the kept spelling exactly:** 0015:106.
+>   - **"In use" lowers both sides and compares spacing exactly:** C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\taxonomy.py:221-241.
+>   - **The upload field only trims:** C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\api\serializers.py:270-271.
+>   - **Confirm only strips:** classification.py:845-846.
+>   - **An added name is not grown:** taxonomy.py:303.
+>
+> **C5. B10, `apps/ai/base.py`: MET.**
+> - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\ai\base.py:72-76 states F1's rule in the re-audit's wording.
+> - It matches `tag_scheme` (classification.py:309-321 and 331).
+>
+> **C6. B10, documents 0015's dated correction: PARTIAL.**
+> - **Only the comment changed: MET.**
+>   - Only `e04a746` and `12e2ff8` ever touched 0015.
+>   - `e04a746` is on `origin/feat/FR-10-automatic-tagging` (the local remote-tracking ref).
+>   - With its docstring removed, the module is AST-identical at `e04a746`, `6e77913` and `d909537`.
+>   - `makemigrations --check --dry-run` reports "No changes detected" (probe R1).
+> - **The correction's last clause is false.** 0015_departments.py:34-35 says "F1 only narrows what any audience is offered."
+> - **Probe R4** compares `d909537`'s `tag_scheme` with the pre-F1 rule on the same rows, with a grown "Legal". The pre-F1 rule is `ce4e9d3`'s `apps/documents/classification.py`, which is identical to `e04a746`'s.
+>
+> | Carrier, on an Administrator-only document | Administrator-only document, pre-F1 | Administrator-only document, F1 | Employee-visible document, pre-F1 | Employee-visible document, F1 |
+> |---|---|---|---|---|
+> | none | not offered | offered | not offered | not offered |
+> | "LEGAL" | not offered | offered | not offered | not offered |
+> | "Legal" | offered | offered | not offered | not offered |
+>
+> - **So F1 widens one audience.** For an audience every role of which reads everything, it offers every active grown department, whether or not a document carries it. It narrows only for other audiences.
+> - **Nothing is disclosed,** because that audience reads every source.
+> - **Why the clause matters:** it is the sentence that tells a reader the migration's own guarantee survives F1. That guarantee is at 0015:25-27: "no audience is offered a department it was not offered before".
+> - **The guarantee no longer quite holds.** Take a grown department whose kept spelling no document carries exactly, because the seed collapses spacing. It is now offered for an Administrator-only document, and no audience was offered that spelling before. This is reasoning from the same code, not a separate probe.
+> - **Fix (comment only, which §7 permits; log it in D-129):** replace "and F1 only narrows what any audience is offered" with: "F1 narrows what any audience with a role that does not read everything is offered (no grown department), and widens what an audience every role of which reads everything is offered (every active grown department, carried or not). That audience reads every source, so nothing is disclosed."
+>
+> **C7. B10, "suggests" to "assigns": PARTIAL (low).**
+> - **Done as claimed:**
+>   - the ten strings in C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\frontend\src\constants.js:1524-1592;
+>   - the comments in C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\frontend\src\components\Departments.jsx:149-163;
+>   - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\docs\api-contract.md:1336-1337 and 1354-1355.
+>   - No "suggest" is left in the department copy. No copy of the old strings is left anywhere else in the repository outside `node_modules`.
+> - **Left unchanged in D-129's own text:**
+>   - decisions.md:13428-13430 and 13458-13460 still say "suggests". They are corrected only by a reading note about 440 lines later (13902-13903), so 13460 now misreports what the screen says.
+>   - decisions.md:13514 says "a hidden department is never suggested for an Employee-visible document". The reading note does not cover it. It is the sentence the re-audit's table called "Wrong as worded" (13802): the model can name the department, and the detail page then says "The AI suggested “X”, which is not one of the known departments" (constants.js:698-699).
+> - **Left unchanged in code:**
+>   - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\models.py:221 says "the classifier suggests only listed departments". That is exactly the claim B10 corrected on the screen.
+>   - Three more places say the same:
+>     - models.py:201;
+>     - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\frontend\src\api\departments.js:2;
+>     - 0015_departments.py:28.
+> - **Fix:**
+>   - At decisions.md:13430, 13460 and 13514, add inline italic dated notes like the one at 13425-13427, saying "assigns": only a listed department admitted for the audience is applied or held; the model may name any other, which is discarded and shown as not one of the known departments.
+>   - Use "assign" in models.py:201 and 221 and in departments.js:2.
+>   - Do the same at 0015:28 if 0015's comment is edited for C6.
+>
+> **C8. B10, the four changed front-end assertions: PARTIAL (low). The breaks hold; the count in the record does not.**
+> - **Each assertion fails when its string's old wording is put back.** I did this on the scratch copy only.
+>   - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\frontend\tests\departments.test.jsx:307, 312, 392 and 435 each gave 30 passed and 1 failed, against 31 passed unbroken.
+>   - Putting each old regex back against the new copy fails it too.
+> - **They are four assertions in three tests, not "four tests".** decisions.md:13904 and `44743ce`'s message both say "four tests". Lines 307 and 312 are in the same test, at line 300.
+> - **Six of the ten strings are pinned by nothing.** Put "suggest" back in any of the following and the file still passes 31 of 31:
+>   - `departmentsUploadNote`;
+>   - `noDepartments`;
+>   - `departmentDeleteBody`;
+>   - `departmentCreateScope`;
+>   - `departmentCreated`;
+>   - `departmentReactivated`.
+> - **Fix:** say "four assertions, in three tests". Optionally, add `toMatch(/assign/)` for each of the six.
+>
+> **C9. B11, the notes on the merge: PARTIAL.**
+> - **True at `d909537`:** the one exception (decisions.md:13275-13279), the literal departure (13351-13352), and the closure of D-128's residual (13907-13909). The evidence:
+>   - `loads_reply` refuses a NUL or an unpaired surrogate in any key or value: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\ai\schema.py:190-209 and 246-248.
+>   - Both providers parse through `run_classification_attempts`: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\ai\anthropic.py:236 and C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\ai\flm.py:173.
+>   - Three replies with a NUL in the department end in `ProviderUnavailable` after exactly three calls (probe R3).
+>   - The route then answers 503: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\api\views.py:1952-1959.
+>   - Ingestion leaves the document unclassified: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\ingestion\documents.py:321-334.
+>   - The refusal is #106's: `8391990` reaches `55d9455`, not `6e1efd1`.
+>   - It is tested at C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\ai\tests\test_classification_schema.py:374-390.
+> - **Wrong: the note on "byte-identical", decisions.md:13262-13265.**
+>   - "These three files" are the ones D-129 restored: `apps/ai/classification.py`, plus the two test files `fa58690` restored, `test_classification_prompt.py` and `test_classification_schema.py`.
+>   - The note names `test_classification_loop.py` in place of the prompt test. D-129 never restored the loop test.
+>   - The note also says all three are no longer byte-identical. But `test_classification_prompt.py` is still byte-identical to `a9934eb`: its blob is `44bdafeefe` at both commits.
+> - **Not annotated:** D-128 still says the residual is open, at decisions.md:12390-12392 ("still answers 500 on the classify route") and 12838-12839.
+> - **Fix:**
+>   - Make 13262-13265 read: "*Since the merge of `main` on 13 November (`bc0b5b6`), `apps/ai/classification.py` and `test_classification_schema.py` are no longer byte-identical to `a9934eb`: they carry #105 and #106's parser changes, as does `test_classification_loop.py`, which D-129 did not restore. `test_classification_prompt.py` is still byte-identical. The prompt text is unchanged.*"
+>   - Add a dated note at D-128's 12390 and 12839: closed on this branch by #106 at `bc0b5b6`; such a reply is retried, then answered 503 (D-129).
+>
+> **C10. UC-09 E1, and which departments are hidden: MET.**
+> - **The record:** decisions.md:13583-13590.
+> - **The quotation** matches C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\proposal.txt:2075 word for word.
+> - **D-119's audit names it** at decisions.md:10055 ("Outside the FR text, not counted as gaps: UC-09 E1's queue…").
+> - **Nothing retries a failed classification by itself.** `classify_document_now` is called only by:
+>   - the classify route (views.py:1946);
+>   - ingestion (ingestion/documents.py:323);
+>   - `classify_documents`.
+> - **`GET /api/departments` carries no `grown`** (serializers.py:428-437).
+>
+> **C11. B2, B5, B6, B7 and B9, MET at `6e77913`, still hold: MET.**
+> - **What the five commits changed** in `apps/documents`, `apps/api`, `apps/core` and `apps/retrieval`:
+>   - the builder;
+>   - main's unquoted `doc_type` message (classification.py:543-547), with its assertion in `test_classification_apply.py`;
+>   - 0015's comment.
+> - **Unchanged:** the prompt, the constants, the models, the taxonomy, the serializers, the views and the scoping.
+> - **Their tests pass** in the runs below.
+> - **Invariant 1 holds:** probe R4 shows an Employee-visible document is never offered a grown department, with or without carriers.
+>
+> **C12. PR #107 changes nothing D-129 or FR-10's parsing relies on: MET.**
+> - `d909537` differs from `12e2ff8` only in `apps/ai/schema.py` and `apps/ai/tests/test_code_fence_scan.py`. Both are identical to main's `a948b50`.
+> - **What it changes:** the code-fence repair (schema.py:93-153) becomes a scan that returns what the two regexes returned. `test_code_fence_scan.py` passes, including its exhaustive comparison with a frozen copy of the old function.
+> - **What it does not change:** no classification file, prompt or NUL refusal.
+> - So D-129 needs no note for #107, and its "#105 and #106" list (13264) stays complete.
+>
+> **C13. `docs/api-contract.md`'s Departments section and `docs/schema-v1.md`'s Departments table agree with the code: MET.**
+> - **The contract** (api-contract.md:1334-1355) agrees with views.py:2234-2310, serializers.py:428-481 and taxonomy.py:221-348 on:
+>   - 401 and then 403 on every route;
+>   - a POST-only `tagging` throttle, on one budget with `POST /api/tags` (views.py:2188-2190);
+>   - 201 for a new name, not grown;
+>   - 200 for a retired name, reactivated with its spelling and `grown` kept;
+>   - 409 `{detail, department_id}`;
+>   - the 400 causes;
+>   - DELETE 200, 204, or 404 with "No Department matches the given query." (views.py:307).
+> - **The table** (C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\docs\schema-v1.md:299-311) agrees with models.py:195-257.
+> - **Two small points, no fix needed:**
+>   - the contract's list of POST 400s omits a lone surrogate, which `CharField` refuses (serializers.py:456);
+>   - schema-v1.md:301's "suggests a department from" claims no exclusivity.
+>
+> **C14. The quotation of the re-audit of `6e77913`: MET.**
+> - decisions.md:13597-13874 is identical, all 278 lines, to the SubagentHandback message in C:\Users\mozza\.claude\projects\C--Users-mozza-Documents-IT-Captone-Project-KMP-KMP-Prototype-KMP-Prototype--claude-worktrees-fr-10-auto-tagging-9a579a\b98e2cf8-f5bb-411a-b107-62e245fd5851\subagents\agent-a18efde1eb7e8990e.jsonl (09:38:05Z, 13 November).
+>
+> **C15. Older than these five commits, and in D-129: a Topic over 255 characters "can only be rejected": CONTRADICTED.**
+> - **What the record says:** decisions.md:13353-13354, "is proposed, as on `main`, and can only be rejected: confirming it is the existing 400". The re-audit of `6e77913` repeated it (13804).
+> - **What the code does:** both proposed-tags routes validate the body with `ProposedTagSerializer`, whose `value` has `max_length=NAME_MAX_LENGTH` (serializers.py:395; views.py:2124-2125).
+> - **Probe R5,** as an Employee, with a 359-character Topic proposal:
+>   - confirm answered 400 `{"value":["Ensure this field has no more than 255 characters."]}`;
+>   - reject answered the same 400;
+>   - the proposal stayed, and nothing was recorded in `rejected_tags`.
+> - **The consequences:**
+>   - the proposal can be neither confirmed nor rejected;
+>   - because no rejection is recorded, rule 4b does not skip the value, and the next run can propose it again.
+> - **Known but not fixed:** the coordinator's transcript records this error as found (03:29Z, 14 November), but `d909537` does not correct it.
+> - **Fix, either of:**
+>   - let the reject route take a value over the column, with tests from both roles. `reject_proposed_tag` writes only JSON and matches by normalised value, so the column limit is not needed there. This is the one that gives the person UC-09's choice.
+>   - or correct 13353-13354 to: "can be neither confirmed nor rejected: both proposed-tags routes answer 400 for a value over 255 characters, and it stays until a run replaces the list".
+>
+> ### Invariants and set-level checks
+>
+> - **1:** pass. `tag_scheme` is unchanged since `6e77913`, and probe R4 confirms the Employee-visible case.
+> - **4:** pass.
+>   - The department and proposed-tag routes are unchanged.
+>   - `test_rbac.py`'s anonymous and forged-session walks pass on every route, `DELETE /api/departments/{id}` included.
+>   - My partial matrix credits all three department routes from both roles.
+> - **8:** pass. The ingestion hook is unchanged, and `test_classification_hook.py` passes.
+> - **9:** pass. Unchanged.
+> - **10:** pass, and strengthened by #106. #107 returns exactly what the regexes did.
+> - **2, 3, 5, 6 and 7:** not applicable.
+> - **Set-level:**
+>   - no AI SDK import outside `apps/ai` (`test_boundary.py` passes);
+>   - no threshold or size literal added;
+>   - no chunk writes;
+>   - nothing enforced only in the interface.
+>
+> ### Gate impact
+>
+> - **Not an M6 requirement.** FR-10 stays INCOMPLETE by D-119, because the summary and key points are not built, whatever this audit finds.
+> - **No MUST path is touched.**
+> - **Smallest fixes, in order:**
+>   1. C9: the note's text, and the D-128 note;
+>   2. C6: the clause, comment only;
+>   3. C15: the record, or the reject route with tests;
+>   4. C2: the PR body and the docstring;
+>   5. C7 and C8: the wording and the count.
+>
+> ### What I ran
+>
+> | Run | Content | Result |
+> |---|---|---|
+> | pytest, 36 files: the 14 FR-10 documents files (ten `test_classification_*`, `test_classify_documents_command`, `test_migration_0015_departments`, `test_objective05_verify`, `test_deletion`), the 11 API `test_fr10_*` files, 9 AI classification and parser files including `test_code_fence_scan` and `test_schema`, `test_classification_hook`, `test_manage_tags_seed` | d909537 | 878 passed (304 s). The partial matrix (18/47) credits all three department routes from both roles |
+> | pytest, 14 files: `test_document_classification`, `test_rbac`, `test_front_end_constants_agreement`, and in `apps/ai` `test_boundary`, `test_prompt_is_not_duplicated`, `test_no_live_provider`, `test_observer_is_not_used_in_application_code`, `test_prompting`, `test_generation`, `test_statement_cap`, `test_summarisation_schema`, `test_summarisation_loop`, `test_anthropic`, `test_flm` | d909537 | 593 passed. In the same run, three probe cases failed on my own probe's user creation; I fixed the probe and re-ran it (next row) |
+> | Probes R1 to R5 (`test_probe_r2.py`) | d909537 | 9 passed. R1: no changes. R2: applied, discarded, discarded. R3: three calls, then ProviderUnavailable. R4: the table in C6. R5: 400 and 400 |
+> | Front-end breaks (`fe_breaks2.py`) on `departments.test.jsx`, scratch copy | d909537's front end | Control 31/31. A1-A4 each 30 passed, 1 failed (three distinct tests). A5-A10 31/31. B1-B4 each 30 passed, 1 failed. After 31/31; copy restored |
+> | vitest: `departments`, `tags`, `documentClassification`, scratch copy | d909537's front end | 107 passed |
+> | oxlint with the repository's `.oxlintrc.json` on `src` and `tests`; vite build, scratch copy | d909537's front end | 0 warnings, 0 errors on 135 files; the build succeeded |
+> | AST comparison of 0015 with its docstring removed; blob hashes at `a9934eb` and `d909537`; both merges diffed against main | — | As in C6, C9 and C12 |
+> | Round-trip of the quoted report against its transcript (`verbatim2.py`) | — | Identical, 278 lines |
+>
+> - **Pytest database:** every run used the wrapper, on `test_kmp_fr10auto_audit3`.
+> - **Outputs:** `pytest_focused.txt`, `pytest_batch2.txt`, `pytest_probes2.txt`, `fe_breaks2_console.txt`, `fe_breaks2_results.json`, `vitest_focused.txt` and `oxlint.txt`, all in C:\Users\mozza\AppData\Local\Temp\claude\415e7131518f8d68\b98e2cf8-f5bb-411a-b107-62e245fd5851\scratchpad\audit3\r2\.
+>
+> ### Could not check
+>
+> - **The full pytest and the matrix at `d909537`.** I was told not to run them.
+>   - At `bc0b5b6`: 4,815 passed and 47/47, reported. The saved log `full-pytest-bc0b5b6.txt` agrees.
+>   - At `d909537`: 1,270 passed, reported. `merge-d909537-focused.txt` agrees.
+> - **CI on `d909537`:** reported as running. The coordinator's transcript tells the user it is green (03:29:53Z, 14 November). I had no network.
+> - **The full front-end suite** (635 reported).
+> - **PR #102's body on GitHub** (C2).
+> - **The corrected summary for the lead** (decisions.md:13911-13912). It is not in the repository, and I did not find it in the coordinator's transcript.
+> - **Earlier work I did not re-run:** the security reviewer's probes, the earlier breaks, and any database figures.
+> - **Whether the screen offers Confirm and Reject for an over-long Topic proposal** (C15).
+>
+> **One line:** INCOMPLETE. At `d909537`, D-129's code and its B1, B4, B8 and UC-09 E1 records hold, and 1,471 tests pass, but three records are false: 0015's new correction, the merge note's file list, and D-129's long-Topic sentence. The claim about the pull request is unsupported.
+
+**What changed because of the re-audit of `d909537` (14 November).** It found D-129's code as recorded
+and returned INCOMPLETE on records. Each point was corrected in the commit after `d909537`:
+
+- **C2:**
+  - `department_threshold`'s docstring now says the 0.30 is D-106's rule's result on departments
+    alone, which the user chose over the pooled 0.25.
+  - The pull request's description now gives the three-point account.
+- **C6:** documents 0015's dated correction now says that F1 widens what a full-scope audience is
+  offered and narrows what any other audience is offered. Only the comment changed; the operations
+  are unchanged.
+- **C7:**
+  - "Assign" is now used in `apps/documents/models.py`, `frontend/src/api/departments.js` and 0015's
+    comment.
+  - This entry's three "suggests" sentences carry dated reading notes.
+- **C8:**
+  - The record now says "four assertions, in three tests".
+  - The six department strings no test pinned are now pinned by one test: each says "assign" and
+    never "suggest". It failed under each of six breaks, and each break was reverted.
+- **C9:**
+  - The merge note's file list is corrected.
+  - D-128's two statements of the open NUL residual carry dated notes closing it.
+- **C15:**
+  - The long-Topic sentence is corrected, and the defect is recorded under "Not covered".
+  - The routes are unchanged. The defect predates D-128 and D-129: #85 capped both routes the same
+    way.
+- **C1, C3 to C5 and C10 to C14:** MET, and nothing changed.
+
+**What changed because of the summary checks (14 November).** Five read-only agents tried to refute
+the summary for the lead, line by line, against the code at `d909537`. Their corrections are in the
+summary the lead was sent. They also found three things the records had wrong or missed:
+
+- **A stale docstring.** `apply_classification`'s docstring named only the 0.95 constant for the
+  type. It now names the per-model threshold.
+- **F2's remaining window.** It is recorded under finding 2.
+- **Two Tags page sentences.**
+  - The note on the AI said it "applies" values in the list. Values below the threshold are only
+    held, so it now says it "assigns" them.
+  - The "Add a department" help now says that a new department can be assigned to any document, and
+    that a retired one comes back as it was.
+  - Each is pinned by a new assertion that failed under its break, and each break was reverted.
+
+**The front end after these changes:** 636 passed; lint and build clean.
+
+## D-130 · FR-03: the warning and the countdown are counted in the browser, an Administrator releases a lock from Role management, `LoginAttempts` records lockouts and releases, and the login decision is made under a row lock
+
+**Status:** Settled by the user (six decisions on 13 November 2026, a seventh on 14 November, an eighth on 15 November) · **Date:** 2026-11-13 ·
+**Concerns:** FR-03, FR-02, NFR-04, UC-02, D-12, D-24, D-25, D-26, D-99, D-119 finding 5 ·
+**Amends:** D-26 finding 4 (dated note there). **Overtakes** D-25's "A gap that arrived with
+enforcement" (dated note there).
+
+FR-03 is a SHOULD for NIT3004 and not one of the twelve M6 requirements. FR-02 already enforced the
+lock (D-25). This entry records what FR-03 adds, Benjamin's eight decisions, the three security reviews,
+and the requirements audit, the last verbatim.
+
+**Decision.** Benjamin's decisions. Each of the six of 13 November 2026 was the option recommended to
+him; the seventh, of 14 November, was not; the eighth, of 15 November, was:
+
+1. **The attempt count is kept in the browser.** The sign-in page counts its own consecutive `401`s
+   for the address typed and works out what remains from the running threshold, which since
+   decision 7 it fetches from the server, five by default. The server's `401` does not change, and
+   no response carries a count.
+2. **The warning shows when two or fewer attempts remain,** after the third and the fourth failure:
+   "2 attempts remaining before temporary lockout", then "1 attempt remaining before temporary
+   lockout". FR-03's "a subtle warning appears once 2+ attempts remain" does not settle when, so it
+   was put to him.
+3. **The release control sits in the Role management table** (`/admin/roles`). There is no new
+   screen.
+4. **The route is `POST /api/users/{id}/unlock`.** `docs/api-contract.md` did not fix one.
+5. **`LoginAttempts` records lockouts and releases only.** An ordinary attempt writes no row, so an
+   unregistered address is never stored.
+6. **The pre-existing login race the design review found (H1, below) is fixed as this PR's first
+   commit.**
+7. **The threshold and the duration are `.env` values, and the sign-in page fetches them** (his
+   decision of 14 November 2026, after the requirements audit found the configuration clause's
+   "without code changes" unmet).
+   - `config/settings.py` reads `LOCKOUT_THRESHOLD` and `LOCKOUT_DURATION_MINUTES`, defaulting to
+     `apps/core/constants.py`'s five and 15 minutes.
+   - Login reads them at request time.
+   - The new anonymous `GET /api/auth/lockout-policy` gives them to the sign-in page, which keeps
+     no copy.
+   - It was put to him with "decline it, recorded" recommended. He chose this instead. See "Decision
+     7" below.
+8. **The policy may only be tightened** (his decision of 15 November 2026, the option recommended
+   to him, after the final security review). The server refuses to start on a threshold outside 1
+   to 5, a duration outside 15 minutes to 365 days, or a value that is not a whole number.
+   - FR-03 gives the values "so the policy can be tightened", and NFR-04's five attempts and 15
+     minutes are the loosest the policy can be.
+   - The maximum closes finding M1 below.
+
+**Why the count is the page's own.**
+
+- **The rule.** UC-02's exception flow E1.03 has a failed attempt return a generic message
+  "disclosing neither whether the email is registered nor whether the account is locked, so that a
+  failed attempt cannot be used to enumerate accounts". FR-03's messaging clause says the same of
+  the lock notice.
+- **What a server count would leak.** A remaining-attempts figure computed on the server for the
+  account behind an address is exactly that disclosure. A registered address's count falls, an
+  unregistered one's never does, and a count of zero announces the lock.
+- **The alternative of counting every address, with a shadow counter and shadow lock for addresses
+  that are not accounts, leaks too.** The real user's own typos lower a registered account's count,
+  and their sign-ins reset it. The design review concluded: "No server-side count can be accurate
+  across devices without an oracle. Accuracy means reflecting other people's attempts, and that
+  information is the oracle."
+- **The browser count discloses nothing.** It comes only from the page's own history and from
+  `401`s that are identical for anyone without the password.
+
+**The cost of decision 1, stated rather than glossed.** The page's count sees only its own attempts:
+
+- failures from another device or tab, or before a reload, are not in it, so the warning can come
+  late or not at all;
+- a success elsewhere resets the server's counter but not the page's, so the warning and the
+  page's locked state can come early;
+- when the page's own count reaches the running threshold, five by default, it shows a locked state and a countdown that may not match
+  the server's lock. So that state's text is true for any address: "If this address has an account,
+  it may be locked for up to 15 minutes, and an administrator can unlock it sooner" (security
+  finding C). The front-end build added "may": the server may not have locked the account at all,
+  if a success elsewhere reset its count;
+- the right password during a lock still gets the server's `403`, and its `retry_after` gives the
+  real time left, within D-26's notice ceiling. Every attempt during a lock counts toward that
+  ceiling, and past it even the right password gets the generic `401`.
+
+None of this is security. The server enforces the lock whatever the page shows (invariant 4).
+
+**The schema.** `LoginAttempts` is `docs/schema-v1.md` §1's entry, created by
+`accounts 0009_login_attempts`.
+
+- **The proposal's five fields:** `attempt_id`, `attempted_email`, `source_ip`, `success` and
+  `attempted_at`.
+- **Four columns its field table lacks, which its own clauses need:**
+  - `event` (`lockout` or `release`), because one table holds two kinds of event;
+  - `user_id` and `released_by`, for "the Administrator who performed it, the account affected";
+  - `locked_until`, so the user list can tell the lockout row that set the current lock from an
+    earlier one (security finding L5).
+- **`success`** is `false` on a lockout row and null on a release row, which is not an
+  authentication attempt.
+- **Both foreign keys are `PROTECT`** (D-12). An account with a lockout or a release row cannot be
+  deleted, as QueryLog rows already prevent. No code deletes users, and D-89's remedy, retiring the
+  account with an unusable password, stands.
+
+**The permission.**
+
+- **`release_account_locks`** is seeded for Administrator only by
+  `accounts 0010_seed_release_account_locks`. FR-03: "Only a user holding the Administrator role
+  may release a lock."
+- **It is a code of its own,** as D-99 and D-119 finding 5 gave their routes, so that granting one
+  never grants the other.
+- **Where the route checks it:** in `permission_classes`, so an Employee is refused with a `403`
+  before any lookup and cannot tell a real user id from an invented one.
+- **`GET /api/users` keeps its gate,** `manage_roles`, and adds `lock` only for a holder of this
+  code.
+
+**The lock order.** The release locks rows in this order (`UserUnlockView.post`):
+
+1. the administrator rows, ordered by primary key, as FR-05's role change locks them (D-26);
+2. then the target, both with `select_for_update(no_key=True)`.
+
+The backend build found the deadlock this prevents. A role change holds the administrator rows and
+waits for the account. A release that had locked only the account would wait, at commit, for the
+requester's row, which its release row's foreign-key check needs. Postgres would abort one of the
+two with a `500`.
+
+- **Why it holds:** the requester is in the set, so that check waits on a row the release already
+  holds. This rests on only Administrators holding `release_account_locks`.
+- **Its limit:** it holds while the administrator set is stable, because each transaction reads the
+  set from its own snapshot. See the residues (the pre-PR security review, finding 4).
+- **The mode:** FOR NO KEY UPDATE conflicts with the role change's and login's FOR UPDATE, but not
+  with the key-share locks other inserts take on those rows.
+- **Tested for a release against a role change,** by `test_fr03_unlock_concurrency.py`. That test
+  holds the release inside its row write until `pg_stat_activity` shows the role change waiting on a
+  lock, so the interleaving is forced, not timed. With the administrator-set lock removed (break
+  U12), it hit `DeadlockDetected` in 10 runs of 10. Unbroken, it passed in 15 runs of 15.
+- **Argued, not tested:** a release against a login, and two locked Administrators releasing each
+  other (security finding L2).
+
+**Two Administrators.** One may release another's lock. That is a locked Administrator's only
+route forward, and FR-03 forbids only "their own account".
+
+**What each FR-03 clause now does** (`proposal.txt` lines 338-395, untracked).
+
+| Clause | Built | Tests |
+|---|---|---|
+| FE "a subtle warning appears once 2+ attempts remain: '2 attempts remaining before temporary lockout'" | after the 3rd and the 4th consecutive `401` for an address (decision 2), in a polite status line beside the banner (`frontend/src/pages/Login.jsx`) | `loginLockout.test.jsx` S1, S5, S7, S8 |
+| FE "Once locked, the login button is disabled with a countdown timer shown" | at the page's count reaching the running threshold (the 5th failure by default), or on the `403` (`retry_after`), Sign in is disabled and a `role="timer"` countdown runs; nothing is sent while it runs; at zero the button comes back | S2, S3, S4, S6, S9 to S12; `test_fr03_lockout_record.py`'s `retry_after` tests |
+| FE "An Administrator viewing a locked account can release the lock immediately" | Role management's Account column, the Unlock button (not on the own row) and its dialog (decision 3, `RoleManagement.jsx`) | `roleManagementUnlock.test.jsx` U1 to U12; `loginLockout.test.jsx` S13 (the reload hint, shown in both lock states; no test reloads the page); `accessDenied.test.jsx` E1; `test_fr03_user_list_lock.py` |
+| FE "The lockout message states that an administrator can unlock the account" | the `403`'s `TEXT.accountLocked`, the page's `TEXT.accountMayBeLocked` and the server's `ACCOUNT_LOCKED_MESSAGE` | S2, S9; `test_the_locked_notice_names_an_administrator_who_can_unlock_the_account` |
+| SE "Each failed attempt increments failed_attempts; reaching the threshold of five sets locked_until…" | FR-02's, now decided on the row read under lock (H1) | `test_login.py`; `test_login_concurrency.py` |
+| SE Validation: the lock before any session; no session for a locked account; the password only selects the message; the resets; the matching password during a lock; only an Administrator, never on their own account | unchanged rules, made race-free (H1); the release's `permission_classes` and its own-account `403` | `test_login.py`; `test_login_concurrency.py`; `test_fr03_unlock.py` |
+| SE configuration: "threshold and lockout duration are configuration values rather than literals, so the policy can be tightened without code changes"; every lockout recorded with the email, source address and timestamp | since decision 7, the `.env` variables `LOCKOUT_THRESHOLD` and `LOCKOUT_DURATION_MINUTES` (`config/settings.py`), defaulting to `apps/core/constants.py`, read by login at request time and fetched by the sign-in page from `GET /api/auth/lockout-policy`, with no copy in the bundle; the lockout row. Until decision 7 this row named only the first half, and the audit below found the second unmet | `test_fr03_lockout_policy.py`; `loginLockout.test.jsx`'s decision-7 tests; `test_front_end_constants_agreement.py::test_the_client_holds_no_copy_of_the_lockout_policy`; `test_fr03_lockout_record.py` |
+| SE messaging: the notice only where the password matched | unchanged (D-25, D-26); the page's own state looks the same for any address (decision 1) | `test_login.py`; `test_every_401_is_byte_identical_to_an_unknown_addresses` (M1) |
+| SE release: clears the expiry and resets the count; never the password; recorded with the Administrator, the account and the time | `UserUnlockView` and the release row | `test_an_administrator_releases_another_users_lock` |
+| SE Responses: 200; 403 for a non-Administrator or the account holder; 404; 409 | `UserUnlockView` | `test_fr03_unlock.py`, every answer |
+| DB Users (Update); LoginAttempts (Create, release recorded as an administrative event) | the release; the lockout and release rows | `test_fr03_unlock.py`; `test_fr03_lockout_record.py` |
+| DB the LoginAttempts table (Create, Read) | `accounts 0009`, with the four added columns; the Read is `GET /api/users`'s `lock` | `test_schema.py`; `test_release_account_locks_seed.py`; `test_fr03_user_list_lock.py` |
+
+**Tests and breaks.** Every new test failed under at least one deliberate break before it counted.
+Each break list is generated from its runs and is in the commit's message, as D-94 asks.
+
+- **`de57242`, H1:** 3 concurrency tests, and breaks B1 to B3. The new file passed 10 runs in a row.
+- **`e624e90`, the server:** the tests named in the table above, and 49 distinct breaks, all caught (51 entries in its list, since break U12 was also run as U12r and U12x10). The
+  final combined run passed 523. Dual-role coverage was 44/44, with
+  `POST /api/users/<uuid:pk>/unlock` from anonymous (401), Employee (403) and Administrator (200,
+  403, 404, 409).
+- **`3eee096`, the front end:** 27 new tests, and 49 breaks, every test caught by at least one.
+  `npm test` passed 612, and lint was clean.
+
+**The design's security review, 13 November 2026, before anything was built.** The
+`security-reviewer` agent read the design note against the code on `main` at `8b2844d`. It ran
+nothing, and every finding is "traced" or "inferred" in its own terms.
+
+- **It found clean:**
+  - counting in the browser, and the page's own locked state;
+  - `retry_after` on the right-password `403` only;
+  - the release route's order, CSRF and expiry handling.
+- **It confirmed that both server-side counts leak.**
+
+| Finding | Severity | What | Disposition |
+|---|---|---|---|
+| H1 | high, pre-existing | Login decided "locked" on a read taken before the password check, without a lock. Concurrent wrong passwords erased a live lock, and a right password read as "unlocked" got a session for an account a concurrent request had just locked | **Fixed** in `de57242` (decision 6), with `test_login_concurrency.py`. D-25's dated note records it |
+| M1 | medium | The tests compared the `401`'s status and JSON, never its headers or bytes, so a `Retry-After` header or a leaked `retry_after` would have passed | **Fixed**: the `401` is compared byte for byte, headers included, across its four cases |
+| C | low | The page's own locked state must say nothing false of an unregistered address (D-26 finding 4's defect) | **Fixed**: "If this address has an account, it may be locked…" |
+| L1 | low | A release during an in-flight login | **Closed by H1's fix** |
+| L2 | low | Two locked Administrators releasing each other could deadlock on the release row's foreign-key check | **Fixed**: FOR NO KEY UPDATE, and the lock order above |
+| L3 | low | A locked Administrator's live session can defeat the self-ban: register an account, promote it, sign in as it, release from it (four requests; the design review said three). The release is also unthrottled | **Recorded** below. The dialog's "check who is asking" helps against someone asking an Administrator for a release, not against L3, whose session holder works the second account's dialog themselves |
+| L4 | low | On the loopback alpha every `source_ip` is `127.0.0.1` | **Recorded** below. The source is DRF's `get_ident()`, and the demonstration script says so |
+| L5 | low | The "latest lockout row" can belong to an earlier lock | **Fixed**: each row stores the `locked_until` it set, and the list matches on it |
+| Q5 | low | Role management replaced the row with the role change's reply, which has no `lock` | **Fixed**: the reply is merged into the row |
+| — | low | No retention rule for `LoginAttempts` | **Recorded** below |
+| — | immaterial, inferred | The lockout insert at the threshold adds to D-24's timing difference | **Recorded** below |
+
+**Residues, recorded rather than fixed.**
+
+- **A lock still does not end a session** (D-26's residue). So whoever holds a locked
+  Administrator's session can defeat FR-03's self-release ban in four requests: register an
+  account, promote it (FR-05), sign in as it (registration starts no session), and release from it.
+  The release is unthrottled too, so a stolen Administrator session can refill an account's guesses
+  five at a time. Ending sessions stays outside this work.
+  - **What the confirmation dialog does not do:** it shows when and from where the lock began, and
+    asks the Administrator to check who is asking. That helps against someone asking an
+    Administrator to release a lock. It does nothing against this, because the session holder works
+    the second account's dialog themselves.
+- **The release is not tied to the lock the dialog showed** (the pre-PR security review, finding 3).
+  - **The scenario:** an Administrator opens Unlock on a lock set from one address, and leaves the
+    dialog open past its end. Meanwhile an attacker locks the account again from another address.
+  - **What follows:** the confirm releases the new lock, which the Administrator never saw, and
+    gives the attacker five fresh guesses past L3's "check who is asking" step.
+  - **What would close it:** the client sending the `locked_until` it showed, with a `409` when the
+    lock has changed.
+- **The only Administrator cannot be released** (the pre-PR security review, finding 2). FR-03
+  forbids releasing one's own lock, so where no other Administrator exists, five requests every 15
+  minutes keep that account out, as D-26 finding 2 described.
+  - **On Role management,** the own row says so ("No other administrator can unlock your account.
+    It unlocks at <time>.") where the list holds no other Administrator.
+  - **The sign-in page's message, and the server's,** still say "ask an administrator to unlock it",
+    which FR-03's front-end clause requires and which is false for that one account. The fix is a
+    second Administrator, not code.
+  - **So does Role management's self-refusal notice** (`TEXT.unlockSelfRefused`, "…Ask another
+    administrator to unlock it."). It shows only when the screen's idea of who is signed in is out
+    of date, because the own row has no button.
+- **The lock order holds while the administrator set is stable** (the pre-PR security review,
+  finding 4). Each transaction reads the administrator set from its own snapshot. A promotion
+  committed mid-request can therefore still put a release and a role change, or two releases, in a
+  cycle, and Postgres aborts one with a `500`. It needs three Administrator actions on the same rows
+  within the same instant. Locking the administrators and the target in one statement would close
+  it.
+- **Where the row lock stops.** Login decides under the row lock, including on success. Django saves
+  the new session's signed-in keys just after the view returns, which is after the lock is
+  released. A lock committed after that decision is the residue above.
+- **No retention rule for `LoginAttempts`.** A lockout row is written once per lock, and attempts
+  during a live lock write none. So the table grows by at most one row per account per lock window,
+  plus one per release. The source address is personal data, kept with no end date.
+- **Timing.** The lockout row's insert runs only for a registered account, at its fifth failure. It
+  adds to D-24's timing difference between a registered and an unknown address. It is one sample per
+  15-minute lock, next to a bcrypt hash, and was judged immaterial by inference. It was not measured.
+- **The loopback alpha cannot show the evidence FR-03 promises.** FR-03 says the record gives
+  "evidence of whether a lockout resulted from a forgotten password or a distributed attempt against
+  many accounts". Every `source_ip` on the alpha is `127.0.0.1`, so that cannot be shown on it.
+- **A refused login `403` without `account_locked`, such as a CSRF refusal,** now shows the client's
+  fixed "You do not have permission to do that." Before, it showed the locked-account message, which
+  was false for it.
+
+**Records this overtakes, left as written.**
+
+- **D-25's "A gap that arrived with enforcement"** (no evidence trail, and waiting as the only
+  remedy) and its deferral of "FR-03's lockout interface". There is a dated note on D-25.
+- **D-26 finding 4,** which removed the release from the message, and finding 2's "there is no
+  release route". There is a dated note on D-26.
+- **`docs/api-contract.md` Stage 2's "FR-03 adds only the warning interface and stays out of the
+  gate (D-25)"** and its "Never … `locked_until`". There are dated notes there, and a new section,
+  "NIT3004 — FR-03".
+- **`docs/schema-v1.md` §2's `LoginAttempts` row.** The row is removed, with a dated note, as
+  `DocumentAnalysis` and `KnowledgeGaps` were when they left.
+- **`docs/demonstration-script.md` FR-02 step 4's expectations,** which hold only on a build
+  without D-130. That script is amended, with a new FR-03 section.
+- **The comment above `ACCOUNT_LOCKED_MESSAGE`,** which said no release existed. It is rewritten in
+  the code, which this file's rule does not cover.
+
+**The security review before the PR, 14 November 2026.** The `security-reviewer` agent read the
+build at `6ed0ef1` and ran no tests.
+
+- **It found nothing high or medium.** Nothing in login, the release route or the front end tells
+  someone without the password whether an address is registered or locked.
+- **It checked every disposition in the design review's table above against the code and the tests,
+  and found each true.**
+- **It reported five low findings:**
+
+| Finding | What | Disposition |
+|---|---|---|
+| 1 | A release reaches the server, not a sign-in page already open, which keeps its own countdown until it is reloaded. So demonstration-script step 8 failed as written | **Fixed.** Both lock states now add "If an administrator has unlocked the account, reload this page to sign in." (`TEXT.lockedReloadHint`), and step 8 says to reload first. Test S13; break R1 |
+| 2 | With a single Administrator, the own row ("Another administrator can unlock your account."), the self-refusal notice and the sign-in message promise a release nobody can make, and five requests every 15 minutes keep that account out (D-26 finding 2) | **Fixed on Role management:** the own row says "No other administrator can unlock your account. It unlocks at <time>." where the list holds no other Administrator. Test U12, and U3 now lists a second Administrator; breaks R2 to R4. **Recorded** for the sign-in and server messages, which FR-03 requires: see the residues. D-26's dated note is qualified |
+| 3 | The release is not tied to the lock the dialog showed | **Recorded** under the residues, beside L3 |
+| 4 | The lock order holds only while the administrator set is stable | **Recorded:** the claim is qualified here and in `UserUnlockView.post`'s comment |
+| 5 | This entry said the self-ban falls in "three requests"; it is four | **Fixed** in the residue |
+
+**The pre-PR fixes' tests and breaks** are in the commit whose subject begins `fix(FR-03): a
+release reaches an open sign-in page`:
+
+- **Tests:** S13 and U12 are new, and U3 is changed. `npm test` passed 614.
+- **Breaks:** R1 to R4, each caught. Each was applied alone and restored by hash, and that commit's
+  message lists them.
+- **What they replace:** break R19 in `3eee096`'s list edits the own row's single line, which these
+  fixes rewrite. R2 to R4 cover that row now.
+
+**Decision 7: the policy in `.env`, fetched by the page** (Benjamin, 14 November 2026).
+
+The requirements audit (verbatim below) found one gap. FR-03 reads "threshold and lockout duration
+are configuration values rather than literals, so the policy can be tightened without code changes".
+The first half was met; the second was not, and nothing declined it. Two options were put to him:
+
+- decline the half, recorded, which was recommended;
+- make the values `.env`-configurable.
+
+He chose `.env`.
+
+- **The server.**
+  - `config/settings.py` reads `LOCKOUT_THRESHOLD` and `LOCKOUT_DURATION_MINUTES`, defaulting to
+    `apps/core/constants.py`'s `LOCKOUT_THRESHOLD` (5) and `LOCKOUT_DURATION` (15 minutes). As
+    first built it refused to start on a value under 1. Since decision 8 it refuses anything looser
+    than NFR-04, a duration over 365 days, and a value that is not a whole number.
+  - `LoginView` reads `settings.LOCKOUT_THRESHOLD` and `settings.LOCKOUT_DURATION` at request time.
+    D-26's notice ceiling follows the running threshold, at `LOCKOUT_NOTICE_CEILING_FACTOR` (2)
+    times it.
+  - `.env.example` documents both variables.
+- **The route.** `GET /api/auth/lockout-policy` answers
+  `{"lockout_threshold": 5, "lockout_duration_seconds": 900}` at the defaults.
+  - It is the third route left open to an anonymous caller (D-21).
+  - It reads nothing from the request and writes nothing. It is not throttled, and it answers every
+    caller alike.
+  - It discloses nothing about any account: the warning on the page already shows the threshold,
+    and the old bundle carried both values.
+- **The page.**
+  - The sign-in page asks for the policy once, after its first failed attempt, and keeps no copy.
+    `frontend/src/constants.js` lost `LOCKOUT_THRESHOLD` and `LOCKOUT_DURATION_SECONDS`, and
+    `test_front_end_constants_agreement.py` now fails if a copy comes back.
+  - Until the policy arrives, the page counts but shows no warning and no lock of its own. If the
+    request fails, it shows neither, and asks again at the next failure.
+  - The server's `403` is counted down from its `retry_after` regardless, or from the policy's
+    duration where it gave none.
+  - The page asks only after a failure, so screens that never fail a sign-in make no extra request.
+- **What it costs, stated:**
+  - **A change takes effect after a server restart,** since settings are read when the process
+    starts. No front-end rebuild is needed.
+  - **A page that cannot fetch the policy shows no warning and no countdown of its own.** The server
+    enforces the lock regardless (invariant 4).
+  - **A departure from `CLAUDE.md` §5:** "These live in `apps/core/constants.py` and nowhere else."
+    The defaults still live there, and the running values come from `.env`. `CLAUDE.md` is the
+    team's file and is not edited here; Benjamin was told.
+- **Tests and breaks,** in the commit whose subject begins `feat(FR-03): the lockout policy is .env
+  configuration`:
+  - **Server:** `test_fr03_lockout_policy.py`, 12 tests, covering:
+    - the settings: their defaults, reading `.env`, and refusing values under 1;
+    - login at a running threshold of three and a two-minute duration;
+    - the ceiling at a running threshold of two;
+    - the route: anonymous, as an Employee and as an Administrator, its values, and read-only.
+
+    Breaks P1 to P10 were each caught, and every new test failed under at least one.
+  - **Front end:** three new tests in `loginLockout.test.jsx`:
+    - the policy asked for once, and not before a failure;
+    - a policy of three failures and ten minutes warning, locking and counting down by it;
+    - a page with no policy showing no warning or lock of its own, while still counting down the
+      server's `403`.
+
+    Breaks F1 to F8 were each caught. F7 was caught only after its test checked every failure, not
+    just the fifth, and that commit's message says so. `npm test` passed 617.
+  - **Existing tests updated:**
+    - `test_rbac.py` and `test_never_cache.py`: the opt-outs now answer by route, 400 for
+      registration and login and 200 for the policy;
+    - `test_source_rows_fail_closed.py` classifies the route;
+    - `login.test.jsx` serves the policy in its two tests that fail a sign-in.
+
+**The requirements audit, verbatim.** The `requirements-auditor` agent audited `c0c2efc` on 14
+November 2026. The report below was extracted mechanically from its transcript and quoted line by
+line, unedited. Its file and line references are to `c0c2efc`.
+
+> ## Audit: FR-03 Account Lockout & Brute-Force Protection — 14 November 2026
+>
+> **Commit audited:** `c0c2efc` (`c0c2efcc802009bd7dc8d7a877d19a87431df0ad`) on `feat/FR-03-lockout-interface`, whose parent is `6ed0ef1`.
+>
+> - **FR-03's own commits:** `de57242`, `3eee096`, `e624e90`, `36ecba6` and `c0c2efc`.
+> - **Requirement text** (`proposal.txt`): FR-03, lines 338–396. Also read against it: FR-02 (302–336), UC-02 E1 and E2 (1715–1723), NFR-04 (1442) and §7.11 (3525–3598).
+> - **Paths** below are relative to the worktree `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-03-lockout-interface-b55494`.
+> - **No test was run for this audit.**
+>
+> **Verdict:** INCOMPLETE
+>
+> One half of one clause is neither met nor declined: FR-03's "so the policy can be tightened without code changes". Every other clause is either satisfied, or met within a recorded decision whose cost is stated.
+>
+> ### Clause coverage
+>
+> | # | Clause (FR-03 unless named) | Status | Evidence |
+> |---|---|---|---|
+> | F1 | "After each failed login, a subtle warning appears once 2+ attempts remain" | Satisfied, as D-130 decision 2 reads "2+": after the 3rd and 4th consecutive 401. How accurate it is depends on decision 1 (the page keeps its own count), whose cost is recorded | `frontend/src/pages/Login.jsx:162-164, 267-272`; `frontend/src/constants.js:50, 341-344`; `loginLockout.test.jsx` S1, S5–S8 |
+> | F2 | "Once locked, the login button is disabled with a countdown timer shown" | Satisfied. It locks at the page's 5th 401, or on the 403, counting down from `retry_after`. It can come late when the failures were made elsewhere (decision 1, recorded) | `Login.jsx:82-98, 188, 195-197, 251-257, 285`; `apps/api/views.py:619-627`; S2–S4, S6, S9–S12; `test_fr03_lockout_record.py::test_retry_after_*` |
+> | F3 | "An Administrator viewing a locked account can release the lock immediately, so a locked-out user has a route forward" | Satisfied. Three residues are recorded in D-130: a sign-in page already open must be reloaded (hint, finding 1); the only Administrator cannot be released (finding 2); the release is not tied to the lock the dialog showed (finding 3) | `frontend/src/pages/RoleManagement.jsx:69-88, 96-106, 137, 387-451`; `frontend/src/api/users.js:71-72`; `views.py:823-910`; `roleManagementUnlock.test.jsx` U1–U12; `accessDenied.test.jsx` E1; S13; `test_fr03_unlock.py::test_an_administrator_releases_another_users_lock`, `::test_after_a_release_the_user_signs_in_with_the_right_password` |
+> | F4 | "The lockout message states that an administrator can unlock the account" | Satisfied. The message is false for the only Administrator, which is a recorded residue (finding 2) | `views.py:191-194`; `constants.js:321-332`; S2, S9; `test_fr03_lockout_record.py::test_the_locked_notice_names_an_administrator_who_can_unlock_the_account` |
+> | S1 | "Each failed attempt increments failed_attempts; reaching the threshold of five sets locked_until to the current time plus fifteen minutes" | Satisfied | `views.py:628-656`; `test_login.py::test_a_failed_attempt_increments_failed_attempts`, `::test_the_threshold_failure_sets_locked_until`, `::test_five_consecutive_failures_then_403`; `test_login_concurrency.py::test_concurrent_wrong_passwords_leave_the_lock_in_place` |
+> | V1 | "the lock is evaluated before any session can be established" | Satisfied | The check at `views.py:594` comes before `django_login` at `:663`, and both run under the row lock taken at `:586`; `test_login.py::test_a_locked_account_issues_no_session` |
+> | V2 | "No session is issued for a locked account under any circumstance, regardless of the password submitted" | Satisfied. Two residues are recorded: the session's keys are saved after the row lock is released (D-130), and a lock does not end an existing session (D-26) | `views.py:582-627`; `test_login.py::test_a_locked_account_is_403_even_with_the_right_password`; `test_login_concurrency.py::test_a_right_password_gets_no_session_once_a_concurrent_request_has_locked_the_account` |
+> | V3 | "The submitted password is still verified while the account is locked … used solely to select the response message and can never grant access" | Satisfied. Past `LOCKOUT_NOTICE_CEILING` the result is not used at all (D-26) | `views.py:581, 611-627`; `test_login.py::test_a_locked_account_with_the_wrong_password_is_the_ordinary_401`, `::test_guessing_past_the_ceiling_stops_being_told_whether_it_was_right` |
+> | V4 | "A successful authentication on an unlocked account resets the counter to zero" | Satisfied | `views.py:664-670`; `test_login.py::test_a_success_resets_failed_attempts_and_sets_last_login`, `::test_a_success_clears_locked_until_as_well_as_the_counter` |
+> | V5 | "the counter also resets automatically once the lockout window expires" | Satisfied, lazily. The next attempt resets it, on the row read under lock. Until then the stale value stays stored, and nothing else reads it | `views.py:631-637, 664-670`; `test_login.py::test_an_expired_lock_does_not_re_lock_on_the_next_single_failure`; `test_fr03_lockout_record.py::test_after_a_lock_expires_the_next_threshold_writes_a_second_row`; `test_fr03_unlock.py::test_an_expired_lock_is_409_and_is_left_exactly_as_it_was` |
+> | V6 | "A matching password submitted during an active lockout window neither clears the lock nor resets the counter" | Satisfied. The attempt is counted (D-26) | `views.py:594-627`; `test_login.py::test_an_attempt_during_the_lock_does_not_extend_it`; `test_login_concurrency.py::test_a_right_password_gets_no_session_once_a_concurrent_request_has_locked_the_account` |
+> | V7 | "Only a user holding the Administrator role may release a lock" | Satisfied, through `release_account_locks`, which is seeded for Administrator only | `views.py:410, 849`; `apps/accounts/migrations/0010_seed_release_account_locks.py`; `test_fr03_unlock.py::test_unlock_is_401_anonymously_and_changes_nothing`, `::test_unlock_is_403_for_an_employee_whatever_the_id` (3 cases); `test_release_account_locks_seed.py::test_release_account_locks_is_held_by_administrator_only` |
+> | V8 | "An Administrator cannot release a lock on their own account" | Satisfied in letter. Its purpose ("must not be releasable by whoever currently holds that session") can be defeated in four requests through a second account. That is residue L3, which is recorded | `views.py:886-889`; `test_fr03_unlock.py::test_an_administrator_cannot_release_their_own_account[locked]`, `[not locked]` |
+> | C1 | "threshold and lockout duration are configuration values rather than literals" | Satisfied on the server | `apps/core/constants.py:440-441`, imported at `views.py:40-42` |
+> | C2 | "so the policy can be tightened without code changes" | **Partial: not met, not declined** | Missing or partial, item 1 |
+> | C3 | "Every lockout is recorded with the attempted email, source address, and timestamp" | Satisfied | `views.py:639-654`; `apps/accounts/models.py:118-162`; `test_fr03_lockout_record.py::test_the_threshold_failure_writes_one_lockout_row_with_every_field`, `::test_no_attempt_during_a_live_lock_writes_a_row`, `::test_an_unknown_address_writes_no_row`, `::test_the_lockout_row_records_the_connecting_address` (2 cases) |
+> | C4 | "giving evidence of whether a lockout resulted from a forgotten password or a distributed attempt against many accounts" | Satisfied in code. It cannot be shown on the loopback alpha, where every `source_ip` is `127.0.0.1`. That is L4, recorded, and the demonstration script says so | `views.py:511-518`; `docs/demonstration-script.md` FR-03 step 6 |
+> | M1 | "the lockout notice is shown only where the submitted password matches the stored credential" | Satisfied | `views.py:611-627`; `test_fr03_lockout_record.py::test_every_401_is_byte_identical_to_an_unknown_addresses` (4 cases) |
+> | M2 | "Where the password was also wrong, the generic 'Invalid email or password' message from FR-02 is retained" | Satisfied on the server. At its own fifth 401 the page adds a hedged notice that is the same for every address (decision 1, finding C) | `views.py:499-508`; `test_login.py::test_a_locked_account_is_indistinguishable_from_an_unknown_address`, `::test_an_unknown_address_is_never_403`; S2 |
+> | R1 | "releasing a lock clears the expiry and resets the failed-attempt count" | Satisfied | `views.py:893-896`; `test_fr03_unlock.py::test_an_administrator_releases_another_users_lock`, `::test_a_release_gives_back_five_attempts_and_the_notice_after_the_next_lock` |
+> | R2 | "The Administrator does not see, set or reset the user's password; … restores the ability to attempt authentication and nothing more" | Satisfied | `views.py:851-910` reads no body and leaves the password, role and sessions untouched; `apps/api/serializers.py:50-100`; `constants.js:409`; `test_fr03_unlock.py::test_an_administrator_releases_another_users_lock` (the password hash, role, `last_login` and the user's existing session are unchanged); U4 |
+> | R3 | "Every release is recorded with the Administrator who performed it, the account affected and the time" | Satisfied | `views.py:900-909`; `test_fr03_unlock.py::test_an_administrator_releases_another_users_lock`, `::test_one_administrator_releases_another_administrators_lock`, `::test_a_lock_set_by_login_and_its_release_are_two_rows_naming_the_same_lock` |
+> | P1 | "200 OK on release" | Satisfied | `views.py:910`; as R1 |
+> | P2 | "403 Forbidden where the requester does not hold the Administrator role" | Satisfied, and given before any lookup | `views.py:849`; `test_fr03_unlock.py::test_unlock_is_403_for_an_employee_whatever_the_id` |
+> | P3 | "… or is the account holder" | Satisfied, whether or not the account is locked | `views.py:886-889`; as V8 |
+> | P4 | "404 Not Found for an unknown account" | Satisfied | `views.py:882-885`; `test_fr03_unlock.py::test_an_unknown_id_is_404_for_an_administrator` |
+> | P5 | "409 Conflict where the account is not currently locked" | Satisfied, including an expired lock | `views.py:891-892`; `test_fr03_unlock.py::test_an_account_that_is_not_locked_is_409_and_its_count_is_left_alone`, `::test_an_expired_lock_is_409_and_is_left_exactly_as_it_was` |
+> | D1 | "Users (Update (locked_until → null, failed_attempts → 0))" | Satisfied | as R1 |
+> | D2 | "LoginAttempts (Create — release recorded as an administrative event)" | Satisfied | as R3 |
+> | D3 | Users table: `user_id`, `failed_attempts`, `locked_until` | Satisfied (FR-02's columns) | `apps/accounts/models.py:85-98` |
+> | D4 | LoginAttempts table (Create, Read): `attempt_id`, `attempted_email`, `source_ip`, `success`, `attempted_at` | Satisfied. Four columns are added and `success` is nullable, both recorded in D-130 "The schema". The Read is `lock` on `GET /api/users`, and no route lists the table (contract). `attempted_email` is an `EmailField` (varchar 254), not text | `apps/accounts/migrations/0009_login_attempts.py`; `views.py:723-739`; `serializers.py:62-100`; `test_fr03_user_list_lock.py` (7 tests); `test_release_account_locks_seed.py::test_the_migrations_apply_and_reverse_through_the_executor`; `apps/core/tests/test_schema.py` |
+> | X1 | FR-02 Front-End "Where the account is locked and the submitted password was correct, a distinct message is shown"; UC-02 E2.02 | Satisfied within `LOCKOUT_NOTICE_CEILING`, and **declined past it by D-26**. D-26's reasons hold in the code: every attempt during a lock is counted, the window is never extended, and the password is hashed on every path | `views.py:581, 600-612`; `test_login.py::test_the_notice_survives_a_mistype_by_the_locked_out_user`, `::test_guessing_past_the_ceiling_stops_being_told_whether_it_was_right` |
+> | X2 | UC-02 E1.03, "disclosing neither whether the email is registered nor whether the account is locked" | Satisfied, headers included | `test_fr03_lockout_record.py::test_every_401_is_byte_identical_to_an_unknown_addresses` |
+> | X3 | NFR-04, "requiring either the 15-minute cooldown to expire or an Administrator to release the lock" | Satisfied | S1 and V1–V8 above; `test_fr03_unlock.py::test_after_a_release_the_user_signs_in_with_the_right_password` |
+> | X4 | §7.11 `handleLoginAttempt()` | Followed, with recorded departures. Counting during the lock and the notice ceiling are D-26. Hashing the password first and deciding on the row read under lock is D-130 (H1) | `views.py:567-671` |
+>
+> ### Missing or partial
+>
+> 1. **C2: "so the policy can be tightened without code changes" is not met, and no decision declines it.**
+>    - **Where the values live.** The threshold and duration are Python module constants at `apps/core/constants.py:440-441`. No environment variable or setting is read for them.
+>    - **The browser's copies.** Since D-130 decision 1 the browser holds its own copies at `frontend/src/constants.js:41-42`: `LOCKOUT_THRESHOLD = 5` and `LOCKOUT_DURATION_SECONDS = 15 * 60`. `test_front_end_constants_agreement.py` Y1 and Y2 hold them equal to the server's.
+>    - **What tightening the policy takes:**
+>      - an edit to both source files;
+>      - a front-end rebuild;
+>      - edits to two test files that pin today's values. `apps/core/tests/test_constants.py:107-111` (`test_lockout_values`) asserts 5 and 15 minutes. `frontend/tests/loginLockout.test.jsx` writes 5 failures, "15:00", "15 minutes" or 899 s at lines 204, 206, 212, 220, 223, 243, 257, 291, 292, 299, 388, 398, 424 and 425, which includes S13.
+>    - **The suite already shows this.** Breaks P01 and P02 in `3eee096`'s message changed only the client copy, and the front-end tests failed.
+>    - **What is met.** The first half, "configuration values rather than literals", is met on the server (C1).
+>    - **Why the record hides it.** D-130's table row at `docs/decisions.md:12198` shortens the clause to "the threshold and duration as configuration values", so the half that is not met never appears. This project's own record uses "a `.env` change and not a code change" for exactly this distinction (`docs/decisions.md:3575`).
+>
+> No other clause is partial or missing.
+>
+> **Declined or recorded with their cost, so not counted as gaps.** I checked each of these against the code:
+>
+> - D-130 decision 1, the page's own count ("The cost of decision 1").
+> - D-130 decision 2, when the warning shows.
+> - D-130 decision 5: only lockouts and releases are recorded, so `success` is false or null.
+> - D-26: counting during the lock, and the notice ceiling (X1).
+> - D-130's residues:
+>   - L3, which takes four requests;
+>   - the only Administrator cannot be released (finding 2);
+>   - the release is not tied to the lock the dialog showed (finding 3);
+>   - the lock order holds only while the administrator set is stable (finding 4);
+>   - the session's keys are saved after the row lock is released;
+>   - there is no retention rule;
+>   - the lockout insert adds a timing difference;
+>   - on the loopback alpha every `source_ip` is `127.0.0.1` (L4).
+>
+> ### Record defects
+>
+> 1. **The configuration clause is presented as met.** D-130's "SE configuration" row (`docs/decisions.md:12198`) and the comment at `apps/core/constants.py:439` ("Configuration values rather than literals, as FR-03 Business logic requires") both say so. The row cites `test_constants.py` as its evidence, yet that file's `test_lockout_values` pins both values. The clause's "without code changes" is not met (item 1).
+> 2. **One text named in pre-PR finding 2 is left uncovered.** Finding 2's "What" column (`docs/decisions.md:12313`) names the self-refusal notice, `TEXT.unlockSelfRefused` ("…Ask another administrator to unlock it.", `frontend/src/constants.js:424`). Neither the finding's disposition nor the residue at `:12255-12262` covers it, and it is false for the only Administrator. The screen shows it only when its idea of who is signed in is out of date.
+> 3. **S13 is cited for more than it tests.** D-130's FE-release row (`docs/decisions.md:12194`) cites "S13 (a release picked up by a reload)". S13 checks only that the hint appears in both lock states and not before. No test reloads the page or picks up a release.
+> 4. **The reload hint's comment leaves out the notice ceiling.**
+>    - The comment above `TEXT.lockedReloadHint` (`frontend/src/constants.js:333-336`) says that after a reload "a lock still live just answers again". It answers with the 403 only within `LOCKOUT_NOTICE_CEILING`.
+>    - Each reload and retry during a live lock is counted (`views.py:600-601`). From the eleventh attempt in all, the right password gets the generic 401 (`:611`).
+>    - So the hint can lead a user who has not been unlocked into that state. Neither the comment nor finding 1's disposition says so.
+>    - D-130 decision 1's cost bullet, "the right password during a lock still gets the server's `403`" (`docs/decisions.md:12129`), leaves out the same qualification.
+> 5. **L3 is described inconsistently.**
+>    - The design-review row (`docs/decisions.md:12233`) still lists three steps, "register an account, promote it, release from it", although finding 5 corrected the residue to four.
+>    - Both that row and the residue (`:12242`) pair L3 with the dialog's "check who is asking". The dialog does nothing against L3, because in L3 the session holder works the second account's dialog themselves.
+> 6. **The break count includes re-runs.** D-130's "51 breaks" for `e624e90` (`docs/decisions.md:12209`) includes U12r and U12x10. Both are re-runs of break U12, not separate breaks.
+> 7. **Two "only" statements are stale and carry no dated note:**
+>    - `apps/api/tests/test_login.py:221-223`: "FR-03 adds only the warning interface".
+>    - `docs/demonstration-script.md:163-164`: "FR-03 adds only the warning, the countdown and the administrator release". This leaves out `LoginAttempts`, which the script's own FR-03 section lists.
+> 8. **One clause is cited under the wrong heading.** `apps/api/views.py:186` and `apps/api/tests/test_fr03_lockout_record.py:13-14` call "The lockout message states that an administrator can unlock the account" FR-03's messaging clause. It is FR-03's Front-End clause (`proposal.txt` line 343).
+>
+> ### Smallest fix for each gap
+>
+> - **Item 1, option (a): docs only, but it needs Benjamin's decision.**
+>   - Add a dated note to D-130 that declines "without code changes". It should cite CLAUDE.md §5, which says these constants "live in `apps/core/constants.py` and nowhere else".
+>   - The note should state the cost: a policy change means editing `apps/core/constants.py:440-441` and `frontend/src/constants.js:41-42`, rebuilding the front end, and editing `apps/core/tests/test_constants.py:107-111` and `frontend/tests/loginLockout.test.jsx`.
+>   - Then correct the table row at `docs/decisions.md:12198` and the comment at `apps/core/constants.py:439`.
+> - **Item 1, option (b): code.**
+>   - Read both values from the environment in `config/settings.py`, with today's constants as the defaults.
+>   - Give the client its copy at runtime rather than building it into the bundle. The values are the same for every account, so serving them reveals nothing about any account.
+>   - Derive the front-end tests' figures from that copy.
+> - **Record defects 1–8:** text edits at the places named above. For defect 4, add one clause: "within `LOCKOUT_NOTICE_CEILING`; each retry during a live lock counts toward it".
+>
+> ### Invariant check (CLAUDE.md §6)
+>
+> - **Invariant 4, authorisation on the server (401, then 403): pass.**
+>   - The release's 401 and 403 come from `permission_classes` (`views.py:849`).
+>   - The own-account 403 is decided on the server (`:886-889`).
+>   - The hidden Unlock buttons are usability only (`RoleManagement.jsx:77-85`; `accessDenied.test.jsx` E1).
+> - **Invariant 1's non-disclosure, applied to accounts: pass.**
+>   - Login's 401 is byte-identical in four cases: an unknown address, a wrong password, a locked account with a wrong password, and a locked account past the ceiling.
+>   - The 403 goes only to the right password.
+>   - An Employee's 403 on the release comes before the lookup, so user ids cannot be probed.
+> - **Invariant 9, atomicity, applied: pass.** A lock and its lockout row commit in one transaction (`views.py:582-656`). So do a release and its release row (`:852-909`).
+> - **Invariants 2, 3, 5, 6, 7, 8 and 10:** not applicable to this slice.
+> - **Constants:**
+>   - No lockout literal appears inline on the server path.
+>   - The client copies at `frontend/src/constants.js:41-42` are flagged under item 1. Y1 and Y2 tie them to the server's values.
+>   - `LOCKOUT_WARNING_REMAINING = 2` (`:50`) is the page's own rule (decision 2) and has no server counterpart.
+> - **Implemented twice:** the attempt count lives in `failed_attempts` on the server and again in the page. This is deliberate and recorded (decision 1). The page's count is not security.
+> - **AI SDK imports:** none in FR-03's files.
+> - **Chunk writes:** not applicable.
+> - **Migrations:**
+>   - `0009` is additive and `0010` is reversible.
+>   - `test_release_account_locks_seed.py::test_the_migrations_apply_and_reverse_through_the_executor` applies both and reverses them.
+>   - `makemigrations --check` reported no changes (recorded in `e624e90`).
+>
+> ### Definition of done (CLAUDE.md §8)
+>
+> 1. **Behaviour, error paths and status codes:** met for every clause except C2.
+> 2. **Both suites:**
+>    - **pytest on `6ed0ef1`:** 4522 passed, with dual-role coverage 44/44. `POST /api/users/<uuid:pk>/unlock` was exercised anonymously (401, 5 tests), from an Employee (403, 5 tests) and from an Administrator (200, 403, 404 and 409, 14 tests). Log: `C:\Users\mozza\AppData\Local\Temp\claude\257e22242454ee47\014b10c2-3a24-461f-99d4-7d1e7098b7ed\scratchpad\full-suite-6ed0ef1.log`. I read its last lines myself.
+>    - **pytest on `c0c2efc`:** this is an inference, not a run.
+>      - Its only server change is a comment (`views.py:856-860`).
+>      - No Python test reads the docs it changed.
+>      - `test_front_end_constants_agreement.py` does read `frontend/src/constants.js`. It parses only `export const` lines and the `DOCUMENT_STATUS`, `ROLES` and `SOURCE_TYPE` objects, and `c0c2efc` changed none of those.
+>    - **npm on `c0c2efc`:** 614 passed with lint clean, according to its commit message. I did not re-run it.
+>    - **Screen clauses in the front-end suite:**
+>      - warning: S1, S5–S8;
+>      - countdown: S2–S4, S6, S9–S12;
+>      - release control: U1–U12 and E1;
+>      - message: S2, S9;
+>      - reload hint: S13.
+> 3. **Happy and failure paths:** both are tested on every route and screen above.
+> 4. **FR ID in each commit:** `de57242`, `3eee096`, `e624e90`, `36ecba6` and `c0c2efc` all carry `(FR-03)`, and each commit holds the tests for its own code.
+> 5. **This audit:** it finds one gap, C2.
+>
+> ### Gate impact
+>
+> - **No M6 impact.** FR-03 is a SHOULD for NIT3004 and not one of the twelve, and the 1 November gate has passed.
+> - **M6 code this branch touches:**
+>   - FR-02's login handler, in `de57242` (the H1 race fix);
+>   - FR-05's user list and screen: `GET /api/users` gains `lock`, and Role management gains the Account column.
+> - **Those changes passed** the full suite on `6ed0ef1`. `test_login.py`, `test_login_concurrency.py` and `test_roles.py` cover them.
+>
+> **FR-03 at c0c2efc is INCOMPLETE:** the clause "so the policy can be tightened without code changes" is neither met nor declined; every other clause is satisfied, or met within a recorded decision whose cost is stated.
+
+> **Dated note, 14 November 2026: what the audit's findings became.**
+>
+> - **Its one gap, C2:** closed by decision 7, above. It is not declined.
+> - **Its record defects:**
+>   - **Defect 1:** the configuration row is rewritten for decision 7.
+>   - **Defect 2:** the self-refusal notice is added to the residue about the only Administrator.
+>   - **Defect 3:** S13's citation now says what it tests.
+>   - **Defect 4:** the notice ceiling is added to the reload hint's comment and to decision 1's cost.
+>   - **Defect 5:** L3 now has four steps, and the dialog's check is no longer claimed against it.
+>   - **Defect 6:** `e624e90` has 49 distinct breaks.
+>   - **Defect 7:** the two "only" statements are corrected (`test_login.py` and the demonstration
+>     script).
+>   - **Defect 8:** the clause is cited under its Front-End heading.
+> - **The verdict stands as recorded:** INCOMPLETE at `c0c2efc`. A re-audit of the commit that closes
+>   the gap is recorded after it.
+
+**The final security review, 15 November 2026.** One workflow ran it at `a8c8479`, with the
+re-audit below:
+
+- a `security-reviewer` agent read decision 7's commit, `610c509`;
+- two independent skeptics then tried to refute each finding.
+
+A finding was kept unless the skeptics refuted it by a majority. Nobody ran pytest or npm during the
+review. The reviewer found the 401, the route, the page's lazy request, the request-time reads and
+the records clean, apart from the findings below.
+
+| Finding | Severity, and the skeptics' votes | What | Disposition |
+|---|---|---|---|
+| M1 | medium; both upheld | A very long `LOCKOUT_DURATION_MINUTES` passed the settings check, then made login answer 500 at the threshold failure: the lock's timestamp overflowed. Only a registered address could trigger it, so five wrong passwords told a stranger whether an address is registered (UC-02 E1.03). No lock was ever set | **Fixed** by decision 8: a 365-day maximum, compared as minutes before any timedelta is built. Breaks B3 and B7 |
+| L1 | low; one upheld, one refuted | The policy accepted any loosening, so a huge threshold silently turned the lockout off, against NFR-04 | **Fixed** by decision 8: a threshold of at most 5 and a duration of at least 15 minutes. Breaks B1, B2 and B6b |
+| L2 | low; one upheld, one refuted | Failures the page counted while it could not fetch the policy are read as current once it arrives. A typo after a long pause can lock the page for the full duration while the server has reset its count | **Recorded**, below |
+| L3 | low; both refuted | A `403` with no `retry_after`, while the policy was unavailable, said "when the timer ends" with no timer shown | **Dropped**: both skeptics refuted it |
+| L4 | low; both upheld | Tightening the policy in a developer's `.env` broke that machine's server tests, which assume the defaults | **Fixed**: `conftest.py`'s autouse `lockout_policy_defaults` pins the defaults for every test. No break covers it, because CI has no `.env` to tighten |
+| I1 | info; both upheld | A value that is not a whole number, or one past a timedelta's range, stopped startup with `ValueError` or `OverflowError` rather than `ImproperlyConfigured` | **Fixed**: both raise `ImproperlyConfigured`, naming the variable. Break B4 |
+| I2 | info; both upheld | The contract's "405 for any method but GET" was wrong. HEAD and OPTIONS answer 200, as on every DRF view, and OPTIONS quotes the view's docstring | **Fixed** in the contract. `test_the_policy_route_is_read_only` now checks POST, PUT, PATCH, DELETE, HEAD and OPTIONS (break B5). OPTIONS quoting docstrings is DRF's default on every route, and is not changed here |
+| I3 | info; both upheld | Several records still described the fixed five and 15, or the page's built-in copy | **Fixed** in the contract, `schema-v1.md`, `constants.js`'s comments and this entry |
+
+**Residue L2, recorded rather than fixed.**
+
+- **What happens:** while the page cannot fetch the policy, it keeps counting failures with no lock
+  and no time-based reset. Once the policy arrives, a count at or above the threshold locks the page
+  at once, for the full duration. The server, whose lock expired meanwhile, may have reset its count
+  to 1.
+- **The way out:** a reload. Only the page's own countdown is wrong; the server enforces the real
+  lock regardless (invariant 4).
+- **The fix the review suggested:** keep each failure's time and replay them the way the server
+  counts.
+
+**Tests and breaks for decision 8 and these fixes** are in the commit whose subject begins
+`fix(FR-03): the lockout policy may only be tightened`.
+
+- **Tests:** in `test_fr03_lockout_policy.py`:
+  - the bounds test, with each kind of refused value;
+  - a test that values at or inside the bounds start;
+  - login at a 20-minute duration, which also catches a default-duration break;
+  - the widened read-only test.
+- **Breaks:** B1 to B7, plus B6b and P5 rerun.
+  - Each new test failed under at least one.
+  - B6 made the default threshold itself invalid, so the test process stopped at settings import and
+    reported no test result. B6b broke the threshold's lower bound instead, and was caught.
+
+**The requirements re-audit, verbatim.** The `requirements-auditor` agent re-audited FR-03 at
+`a8c8479` on 15 November 2026, in the same workflow. The report below is that agent's return value,
+checked identical to its record in the workflow's journal and quoted line by line, unedited. Its
+references are to `a8c8479`.
+
+> ## Audit: FR-03 Account Lockout & Brute-Force Protection — re-audit at a8c8479, 15 November 2026
+>
+> **Commit audited:** `a8c8479` (`a8c8479d7be9ad2f6c6e99bffac45b36748f0d5f`) on `feat/FR-03-lockout-interface`. It merges `610c509` (Benjamin's decision 7, the commit under review) with `95aadd3` (main, PR #108, D-131).
+>
+> - **FR-03's own commits:** `de57242`, `3eee096`, `e624e90`, `36ecba6`, `c0c2efc` and `610c509`.
+> - **Requirement text:** `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\proposal.txt` (untracked, read where it is). FR-03 is lines 338–396. I also read it against FR-02 (302–336), UC-02 E1 and E2 (1715–1723), NFR-04 (1442) and the configuration table (2818–2824).
+> - **Paths** below are relative to the worktree `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-03-lockout-interface-b55494`. Line numbers are at `a8c8479`.
+> - **I ran no tests for this audit.** The full pytest run on `a8c8479` was still going: its log was at 31% when I read it at 10:47 on 15 November. **I did not have its result.**
+>
+> **Verdict:** COMPLETE
+>
+> Every FR-03 clause is either satisfied, or met within a recorded decision whose cost is stated. The previous audit's one gap, C2 ("so the policy can be tightened without code changes"), is now met. The verdict does not cover three things:
+> - `a8c8479`'s full pytest result, which I did not have;
+> - two of the eight earlier record defects (2 and 4), which are only partly fixed;
+> - new defects N1 to N7 below. N6 and N7 are consequences of decision 7 that nobody recorded, not text slips. None of them leaves a clause unmet.
+>
+> ### Clause coverage
+>
+> | # | Clause (FR-03 unless named) | Status | Evidence |
+> |---|---|---|---|
+> | F1 | "a subtle warning appears once 2+ attempts remain: '2 attempts remaining before temporary lockout'" | Satisfied, reading "2+" as decision 2 does: the warning shows at 2 remaining, then at 1. Since decision 7 it counts against the threshold the page fetches. How accurate it is depends on decision 1, whose cost is recorded | `frontend/src/pages/Login.jsx:177-182, 303-307`; `frontend/src/constants.js:45, 341-344`; `loginLockout.test.jsx` S1, S5, S7, S8 and "warns, locks and counts down by the policy the server sends, here three failures and ten minutes" |
+> | F2 | "Once locked, the login button is disabled with a countdown timer shown" | Satisfied. The server's 403 counts down its `retry_after` whether or not the policy has arrived. The page's own lock waits for the fetched policy, a cost decision 7 records | `Login.jsx:82-102, 206, 212-216, 297-298, 340`; `apps/api/views.py:620-628`; S2–S4, S6, S9–S12; "shows no warning and no lock of its own when the policy cannot be had, and still counts down the server’s 403"; `test_fr03_lockout_record.py::test_retry_after_is_whole_seconds_within_the_lock`, `::test_retry_after_is_the_time_left_on_the_accounts_lock`, `::test_retry_after_rounds_up_so_the_page_never_reopens_early` |
+> | F3 | "An Administrator viewing a locked account can release the lock immediately" | Satisfied. Three residues are recorded in D-130: a sign-in page already open must be reloaded (finding 1); the only Administrator cannot be released (finding 2); the release is not tied to the lock the dialog showed (finding 3) | `frontend/src/pages/RoleManagement.jsx:69-88, 96-106, 400-446`; `frontend/src/api/users.js:71-72`; `views.py:850-937`; `roleManagementUnlock.test.jsx` U1–U12; `accessDenied.test.jsx` E1; S13; `test_fr03_unlock.py::test_an_administrator_releases_another_users_lock`, `::test_after_a_release_the_user_signs_in_with_the_right_password` |
+> | F4 | "The lockout message states that an administrator can unlock the account" | Satisfied. The message is false for the only Administrator, a recorded residue (finding 2) | `views.py:190-193`; `constants.js:318-330`; S2, S9; `test_fr03_lockout_record.py::test_the_locked_notice_names_an_administrator_who_can_unlock_the_account` |
+> | S1 | "Each failed attempt increments failed_attempts; reaching the threshold of five sets locked_until to the current time plus fifteen minutes" | Satisfied at the defaults, using the running settings | `views.py:629-658` (lock at `641-642`); `config/settings.py:180-185`; `test_login.py::test_a_failed_attempt_increments_failed_attempts`, `::test_the_threshold_failure_sets_locked_until`, `::test_five_consecutive_failures_then_403`; `test_login_concurrency.py::test_concurrent_wrong_passwords_leave_the_lock_in_place`; `test_fr03_lockout_policy.py::test_login_locks_at_the_running_threshold_for_the_running_duration` |
+> | V1 | "the lock is evaluated before any session can be established" | Satisfied | The check at `views.py:593` comes before `django_login` at `:665`, and both run under the row lock taken at `:585`; `test_login.py::test_a_locked_account_issues_no_session` |
+> | V2 | "No session is issued for a locked account under any circumstance, regardless of the password submitted" | Satisfied. Two residues are recorded: the session's keys are saved after the row lock is released (D-130), and a lock does not end an existing session (D-26) | `views.py:593-628`; `test_login.py::test_a_locked_account_is_403_even_with_the_right_password`; `test_login_concurrency.py::test_a_right_password_gets_no_session_once_a_concurrent_request_has_locked_the_account` |
+> | V3 | "The submitted password is still verified while the account is locked … used solely to select the response message" | Satisfied. Past the notice ceiling, now twice the running threshold, the result is not used at all (D-26) | `views.py:580, 611-613`; `test_login.py::test_a_locked_account_with_the_wrong_password_is_the_ordinary_401`, `::test_guessing_past_the_ceiling_stops_being_told_whether_it_was_right`; `test_fr03_lockout_policy.py::test_the_notice_ceiling_follows_the_running_threshold` |
+> | V4 | "A successful authentication on an unlocked account resets the counter to zero" | Satisfied | `views.py:666-672`; `test_login.py::test_a_success_resets_failed_attempts_and_sets_last_login`, `::test_a_success_clears_locked_until_as_well_as_the_counter` |
+> | V5 | "the counter also resets automatically once the lockout window expires" | Satisfied, lazily: the next attempt resets it, on the row read under lock | `views.py:632-638`; `test_login.py::test_an_expired_lock_does_not_re_lock_on_the_next_single_failure`; `test_fr03_lockout_record.py::test_after_a_lock_expires_the_next_threshold_writes_a_second_row` |
+> | V6 | "A matching password submitted during an active lockout window neither clears the lock nor resets the counter" | Satisfied. The attempt is counted (D-26) | `views.py:593-628`; `test_login.py::test_an_attempt_during_the_lock_does_not_extend_it`; `test_login_concurrency.py::test_a_right_password_gets_no_session_once_a_concurrent_request_has_locked_the_account` |
+> | V7 | "Only a user holding the Administrator role may release a lock" | Satisfied, through `release_account_locks`, which is seeded for Administrator only | `views.py:409, 876`; `apps/accounts/migrations/0010_seed_release_account_locks.py:22-25`; `test_fr03_unlock.py::test_unlock_is_401_anonymously_and_changes_nothing`, `::test_unlock_is_403_for_an_employee_whatever_the_id` [a locked colleague, their own locked account, an unknown id]; `test_release_account_locks_seed.py::test_release_account_locks_is_held_by_administrator_only` |
+> | V8 | "An Administrator cannot release a lock on their own account" | Satisfied in letter. Its purpose can be defeated in four requests through a second account. That is residue L3, which is recorded | `views.py:913-916`; `test_fr03_unlock.py::test_an_administrator_cannot_release_their_own_account[locked]`, `[not locked]` |
+> | C1 | "threshold and lockout duration are configuration values rather than literals" | Satisfied | `config/settings.py:180-189`, defaulting to `apps/core/constants.py:449-450`; read at `views.py:611, 641-642, 695-696` |
+> | C2 | "so the policy can be tightened without code changes" | **Satisfied.** At `c0c2efc` it was partial and not declined | See "The previous audit's gap" below |
+> | C3 | "Every lockout is recorded with the attempted email, source address, and timestamp" | Satisfied | `views.py:648-656`; `apps/accounts/models.py:118-162`; `test_fr03_lockout_record.py::test_the_threshold_failure_writes_one_lockout_row_with_every_field`, `::test_no_attempt_during_a_live_lock_writes_a_row`, `::test_an_unknown_address_writes_no_row`, `::test_the_lockout_row_records_the_connecting_address` [the connecting address is recorded, x-forwarded-for is ignored] |
+> | C4 | "giving evidence of whether a lockout resulted from a forgotten password or a distributed attempt against many accounts" | Satisfied in code. It cannot be shown on the loopback alpha, where every `source_ip` is `127.0.0.1`. That is L4, which is recorded, and the demonstration script says so | `views.py:510-517`; `apps/api/serializers.py:83-100`; `docs/demonstration-script.md:252-257` |
+> | M1 | "the lockout notice is shown only where the submitted password matches the stored credential" | Satisfied | `views.py:611-628`; `test_fr03_lockout_record.py::test_every_401_is_byte_identical_to_an_unknown_addresses` [unknown address, registered wrong password, locked wrong password, locked past the ceiling right password] |
+> | M2 | "Where the password was also wrong, the generic 'Invalid email or password' message from FR-02 is retained" | Satisfied on the server. When the page's own count locks, it adds a hedged notice that reads the same for every address (decision 1, finding C) | `views.py:498-507, 612-613`; `test_login.py::test_a_locked_account_is_indistinguishable_from_an_unknown_address`, `::test_an_unknown_address_is_never_403`; S2 |
+> | R1 | "releasing a lock clears the expiry and resets the failed-attempt count" | Satisfied | `views.py:920-923`; `test_fr03_unlock.py::test_an_administrator_releases_another_users_lock`, `::test_a_release_gives_back_five_attempts_and_the_notice_after_the_next_lock` |
+> | R2 | "The Administrator does not see, set or reset the user's password; … nothing more" | Satisfied | `views.py:878-937` reads no body and leaves the password, the role and every session alone; `serializers.py:50-100`; `constants.js:409`; `test_fr03_unlock.py::test_an_administrator_releases_another_users_lock`; U4 |
+> | R3 | "Every release is recorded with the Administrator who performed it, the account affected and the time" | Satisfied | `views.py:927-936`; `test_fr03_unlock.py::test_an_administrator_releases_another_users_lock`, `::test_one_administrator_releases_another_administrators_lock`, `::test_a_lock_set_by_login_and_its_release_are_two_rows_naming_the_same_lock` |
+> | P1 | "200 OK on release" | Satisfied | `views.py:937`; tests as for R1 |
+> | P2 | "403 Forbidden where the requester does not hold the Administrator role" | Satisfied, and given before any lookup | `views.py:876`; tests as for V7 |
+> | P3 | "… or is the account holder" | Satisfied, whether or not the account is locked | `views.py:913-916`; tests as for V8 |
+> | P4 | "404 Not Found for an unknown account" | Satisfied | `views.py:909-912`; `test_fr03_unlock.py::test_an_unknown_id_is_404_for_an_administrator` |
+> | P5 | "409 Conflict where the account is not currently locked" | Satisfied, including an expired lock | `views.py:917-919`; `test_fr03_unlock.py::test_an_account_that_is_not_locked_is_409_and_its_count_is_left_alone`, `::test_an_expired_lock_is_409_and_is_left_exactly_as_it_was` |
+> | D1 | "Users (Update (locked_until → null, failed_attempts → 0))" | Satisfied | as R1 |
+> | D2 | "LoginAttempts (Create — release recorded as an administrative event)" | Satisfied | as R3 |
+> | D3 | Users table: `user_id`, `failed_attempts`, `locked_until` | Satisfied (FR-02's columns) | `apps/accounts/models.py:86, 97-98` |
+> | D4 | LoginAttempts table (Create, Read): `attempt_id`, `attempted_email`, `source_ip`, `success`, `attempted_at` | Satisfied. D-130 "The schema" records the four added columns and the nullable `success`. `attempted_email` is an `EmailField` (varchar 254), not text. The Read is `lock` on `GET /api/users`, and no route lists the table | `apps/accounts/migrations/0009_login_attempts.py`; `models.py:141-159`; `views.py:740-766`; `serializers.py:62-100`; every test in `test_fr03_user_list_lock.py`; `test_release_account_locks_seed.py::test_the_migrations_apply_and_reverse_through_the_executor` |
+> | X1 | FR-02 Front-End "Where the account is locked and the submitted password was correct, a distinct message is shown"; UC-02 E2.02 | Satisfied within the notice ceiling, and **declined past it by D-26**. D-26's reasons hold in the code: every attempt during a lock is counted (`views.py:599-600`), the locked branch never writes `locked_until`, and `authenticate()` hashes the password on every path (`:580`) | `views.py:599-628`; `test_login.py::test_the_notice_survives_a_mistype_by_the_locked_out_user`, `::test_guessing_past_the_ceiling_stops_being_told_whether_it_was_right` |
+> | X2 | UC-02 E1.03, "disclosing neither whether the email is registered nor whether the account is locked" | Satisfied, headers included. The policy route's body is the same for every caller | `test_fr03_lockout_record.py::test_every_401_is_byte_identical_to_an_unknown_addresses`; `test_fr03_lockout_policy.py::test_the_policy_route_answers_every_caller_alike` |
+> | X3 | NFR-04, "lock a user account after 5 consecutive failed login attempts, requiring either the 15-minute cooldown to expire or an Administrator to release the lock" | Satisfied at the default policy. A `.env` can now set a looser policy (N6) | as S1 and V1–V8; `test_login.py::test_login_succeeds_once_the_lock_has_expired`; `test_fr03_unlock.py::test_after_a_release_the_user_signs_in_with_the_right_password` |
+> | X4 | UC-02 E1.02, "Where the counter reaches the configured threshold, the account is locked" | Satisfied. Since decision 7 the threshold really is configuration | `config/settings.py:180`; `views.py:641` |
+>
+> ### Missing or partial
+>
+> **No clause is missing or partial.**
+>
+> **Declined or recorded with their cost, so not counted as gaps.** I checked each against the code:
+> - D-26, past the ceiling (X1);
+> - D-130's decisions:
+>   - decision 1, the page's own count;
+>   - decision 2, when the warning shows;
+>   - decision 5, which records only lockouts and releases;
+>   - decision 7's costs: a change applies after a restart, a page without the policy shows no warning or lock of its own, and it departs from `CLAUDE.md` §5;
+> - D-130's residues:
+>   - L3, in four requests;
+>   - the only Administrator (finding 2);
+>   - the release not tied to the lock the dialog showed (finding 3);
+>   - the lock order, which holds only while the administrator set is stable (finding 4);
+>   - the session keys, saved after the row lock is released;
+>   - no retention rule;
+>   - the timing difference from the lockout insert;
+>   - L4, every `source_ip` being `127.0.0.1` on the loopback alpha.
+>
+> ### The previous audit's gap: C2, **fixed**
+>
+> - **The server.**
+>   - `config/settings.py:180-189` reads `LOCKOUT_THRESHOLD` and `LOCKOUT_DURATION_MINUTES` from the process environment or the repository-root `.env` (`:38-40`). Both default to `apps/core/constants.py:449-450`, and a value under 1 stops the server starting. `.env.example:20-24` documents both.
+>   - `LoginView` reads `settings.LOCKOUT_THRESHOLD` and `settings.LOCKOUT_DURATION` (`views.py:611, 641-642`).
+>   - No server path imports the lockout constants any more. The only importers are `config/settings.py:24-25` and tests.
+> - **The page.**
+>   - `GET /api/auth/lockout-policy` serves the policy (`apps/api/urls.py:19`; `views.py:676-698`), and `frontend/src/api/auth.js:49-50` asks for it.
+>   - `Login.jsx` reads it at `:60-66, 82-96, 303-310, 312-329`, and asks for it at `:360` and `:370`.
+>   - Neither `frontend/src/constants.js` (`:32-37`) nor `Login.jsx` holds a copy. There is no numeric fallback at `Login.jsx:84` or `:94`.
+>   - The page takes its message's duration from the policy (`constants.js:328-330`). The server's own message carries no number (`views.py:190-193`).
+> - **What tightening the policy takes now:** an edit to `.env` and a server restart. No source file changes and no front-end rebuild.
+> - **Tests.**
+>   - **Server**, in `test_fr03_lockout_policy.py`:
+>     - `test_the_policy_defaults_to_the_constants`;
+>     - `test_the_policy_is_read_from_the_environment`;
+>     - `test_a_policy_under_one_refuses_to_start` [LOCKOUT_THRESHOLD-0, LOCKOUT_THRESHOLD--1, LOCKOUT_DURATION_MINUTES-0];
+>     - `test_login_locks_at_the_running_threshold_for_the_running_duration`;
+>     - `test_the_notice_ceiling_follows_the_running_threshold`;
+>     - `test_the_policy_route_gives_the_running_values_to_an_anonymous_caller`;
+>     - `test_the_policy_route_defaults_to_the_constants`;
+>     - `test_the_policy_route_answers_every_caller_alike` [employee, administrator];
+>     - `test_the_policy_route_is_read_only`.
+>   - **Front end**, in `loginLockout.test.jsx`:
+>     - "asks for the policy once, after the first failed attempt, and not before";
+>     - "warns, locks and counts down by the policy the server sends, here three failures and ten minutes";
+>     - "shows no warning and no lock of its own when the policy cannot be had, and still counts down the server’s 403".
+>   - **The tie:** `test_front_end_constants_agreement.py::test_the_client_holds_no_copy_of_the_lockout_policy`.
+>   - **Breaks.** `610c509`'s message reports every server test failing under at least one of breaks P1–P10, and every front-end test failing under at least one of F1–F7. F7 was caught only after its test was made to check every failure. F8 was caught by the tie test.
+>
+> ### The previous audit's eight record defects
+>
+> 1. **Fixed.**
+>    - D-130's configuration row (`docs/decisions.md:12250`) now quotes both halves of the clause and cites the decision-7 tests.
+>    - The comment at `apps/core/constants.py:439-448` is rewritten.
+>    - `test_constants.py::test_lockout_values` (`apps/core/tests/test_constants.py:107-111`) still pins 5 and 15 minutes. These are now the defaults, so pinning them is correct, and the row no longer cites that test.
+> 2. **Partly fixed.**
+>    - The residue at `decisions.md:12318-12320` now covers `TEXT.unlockSelfRefused` (`constants.js:424`).
+>    - Finding 2's disposition cell (`decisions.md:12371`) is unchanged. It still lists only "the sign-in and server messages" as recorded, under "Fixed on Role management", which the self-refusal notice on Role management is not.
+> 3. **Fixed.** `decisions.md:12246` now reads "S13 (the reload hint, shown in both lock states; no test reloads the page)".
+> 4. **Partly fixed.**
+>    - The notice ceiling is now in the reload hint's comment (`constants.js:334-336`) and in decision 1's cost (`decisions.md:12180-12182`).
+>    - Finding 1's disposition (`decisions.md:12370`), which defect 4 also named as silent, still does not mention it.
+> 5. **Fixed in `decisions.md`.**
+>    - The L3 row (`:12285`) and the residue (`:12294-12302`) both give four requests, and neither claims the dialog's check against L3.
+>    - The same pairing survives in code comments (N5).
+> 6. **Fixed, and verified.**
+>    - `decisions.md:12261` says "49 distinct breaks, all caught (51 entries in its list, since break U12 was also run as U12r and U12x10)".
+>    - `e624e90`'s list has 51 entries, and each one says "caught". With U12r and U12x10 folded into U12, the distinct breaks are: U1–U10, U12–U17, L1–L5, L7–L18, S1–S7, K1–K3, D1–D5 and C1, which makes 49.
+> 7. **Fixed.**
+>    - `apps/api/tests/test_login.py:221-223` now reads "FR-03 adds the warning, the countdown, the release and LoginAttempts (D-130)".
+>    - `docs/demonstration-script.md:177-181` now names `LoginAttempts` and the `.env` policy.
+>    - The merge kept the branch's text over main's "adds only" line.
+> 8. **Fixed.**
+>    - `views.py:185` and `test_fr03_lockout_record.py:14` now say "FR-03's Front-End clause".
+>    - The remaining uses of "messaging clause" (`views.py:608`, `decisions.md:12156`) refer to the messaging clause correctly.
+>
+> ### New record defects
+>
+> - **N1. D-130 decision 1 contradicts decision 7.**
+>   - Decision 1 (`decisions.md:12127-12129`) still says the page "works out what remains from its copy of `LOCKOUT_THRESHOLD`".
+>   - Since decision 7 there is no copy, and `test_the_client_holds_no_copy_of_the_lockout_policy` enforces that.
+>   - The FE rows at `:12244-12245` also give failure counts at the defaults without saying that the page's own warning and lock wait for the policy.
+> - **N2. D-21 was overtaken without a dated note.**
+>   - D-21 (`decisions.md:551-553`) still says "the registration and login endpoints opt out explicitly".
+>   - `610c509` added a third opt-out (`views.py:690`) and cites D-21 for it, but D-21 has no dated note, and D-130's "Records this overtakes" (`:12343-12357`) does not list it.
+>   - `config/settings.py:192` still says "Every route is protected unless it opts out explicitly (registration and login)".
+>   - `views.py:467` and `:560` still say "one of the two opt-outs (D-21)".
+> - **N3. A stale test header.** `frontend/tests/loginLockout.test.jsx:10-12` says a 403 without `retry_after` counts down "the full fifteen minutes". Since `610c509` it counts down the fetched policy's duration (`Login.jsx:84`), which is what the test names at `:389` and `:402` say.
+> - **N4. A stale comment.**
+>   - `constants.js:311-312` says the 403 comes "only within LOCKOUT_NOTICE_CEILING (D-26)".
+>   - The running ceiling is `settings.LOCKOUT_THRESHOLD × LOCKOUT_NOTICE_CEILING_FACTOR` (`views.py:611`). `LOCKOUT_NOTICE_CEILING` is the value at the default threshold, kept "for the tests that run on the defaults" (`apps/core/constants.py:459-460`).
+>   - `610c509` changed `views.py:500` and `:597` to "the notice ceiling" for exactly this reason, but not this comment.
+> - **N5. The dialog's check is still labelled "finding L3" in code.**
+>   - The places: `constants.js:410-411`, `RoleManagement.jsx:93-94` and `roleManagementUnlock.test.jsx:13`.
+>   - D-130's corrected L3 row (`decisions.md:12285`) says the check helps against someone asking an Administrator for a release, "not against L3".
+> - **N6. Not recorded: a `.env` can loosen the policy past NFR-04.**
+>   - `config/settings.py:186-189` refuses only values under 1. A setting such as `LOCKOUT_THRESHOLD=50` or `LOCKOUT_DURATION_MINUTES=1` starts cleanly.
+>   - That puts the build outside NFR-04's "5 consecutive failed login attempts … 15-minute cooldown" (`proposal.txt:1442`; the configuration table at 2818–2824).
+>   - FR-03 says "tightened". Decision 7's costs (`decisions.md:12420-12427`) do not mention loosening.
+> - **N7. Not recorded: the server suite is not isolated from the lockout policy in `.env`.**
+>   - `config/settings.py:38-40` reads the repository-root `.env`.
+>   - `conftest.py:91-99` pins the provider and transcription settings "whatever a developer's .env says", but no lockout setting.
+>   - I inferred the following from reading the code; I did not run it. With `LOCKOUT_THRESHOLD=3` in that file, two tests fail:
+>     - `test_fr03_lockout_policy.py::test_the_policy_route_defaults_to_the_constants` (`:145-151`) compares the live settings with the constants;
+>     - `test_fr03_lockout_record.py::test_the_threshold_failure_writes_one_lockout_row_with_every_field` writes its row at the third failure but asserts none before the fifth (`:88-90`). Any change to the duration also fails its `:110`.
+>   - Nothing is affected today. CI and the FR-03 worktree have no `.env`, and the main checkout's `.env` has no line beginning `LOCKOUT`. The suite would fail in a checkout whose `.env` tightens the policy.
+>
+> **Observations, not defects.**
+> - **O1. No security review covers decision 7.** Nothing in D-130 records a security review of `610c509`, which adds an anonymous route and changes where `LoginView` reads its policy. The pre-PR review read `6ed0ef1` (`decisions.md:12359-12360`). `CLAUDE.md` §8 does not require one.
+> - **O2. `CLAUDE.md` §5 now disagrees with the code for these two values.** It still says the constants "live in `apps/core/constants.py` and nowhere else". The disagreement is recorded in decision 7's costs (`decisions.md:12425-12427`). `CLAUDE.md` at `a8c8479` is byte-identical to main's. Resolving it needs the team's own edit to that file.
+>
+> ### Regression check
+>
+> - **`610c509`, server.**
+>   - At the default policy, the running values equal `c0c2efc`'s constants: threshold 5, duration 15 minutes, notice ceiling 10.
+>   - The rbac and never-cache walks treat the new route as open, with a 200.
+>   - The dual-role matrix lists it as "open (AllowAny, not counted)".
+> - **`610c509`, front end.**
+>   - FR-02's distinct locked message does not depend on the policy: `TEXT.accountLocked` shows on the 403 regardless (`Login.jsx:302, 309`).
+>   - One fallback has narrowed. A 403 without a usable `retry_after` used to count down a built-in 15 minutes. It now counts down the fetched duration, and with no policy it shows the message without a countdown and leaves Sign in enabled.
+>   - This server always sends `retry_after` (`views.py:620-626`), so that path cannot be reached with it. Decision 7 records the general cost. Not a defect.
+> - **`a8c8479`, the merge.**
+>   - **What it changes.** It touches no file under `apps/`, `config/` or `frontend/`. It brings `corpus/objective-02/runs/2026-11-13-alpha-anthropic/` and `corpus/objective-06/runs/2026-11-13-kmp-anthropic-gap-column/`, and changes `docs/alpha-deployment.md`, `docs/decisions.md` and `docs/demonstration-script.md`.
+>   - **Docs from main.**
+>     - The corpus files and `docs/alpha-deployment.md` are byte-identical to `95aadd3`'s.
+>     - `docs/decisions.md` keeps every line of `95aadd3`'s. D-131 is identical to main's. D-130 is identical to `610c509`'s apart from one added blank line. D-130 sits before D-131, as D-131's closing note asks.
+>   - **The demonstration script.** `docs/demonstration-script.md` keeps the branch's FR-03 text and main's 14 November amendment. Its new line "None of this is on either alpha" is true: neither `8598d19` nor `6e1efd1` contains `de57242`, `3eee096` or `e624e90`.
+>   - **Leftovers.** No conflict markers remain.
+>   - **Tests that read docs.**
+>     - `test_request_body_bound.py`'s scan skips `decisions.md`, and the branch adds no Waitress command anywhere.
+>     - `test_summary_commands.py` and `test_knowledge_gap_schedule.py` read `docs/alpha-deployment.md`, which is main's file unchanged.
+>   - **So I expect `a8c8479`'s suite to match `610c509`'s.** That is an inference, not a run.
+>
+> ### Invariant check (CLAUDE.md §6)
+>
+> - **Invariant 4, authorisation on the server: pass.**
+>   - The release's 401 and 403 come from `permission_classes` (`views.py:876`).
+>   - The own-account 403 is decided on the server (`:913-916`).
+>   - Hiding the Unlock buttons is usability only (`RoleManagement.jsx:77-85`; E1).
+>   - The policy route is a deliberate opt-out, though D-21 does not record it (N2).
+> - **Invariant 1's non-disclosure, applied to accounts: pass.**
+>   - Login's 401 is byte-identical in four cases: an unknown address, a wrong password, a locked account with a wrong password, and a locked account past the ceiling.
+>   - The 403 goes only to the right password, within the ceiling.
+>   - An Employee's 403 on the release comes before the lookup, so user ids cannot be probed.
+>   - The policy route gives the same body to an anonymous caller and to both roles.
+> - **Invariant 9, atomicity, applied: pass.** A lock and its lockout row commit in one transaction (`views.py:581-658`). So do a release and its release row (`:879-936`).
+> - **Invariants 2, 3, 5, 6, 7, 8 and 10:** not applicable to this slice.
+> - **Set-level checks.**
+>   - **Constants:** the policy's departure from §5 is recorded (O2). No lockout literal appears inline on the server path. `LOCKOUT_WARNING_REMAINING = 2` (`constants.js:45`) is decision 2's rule, and `COUNTDOWN_TICK_MS = 1000` (`Login.jsx:23`) is the countdown's redraw interval.
+>   - **Implemented twice:** the attempt count lives in `failed_attempts` and again in the page, which decision 1 records. The ceiling is also defined twice: `LOCKOUT_NOTICE_CEILING` and the running value at `views.py:611` agree only at the defaults (N4, N7).
+>   - **Wrong app or layer:** none.
+>   - **UI-only enforcement:** none.
+>   - **AI SDK imports:** none in the branch's diff against main.
+>   - **Chunk writes:** not applicable.
+>   - **Migrations:** `610c509` adds none. Its message reports `makemigrations --check` clean.
+>
+> ### Definition of done (CLAUDE.md §8)
+>
+> 1. **Behaviour, error paths and status codes:** met for every clause.
+> 2. **Both suites.**
+>    - **pytest on `610c509`:** 4533 passed, exit 0, dual-role coverage 44/44. The source is the commit message and the last lines of `C:\Users\mozza\AppData\Local\Temp\claude\257e22242454ee47\014b10c2-3a24-461f-99d4-7d1e7098b7ed\scratchpad\full-suite-decision7.log`, which I read. The log does not name its commit.
+>    - **The release route in that run:** `POST /api/users/<uuid:pk>/unlock` was exercised anonymously (401, 5 tests), from an Employee (403, 5 tests) and from an Administrator (200, 403, 404 and 409, 14 tests).
+>    - **pytest on `a8c8479`:** I did not have the result. `C:\Users\mozza\AppData\Local\Temp\claude\257e22242454ee47\014b10c2-3a24-461f-99d4-7d1e7098b7ed\scratchpad\full-suite-a8c8479.log` was at 31%.
+>    - **npm on `610c509`:** 617 passed, with lint and build clean, according to its commit message. I did not re-run it. The merge changes no front-end file.
+>    - **Screen clauses in the front-end suite:**
+>      - warning: S1, S5, S7, S8 and the three-failure policy test;
+>      - countdown: S2–S4, S6, S9–S12 and the decision-7 tests;
+>      - release control: U1–U12 and E1;
+>      - message: S2 and S9;
+>      - reload hint: S13;
+>      - fetching the policy: the decision-7 tests.
+> 3. **Happy and failure paths:** both are tested on every route and screen above.
+> 4. **FR ID in each commit:** `de57242`, `3eee096`, `e624e90`, `36ecba6`, `c0c2efc` and `610c509` all carry `(FR-03)`, and `610c509` carries its own tests.
+> 5. **This audit:** it finds no clause gap.
+>
+> ### Smallest fix for each item
+>
+> - **Clause gaps:** none.
+> - **Defect 2's remainder:** at `decisions.md:12371`, add "and the self-refusal notice (`TEXT.unlockSelfRefused`)" to the "Recorded for" clause.
+> - **Defect 4's remainder:** at `decisions.md:12370`, add that every attempt after a reload counts toward D-26's ceiling.
+> - **N1:** add a dated qualifier to decision 1 at `decisions.md:12128`: "from the policy it fetches (decision 7)".
+> - **N2:**
+>   - add a dated note on D-21 naming `GET /api/auth/lockout-policy` as the third opt-out;
+>   - list D-21 in D-130's "Records this overtakes";
+>   - edit `config/settings.py:192` and `views.py:467` and `:560`.
+> - **N3:** at `loginLockout.test.jsx:10-12`, change "the full fifteen minutes" to "the policy's duration".
+> - **N4:** at `constants.js:312`, change "LOCKOUT_NOTICE_CEILING" to "D-26's notice ceiling".
+> - **N5:** replace "finding L3" at `constants.js:410`, `RoleManagement.jsx:94` and `roleManagementUnlock.test.jsx:13` with the case the check does address, someone asking an Administrator for a release.
+> - **N6:** Benjamin's decision. Either record in decision 7's costs that a `.env` can loosen the policy past NFR-04, or refuse values looser than the defaults at `config/settings.py:186-189`.
+> - **N7:** add an autouse fixture in `conftest.py` that sets `settings.LOCKOUT_THRESHOLD` and `settings.LOCKOUT_DURATION` to `apps/core/constants.py`'s values. The policy tests already override them through pytest-django's `settings` fixture.
+>
+> ### Gate impact
+>
+> - **No M6 impact.** FR-03 is a SHOULD for NIT3004, not one of the twelve, and the 1 November gate has passed.
+> - **M6 code this branch touches:**
+>   - FR-02's `LoginView`: the H1 race fix in `de57242`, and the settings reads in `610c509`, which behave identically at the defaults;
+>   - FR-05's `GET /api/users`, which gains `lock`, and Role management, which gains the Account column.
+> - **Evidence for those changes:** they passed the full suite on `610c509`. The result on `a8c8479` is still to come.
+>
+> **FR-03 at a8c8479 is COMPLETE: every clause, C2 included, is satisfied or met within a recorded decision; the a8c8479 pytest result was not available to me, and defects 2 and 4 (partly fixed) and N1–N7 remain to be corrected or recorded.**
+
+> **Dated note, 15 November 2026: what came after the re-audit.** The re-audit read `a8c8479`.
+> Decision 8 and the final security review's fixes came after it, in the commit whose subject begins
+> `fix(FR-03): the lockout policy may only be tightened`. That commit changes:
+>
+> - the startup validation of the two variables;
+> - a test fixture;
+> - the policy tests;
+> - records.
+>
+> It changes no FR-03 behaviour the clause table depends on, except that a policy looser than NFR-04
+> no longer starts. It was not re-audited, and the verdict stands as recorded for `a8c8479`.
+
+## D-131 · The AI provider is chosen at setup and a database keeps it; the alpha runs on Anthropic, on a database built for it
+
+**Status:** Settled by the user · **Date:** 2026-11-13 · **Concerns:** `CLAUDE.md` §4, FR-08 (risk
+R10), FR-19, D-64, D-88, D-117, D-122, `docs/alpha-deployment.md` · **Supersedes:** D-88's database
+for the alpha. Once the implementation below lands, also D-117's `--resize-column` as a way to move
+a database to another provider.
+
+**What prompted it:** D-117's note of 12 November.
+
+- **The defect.** `reindex --resize-column` moved `kmp_anthropic` to voyage-4 and left FR-19's gap
+  column at 768, so FR-19's cycle failed there.
+- **The user asked whether the width could follow the provider dynamically.** The session set out
+  two ways:
+  - a column with no fixed width, so one database could hold both providers' vectors;
+  - resizing automatically on a switch. The session advised against this one: a fixed-width column
+    can change width only by deleting every vector in it.
+
+**The decision, the user's, on 13 November 2026:**
+
+1. **No switching.** In the user's words: "Switching providers once the database has been created
+   is not something I want. On setup, the user will need to decide FLM or Anthropic installation."
+   - A database keeps the provider it was set up with, and so its embedding width.
+   - To change provider, set up a new database under the new provider and ingest the content again.
+   - `CLAUDE.md` §4 already says a switch goes "onto a fresh database". `--resize-column` and
+     the README's "Switching an existing database" contradict that, and will go.
+2. **How the installer chooses:** `AI_PROVIDER` in `.env`, before the first `migrate`. The column
+   widths follow from it.
+3. **The rule is built on a branch of its own.** It gets tests and deliberate breaks, and the
+   requirements-auditor runs before any PR, which opens only when the user says. It will contain:
+   - the width derived from `AI_PROVIDER`, instead of `EMBEDDING_DIMENSION` set by hand beside it;
+   - a startup check that refuses a database set up for the other provider;
+   - `reindex --resize-column` removed, and `reindex` limited to the database's own provider;
+   - the README's setup, rewritten.
+
+   `CLAUDE.md` §4's lines on switching change only after the user approves the wording. None of
+   this is built yet.
+4. **`kmp_anthropic`'s gap column was altered to `vector(1024)`.** It is on the never-write list,
+   so the user approved this statement. See D-117's note of 13 November.
+5. **The alpha moves to Anthropic.** In the user's words: "I want the alpha deployed on the
+   Anthropic provider." Under point 1, that meant a new database, not `kmp_demo_20261101` switched.
+   The user approved:
+   - creating `kmp_alpha_20261113`, and building it fresh from item 6's corpus;
+   - moving the alpha to current `main` now, before the rule's branch;
+   - copying the two keys from the main checkout's `.env`, and keeping the FLM `.env` as
+     `.env.flm-20261101`;
+   - seeding item 6's tags, then classifying every document again (below).
+
+**What was done for the alpha:** `corpus/objective-02/runs/2026-11-13-alpha-anthropic/README.md`
+records each step.
+
+- **The setup, at `6e1efd1`:**
+  - the database created and migrated under Anthropic, with both vector columns `vector(1024)`;
+  - `check --deploy`, with exactly D-64's four HTTPS warnings;
+  - the front end built;
+  - Waitress started as `docs/alpha-deployment.md` step 6 does.
+- **The accounts and the corpus.** The two corpus accounts were made with passwords nobody knows.
+  Item 6's corpus went through the alpha's own server:
+  - D01 to D20 and T01 to T05 indexed;
+  - every invalid item refused as documented, and "Missed: none";
+  - 48 chunks, all `voyage-4` at 1024, 5 of them FR-16 summaries, all five summaries Ready
+    (`setup/database-state-2026-11-14.txt`). The ingestion's own count, 47, has nine meeting
+    chunks, four of them summaries'. The fifth summary was parsed at 16:43:50
+    (`server-logs/attempts.log`), as the ingestion ended. So, by the session's reckoning, the count
+    was read just before that summary's chunk was written; the count line has no time of its own.
+- **The tag order.**
+  - **The order.** The full seed finds each document by title and stops if one is missing, so it
+    runs after the ingestion. The ingestion classifies each document at upload, before any tag
+    exists. So the documents were first classified against no tags: 13 topic proposals across 10
+    documents (`classification/state-before.txt`, transcribed). `seed_objective02_tags.py` says to
+    run before any document is classified. Only a `--scheme-only` pass before the ingestion allows
+    that, and it was not tried. It is not a safe substitute as written: `--scheme-only` marks nothing grown, so `atlas` would be offered to Employees, and a held AI link on a document every role reads would keep the full seed from marking it grown later.
+  - **What the user chose:** seed, then classify again.
+  - **The seed:** 14 tags and 48 links, with `atlas` marked grown.
+  - **The second classification:** 20 documents classified and 0 failed. FR-10 applied no tag. It
+    held 15 provisional ones, which FR-15's views leave out until someone confirms them (D-105),
+    and proposed one topic (`classification/classify-all.json`).
+- **The checks.** The five smoke checks passed on 13 November. That output was not saved, so they
+  were run again after the laptop's restart and saved (`setup/smoke-checks-2026-11-14.txt`). The
+  deployment was recorded with `dirty=False` (`setup/deployment-record.txt`).
+- **The runbook.** `docs/alpha-deployment.md` now describes the anthropic alpha, how its database
+  was built, and how to bring back the FLM one.
+
+**Not done, or not covered:**
+
+- **Runbook steps 9 and 10,** the scheduled FR-19 cycle and FR-16 retry. The session's permission
+  check refused to register scheduled tasks, so the user registers them.
+- **The passwords,** which the user sets.
+- **D-40's screening** of demonstration questions on the new database.
+- **The rule's implementation** (point 3).
+- **Other mismatched databases.** `kmp_obj05_d128_20261113`, the FR-10 session's, has chunks at 768
+  and its gap column at 1024 (D-117's note of 13 November). It is not this session's, and was left
+  as it is.
+- **The order of entries at merge.** D-128 and D-129 (#102) and D-130 (the FR-03 session's branch)
+  are not on `main` yet. Whichever of these entries merges later puts them back in number order.
+
+**Dated note, 14 November 2026: the rule built.** On `fix/FR-08-provider-fixed-at-setup`, stacked
+on this entry's branch. Corrected the same day after the requirements audit of `46b0eec`.
+
+- **The width follows the provider.** `EMBEDDING_DIMENSION_BY_PROVIDER` in `apps/core/constants.py`
+  gives 1024 for `anthropic` and 768 for `flm`, and `config/settings.py` takes
+  `EMBEDDING_DIMENSION`'s default from it. A line in `.env` is still read, so an existing `.env`
+  keeps working. One that disagrees with `AI_PROVIDER` is refused at startup (ai.E004). CI no
+  longer sets `EMBEDDING_DIMENSION`, so its full suite runs on the derived width.
+- **The database must have been set up for the provider.** `check_database_provider`
+  (`apps/ai/checks.py`) reads both vector columns' widths from Postgres
+  (`apps/core/vector_columns.py`).
+  - **A column of another width is an Error (ai.E005),** naming each column that differs. Every
+    command that runs the checks stops: `runserver`, `migrate`, `check`, `check --deploy`,
+    `reindex`.
+  - **Rows embedded by another model are a Warning (ai.W003).** Retrieval leaves such chunks out
+    (R10), and within one provider and one width `reindex` rebuilds them. Nothing re-embeds a gap
+    entry of another model, and no new question joins one, because FR-19 groups within one model.
+  - **A table not created yet is passed over,** and the other table is still checked. So a
+    database from before FR-19 still gets its chunks' warning.
+  - **A database that cannot be read is a Warning (ai.W004).** Whether it was set up for this
+    provider is then not known.
+- **`reindex`.** `--resize-column` is removed. `--provider` no longer overrides `AI_PROVIDER`: it
+  is a confirmation, and another provider is refused before the provider is asked. For a caller
+  that skips the checks, it applies ai.E004's condition itself, and refuses a stored chunk column
+  of another width.
+- **ai.E001's hint** no longer sends anyone to re-index.
+- **Waitress runs no checks.** So `docs/alpha-deployment.md` step 6 first connects to the database,
+  and stops if it does not answer. It then runs `manage.py check`, and only then starts Waitress.
+  `docs/measurement-runbook.md` section 5 runs `manage.py check` before Waitress too.
+- **`CLAUDE.md` §4** carries the wording the user approved on 14 November: the provider chosen at
+  setup, a database keeping it, a change of provider meaning a new database, `reindex` limited to
+  the database's own provider, and no `EMBEDDING_DIMENSION=768` in the FLM block.
+- **Also updated:**
+  - `README.md`: setup, the FLM block, "Changing provider: a new database", and the alpha;
+  - `.env.example`, and the alpha runbook's `.env` template: no `EMBEDDING_DIMENSION` line;
+  - `docs/ai-provider.md` §4;
+  - `docs/measurement-runbook.md`: "A database for another provider", in place of the copy that
+    was moved across;
+  - wording that still described switching, in `scripts/snapshot_measurement_db.py`,
+    `apps/ingestion/embedding.py`, `apps/retrieval/scoping.py`, `apps/retrieval/models.py`,
+    `apps/retrieval/search.py`, and the tests
+    `apps/api/tests/test_fr12_traceability_survives_reprocess.py`,
+    `apps/ai/tests/test_measurement_scripts.py`, `apps/ingestion/tests/test_reindex.py`,
+    `apps/ingestion/tests/test_reindex_summaries.py` and `apps/retrieval/tests/test_search.py`.
+
+**The session's choices, not the user's, and what follows from each:**
+- **ai.W003 is a warning, not an error.** `reindex` stays usable for a change of model within one
+  provider, at one width. Gap entries of another model stay in the list, re-embedded by nothing.
+- **A database that cannot be read is a warning (ai.W004), not an error.** Commands that do not
+  need it, such as `makemigrations`, keep working while Docker is down. A development server
+  started before the database is up therefore warns and then serves it unchecked. The alpha's serve
+  steps connect first, so a database that is down stops them there. The measurement runbook's
+  server step runs the check, which only warns while the database is down, and says to start the
+  database first.
+- **The database check has a tag of its own, `embedding`,** because the suite runs `check --tag
+  ai` without a database.
+
+**Tests.** Each test below fails under at least one deliberate break, listed after the table.
+
+- **The table** was generated from the break runs, against `apps/ai/tests/test_checks.py` (unless
+  another file is named), `apps/ingestion/tests/test_reindex.py`,
+  `apps/ingestion/tests/test_reindex_summaries.py` and `apps/core/tests/test_constants.py`.
+- **Unbroken,** those four pass: 136 tests.
+- **The run.** All the breaks were run again after the audit's corrections. An earlier run of
+  seven of them was discarded: every database test in it errored, because Docker had stopped.
+
+| Test | Fails under |
+|---|---|
+| `test_dimension_mismatch_is_an_error` (changed) | X12 |
+| `test_the_setting_check_is_registered_under_the_ai_tag` | X21 |
+| `test_a_width_that_agrees_with_the_provider_passes` | X19 |
+| `test_a_width_that_disagrees_with_the_provider_is_an_error` | X2, X3 |
+| `test_an_unknown_provider_is_left_to_ai_e002` | X20 |
+| `test_the_database_check_has_a_tag_of_its_own` | X11 |
+| `test_a_database_of_this_providers_width_passes` | X22 |
+| `test_a_database_set_up_for_another_width_is_an_error_naming_both_columns` | X4, X5 |
+| `test_a_gap_column_left_at_another_width_is_an_error_naming_it_alone` | X4, X22 |
+| `test_an_unsized_gap_column_is_an_error_too` | X4, X18, X22 |
+| `test_a_table_not_created_yet_is_passed_over` | X6 |
+| `test_a_database_that_cannot_be_read_is_a_warning` | X7, X29 |
+| `test_a_database_from_before_fr19_still_warns_about_its_chunks` | X6, X9, X22, X26 |
+| `test_rows_of_another_model_are_a_warning_naming_them` | X4, X9, X22, X27 |
+| `test_rows_of_the_configured_model_are_silent` | X10, X22 |
+| `test_rows_are_compared_with_the_providers_own_model_name` | X8, X17, X22 |
+| `test_manage_py_check_refuses_a_database_set_up_for_another_width` | X5, X11 |
+| `test_resize_column_is_gone` (`test_reindex.py`) | X23 |
+| `test_a_column_of_another_width_is_refused_and_a_new_database_is_named` (`test_reindex.py`) | X2, X15, X16, X25 |
+| `test_a_width_that_disagrees_with_the_provider_is_refused` (`test_reindex.py`) | X25, X28 |
+| `test_another_provider_is_refused_and_the_setting_is_left_alone` (`test_reindex.py`) | X13, X14 |
+| `test_naming_the_configured_provider_is_an_ordinary_reindex` (`test_reindex.py`) | X24, X25 |
+| `test_each_provider_has_its_models_width` (`test_constants.py`) | X2, X25 |
+| `test_the_suites_own_width_is_its_providers` (`test_constants.py`) | X25 |
+| `test_settings_take_the_width_from_the_provider` (`test_constants.py`) | X1, X2, X25 |
+
+- X1: the width no longer follows the provider: a fixed default of 1024.
+- X2: FLM's width is given as 1024.
+- X3: ai.E004 never fires.
+- X4: ai.E005 reads the chunks' column only, not the gap column.
+- X5: a database of another width is only a warning.
+- X6: a table not created yet is not passed over.
+- X7: a database that cannot be read passes in silence, as before the audit.
+- X8: rows are compared with VOYAGE_MODEL whatever the provider.
+- X9: ai.W003 never fires.
+- X10: a row with no model counts as another model's.
+- X11: the database check is registered under the ai tag.
+- X12: ai.E001's hint sends people to re-index again.
+- X13: reindex no longer refuses another provider.
+- X14: reindex --provider overrides AI_PROVIDER for the run, as before D-131.
+- X15: reindex skips the column guard.
+- X16: the column guard refuses only an unsized column.
+- X17: the configured embedding model is VOYAGE_MODEL whatever the provider.
+- X18: an unsized column's modifier is taken as its width.
+- X19: ai.E004 fires on a width that agrees with the provider.
+- X20: ai.E004 reports an unknown provider instead of leaving it to ai.E002.
+- X21: ai.E004 is not registered.
+- X22: ai.E005 fires on a database of this provider's width.
+- X23: reindex accepts --resize-column again.
+- X24: reindex refuses the configured provider too.
+- X25: anthropic's width is given as 1280.
+- X26: the model rows are asked of every table, a missing one included.
+- X27: ai.W003's hint says reindex rebuilds gap entries too, as before the audit.
+- X28: reindex skips ai.E004's condition.
+- X29: a database that cannot be read is an error.
+
+**Not covered:**
+- **`C:\kmp-demo\2026-11-13\serve-alpha.ps1`,** which is outside the repository, gains the
+  connection and `manage.py check` when the alpha is redeployed with this code.
+- **Databases the new check will refuse.** `kmp_obj05_d128_20261113`, the FR-10 session's, has
+  chunks at 768 and its gap column at 1024.
+- **A development server started before its database is up,** as above.
+- **Only the default database is read.** The project has no other.
+- **The front-end suite.** No front-end file changed. The full backend suite passed at `747cbfb`:
+  4,486 tests in 28 min 23 s, with dual-role coverage 43 of 43.
+
+**Dated note, 15 November 2026: D-40's screening on the new database is done, on a copy of it.**
+The "Not done" list above names it. At Benjamin's request, the walk's questions were screened on
+`kmp_alpha_screen_20261115`. That is a `pg_dump` of `kmp_alpha_20261113`, checked to hold the same
+chunks, embeddings, accounts and migrations, and the screen ran the alpha's own code, `6e1efd1`. The
+record is `corpus/demo/screening-2026-11-15-anthropic/`.
+
+- **D-40's rule was applied with its margins measured from `voyage-4`'s threshold,** 0.2687
+  (D-120). An answer needs a top score of at least 0.3187 and no candidate within 0.005 of the
+  threshold. Path A needs a top score of at most 0.2487.
+- **Every question had its expected outcome and source on every run.** The band clause fails for
+  FR-12.2, FR-12.5 and FR-13.3's first turn. Whether to accept them or to replace those questions
+  is open, and it is the user's call.
+- **`docs/demonstration-script.md` now describes this alpha** (its amendment of 15 November).
+- **Not covered:**
+  - a walk on the alpha itself;
+  - the threads the walk does not ask;
+  - the alpha after a redeploy from `main`. That changes the generation parser (#106, #107) and not
+    retrieval, and it does not touch the database.
+
+## D-133 · A proposed Topic longer than a tag name can be rejected: the reject route reads a value up to 100,000 characters, and confirm keeps its 255
+
+**Status:** Settled by the user · **Date:** 2026-11-15 · **Concerns:** FR-10 (controlled taxonomy
+growth; correction), UC-09, Objective 05 clause 3, D-128, D-129, `docs/api-contract.md` ·
+**Supersedes:** nothing. It closes D-129's "Not covered" item "A proposed Topic over 255 characters".
+
+**What prompted it:** the requirements re-audit of `d909537` (14 November), finding C15, quoted in
+D-129. Its probe R5, from an Employee session, proposed a 359-character Topic:
+
+- confirm answered 400 `{"value":["Ensure this field has no more than 255 characters."]}`;
+- reject answered the same 400;
+- the proposal stayed, and nothing was recorded in `rejected_tags`, so rule 4b did not skip the value
+  and the next run could propose it again.
+
+D-129 recorded the defect under "Not covered", as a follow-up for the user. It predates D-128 and
+D-129: #85's `ProposedTopicSerializer` capped both of its routes the same way.
+
+**The cause.** `POST /api/documents/{id}/proposed-tags/confirm` and
+`POST /api/documents/{id}/proposed-tags/reject` validated the body with one serializer,
+`ProposedTagSerializer`, whose `value` had `max_length=NAME_MAX_LENGTH`: 255, the `Tags.tag_name`
+column. A run proposes a Topic outside the scheme whatever its length (D-129; `apply_classification`
+rule 4d).
+*Since D-134, later on 15 November 2026, a run discards a Topic over 255 characters once normalised
+instead of proposing it.*
+- **Confirming needs the column's limit,** because it creates a Tag.
+- **Rejecting does not.** `reject_proposed_tag` writes only JSON, an entry in `rejected_tags`, and
+  matches the proposal by its normalised value.
+
+**The decision:**
+
+1. **The reject route reads a value up to `MAXIMUM_PROPOSED_TAG_LENGTH`,** a new constant in
+   `apps/core/constants.py`, through a new `ProposedTagRejectSerializer` in `apps/api/serializers.py`.
+   `DocumentProposedTagRejectView` names it as its `body_serializer`. Past the bound the answer is 400
+   keyed on `value`. `reject_proposed_tag` is unchanged.
+2. **Confirm keeps the column's 255 and its 400.** `DocumentProposedTagConfirmView` still reads
+   `ProposedTagSerializer`, and `confirm_proposed_tag` keeps its own length check behind it.
+3. **The bound is 100,000 characters: the user's choice on 15 November 2026,** in answer to one
+   question. The question and its options, as put:
+
+   > The reject route needs a new upper bound on a proposed Topic's length. The brief sizes it from
+   > CLASSIFICATION_MAX_TOKENS (400 tokens), but that cap only applies to FLM. On Anthropic, which is
+   > the default and the alpha's provider, a classification reply can be up to CLAUDE_MAX_TOKENS
+   > (16,000 tokens), and nothing in the parser limits a tag value's length. A proposal longer than
+   > the bound would still be impossible to reject. Which bound should the constant take?
+   >
+   > - **100,000 characters (Recommended):** Sized for Anthropic's 16,000-token reply at about 6
+   >   characters a token, so any realistic proposal on either provider can be rejected. A test ties
+   >   the constant to both reply ceilings. Cheap: Waitress already accepts a 52 MB body, and what
+   >   gets stored is the proposal's own value. A longer Topic is recorded as a theoretical residual.
+   > - **4,000 characters:** Sized for FLM's 400-token reply at 10 characters a token, following the
+   >   brief's reasoning. If Claude proposed a Topic over 4,000 characters it would still be stuck.
+   >   That would be recorded as a known residual on the default provider.
+   > - **Bound, and cap proposals:** 100,000 on the route, and a classification run also discards a
+   >   longer Topic instead of proposing it, so every proposal can be rejected by construction. This
+   >   changes D-129's 'any length' rule and Objective 05's verifier count, so it is a lead's
+   >   decision and goes beyond the brief.
+
+   The user chose "100,000 characters (Recommended)".
+
+   *Corrected on 15 November 2026, after the reviews of `bc70fe6`: the options priced the two bounds at
+   different ratios, about 6 characters a token for the recommended one and 10 for the other, and
+   said nothing about why.*
+   - *6.25 is 100,000 / 16,000: the ratio at which the bound equals Claude's ceiling, worked back from
+     the bound. It was not measured.*
+   - *The 10 was this session's figure, not the brief's: the brief named only
+     `CLASSIFICATION_MAX_TOKENS`. At 10 characters a token, Claude's ceiling would be 160,000
+     characters, past the bound.*
+   - *No ratio is a ceiling anyway: a run of punctuation can be one token of many characters (the
+     security review, I1).*
+   - *So the bound sits far above anything measured, and is not a proof that every reply fits.
+     "Not covered" names the residual. The third option would close it by construction, and it is
+     the lead's to take up. The constant's comment and the test say the same since this correction.*
+
+   *Taken up later on 15 November 2026: the user chose the third option, with the bound at the Tags
+   column's 255 characters rather than 100,000, as D-134. A run discards a longer Topic instead of
+   proposing it. This route's 100,000 is unchanged, and now serves proposals stored before D-134.*
+
+   **Why the brief's premise did not hold.** The brief sized the bound from
+   `CLASSIFICATION_MAX_TOKENS`, 400 tokens. That is FLM's ceiling.
+   - On Anthropic, the default since D-122 and the alpha's provider since D-131,
+     `AnthropicService.classify_document` sends `max_tokens=CLAUDE_MAX_TOKENS`, 16,000
+     (`apps/ai/anthropic.py`), because Claude's thinking counts against it (D-115).
+   - The recorded Anthropic run's attempt logs show `max_tokens=16000` on every attempt
+     (`corpus/objective-05/runs/2026-11-10-anthropic/classify/attempts.log`, and the same file under
+     `draw-2/` and `draw-3/`).
+   - Nothing in `parse_classification` bounds a tag value's length: `CLASSIFICATION_SCHEMA` gives a
+     tag's `value` `{"type": "string", "minLength": 1}`.
+
+   **A test holds the decided value against both ceilings.**
+   `apps/core/tests/test_constants.py::test_the_reject_bound_is_at_least_6_25_characters_a_token_of_either_classification_ceiling`
+   asserts:
+   - the value;
+   - that neither `CLAUDE_MAX_TOKENS` nor `CLASSIFICATION_MAX_TOKENS` has grown past 16,000 tokens,
+     which would leave the bound under 6.25 characters a token of it, and the decision to revisit;
+   - that the bound is above the Tags column.
+
+   It does not show that every reply fits. Until the reviews it was named
+   `test_the_reject_bound_covers_the_longest_classification_reply_either_provider_may_return`, which
+   claimed more than it checks (the requirements audit of `bc70fe6`).
+4. **The page needed no source change.** `ProposedTagRow` (`frontend/src/components/Classification.jsx`)
+   offers Confirm and Reject on every proposal, whatever its length, and `rejectProposedTag`
+   (`frontend/src/api/documents.js`) sends the value as `proposed_tags` carries it. Only the client's
+   comment changed. A front-end test now holds both (below).
+
+   *Changed on 15 November 2026 by D-135, the user's decision: the page offers Reject alone on a
+   proposal longer than a tag name, and a sentence in the row says why. `rejectProposedTag` is
+   unchanged, and the front-end test named below still holds Reject.*
+
+**What was measured, for the residual:**
+`corpus/objective-05/runs/2026-11-15-topic-lengths/topic_lengths.py` reads the records already
+committed under `corpus/objective-05/runs/`, and its output is `topic-lengths.txt` beside it.
+- **Topic values,** as suggestions, proposals and links: 935, and the longest is 21 characters.
+- **Replies:** only `2026-11-10-anthropic/` keeps `attempts.log` files. They show `max_tokens=16000`
+  sent, and a longest reply of 562 completion tokens.
+
+**What changed:**
+- `apps/core/constants.py`: `MAXIMUM_PROPOSED_TAG_LENGTH = 100_000`, with its reasoning.
+- `apps/api/serializers.py`: `ProposedTagRejectSerializer`; `ProposedTagSerializer`'s docstring
+  now says it is confirm's body.
+- `apps/api/views.py`: `_ProposedTagView.body_serializer`, `ProposedTagSerializer` by default;
+  `DocumentProposedTagRejectView.body_serializer = ProposedTagRejectSerializer`; the docstrings.
+- `apps/documents/classification.py`: docstrings only, rule 4d and `reject_proposed_tag`.
+- `frontend/src/api/documents.js`: the comment on the proposed-tags routes.
+- `docs/api-contract.md`: the confirm row, the reject row and its errors, and the line on Topic
+  proposals.
+- D-129: a dated note on its long-Topic sentence and on its "Not covered" item.
+
+**The tests.** Each route test runs from an Employee session and an Administrator session through
+`session_client`. The constants test reads no route.
+
+- **New, `apps/api/tests/test_fr10_reject_long_proposal.py`,** over a 359-character Topic proposal,
+  the probe's length:
+  - `test_rejecting_a_topic_longer_than_the_column_drops_it_and_records_the_rejection`: 200; it
+    leaves `proposed_tags` and joins `rejected_tags` with the machine's confidence; no Tag, no link;
+    the record is not in the reply.
+  - `test_a_rejected_long_topic_is_not_proposed_again`: a later classify suggesting it skips it
+    (rule 4b).
+  - `test_confirming_a_topic_longer_than_the_column_is_still_400`: 400 keyed on `value`; the
+    proposal stays; nothing is recorded or created.
+  - `test_the_reject_route_reads_a_value_up_to_its_bound_and_refuses_one_past_it`: 100,000
+    characters is read, and is not proposed, so it gets the document's 404 body; 100,001 is 400
+    keyed on `value`; neither changes anything.
+- **New, `apps/core/tests/test_constants.py`:** the test in point 3.
+- **New, `frontend/tests/documentClassification.test.jsx`:** "offers an enabled Reject on the
+  359-character proposal, sends all 359 characters, and drops the row". It asserts `disabled`
+  directly, because `fireEvent` clicks a disabled button too.
+- **Changed, because a 256-character value is now one the reject route reads** (a value not
+  proposed there gets the 404):
+  - `apps/api/tests/test_fr10_proposed_tags.py::test_a_missing_blank_or_over_long_value_is_400_keyed_on_value`:
+    "over-long" is each route's own bound plus one character, 256 characters to confirm and
+    100,001 to reject.
+  - `apps/api/tests/test_document_classification.py::test_a_blank_or_over_long_value_is_400_keyed_on_value`:
+    the same, and it now also checks that the proposal stays.
+
+**Deliberate breaks.** Each new or changed test failed under at least one break before it was
+relied on, and every break was reverted.
+- **How:** a script applied each break alone, ran the tests, restored every touched file byte for
+  byte and checked it by SHA-256.
+- **A server break ran:** the new file; `test_constants.py`; `test_fr10_proposed_tags.py`;
+  `test_fr10_rejected_proposals.py`; the confirm, reject, not-proposed and blank-or-over-long tests
+  of `test_document_classification.py`; and, in `apps/documents/tests/`,
+  `test_classification_d128.py`, `test_classification_rejected.py` and
+  `test_classification_confirm.py`.
+- **A front-end break ran:** `documentClassification.test.jsx`.
+- **The table** is generated from the runs' JUnit XML and vitest JSON reports, not typed. The script
+  and the reports are in the session's scratchpad, not in the repository.
+
+B3 alone fails no test of the long proposal itself: `confirm_proposed_tag`'s own length check still
+answers 400 behind the serializer. B3b removes both, and the confirm test fails.
+
+| Test | Fails under |
+|---|---|
+| `documentClassification.test.jsx` › "offers an enabled Reject on the 359-character proposal, sends all 359 characters, and drops the row" | FB1, FB2, FB3 |
+| `test_constants.py::test_the_reject_bound_is_at_least_6_25_characters_a_token_of_either_classification_ceiling` | B6 |
+| `test_document_classification.py::test_a_blank_or_over_long_value_is_400_keyed_on_value[long]`, Employee and Administrator | B3, B3b, B5 |
+| `test_fr10_proposed_tags.py::test_a_missing_blank_or_over_long_value_is_400_keyed_on_value[Process-confirm-over-long]`, Employee and Administrator | B3, B3b |
+| `test_fr10_proposed_tags.py::test_a_missing_blank_or_over_long_value_is_400_keyed_on_value[Process-reject-over-long]`, Employee and Administrator | B5 |
+| `test_fr10_proposed_tags.py::test_a_missing_blank_or_over_long_value_is_400_keyed_on_value[Project-confirm-over-long]`, Employee and Administrator | B3, B3b |
+| `test_fr10_proposed_tags.py::test_a_missing_blank_or_over_long_value_is_400_keyed_on_value[Project-reject-over-long]`, Employee and Administrator | B5 |
+| `test_fr10_proposed_tags.py::test_a_missing_blank_or_over_long_value_is_400_keyed_on_value[Topic-confirm-over-long]`, Employee and Administrator | B3, B3b |
+| `test_fr10_proposed_tags.py::test_a_missing_blank_or_over_long_value_is_400_keyed_on_value[Topic-reject-over-long]`, Employee and Administrator | B5 |
+| `test_fr10_reject_long_proposal.py::test_a_rejected_long_topic_is_not_proposed_again`, Employee and Administrator | B1, B2, B7, B8 |
+| `test_fr10_reject_long_proposal.py::test_confirming_a_topic_longer_than_the_column_is_still_400`, Employee and Administrator | B3b |
+| `test_fr10_reject_long_proposal.py::test_rejecting_a_topic_longer_than_the_column_drops_it_and_records_the_rejection`, Employee and Administrator | B1, B2, B7 |
+| `test_fr10_reject_long_proposal.py::test_the_reject_route_reads_a_value_up_to_its_bound_and_refuses_one_past_it`, Employee and Administrator | B1, B2, B4, B5 |
+
+The breaks, each applied alone, run, and reverted, with every touched file checked by SHA-256:
+
+- **B1** (server): the defect restored: the reject view reads the confirm serializer (255).
+- **B2** (server): the reject serializer's bound set back to the column.
+- **B3** (server): confirm reads the reject serializer (its function check kept).
+- **B3b** (server): confirm reads the reject serializer and confirm_proposed_tag's length check is gone.
+- **B4** (server): the reject bound one short (max_length = bound - 1).
+- **B5** (server): the reject bound one over (max_length = bound + 1).
+- **B6** (server): the constant sized for FLM's reply instead (4,000).
+- **B7** (server): reject_proposed_tag records no rejection for a value over the column.
+- **B8** (server): rule 4b ignores a rejection over the column (_rejected).
+- **FB1** (front end): the page sends the value cut to a tag name's 255 characters.
+- **FB2** (front end): the page offers no controls on a proposal longer than a tag name.
+- **FB3** (front end): the page disables Reject on a proposal longer than a tag name.
+
+Tests outside the section that a break also failed:
+
+- **B3b:** `test_classification_d128.py::test_a_topic_longer_than_the_column_is_proposed_and_confirming_it_is_refused`
+
+**The suites.**
+- **At `bc70fe6`, before the merge of `main`:**
+  - `pytest`, the whole suite: 4,871 passed in 1,662.98 s (0:27:42), with dual-role coverage 47 of
+    47 protected endpoints.
+  - The front end: `npm test` 637 passed in 46 files; `npm run lint` and `npm run build` clean. The
+    new test passed ten runs in a row.
+  - `makemigrations --check --dry-run`: "No changes detected". No model changed.
+- **After the merge of `main` and the reviews' corrections,** on the tree committed with them:
+  - `pytest`, the whole suite: 4,949 passed in 967.80 s (0:16:07), with dual-role coverage 48 of
+    48 protected endpoints. FR-03 added one.
+  - The front end: `npm ci`, `npm run lint` and `npm run build` exit 0; `npm test` 666 passed in 48
+    files.
+  - `makemigrations --check --dry-run`: "No changes detected".
+
+**The reviews of `bc70fe6` (15 November 2026).** Each reviewed the commit read-only. Both reports
+are kept whole outside the repository, in the session group's notes folder, as
+`fr10-reject-audit-bc70fe6-verbatim.md` and `fr10-reject-security-bc70fe6-verbatim.md`. They were
+extracted mechanically from the agents' transcripts, and each verdict line below was checked by
+script against them.
+
+- **`requirements-auditor`: COMPLETE.** Its closing line:
+
+  > **COMPLETE: bc70fe6 meets all seven criteria. Before merging, correct the 6.25 reasoning, resolve the `serializers.py` conflict with origin/main, and re-run both suites on the merged tree.**
+
+  - It recomputed the break results without `gen_table.py`, re-ran `topic_lengths.py` and got the
+    same output, and checked the attempt logs, the code citations, the "What changed" list and the
+    D-129 notes.
+  - **Its one misstated record, low:** the 6.25 characters a token was worked back from the bound
+    but presented as a limit, the other option was priced at 10, and the test's name claimed that
+    the bound covers the longest reply.
+  - It noted that D-130 had reached `main` (PR 110), and that the branch needed merging.
+- **`security-reviewer`: PASS WITH NOTES.** Its verdict line:
+
+  > **VERDICT: PASS WITH NOTES.** There are no high or medium findings. The C15 fix is correct and opens no disclosure path. There are three notes: one low and two info.
+
+  - **What it confirmed, by probes on pytest's own database:**
+    - the check order is unchanged: an out-of-scope document is the same 404, byte for byte, for
+      every body, and without `contribute_content` every body is 403;
+    - `rejected_tags` stores only the matched proposal's own value, never the request's;
+    - confirm takes no value over 255 characters by any path;
+    - a NUL or a lone surrogate is still 400;
+    - neither the 400 nor the 200 echoes the value, and nothing logs it.
+  - **L1, low:** `rejected_tags` is only ever added to, and an entry can now be as long as a
+    proposal. A contributor who steers a document's classification into new long Topics, and
+    rejects them run after run, could grow that one row by up to a reply's worth a run, against
+    about 2 KB a run before. Nothing is disclosed. The cost is that document's row, which every
+    detail read loads.
+  - **I1, info:** the residual can be produced on purpose, and the test's name claimed too much.
+  - **I2, info, older than this commit:** DRF runs every validator even after the length check
+    fails, on routes with no throttle. It measured the surrogate validator at 7.6 ms on 100,000
+    characters and 1.79 s on 50 MiB, near Waitress's cap. That is the same before and after D-133.
+
+**What changed because of them:**
+- The 6.25 reasoning is corrected in point 3, in the constant's comment and in the test's
+  docstring, and the test is renamed to what it asserts.
+- `main` was merged in at `c4695c0` (PR 110, FR-03). Its one conflict, the import list of
+  `apps/api/serializers.py`, kept both names.
+- The breaks ran again on the merged tree, and the table above is regenerated from that run.
+- Both suites ran again on the merged tree (above).
+- L1, I1 and I2 are under "Not covered". Nothing else changed: L1 and I1 close only with the third
+  option, which is the lead's decision, and I2 is older than this entry.
+  *L1 and I1 were closed later on 15 November 2026 by D-134, the third option at 255 characters.*
+
+**Not covered:**
+- **A proposal longer than 100,000 characters** would still be refused 400 by reject, and stuck as
+  before. Nothing bounds a tag value in a reply, so this is a residual. The longest recorded Topic is
+  21 characters. It can be produced on purpose: a reply steered into runs of punctuation could pass
+  100,000 characters within Claude's ceiling (the security review, I1). The third option in point 3
+  would close it.
+  *Closed later on 15 November 2026 by D-134 for every run made since: a run discards a Topic over
+  255 characters, so it never proposes one past this bound. A proposal stored before D-134 is the
+  only one that could still be.*
+- **`rejected_tags` can grow faster** (the security review, L1, low). Nothing prunes it, and since
+  D-133 an entry is as long as the proposal it rejected, up to a reply's worth. Its fixes, none
+  built:
+  - the third option in point 3, so that no long proposal is ever made or rejected: the lead's
+    decision, since it changes D-129's rule;
+  - a cap on the entries kept: it would change what a rejection keeps, so a rejected value could be
+    proposed again;
+  - deferring the column where the detail reads the analysis (`classification_of`): it cheapens the
+    read and bounds nothing.
+
+  *Closed later on 15 November 2026 by D-134, the first fix: a run proposes no Topic over 255
+  characters, so a rejection of a proposal made since then is at most 255 characters, as before
+  D-133. The list is still never pruned, at that rate.*
+- **Every validator runs past a failed length check** (the security review, I2, info). The
+  proposed-tags routes have no throttle, and a value near Waitress's cap costs about 1.8 s of
+  validation. This predates D-133. The reviewer's optional hardening, not built: refuse an over-long
+  value before the other validators run, or give these routes a throttle scope.
+- **The page still offers Confirm on a proposal over 255 characters.** Pressing it shows the
+  client's fixed 400 sentence, and the row stays. Whether the page should withhold Confirm there, or
+  say why, is an interface question this decision does not settle (`CLAUDE.md` §1: raise it rather
+  than build it).
+  *Since D-134 (later on 15 November 2026) only a proposal stored before D-134 can be over 255
+  characters.*
+
+  *Fixed on 15 November 2026 by D-135, the user's decision: the page withholds Confirm on such a
+  proposal, and a sentence in the row says why and that it can be rejected.*
+- **The 200 path for a long value is tested in Topic only.** The serializer and
+  `reject_proposed_tag` are dimension-generic, and the 400 past the bound is tested in Project,
+  Process and Topic. Since D-129 a run proposes no Project or Process value.
+- **What the server receives is unchanged.** A JSON body is parsed up to Waitress's
+  `MAX_REQUEST_BODY_BYTES` before any serializer reads it (D-124), as before. The bound limits how
+  long a value is normalised and matched. The entry stored is the proposal's own value, never the
+  request's.
+- **No database the user works with was read or written;** the tests ran on pytest's own test
+  database. No model changed, so nothing needs migrating. A proposal already stuck on the alpha's
+  database or on `kmp_anthropic`, if there is one, becomes rejectable when that server runs this
+  code. Nobody looked for one.
+- **`CLAUDE.md` §5's table is not changed.** Of FR-10's values it lists only
+  `MAXIMUM_CLASSIFY_ATTEMPTS`.
+
+## D-134 · A classification run discards a Topic longer than a tag name instead of proposing it, so every proposal a run makes can be confirmed
+
+**Status:** Settled by the user · **Date:** 2026-11-15 · **Concerns:** FR-10 (controlled taxonomy
+growth), UC-09, Objective 05 clause 3, D-129, D-133, `apps/documents/classification.py`,
+`scripts/objective05_verify.py`, `docs/api-contract.md` · **Supersedes:** for a Topic longer than
+255 characters, D-129's rule 4 ("Topic: proposed for a person, at any confidence") and its choice
+"A Topic over 255 characters is proposed". **Closes:** D-133's "Not covered" items on a proposal
+over 100,000 characters (the security review's I1) and on the growth of `rejected_tags` (L1), for
+every run made since.
+
+**What prompted it.** D-133's security review (PASS WITH NOTES) left two notes that D-133 could not
+close, both recorded under its "Not covered":
+
+- **L1 (low):** `rejected_tags` is never pruned, and since D-133 an entry is as long as the proposal it
+  rejected. A contributor who steers a document's classification into new long Topics and rejects
+  them run after run could grow that row by up to a reply's worth a run, against about 2 KB a run
+  before D-133 (2,040 characters: eight entries of 255).
+- **I1 (info):** a proposal over 100,000 characters, past the reject route's bound, could be produced
+  on purpose by a reply steered into runs of punctuation, and would be stuck again. The review called
+  this suspected, not measured: inferred from how tokenisers generally work, not tested on Claude.
+
+For L1, the review's "smallest correct fix" was D-133's third option, which the user had not taken:
+a run discards a Topic over a bound into `discarded_suggestions`, which each run replaces. Of I1 it
+said "Option 3 closes this too." Because the option changes D-129's rule, it was the lead's decision. D-133's session proposed it as a follow-up, and this
+session was started for it.
+
+**The decision: the user's, on 15 November 2026,** in answer to one question. The question and its
+options, as put (checked by script against the session's transcript):
+
+> FR-10 follow-up to D-133: should a classification run discard a Topic outside the scheme that is longer than a set limit, instead of proposing it? It would go to discarded_suggestions, which is never shown and is replaced on every run. This closes the two open notes from D-133's security review. L1: since D-133, rejected_tags can grow by up to a whole reply on every run. I1: a proposal over 100,000 characters can be produced on purpose and could then be neither confirmed nor rejected. The cost: it departs from D-129's rule that a Topic is proposed whatever its length. Objective 05's verifier would count each such discard as a clause 3 violation, as it already does for D-129's NUL departure. None of the 935 Topic values in the recorded Objective 05 runs would be affected: the longest is 21 characters.
+>
+> - **Discard over 255 (Recommended):** The limit is the Tags column's 255 characters (NAME_MAX_LENGTH). A longer Topic can never be confirmed anyway, so every proposal that remains can be either confirmed or rejected. Rejected entries go back to at most 255 characters, which closes L1 and I1. The verifier stays strict, and D-134 records the departure. D-133's reject route keeps its 100,000 limit, for proposals already stored.
+> - **Discard over 100,000:** The limit is MAXIMUM_PROPOSED_TAG_LENGTH. This closes I1 only. L1 stays open, because a rejected entry can still be up to 100,000 characters long. A Topic of 256 to 100,000 characters is still proposed, and it can be rejected but never confirmed.
+> - **Leave D-129 as it is:** No change. L1 and I1 stay recorded under D-133's 'Not covered', and this session ends without building anything.
+
+The user chose "Discard over 255 (Recommended)".
+
+*Two notes on the question as put:*
+- *It says I1's proposal "can be produced on purpose", as D-133's "Not covered" does. The security
+  review called that suspected, not measured (above).*
+- *"Rejected entries go back to at most 255 characters" holds for the proposals runs make from now
+  on. A proposal stored before D-134 can still be rejected at its own length, once (below).*
+
+**The number.** The session that built D-135 (the page's Confirm, PR 113) claimed D-134 as well that
+evening, and moved to D-135 when the two claims met. D-135's entry records it. This entry's question
+had already named D-134.
+
+**What it does.**
+
+1. **Rule 4d of `apply_classification`:** a Topic outside the scheme whose normalised name is longer
+   than `NAME_MAX_LENGTH`, 255 characters, is discarded into `discarded_suggestions` as
+   `{"dimension": "Topic", "value", "confidence"}`, at any confidence, instead of being proposed.
+   - **The length is measured as `confirm_proposed_tag` measures it:** on the name after
+     `normalise_tag_name` (trimmed, single spaces, lower case). A Topic of exactly 255 characters is
+     proposed, and confirming it makes the Tag.
+   - **Whether a value can be stored is still decided first,** so a long Topic holding a NUL or a lone
+     surrogate is recorded with U+FFFD, as any such value is (D-129).
+   - **The value is recorded as written,** normalised and not cut, as a Project or Process value is.
+     `discarded_suggestions` is replaced by each run and not exposed.
+2. **Nothing else changes:**
+   - D-133's reject route keeps its 100,000 characters, for proposals stored before D-134.
+   - Confirm keeps the column's 255 and its own length check behind the serializer.
+   - Rule 4b still runs first, so a long Topic a person rejected under D-133 is skipped, not
+     discarded.
+   - The verifier still counts strictly. No model, migration, route or screen changes.
+
+**Why 255 rather than 100,000.** A Topic longer than the Tags column can never be confirmed:
+confirming creates a Tag, `Tags.tag_name` is varchar(255), and `confirm_proposed_tag` refuses the
+name (D-133). Since D-133, proposing it only let a person reject it; before D-133, not even that. So
+discarding it loses nothing a person could have made of it, and:
+
+- **every proposal a run makes can be confirmed or rejected;**
+- **L1:** a rejection of a proposal made since D-134 is at most 255 characters, as before D-133. A run
+  proposes at most eight tag values (`MAXIMUM_TAG_SUGGESTIONS`, `apps/ai/classification.py`), so a
+  steered document's row grows by at most 2,040 characters a run, the rate before D-133. Stored as
+  UTF-8 JSON with four-byte characters that is up to about 8.6 KB: the security review of this entry
+  measured 8,624 bytes a run (its N1). Nothing prunes the list still. That predates D-133, and the
+  review of D-133 raised L1 only at D-133's rate;
+- **I1:** no proposal a run makes can come near the reject route's 100,000.
+
+At 100,000 only I1 would close. A Topic of 256 to 100,000 characters would still be proposed, rejected
+at full length, and never confirmed.
+
+**The departure from Objective 05's clause 3, accepted by the user.** The clause reads: "suggested
+values falling outside the established scheme must be discarded in the Department, Project and Process
+dimensions while being proposed for confirmation in the Topic dimension only". A Topic over 255
+characters is now discarded, not proposed. That is the second literal departure, beside D-129's value
+that cannot be stored, which since #106's parser does not occur on the shipped path.
+
+FR-10's own clause is worded more loosely: "A value that does not match may be proposed only in the
+Topic dimension and requires user confirmation before it is created". It permits a proposal in Topic
+only, and a Topic no Tag could hold could not be created by any confirmation. So the departure is from
+the objective's wording, which the verifier reads strictly, rather than from FR-10's.
+
+- **The verifier is unchanged.** `scripts/objective05_verify.py` counts a Topic in
+  `discarded_suggestions` as a clause 3 violation ("discarded a Topic value"), so a measurement would
+  show this departure rather than hide it. Its docstring now names both cases.
+- **No recorded run is affected.** D-133's measurement
+  (`corpus/objective-05/runs/2026-11-15-topic-lengths/topic-lengths.txt`) found 935 Topic values across
+  the recorded runs, the longest 21 characters. So every recorded verification of clause 3 stands.
+- **Invariant 1.** The departure turns on the suggestion's own length. No Tag name is longer than 255
+  characters, so such a value can only be one no Tag has: case (a) of rule 4's same-treatment argument.
+  Discarding it says nothing about any Tag, and `discarded_suggestions` is not exposed.
+
+**What changed:**
+- `apps/documents/classification.py`: rule 4d's length branch; the docstrings of the module, rule 4d,
+  the same-treatment argument, `confirm_proposed_tag` and `reject_proposed_tag`.
+- `apps/documents/models.py`: the comments and docstring on `proposed_tags` and
+  `discarded_suggestions`. No field changed, so no migration.
+- `apps/core/constants.py`: the comment on `MAXIMUM_PROPOSED_TAG_LENGTH`. Its value is unchanged.
+- `apps/api/serializers.py`, `apps/api/views.py`, `apps/core/tests/test_constants.py`: docstrings
+  that said a run proposes a Topic whatever its length.
+- `scripts/objective05_verify.py`: its docstring only. What it counts is unchanged.
+- `docs/api-contract.md`: the Topic line of the classification section, the `discarded_suggestions`
+  and `proposed_tags` paragraphs, and the confirm and reject rows.
+- `docs/schema-v1.md`: the `proposed_topics` and `discarded_suggestions` rows.
+- `frontend/tests/documentClassification.test.jsx`: the comment on D-133's test. No source or test
+  behaviour changed.
+- D-129 and D-133: dated notes where they say a run proposes a long Topic, and where D-133 left L1 and
+  I1 to the lead.
+
+**The tests.** Each route test runs from an Employee session and an Administrator session through
+`session_client`.
+
+- **New, `apps/api/tests/test_fr10_discard_long_topic.py`:**
+  - `test_a_classify_discards_a_topic_longer_than_a_tag_name_and_proposes_the_short_one_beside_it`: a
+    classify suggesting the re-audit's 359-character Topic and a short one. The short one is proposed
+    and the long one is not. The reply does not carry the discard, and the record holds it with its
+    confidence. No Tag or link is made. The reject route, which reads a value that long, answers the
+    document's own 404 body and records nothing.
+  - `test_a_topic_exactly_as_long_as_a_tag_name_is_proposed_and_the_confirm_route_makes_the_tag`.
+- **New, in `apps/documents/tests/test_classification_d128.py`:**
+  - `test_a_topic_longer_than_a_tag_name_is_discarded_at_any_confidence_and_nothing_is_proposed`:
+    below, at and above the threshold, for both models' thresholds. It is written with padding and
+    capitals, and recorded normalised.
+  - `test_a_discarded_long_topic_is_neither_confirmed_nor_rejected_and_no_rejection_is_recorded`:
+    `NotOnThisDocument` from both functions, and `rejected_tags` stays empty.
+  - `test_a_topic_exactly_as_long_as_a_tag_name_is_proposed_and_confirming_it_makes_the_tag`: written
+    longer than the column, with padding, and exactly 255 characters once normalised.
+  - `test_a_long_topic_that_cannot_be_stored_is_discarded_with_the_replacement_character`: a NUL and a
+    lone surrogate.
+  - `test_a_proposal_stored_before_d134_longer_than_the_column_cannot_be_confirmed`, which replaces
+    `test_a_topic_longer_than_the_column_is_proposed_and_confirming_it_is_refused`: a run no longer
+    makes the proposal, so the test writes it into the record as a run before D-134 left it.
+- **Changed:**
+  - `test_classification_d128.py`: the "longer than the column" case leaves `PROPOSED_AS_WRITTEN`,
+    since such a Topic is no longer proposed again.
+  - `apps/api/tests/test_fr10_reject_long_proposal.py`, D-133's file: its fixture made the
+    359-character proposal by a classify, which now discards it. The fixture now classifies with no tag
+    suggested, writes the proposal into the record as a run before D-134 left it, and checks that the
+    detail shows it. Its four tests are otherwise unchanged. Since D-134,
+    `test_a_rejected_long_topic_is_not_proposed_again`'s empty `discarded_suggestions` shows that rule 4b
+    skipped the value before rule 4d could discard it.
+- **Added after the reviews (the audit's F4), in `apps/documents/tests/test_objective05_verify.py`:**
+  `test_a_topic_longer_than_a_tag_name_is_discarded_and_reported_as_a_clause_3_violation`. One run
+  suggests a short Topic and one a character past the column. The apply layer proposes the first and
+  discards the second, and the verifier, run through `main()`, counts the proposal and reports the
+  discard as "discarded a Topic value", so clause 3 does not pass.
+
+**Deliberate breaks.** Each new test, and each changed test that gained an assertion, failed under at
+least one break before it was relied on, and every break was reverted.
+`test_a_topic_that_d128_refused_is_proposed_again` only lost its "longer than the column" case. Its
+other cases are unchanged and are not in the table (the audit of `266b533`, I2).
+- **How:** a script applied each break alone, ran the tests, restored every touched file byte for
+  byte and checked it by SHA-256. It is D-133's script, adapted, and kept with the runs' JUnit XML in
+  the session's scratchpad, not in the repository.
+- **K1 to K8 are this decision's.** B1, B2, B3b, B4, B5, B7 and B8 are D-133's server breaks, run again
+  because the fixture of the file they covered changed.
+- **Every break ran:** `apps/documents/tests/test_classification_d128.py`; `apps/api/tests/test_fr10_discard_long_topic.py`; `apps/api/tests/test_fr10_reject_long_proposal.py`; `apps/documents/tests/test_classification_apply.py`; `apps/documents/tests/test_classification_rejected.py`; `apps/documents/tests/test_classification_confirm.py`; `apps/api/tests/test_fr10_rejected_proposals.py`; `apps/api/tests/test_fr10_proposed_tags.py`; `apps/api/tests/test_document_classification.py`; `apps/api/tests/test_fr10_d128_invariant1.py`.
+- **The table** is generated from the runs' JUnit XML, not typed.
+
+| Test | Fails under |
+|---|---|
+| `test_classification_d128.py::test_a_discarded_long_topic_is_neither_confirmed_nor_rejected_and_no_rejection_is_recorded` | K1, K3, K7 |
+| `test_classification_d128.py::test_a_long_topic_that_cannot_be_stored_is_discarded_with_the_replacement_character`, all 2 cases (a NUL, a lone surrogate) | K5 |
+| `test_classification_d128.py::test_a_proposal_stored_before_d134_longer_than_the_column_cannot_be_confirmed` | K8, B3b |
+| `test_classification_d128.py::test_a_topic_exactly_as_long_as_a_tag_name_is_proposed_and_confirming_it_makes_the_tag` | K2, K4 |
+| `test_classification_d128.py::test_a_topic_longer_than_a_tag_name_is_discarded_at_any_confidence_and_nothing_is_proposed`, all 6 cases (above-claude-haiku-5-5, above-stub-chat, at-claude-haiku-5-5, at-stub-chat, below-claude-haiku-5-5, below-stub-chat) | K1, K3, K6, K7 |
+| `test_fr10_discard_long_topic.py::test_a_classify_discards_a_topic_longer_than_a_tag_name_and_proposes_the_short_one_beside_it`, Employee and Administrator | K1, K6, K7, B1, B2 |
+| `test_fr10_discard_long_topic.py::test_a_topic_exactly_as_long_as_a_tag_name_is_proposed_and_the_confirm_route_makes_the_tag`, Employee and Administrator | K2 |
+| `test_fr10_reject_long_proposal.py::test_a_rejected_long_topic_is_not_proposed_again`, Employee and Administrator | B1, B2, B7, B8 |
+| `test_fr10_reject_long_proposal.py::test_confirming_a_topic_longer_than_the_column_is_still_400`, Employee and Administrator | B3b |
+| `test_fr10_reject_long_proposal.py::test_rejecting_a_topic_longer_than_the_column_drops_it_and_records_the_rejection`, Employee and Administrator | B1, B2, B7 |
+| `test_fr10_reject_long_proposal.py::test_the_reject_route_reads_a_value_up_to_its_bound_and_refuses_one_past_it`, Employee and Administrator | B1, B2, B4, B5 |
+
+The breaks, each applied alone, run, and reverted, with every touched file checked by SHA-256:
+
+- **K1** (server): a long Topic is proposed again: the length branch never taken (D-129 and D-133's rule).
+- **K2** (server): the bound one short: a Topic of exactly 255 characters is discarded.
+- **K3** (server): the bound one over: a Topic of 256 characters is proposed.
+- **K4** (server): the length taken as the model wrote it, before normalisation.
+- **K5** (server): the length decided before storability: a long value holding a NUL is recorded as written.
+- **K6** (server): the discarded long Topic recorded cut to the column.
+- **K7** (server): the long Topic dropped without a record: neither proposed nor discarded.
+- **K8** (server): confirm_proposed_tag's length check gone (the route's serializer kept).
+- **B1** (server): D-133: the defect restored: the reject view reads the confirm serializer (255).
+- **B2** (server): D-133: the reject serializer's bound set back to the column.
+- **B3b** (server): D-133: confirm reads the reject serializer and confirm_proposed_tag's length check is gone.
+- **B4** (server): D-133: the reject bound one short (max_length = bound - 1).
+- **B5** (server): D-133: the reject bound one over (max_length = bound + 1).
+- **B7** (server): D-133: reject_proposed_tag records no rejection for a value over the column.
+- **B8** (server): D-133: rule 4b ignores a rejection over the column (_rejected).
+
+Tests outside the section that a break also failed:
+
+- **B3b:** `test_document_classification.py::test_a_blank_or_over_long_value_is_400_keyed_on_value[administrator-long]`, `test_document_classification.py::test_a_blank_or_over_long_value_is_400_keyed_on_value[employee-long]`, `test_fr10_proposed_tags.py::test_a_missing_blank_or_over_long_value_is_400_keyed_on_value[administrator-Process-confirm-over-long]`, `test_fr10_proposed_tags.py::test_a_missing_blank_or_over_long_value_is_400_keyed_on_value[administrator-Project-confirm-over-long]`, `test_fr10_proposed_tags.py::test_a_missing_blank_or_over_long_value_is_400_keyed_on_value[administrator-Topic-confirm-over-long]`, `test_fr10_proposed_tags.py::test_a_missing_blank_or_over_long_value_is_400_keyed_on_value[employee-Process-confirm-over-long]`, `test_fr10_proposed_tags.py::test_a_missing_blank_or_over_long_value_is_400_keyed_on_value[employee-Project-confirm-over-long]`, `test_fr10_proposed_tags.py::test_a_missing_blank_or_over_long_value_is_400_keyed_on_value[employee-Topic-confirm-over-long]`
+- **B5:** `test_document_classification.py::test_a_blank_or_over_long_value_is_400_keyed_on_value[administrator-long]`, `test_document_classification.py::test_a_blank_or_over_long_value_is_400_keyed_on_value[employee-long]`, `test_fr10_proposed_tags.py::test_a_missing_blank_or_over_long_value_is_400_keyed_on_value[administrator-Process-reject-over-long]`, `test_fr10_proposed_tags.py::test_a_missing_blank_or_over_long_value_is_400_keyed_on_value[administrator-Project-reject-over-long]`, `test_fr10_proposed_tags.py::test_a_missing_blank_or_over_long_value_is_400_keyed_on_value[administrator-Topic-reject-over-long]`, `test_fr10_proposed_tags.py::test_a_missing_blank_or_over_long_value_is_400_keyed_on_value[employee-Process-reject-over-long]`, `test_fr10_proposed_tags.py::test_a_missing_blank_or_over_long_value_is_400_keyed_on_value[employee-Project-reject-over-long]`, `test_fr10_proposed_tags.py::test_a_missing_blank_or_over_long_value_is_400_keyed_on_value[employee-Topic-reject-over-long]`
+
+**Breaks run after the reviews (the audit's F4).** The new verifier test ran under two breaks, by the
+same script, over `apps/documents/tests/test_objective05_verify.py` alone (10 tests, all
+passing at baseline). The table is generated from that run's JUnit XML.
+
+| Test | Fails under |
+|---|---|
+| `test_objective05_verify.py::test_a_topic_longer_than_a_tag_name_is_discarded_and_reported_as_a_clause_3_violation` | K1, K9 |
+
+- **K1** (server): a long Topic is proposed again: the length branch never taken (D-129 and D-133's rule).
+- **K9** (server): the verifier counts a discarded Topic as nothing: its clause 3 violation made a no-op.
+
+Neither break failed any other test in the file.
+
+**The review corrections changed no code the breaks cover.** They changed
+`apps/documents/classification.py` and `apps/api/views.py` in docstrings and comments only. A script
+parsed each file at `266b533` and as committed with the corrections, removed every docstring, and
+compared the ASTs (comments are not in them): the same for both files, and for
+`apps/api/serializers.py`, `apps/core/constants.py`, `apps/documents/models.py` and
+`scripts/objective05_verify.py`, whose bytes did not change. The same check found the changes to
+`test_classification_d128.py` and `test_fr10_discard_long_topic.py` docstring-only. So the first
+run's table stands.
+
+**The suites.**
+- **At `266b533`, the first commit:**
+  - **`pytest`, the whole suite:** 4,965 passed in 1,695.96 s (0:28:15), with dual-role coverage 48 of
+    48 protected endpoints.
+    - It ran in a temporary detached worktree at `f82fb1a` with this change applied, because the breaks
+      were running in this one.
+    - That tree was built from a diff captured while break K1 was applied. Its one changed line was
+      repaired by `sed` ten seconds later.
+    - After the repair the diff equalled the committed change, except for its `index` line, which still
+      named K1's blob. The comparison was made by diff before committing (the audit of `266b533`, I3).
+    - Only this entry in `docs/decisions.md` was added afterwards, and no test reads it.
+  - **The front end:** `npm test` 666 passed in 48 files; `npm run lint` and `npm run build` exit 0.
+  - **`makemigrations --check --dry-run`:** "No changes detected". No model field changed.
+  - **CI on `266b533`:** green, with 4,960 passed and 5 skipped, dual-role 48 of 48, and the front end's
+    666.
+- **After the merges of `main` (PRs 113 and 114) and the reviews' corrections,** on the tree committed
+  with them, in this worktree:
+  - **`pytest`, the whole suite:** 4,966 passed in 1,658.61 s (0:27:38), with dual-role coverage 48 of
+    48 protected endpoints. The one more is the verifier test.
+  - **The front end:** `npm ci`, `npm run lint` and `npm run build` exit 0; `npm test` 670 passed in
+    48 files. D-135 added four.
+  - **`makemigrations --check --dry-run`:** "No changes detected".
+
+**The reviews of `266b533` (15 November 2026).** Each reviewed the commit read-only. Both reports are
+kept whole outside the repository, in the session group's notes folder, as
+`fr10-discard-audit-266b533-verbatim.md` and `fr10-discard-security-266b533-verbatim.md`. They were
+extracted mechanically from the agents' transcripts, and each verdict line below was checked by script
+against them.
+
+- **`requirements-auditor`: INCOMPLETE.** Its closing line:
+
+  > **INCOMPLETE:** The rule, its tests, its breaks and its record of the decision are correct and CI is green on `266b533`, but four passages still describe the rule untruly (F1 to F3) and the branch must merge main's PR 113 before its own PR (F5); none of the fixes changes the rule's code.
+
+  - It found the decision recorded as made (it rebuilt the quote from the session's transcript), the
+    code as recorded, the break table as the runs produced it (recomputed from the JUnit XML), and CI
+    green on `266b533`: 4,960 passed and 5 skipped, dual-role 48 of 48.
+  - **F1 (low):** four passages said "as written" while the departures contradicted them:
+    `apps/documents/classification.py` twice, `docs/api-contract.md` and a comment in
+    `apps/api/views.py`.
+  - **F2 (low):** D-133's "The cause" still said in the present tense that a run proposes a Topic
+    whatever its length.
+  - **F3 (low):** the contract and a test docstring said that from D-129 until D-134 such a proposal
+    "could only be rejected". Until D-133 it could be neither confirmed nor rejected.
+  - **F4 (low):** no test held the verifier's "discarded a Topic value", on which this entry relies.
+  - **F5 (medium, merge readiness):** PR 113 (D-135) had merged into `main`, leaving two conflicts in
+    this file.
+  - **Information only:**
+    - I1: "smallest correct fix" was said of L1 only.
+    - I2: one changed test only lost a case.
+    - I3: the first full run's tree was built from a diff captured while K1 was applied and repaired by
+      `sed`.
+    - I4: 2 KB is 2,040 characters.
+    - I5: the number collision is recorded in D-135, not here.
+- **`security-reviewer`: PASS WITH NOTES.** Its verdict line:
+
+  > **VERDICT: PASS WITH NOTES.** D-134's code is correct, discloses nothing about any Tag, and closes L1 and I1 for every run made since it. I have three notes, all info, and none blocks the change: one is about the record's wording, one is a residual that predates D-133, and one is a check owed on databases written before D-134.
+
+  - **What it confirmed, by probes on pytest's own database:**
+    - A classify reply, the detail, `proposed_tags`, `discarded_suggestions`, `rejected_tags` and the
+      link count came out identical under five Tag states: none; grown and carried only by restricted
+      material; grown and carried by nothing; retired and carried only by restricted material; retired
+      and carried by nothing.
+    - `lower()` lengthens only U+0130, so "İ" × 128 is discarded and "İ" × 127 proposed.
+    - Every path to `apply_classification` was traced.
+    - Three rounds of eight 255-character rejections left 24 entries in `rejected_tags`, the longest
+      255.
+    - A name of 255 four-byte characters confirms into the varchar(255) column.
+  - **N1 (info):** "about 2 KB a run" is 2,040 characters, and up to 8,624 bytes as stored.
+  - **N2 (info):** `rejected_tags` still has no cap at the restored rate.
+  - **N3 (info):** rows written before D-134 were not checked. It gave a read-only query.
+
+**What changed because of them:**
+- **F1:** each "as written" now names the two recorded departures.
+- **F2:** a dated note on D-133's "The cause".
+- **F3:** the history is corrected in the contract, in the docstrings of
+  `test_classification_d128.py` and `test_fr10_discard_long_topic.py`, and in "Why 255" above.
+- **F4:** the verifier test, with its breaks (above).
+- **F5:** `main` was merged in twice, with the merge commits named here:
+  - `480fd16`, PR 113. It keeps both dated notes under D-133, puts this entry above D-135, and adds a
+    dated note on the page item under "Not covered";
+  - `666f761`, PR 114, FR-16's Objective 04, which merged with no conflict.
+- **I1, I2, I4 and N1, I5:** corrected or added in this entry. **I3:** in the suites paragraph.
+- **N2, N3:** under "Not covered".
+- **The checks:** no code the breaks cover changed (above), and both suites ran again on the final tree
+  (the suites paragraph).
+
+**Not covered:**
+- **A proposal stored before D-134 longer than 255 characters** stays on its document until a person
+  rejects it (D-133's route) or a run replaces the list. Its rejection is kept at its own length, once.
+  One longer than 100,000 characters would still be refused by the reject route until a run replaces
+  the list. Either could come only from a run made before D-134. Nobody looked for one on the alpha's
+  database or on `kmp_anthropic`. The security review of this entry (N3) gave a read-only check an
+  operator can run first. It was not run, because neither the session nor its reviewers touch those
+  databases:
+
+  ```sql
+  SELECT doc_id FROM document_analysis
+  WHERE EXISTS (SELECT 1 FROM jsonb_array_elements(proposed_topics) e WHERE char_length(e->>'value') > 255)
+     OR EXISTS (SELECT 1 FROM jsonb_array_elements(rejected_tags) e WHERE char_length(e->>'value') > 255);
+  ```
+
+  A long proposal it finds goes at the document's next classification; a long rejection is kept, once.
+- **`rejected_tags` is still never pruned,** at the rate before D-133: at most eight entries a run, each
+  at most 255 characters. The review of D-133 raised L1 only at D-133's rate. The security review of
+  this entry (N2) estimated, by inference and not at scale, up to 480 entries, about 0.5 MB, an hour per
+  account at the ingestion throttle's 60 runs an hour. That holds only if the model can be steered into
+  eight new values on every run of the same text. Its cheap fix, `.defer("rejected_tags",
+  "discarded_suggestions")` in `classification_of` (`apps/api/repository.py`), cheapens the detail read
+  and is not built. A cap on the entries would conflict with "a rejection sticks", so it is the lead's
+  decision.
+- **`discarded_suggestions` can hold a long discarded value,** up to a reply's worth, until the next run
+  replaces it. A long Project or Process value could already do so before D-134, as could a long
+  Topic in `proposed_tags` until D-134. It is not exposed. Every detail read still loads the row (the
+  security review of D-133, on L1's cost). Deferring the column in `classification_of` is not built.
+- **The page still offers Confirm on a proposal over 255 characters.** Since D-134 only a proposal
+  stored before D-134 can be one. Another session is changing the page for those, as D-135 (PR 113,
+  branch `fix/FR-10-confirm-long-proposal`). It was not merged when this was written, so nothing here
+  depends on it.
+  *D-135 merged later on 15 November 2026 (PR 113, `4fc8373`), and this branch merged it in: the page
+  now offers no Confirm on a proposed value longer than a tag name, and says why in the row.*
+- **A measurement that meets this departure** would report "discarded a Topic value" as a clause 3
+  violation, and it should cite D-134. None has: the longest recorded Topic is 21 characters.
+- **D-133's I2** (every validator runs past a failed length check, on routes with no throttle) is
+  unchanged, and older than both entries.
+- **No database the user works with was read or written.** The tests ran on pytest's own test
+  databases. No model changed, so nothing needs migrating. When a server runs this code, its next run
+  on each document applies the rule.
+- **`CLAUDE.md` §5's table is not changed.** It lists neither `NAME_MAX_LENGTH` nor
+  `MAXIMUM_PROPOSED_TAG_LENGTH`.
+
+## D-135 · The document page offers no Confirm on a proposed value longer than a tag name, and says why in the row
+
+**Status:** Settled by the user · **Date:** 2026-11-15 · **Concerns:** FR-10 (a Topic outside the
+scheme "requires user confirmation before it is created"), D-128, D-129, D-133, D-134, `frontend/` ·
+**Supersedes:** nothing. It closes D-133's "Not covered" item "The page still offers Confirm on a
+proposal over 255 characters".
+
+**What prompted it:** D-133 (PR 112) let the reject route read a proposed value up to 100,000
+characters, and kept confirm's 255. Confirming creates a Tag, whose name the `Tags.tag_name` column
+limits. On `main` at `f82fb1a` a run proposes a Topic whatever its length (D-129). So, on a proposal
+over 255 characters:
+
+- the page offered an enabled Confirm (`ProposedTagRow`, `frontend/src/components/Classification.jsx`);
+- the server refused it with 400 every time;
+- the page then showed the API client's fixed 400 sentence, "Some of the information provided is
+  not valid. Please check it and try again." (`frontend/src/api/client.js`, through the 400 branch
+  of `fail` in `Classification.jsx`). A person cannot act on it, and the row stayed.
+
+D-133's requirements audit and its "Not covered" list both named it, as an interface question for
+the lead.
+
+**Beside D-134.** D-134 is the sibling session's decision of the same day, on its branch
+`fix/FR-10-discard-long-topic`. It was not merged when this was written. Under it, a run discards a
+Topic outside the scheme longer than 255 characters once normalised, instead of proposing it; the user
+chose "Discard over 255". Once both are on `main`, no new proposal over 255 characters is made. This
+page change still covers a proposal stored before D-134, which stays until the document is classified
+again. Where the two branches meet, as the sibling session described its own branch in its messages
+to this session (received at 21:10 on 15 November 2026; its D-134 entry was not yet written in its tree
+when the requirements audit looked):
+- `docs/decisions.md`: both add a dated note right after "than build it)." under D-133's "Not
+  covered" item on the page's Confirm. The sibling's message says its D-134 entry goes at the end of
+  the file, with D-135 after it. Whichever merges second keeps both notes and puts D-134 above D-135.
+- `frontend/tests/documentClassification.test.jsx`: the sibling changes only the first lines of the
+  D-133 block's doc comment, which this branch leaves alone.
+
+**The number.**
+- **The collision.** This session claimed D-134 at 20:25 on 15 November 2026, in the session
+  group's notes folder and by a message. The sibling session claimed D-134 for its decision too: its
+  claim note there was created at 20:50, with the user's decision tied to it. When this session
+  checked, about 20:55, the sibling's worktree already used D-134 throughout its uncommitted change.
+- **Where the times come from.** This session read both notes' creation times with `stat` at 20:56,
+  before either note was rewritten. Rewriting them reset those times, so they cannot be read from
+  the files now. That output is in this session's transcript, beside its claim note's first write
+  (20:25:24) and its message to the sibling (20:25:28).
+- **This branch moved.** It cited D-134 only in comments and in the test block's title, in
+  `Classification.jsx`, `Classification.css`, `constants.js` and `documentClassification.test.jsx`,
+  none of it pushed. It moved to D-135 at `a517be3`, and the sibling session was told.
+- **The subjects of `d64b849` and `28c5459` still say D-134.** They are kept, not rewritten.
+
+**The decision.** The user's choice on 15 November 2026, in answer to one question. Each option came
+with a text preview of the row. The question and its options, as put:
+
+> On the document page, any proposed Topic longer than 255 characters (the most a tag name can
+> hold) still shows an enabled Confirm. The server always refuses it with 400. The page then shows
+> its generic "Some of the information provided is not valid…", which nobody can act on. Reject has
+> worked on these proposals since D-133. What should the page do with Confirm on such a proposal?
+> (The row text in the previews is a draft. Change it in the notes if you like.)
+>
+> - **Withhold Confirm (Recommended):** No Confirm button on a proposal over 255 characters. A
+>   sentence in the row says it is too long to become a tag and can be rejected. This is how the
+>   section already handles an action that can't apply: a tag row shows Confirm only on an
+>   unconfirmed AI tag, and a 403 removes the controls and says why. No button that never works,
+>   nothing for Tab to skip.
+> - **Disable Confirm:** Keep Confirm, but disabled (greyed to 0.55 opacity), with the same sentence
+>   beside it. Tab skips a disabled button, so a keyboard user only meets the sentence. Everywhere
+>   else, the section disables a button only while another request is running.
+> - **Explain after the 400:** Keep Confirm enabled. When the server refuses, replace the generic
+>   sentence with one saying the topic is too long to become a tag and can be rejected. The page
+>   knows the press will fail before it is made.
+
+The previews drafted the row's sentence as "This topic has 359 characters, more than the 255 a tag
+name can have, so it cannot be confirmed as a tag. You can reject it." The user chose "Withhold
+Confirm (Recommended)" and left the sentence as drafted.
+
+1. **`ProposedTagRow` offers Reject alone on a proposal longer than `TAG_NAME_MAXIMUM_LENGTH`.**
+   That constant is 255 (`frontend/src/constants.js`), and
+   `apps/api/tests/test_front_end_constants_agreement.py` holds it to the server's
+   `NAME_MAX_LENGTH`. Confirm is not rendered at all: it is not disabled, and not hidden. It is the
+   one row this needs: in `frontend/src`, only `Classification.jsx` reads `proposed_tags` or calls
+   `confirmProposedTag`.
+2. **The length is counted as the server counts it,** in code points, as Python's `len()` counts
+   them, not in UTF-16 units. A run stores a proposal normalised (`normalise_tag_name`,
+   `apply_classification` rule 4d), so the proposal's own length is the one `ProposedTagSerializer`
+   and `confirm_proposed_tag` check. A proposal of exactly 255 characters is still offered Confirm.
+3. **A sentence in the row says why, and that Reject still works:** `TEXT.proposedTagTooLong`. It
+   names the proposal's own dimension and its length. The length has its thousands grouped
+   (`Intl.NumberFormat('en-AU')`), since nothing on the page bounds it. It is in words, beside the
+   value, as every state in the section is.
+4. **The sentence goes with the controls.** When a 403 withdraws the section's controls, the
+   sentence goes too, because "You can reject it" would be untrue for a role that may not change
+   classifications. The proposal stays listed with its provenance, as before.
+5. **`.tag__note`** (`frontend/src/components/Classification.css`) sets the sentence on a line of its
+   own under the provenance. It is muted as the provenance is: `--color-text-muted` on
+   `--color-surface`, 7.56:1, a pair `frontend/tests/contrast.test.js` already lists.
+6. **No server file changed.** The server refuses that confirm whatever the page offers
+   (`CLAUDE.md` §6, invariant 4), so this is usability, not security.
+
+**Against `docs/accessibility.md`.** Its rules on hidden and disabled controls concern keyboard
+stops:
+- the tab-order walk skips disabled controls;
+- nothing reachable may be invisible while it holds focus;
+- no `aria-hidden` subtree may hold a focusable element.
+
+A withheld Confirm is not in the DOM, so it can break none of them, and the row's only keyboard stop
+is Reject. The tests read the row's buttons from the DOM, not by role, so a Confirm left in the
+markup but hidden fails them (FB3 below). They check the sentence against the stylesheets with
+`hidingCauses` (FB8). `docs/accessibility.md` itself needed no change.
+
+**What changed:**
+- `frontend/src/components/Classification.jsx`: `lengthOf`; `ProposedTagRow` withholds Confirm and
+  shows the sentence; the section's and the row's doc comments.
+- `frontend/src/constants.js`: `TEXT.proposedTagTooLong`; `COUNT_FORMAT`; a sentence on
+  `TAG_NAME_MAXIMUM_LENGTH`'s comment.
+- `frontend/src/components/Classification.css`: `.tag__note`.
+- `frontend/tests/documentClassification.test.jsx`: the tests below, and `buttonsIn`.
+  `proposalRow` now finds a row by its Reject, which every proposal has, not its Confirm.
+- D-133: dated notes on its point 4 and on its "Not covered" item.
+
+**The tests,** in `frontend/tests/documentClassification.test.jsx`, the block "D-135: a proposal
+longer than a tag name can be is offered Reject alone, and the row says why in words":
+- "withholds Confirm on a 256-character proposal, …": the row's buttons, read from the DOM, are
+  Reject alone; the sentence is in the row, word for word, with 256, and no stylesheet or attribute
+  hides it; Reject is enabled; a short proposal beside it keeps an enabled Confirm and no sentence.
+- "offers an enabled Confirm on a proposal exactly as long as a tag name can be, …": 255 characters,
+  and 255 ship emoji (510 UTF-16 units), each keep an enabled Confirm and no sentence; 256 ships get
+  Reject alone, and the sentence counts 256. Confirm on the 255-character one sends one request
+  with the value whole.
+- "writes the length with its thousands grouped, in the proposal's own dimension": 100,000 in Topic
+  and 1,024 in Project.
+- "a 403 on Reject withdraws the controls and the sentence with them, and the proposal stays
+  listed": the failure path.
+
+`disabled` is asserted directly, because `fireEvent` clicks a disabled button too. After the one
+press that changes the page, the test waits on the announcement with `waitFor` rather than racing
+`findBy`. The block passed ten runs in a row on `a517be3`, and each run passed all its tests.
+
+**Deliberate breaks.** Each new test failed under at least one break before it was relied on, and
+every break was reverted.
+- **How:** a script applied each break alone to the committed tree, ran
+  `documentClassification.test.jsx` with vitest's JSON reporter, restored every touched file byte for
+  byte, and checked it by SHA-256. It required the tree clean before the first break and after the
+  last.
+- **Where it ran:** on `d64b849`; on `28c5459`, which changed comments only; and on `a517be3`, the
+  renumbering, which changed comments and the block's title. Each break failed the same tests each
+  time, compared by test title. The table is the last run's.
+- **The table** is generated from the runs' JSON reports, not typed. The script and the reports are in
+  the session's scratchpad, not in the repository.
+- The tests of the D-133 and D-128 blocks are listed too, because their `proposalRow` changed.
+
+| Test | Fails under |
+|---|---|
+| `documentClassification.test.jsx` › D-135 › "withholds Confirm on a 256-character proposal, says in its row why and that it can be rejected, and leaves Reject enabled, while a short proposal keeps both" | FB1, FB2, FB3, FB6, FB8, FB9, FB10, FB11, FB14 |
+| `documentClassification.test.jsx` › D-135 › "offers an enabled Confirm on a proposal exactly as long as a tag name can be, counted in code points as the server counts, and Confirm sends it whole" | FB1, FB2, FB3, FB4, FB5, FB6, FB9, FB11, FB14 |
+| `documentClassification.test.jsx` › D-135 › "writes the length with its thousands grouped, in the proposal’s own dimension" | FB12, FB13 |
+| `documentClassification.test.jsx` › D-135 › "a 403 on Reject withdraws the controls and the sentence with them, and the proposal stays listed" | FB1, FB6, FB7, FB9, FB10, FB14 |
+| `documentClassification.test.jsx` › D-128 › "lists one proposal per dimension under the suggestions, each naming its dimension in its row and in its controls, and none among the document’s tags" | FB11 |
+| `documentClassification.test.jsx` › D-128 › "Confirm on the Project proposal sends its dimension with the value and makes it a tag there, and Reject on the Process one sends its own" | FB11 |
+| `documentClassification.test.jsx` › D-128 › "Confirm on the Process proposal sends its dimension with the value and makes it a tag there, and Reject on the Topic one sends its own" | FB11 |
+| `documentClassification.test.jsx` › D-128 › "Confirm on the Topic proposal sends its dimension with the value and makes it a tag there, and Reject on the Project one sends its own" | FB11 |
+| `documentClassification.test.jsx` › D-133 › "offers an enabled Reject on the 359-character proposal, sends all 359 characters, and drops the row" | FB10, FB14 |
+
+The breaks, each applied alone, run, and reverted, with every touched file checked by SHA-256:
+
+- **FB1** (`Classification.jsx`): the defect restored: Confirm is offered on every proposal, whatever its length.
+- **FB2** (`Classification.jsx`): Confirm is disabled on a proposal over the length rather than withheld (option b).
+- **FB3** (`Classification.jsx`): Confirm is left in the markup with the `hidden` attribute rather than withheld.
+- **FB4** (`Classification.jsx`): the length is counted in UTF-16 units, not code points.
+- **FB5** (`Classification.jsx`): off by one: Confirm is withheld on a proposal exactly as long as a tag name can be.
+- **FB6** (`Classification.jsx`): Confirm is withheld but no sentence says why.
+- **FB7** (`Classification.jsx`): the sentence stays when a 403 has withdrawn the controls.
+- **FB8** (`Classification.css`): the stylesheet hides the sentence (`display: none` on .tag__note).
+- **FB9** (`Classification.jsx`): the sentence gives the tag name's limit as the proposal's length.
+- **FB10** (`Classification.jsx`): Reject is disabled on a proposal over the length.
+- **FB11** (`Classification.jsx`): Confirm is withheld on every proposal.
+- **FB12** (`constants.js`): the length is written without its thousands grouped.
+- **FB13** (`constants.js`): the sentence always says "topic", whatever the dimension.
+- **FB14** (`Classification.jsx`): a proposal over the length is offered no controls at all.
+
+Tests outside these blocks that a break also failed:
+
+- **FB11:** "FR-10: a 403 and a 404 on an action" › "a 403 withdraws every control and says the role may not change classifications"
+
+**The suites,** on `a517be3`, the head the breaks last ran on, with the tree clean before and after:
+- **`npm ci`:** exit 0; "found 0 vulnerabilities".
+- **`npm run lint`** (oxlint): exit 0.
+- **`npm run build`:** exit 0. Vite warns that the main chunk is larger than 500 kB after
+  minification. It was already, before this change: CI's build of `main` at `f82fb1a` made it
+  506.65 kB, and this branch makes it 507.04 kB.
+- **`npm test`:** 670 passed in 48 files, exit 0. CI's run of `main` at `f82fb1a` passed 666 in 48
+  files; the difference is the D-135 block.
+- **The D-135 block alone,** ten runs in a row: see "The tests".
+  - A first loop on `a517be3` matched no test, because its filter still named D-134. It is not
+    counted, and the loop now counts a run that passes nothing as a failure.
+  - On `28c5459`, before the renumbering, the block had passed ten runs in a row too.
+- **The whole of `documentClassification.test.jsx`,** 40 runs in a row on `cc01e09`: each passed 55
+  of 55.
+- **`pytest`:** no server file changed, so the whole suite was not run here. CI runs it on the pull
+  request. One server test reads a file this change touches:
+  `apps/api/tests/test_front_end_constants_agreement.py`, which reads `frontend/src/constants.js`.
+  It passed: 16 passed. It opens no database, so it ran with a placeholder `DATABASE_URL`.
+
+**The requirements audit of `cc01e09` (15 November 2026).** `requirements-auditor` reviewed the
+branch read-only. Its report is kept whole outside the repository, in the session group's notes
+folder, as `fr10-confirm-audit-cc01e09-verbatim.md`, saved by script straight from the agent's
+transcript. Its line numbers are at `cc01e09`. Its closing line:
+
+> **COMPLETE WITH NOTES.** The page withholds Confirm exactly where the server would refuse it and offers it at 255. The sentence and the 403 path are right and defended by tests that each fail under a recorded, reverted break. The table, the suites and the D-135 number all check out against git, the records and CI. D-135 still has to name the over-100,000-character path in its "Not covered" list (N1), with N2 optional. That is one documentation edit, and §8 condition 5 is met once it is made.
+
+- **What it recomputed:** the break table, from the run's record and without the generator; each
+  restored file's SHA-256, against the committed blobs; the suite figures, against the logs and CI.
+- **N1:** "Not covered" left out the one path where the row's sentence is false, a proposal over
+  100,000 characters. It is added below.
+- **N2, minor:** a count of the sibling's references would go stale. It is replaced with a
+  description that needs no count.
+- **Observations:**
+  - O1: no test confirms a proposal of exactly 255 characters through the confirm route, though
+    `POST /api/tags` is tested at 255. It is older than this branch, and under "Not covered".
+  - O2, the code-point count not shared between files: under "Not covered".
+  - O3: the header cited UC-09 A3, which is a person correcting a classification. It now cites
+    FR-10's own words.
+  - O4, the merge with D-134: recorded above, with where the two branches meet.
+  - O5: `suites\loop40-file.txt` held 15 runs when it looked, and nothing cited it. The finished
+    loop, 40 runs, is now under the suites.
+- **What it could not check,** and where each stands:
+  - **The question as put, and the answer.** This session checked both by script against its own
+    transcript. The question and its options are identical to the quote above, with whitespace
+    collapsed. The answer selected "Withhold Confirm (Recommended)", with no notes. The drafted
+    sentence is in the chosen option's preview.
+  - **The claim times, 20:25 and 20:50.** Both notes had been rewritten by then. "The number" says
+    where the times come from.
+  - **The CI jobs of PR 113,** still pending when it looked. CI on `cc01e09` has since passed both
+    jobs: Django on Postgres with pgvector, and React. Every later commit of this branch changes only
+    this file, so the code is the same. The run on the commit that adds this note had not finished
+    when it was written.
+  - **The sentence's layout on screen:** under "Not covered".
+
+**Not covered:**
+- **A proposal longer than `MAXIMUM_PROPOSED_TAG_LENGTH`** (100,000 characters,
+  `apps/core/constants.py`) still reads "You can reject it", but the reject route refuses it with 400
+  (`ProposedTagRejectSerializer`), and the page shows the client's fixed 400 sentence. D-133 records
+  that such a proposal can exist (its first "Not covered" item). After D-134 it can only be one stored
+  before D-134, and none appears in measured data. Saying so on the row would need a client copy of
+  the bound and a row in the agreement test: the lead's call, not built (the requirements audit, N1).
+- **No route test confirms a proposal of exactly 255 characters.** Pytest refuses 256
+  (`apps/api/tests/test_fr10_proposed_tags.py`), and only `POST /api/tags` is tested at 255. The page
+  now offers Confirm at 255, and by reading the server accepts it: `max_length`, then a strict `>`.
+  This predates the branch (the requirements audit, O1).
+
+  *Covered on 16 November 2026, on the branch `test/FR-10-confirm-at-column-width`:*
+  `test_a_value_exactly_as_long_as_the_column_is_confirmed_whole`, beside the over-long case in
+  `apps/api/tests/test_fr10_proposed_tags.py` (`c297902`).
+  - **What it confirms:** a proposal of 255 ASCII characters, and one of 255 ships (U+1F6A2), which
+    are 510 UTF-16 units and 1,020 UTF-8 bytes. Each value is normalised as a run holds a proposal,
+    so the value sent back is the value held. It runs in Project, Process and Topic, as the 256 case
+    beside it does, from an Employee and an Administrator session through `session_client`: 12
+    cases. A Topic is proposed through the classify route, the stub suggesting it upper-cased. A
+    Project or Process value is written onto the analysis row, as in the file's other tests.
+  - **What each case asserts:** before the confirm, the proposal is held whole. Then: 200; the
+    proposal leaves `proposed_tags`, in the reply and on the row; the `tag_details` entry names the
+    whole value, `applied_by="ai"`, confirmed, not provisional, with the proposal's confidence; the
+    one Tag, read back from the database, holds the whole value; and the document's one link is to
+    that Tag.
+  - **Deliberate breaks.** Each case failed under at least one break before it was relied on, and
+    every break was reverted.
+    - **How:** a script applied each break alone to the committed tree. Each run used the 16 test
+      files that reach the confirm route, `confirm_proposed_tag` or `ProposedTagSerializer`, on a
+      newly created test database. The script restored every touched file byte for byte. It checked
+      each file's SHA-256 against the bytes before the break and against the committed blob, and it
+      required the tree clean before and after each break.
+    - **A first attempt was discarded.** It reused the test database between runs.
+      `apps/documents/tests/test_classification_lock_order.py` is transactional, and its teardown
+      empties every table, the seeded roles included. So every break run after the control errored
+      in setup, and showed nothing about its break. The script now creates the database for each
+      run, and stops if any test errors in setup.
+    - **The table** is generated from the runs' junit reports by a script, not typed. The scripts
+      and the reports are in the session's scratchpad, not in the repository.
+
+  The control run, with no break, at `d8327c8`: 497 tests in 16 files, 0 failed (exit 0).
+
+  | `test_a_value_exactly_as_long_as_the_column_is_confirmed_whole[...]` | Fails under |
+  |---|---|
+  | `[administrator-Process-ascii]` | B1, B2, B4, B5 |
+  | `[administrator-Process-astral]` | B1, B2, B3, B4, B5, B6 |
+  | `[administrator-Project-ascii]` | B1, B2, B4, B5 |
+  | `[administrator-Project-astral]` | B1, B2, B3, B4, B5, B6 |
+  | `[administrator-Topic-ascii]` | B1, B2, B4, B5 |
+  | `[administrator-Topic-astral]` | B1, B2, B3, B4, B5, B6 |
+  | `[employee-Process-ascii]` | B1, B2, B4, B5 |
+  | `[employee-Process-astral]` | B1, B2, B3, B4, B5, B6 |
+  | `[employee-Project-ascii]` | B1, B2, B4, B5 |
+  | `[employee-Project-astral]` | B1, B2, B3, B4, B5, B6 |
+  | `[employee-Topic-ascii]` | B1, B2, B4, B5 |
+  | `[employee-Topic-astral]` | B1, B2, B3, B4, B5, B6 |
+
+  The breaks, each applied alone, run, and reverted:
+
+  - **B1** (`apps/api/serializers.py`): `ProposedTagSerializer`'s `value` has `max_length=NAME_MAX_LENGTH - 1`, 254. 12 of the 497 tests failed, all of them new.
+  - **B2** (`apps/documents/classification.py`): `confirm_proposed_tag` refuses a name with `>=` rather than `>`. 12 of the 497 tests failed, all of them new.
+  - **B3** (`apps/documents/classification.py`): `confirm_proposed_tag` counts the name in UTF-16 units, as JavaScript's `length` does, not in code points. 6 of the 497 tests failed, all of them new.
+  - **B4** (`apps/documents/classification.py`): `confirm_proposed_tag` creates the Tag from the name cut to `NAME_MAX_LENGTH - 1` characters. 12 of the 497 tests failed, all of them new.
+  - **B5** (`apps/documents/classification.py`): `confirm_proposed_tag` drops the proposal by the name cut to `NAME_MAX_LENGTH - 1` characters, so one at the column's width stays. 12 of the 497 tests failed, all of them new.
+  - **B6** (`apps/api/serializers.py`): `ProposedTagSerializer`'s `value` also refuses more than `NAME_MAX_LENGTH` UTF-16 units (a field validator, so the reject serializer, which redefines `value`, is unchanged). 6 of the 497 tests failed, all of them new.
+
+  No test outside the new one failed under any break.
+
+  - **What each break tripped,** read from the runs' reports. B1, B2, B3 and B6 tripped on the
+    confirm's 400 keyed on `value`: under B1 with the serializer's 254 message, under B2 and B3
+    with `confirm_proposed_tag`'s message, and under B6 with that break's own. B4 tripped on the
+    `tag_details` entry, whose name was cut short. B5 tripped on the reply's `proposed_tags`, which
+    still held the proposal.
+  - **D-134 was read, not run.** On its branch, `fix/FR-10-discard-long-topic`, a run discards a
+    Topic only when it is over 255 characters (`len(name) > NAME_MAX_LENGTH`), and
+    `confirm_proposed_tag` changes only in its docstring. So the Topic cases should still be
+    proposed and confirmed once both are on `main`, and each break above should still apply. These
+    tests were not run on that branch.
+  - **The suites:** the control run above. No server code changed, only that test file and this
+    note, so the whole of `pytest` was not run here. CI runs it on the pull request.
+- **The code-point count is not shared:** `lengthOf` here, and `tagNameError` and
+  `departmentNameError` in `frontend/src/utils/validation.js`, each count for themselves. They agree.
+  No shared helper was made (the requirements audit, O2, low).
+- **The sentence's layout on screen,** a line of its own under the provenance, is not tested. jsdom
+  draws nothing, so the `.tag__note` rule is the only evidence. `hidingCauses` shows only that nothing
+  hides the sentence.
+- **Any other 400 on confirm** still shows the client's fixed sentence: a dimension the server
+  refuses, say. The page no longer sends a confirm that the server refuses for its length.
+- **A Project or Process proposal** over 255 characters is treated as a Topic is: the rule is
+  dimension-generic, as the server's check is. It is tested in Topic only, and the sentence's words in
+  Project. Since D-129 a run proposes neither.
+- **The server's own 400** on a long confirm is unchanged (D-133). A client other than this page
+  still meets it.
+- **`docs/api-contract.md` is unchanged.** It describes the routes, and they did not change. Its
+  line "can only be rejected (D-133)" stays true.
+- **The tab-order walk** (`frontend/tests/tabOrder.test.jsx`) visits no document detail page, so the
+  classification section's keyboard stops are not walked. The long row's stops are asserted through
+  its buttons in the DOM instead.
+- **No database the user works with was read or written,** and no server was started. The alpha shows
+  the change once it runs this code.

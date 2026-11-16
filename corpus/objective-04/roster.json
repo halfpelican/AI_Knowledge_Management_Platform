@@ -1,0 +1,119 @@
+{
+  "name": "Objective 04 roster: the users the measurement database holds",
+  "purpose": "FR-16 matches a named owner against the user list (D-125). These are the only users in the Objective 04 database, so 'resolves to a user on the system' means one of these. Nobody signs in as them: the ingest script creates them with unusable passwords.",
+  "deliberate_features": [
+    "Two users share the first name Alex (Alex Morgan, Alex Petrov).",
+    "Two users share the surname Haddad (Jamal Haddad, Nadia Haddad).",
+    "People named in the transcripts who are NOT users: Brendan (Northgate Fitouts), Mei (Coastal Print), Sam (a contractor), Joanne (Paper Trail), Mrs Delaney (a customer), and the speakers of T02, T04 and T05 other than Nadia."
+  ],
+  "users": [
+    {
+      "name": "Priya Raman",
+      "email": "priya.raman@kmp.example",
+      "role": "Administrator",
+      "team": "Operations"
+    },
+    {
+      "name": "Ravi Sharma",
+      "email": "ravi.sharma@kmp.example",
+      "role": "Administrator",
+      "team": "Finance"
+    },
+    {
+      "name": "Sofia Marchetti",
+      "email": "sofia.marchetti@kmp.example",
+      "role": "Administrator",
+      "team": "Product"
+    },
+    {
+      "name": "Marcus Chen",
+      "email": "marcus.chen@kmp.example",
+      "role": "Employee",
+      "team": "Infrastructure"
+    },
+    {
+      "name": "Lena Kowalski",
+      "email": "lena.kowalski@kmp.example",
+      "role": "Employee",
+      "team": "Service Desk"
+    },
+    {
+      "name": "Tomas Okafor",
+      "email": "tomas.okafor@kmp.example",
+      "role": "Employee",
+      "team": "Infrastructure"
+    },
+    {
+      "name": "Jamal Haddad",
+      "email": "jamal.haddad@kmp.example",
+      "role": "Employee",
+      "team": "Engineering"
+    },
+    {
+      "name": "Nadia Haddad",
+      "email": "nadia.haddad@kmp.example",
+      "role": "Employee",
+      "team": "Human Resources"
+    },
+    {
+      "name": "Aisha Rahman",
+      "email": "aisha.rahman@kmp.example",
+      "role": "Employee",
+      "team": "Product"
+    },
+    {
+      "name": "Wei Zhang",
+      "email": "wei.zhang@kmp.example",
+      "role": "Employee",
+      "team": "Quality Assurance"
+    },
+    {
+      "name": "Owen Fletcher",
+      "email": "owen.fletcher@kmp.example",
+      "role": "Employee",
+      "team": "Facilities"
+    },
+    {
+      "name": "Grace Nguyen",
+      "email": "grace.nguyen@kmp.example",
+      "role": "Employee",
+      "team": "Human Resources"
+    },
+    {
+      "name": "Daniel Brooks",
+      "email": "daniel.brooks@kmp.example",
+      "role": "Employee",
+      "team": "Communications"
+    },
+    {
+      "name": "Alex Morgan",
+      "email": "alex.morgan@kmp.example",
+      "role": "Employee",
+      "team": "Finance"
+    },
+    {
+      "name": "Alex Petrov",
+      "email": "alex.petrov@kmp.example",
+      "role": "Employee",
+      "team": "IT"
+    },
+    {
+      "name": "Hannah Lee",
+      "email": "hannah.lee@kmp.example",
+      "role": "Employee",
+      "team": "Finance"
+    },
+    {
+      "name": "Chloe Martin",
+      "email": "chloe.martin@kmp.example",
+      "role": "Employee",
+      "team": "Customer Success"
+    },
+    {
+      "name": "Ben Carter",
+      "email": "ben.carter@kmp.example",
+      "role": "Employee",
+      "team": "Customer Success"
+    }
+  ]
+}

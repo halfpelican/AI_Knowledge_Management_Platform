@@ -77,7 +77,7 @@ class SlotProbe:
         self.embed_calls = 0
         self.generate_calls = 0
 
-    def embed(self, texts):
+    def embed(self, texts, *, input_type=None):
         self.embed_calls += 1
         if self.while_held is not None:
             hook, self.while_held = self.while_held, None  # once, for the outer ask only

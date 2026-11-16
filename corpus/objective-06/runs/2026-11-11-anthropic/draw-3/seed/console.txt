@@ -1,0 +1,55 @@
+database: kmp_obj0506_anthropic_20261110
+Provider gate: PASS (anthropic, claude-haiku-5-5, voyage-4 at 1024, both keys present, threshold 0.2687 and floor 0.2468; database kmp_obj0506_anthropic_20261110)
+  A01 Employee      ask    answered                     4.5s  What happens to annual leave I haven't used by the end of th
+  A02 Employee      ask    answered                     1.8s  Is multi-factor authentication required for my work email?
+  A03 Employee      ask    answered                     2.7s  Who has to approve a purchase of eighteen thousand dollars?
+  A04 Employee      ask    answered                     1.9s  How many days do I have to submit an expense claim after pay
+  A05 Administrator ask    answered                     1.5s  What rating does Bluewater IT have in the vendor register?
+  A06 Administrator ask    answered                     1.4s  Who is facilitating the "Writing clear reports" session?
+  A07 Employee      ask    answered                     1.8s  Where is the assembly point if we have to evacuate the build
+  A08 Employee      search 1 result(s)                  0.0s  Harbour Light
+  A09 Administrator search 1 result(s)                  0.0s  Quartz Harbour
+  A10 Employee      search 1 result(s)                  0.0s  Lantern Grove
+  U01 Employee      ask    no-answer                    0.5s  Will my salary rise with inflation?
+  U02 Administrator ask    no-answer                    1.0s  Are salaries indexed to inflation?
+  U03 Administrator search 0 result(s)                  0.0s  salary review
+  U04 Employee      ask    no-answer                    1.5s  Is there a corporate credit card I can be issued with?
+  U05 Administrator ask    no-answer                    1.8s  Is there a corporate credit card program?
+  U06 Employee      search 0 result(s)                  0.0s  corporate card
+  U07 Employee      ask    no-answer                    0.6s  Does everything stop over Christmas?
+  U08 Administrator ask    no-answer                    0.6s  What stops running over the Christmas period?
+  U09 Employee      search 0 result(s)                  0.0s  christmas shutdown
+  U10 Employee      ask    no-answer                    1.1s  Is jury duty paid?
+  U11 Administrator ask    no-answer                    0.6s  What happens if someone is summoned for jury service?
+  U12 Employee      search 0 result(s)                  0.1s  jury duty
+  P01 Employee      ask    no-answer                    1.1s  Who is the project manager for Project Atlas?
+  P02 Employee      ask    no-answer                    0.6s  What gets decided at the Quartz Harbour milestone gate?
+  P03 Employee      search 0 result(s)                  0.0s  Quartz Harbour
+  P04 Employee      ask    no-answer                    0.5s  Who on the team is rated four in project management?
+  P05 Employee      search 0 result(s)                  0.0s  Ember Field
+  P06 Employee      ask    no-answer                    0.7s  How much is in the Fernwood contingency reserve?
+  P07 Employee      ask    no-answer                    1.4s  What did the risk committee decide to do about supplier conc
+  P08 Employee      ask    no-answer                    2.1s  How many people reported the Cobalt Reef phishing email to t
+
+wrote corpus\objective-06\runs\2026-11-11-anthropic\draw-3\seed\seed.json
+{
+  "answerable": {
+    "asks_answered": 7,
+    "asks_no_answer": 0,
+    "searches_with_results": 3,
+    "searches_zero": 0
+  },
+  "unanswerable": {
+    "asks_answered": 0,
+    "asks_no_answer": 8,
+    "searches_with_results": 0,
+    "searches_zero": 4
+  },
+  "permission-only": {
+    "asks_answered": 0,
+    "asks_no_answer": 6,
+    "searches_with_results": 0,
+    "searches_zero": 2
+  }
+}
+Claude usage: {'calls': 11, 'input_tokens': 34403, 'output_tokens': 860, 'replies_without_usage': 0, 'estimated_usd': 0.0039}

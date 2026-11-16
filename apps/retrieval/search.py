@@ -35,6 +35,12 @@ something a view has to remember to wire up. It also gets 7.10 step 2 for free: 
 re-read from the user row on every request, so a role changed mid-session takes effect on
 the next search rather than at the next sign-in.
 
+> **One function here takes a role, on purpose (9 November 2026, FR-19, D-108).**
+> ``search_total`` counts what a named role would find, writes no row and returns to no user: it is
+> the knowledge-gap cycle's recount of a zero-result search as the Administrator. There is no user
+> beside the role for a caller to mismatch, which is the failure the paragraph above designs out,
+> and it shares ``search``'s term checks and match, so its number is ``search``'s. No route calls it.
+
 The role scope is then a condition on the query in every one of the three querysets below,
 so out-of-scope rows are never fetched:
 
@@ -94,7 +100,7 @@ two different models returns a plausible number that means nothing (risk R10). T
 is a property of comparing vectors, and this path compares none: ``chunk_text`` is the same
 text whatever embedded it. Excluding those rows here would hide readable material from a
 user for a reason that does not apply, and — worse — would make the search results silently
-narrow after a provider switch, in a path with no no-answer message to make the narrowing
+narrow after a change of embedding model, in a path with no no-answer message to make the narrowing
 visible. So keyword search over a corpus awaiting ``manage.py reindex`` still works. That
 is a feature, and it is the only place in retrieval where the two predicates come apart.
 
@@ -111,7 +117,7 @@ from datetime import date, datetime
 
 from django.db.models import F, Func, Q, TextField, Value
 
-from apps.core.constants import MINIMUM_SEARCH_LENGTH, SOURCE_TYPES
+from apps.core.constants import MAXIMUM_SEARCH_LENGTH, MINIMUM_SEARCH_LENGTH, SOURCE_TYPES
 from apps.retrieval.models import SearchLog
 from apps.retrieval.scoping import (
     permission_scope,
@@ -207,6 +213,16 @@ class SearchQueryContainsNullCharacter(ValueError):
     """
 
 
+class SearchQueryTooLong(ValueError):
+    """The search term is longer than MAXIMUM_SEARCH_LENGTH (D-79's note of 10 November 2026).
+
+    Raised by ``search`` only, and turned into FR-12's 400 by the view, with no ``SearchLog`` row,
+    as the other two refusals are. ``search_total`` does not raise it: FR-19's cycle recounts
+    terms logged before the bound existed, and a refusal there would roll back that cycle and
+    every later one (the security review's M1, D-107's note).
+    """
+
+
 class SearchQueryTooShort(ValueError):
     """The search term is shorter than MINIMUM_SEARCH_LENGTH.
 
@@ -251,6 +267,11 @@ class SearchResult:
     snippet: str
     department: str
     date: datetime | date
+    # True where ``snippet`` is taken from the meeting's AI-generated summary rather than from the
+    # transcript (FR-16, UC-04; D-125 choice 1). The interface marks it as AI content (NFR-15).
+    # Only ever True for a meeting whose transcript does not contain the term but whose summary
+    # does: where both match, the transcript's own words are shown.
+    snippet_ai_generated: bool = False
 
 
 @dataclass(frozen=True)
@@ -323,8 +344,9 @@ def snippet_for(text: str, term: str) -> str:
     return f"{prefix}{text[start:end]}{suffix}"
 
 
-def _snippets_by_source(*, role_name: str, query_text: str) -> dict[tuple[str, str], str]:
-    """Every in-scope chunk whose text contains the term, reduced to one snippet per source.
+def _snippets_by_source(*, role_name: str, query_text: str) -> dict[tuple[str, str], tuple[str, bool]]:
+    """Every in-scope chunk whose text contains the term, reduced to one snippet per source,
+    with whether that snippet is AI-generated.
 
     The role predicate is ``scoping.scoped_chunks`` — the same function the ranked path
     restricts its candidate set with, reused rather than restated, so this module contains
@@ -336,22 +358,28 @@ def _snippets_by_source(*, role_name: str, query_text: str) -> dict[tuple[str, s
     rather than matching everything.
 
     Ordered by ``chunk_index`` so "the first matching chunk" is a property of the document
-    rather than of the query plan.
+    rather than of the query plan. **A meeting's own words come before its summary's:**
+    ``ai_generated`` sorts first, False before True, so where the term is in the transcript the
+    snippet is the transcript's, and a summary passage (FR-16, D-125) supplies the snippet only
+    when nothing else of the meeting matched. The flag is returned with the snippet so the reply
+    can say which it is (NFR-15). A summary passage carries the meeting's source type, id and
+    ``visible_to_roles``, so it is admitted by the same predicate and resolves to the same
+    meeting row: a meeting found through its summary is one result, counted once.
     """
     matches = (
         scoped_chunks(role_name=role_name)
         .annotate(collapsed_text=_collapsed("chunk_text"))
         .filter(collapsed_text__icontains=query_text)
-        .order_by("source_type", "source_id", "chunk_index")
-        .values_list("source_type", "source_id", "chunk_text")
+        .order_by("source_type", "source_id", "ai_generated", "chunk_index")
+        .values_list("source_type", "source_id", "chunk_text", "ai_generated")
     )
-    snippets: dict[tuple[str, str], str] = {}
-    for source_type, source_id, chunk_text in matches:
+    snippets: dict[tuple[str, str], tuple[str, bool]] = {}
+    for source_type, source_id, chunk_text, ai_generated in matches:
         key = (source_type, str(source_id))
         if key not in snippets:  # first matching chunk wins; see the docstring
             # Windowed over the collapsed text, so a match that wraps a line in the source
             # is found by ``snippet_for`` and shown as one run (D-71).
-            snippets[key] = snippet_for(collapse_whitespace(chunk_text), query_text)
+            snippets[key] = (snippet_for(collapse_whitespace(chunk_text), query_text), ai_generated)
     return snippets
 
 
@@ -362,10 +390,14 @@ def _opening_snippet(*, source_type: str, source_id: str, role_name: str) -> str
     document marked "Insufficient content", or one whose indexing failed. An empty snippet
     is the truthful rendering of "there is no passage here"; the row is still returned,
     because its title genuinely matched.
+
+    Never a passage of a meeting's AI-generated summary (D-125): "the opening of the item" is the
+    opening of the transcript. A summary chunk shares the meeting's source and starts its own
+    ``chunk_index`` at 0, so without the filter it could be picked as the meeting's first chunk.
     """
     first = (
         scoped_chunks(role_name=role_name)
-        .filter(source_type=source_type, source_id=source_id)
+        .filter(source_type=source_type, source_id=source_id, ai_generated=False)
         .order_by("chunk_index")
         .values_list("chunk_text", flat=True)
         .first()
@@ -379,7 +411,7 @@ def _group(
     *,
     source_type: str,
     sources,
-    snippets: dict[tuple[str, str], str],
+    snippets: dict[tuple[str, str], tuple[str, bool]],
     role_name: str,
     title_of,
     department_of,
@@ -393,12 +425,14 @@ def _group(
     results = []
     for source in sources:
         key = (source_type, str(source.id))
-        snippet = snippets.get(key)
-        if snippet is None:
+        found = snippets.get(key)
+        if found is None:
             # Matched by title alone; show the opening of the item instead.
-            snippet = _opening_snippet(
+            snippet, ai_generated = _opening_snippet(
                 source_type=source_type, source_id=str(source.id), role_name=role_name
-            )
+            ), False
+        else:
+            snippet, ai_generated = found
         results.append(
             SearchResult(
                 source_type=source_type,
@@ -407,6 +441,7 @@ def _group(
                 snippet=snippet,
                 department=department_of(source),
                 date=date_of(source),
+                snippet_ai_generated=ai_generated,
             )
         )
     return SearchGroup(source_type=source_type, results=tuple(results))
@@ -474,10 +509,94 @@ def search(*, query_text: str, user) -> SearchResults:
     request was largely doomed anyway. Unlike ``record_query`` there is no second table, so
     no transaction is needed for one row.
 
-    Raises SearchQueryTooShort for a term under MINIMUM_SEARCH_LENGTH, and
-    SearchQueryContainsNullCharacter for a term carrying a NUL byte, both before any query
-    runs and before any row is written. Two exceptions rather than one because they are two
+    Raises SearchQueryTooShort for a term under MINIMUM_SEARCH_LENGTH,
+    SearchQueryContainsNullCharacter for a term carrying a NUL byte, and SearchQueryTooLong
+    for a term over MAXIMUM_SEARCH_LENGTH, all before any query runs and before any row is
+    written. Two exceptions rather than one because they are two
     different things to tell the user; see SearchQueryContainsNullCharacter.
+    """
+    _check_term(query_text)
+    if len(query_text) > MAXIMUM_SEARCH_LENGTH:
+        # Here and not in _check_term, which search_total shares: see SearchQueryTooLong.
+        raise SearchQueryTooLong(
+            f"A search term can be at most {MAXIMUM_SEARCH_LENGTH} characters."
+        )
+
+    role_name = permission_scope(user)
+    match = _match(role_name=role_name, query_text=query_text)
+
+    results = SearchResults(
+        query_text=query_text,
+        documents=_group(
+            source_type=DOCUMENT_SOURCE_TYPE,
+            sources=match.documents,
+            snippets=match.snippets,
+            role_name=role_name,
+            title_of=lambda source: source.title,
+            # D-09: a document's department may be blank, and blank is "" already.
+            department_of=lambda source: source.department,
+            date_of=lambda source: source.uploaded_at,
+        ),
+        meetings=_group(
+            source_type=MEETING_SOURCE_TYPE,
+            sources=match.meetings,
+            snippets=match.snippets,
+            role_name=role_name,
+            title_of=lambda source: source.title,
+            # Meetings model no department. See SearchResult's docstring for why this is
+            # an empty string and not an invented value.
+            department_of=lambda source: "",
+            date_of=lambda source: source.meeting_date,
+        ),
+    )
+
+    SearchLog.objects.create(
+        user=user,
+        query_text=query_text,  # verbatim, as typed
+        result_count=results.total_count,  # the post-filter total, the same one returned
+    )
+    return results
+
+
+def search_total(*, role_name: str, query_text: str) -> int:
+    """The post-filter total ``search`` would report for ``query_text`` under ``role_name``,
+    with no ``SearchLog`` row written (FR-19, D-108).
+
+    **For one caller: the knowledge-gap cycle's recount of a zero-result search** as the
+    Administrator (``apps/retrieval/gaps.py``). Above zero means the asker's role withheld what
+    the Administrator would have found, so the search marks a permission boundary rather than a
+    documentation gap and is left out of the log. Zero means nobody could find it.
+
+    **The same number, from the same code.** ``search`` and this function share the term checks
+    (``_check_term``) and the scoped match (``_match``), so the total here is the count of the
+    very querysets ``search`` builds its two groups from. ``SearchResults.total_count`` is the
+    length of those groups, one result per source, so ``.count()`` on the same querysets is
+    the same integer. (``_match`` builds the body-match snippets as it always does; nothing
+    here reads them.)
+
+    **Why this one takes a role name, when ``search`` refuses to.** ``search``'s module docstring
+    argues that a ``role_name`` beside a ``user`` lets a view pass one person's identity with
+    another's role and log the result under the wrong person. Here there is no user and no
+    row: nothing is returned to anybody but the cycle, and nothing is written. The question
+    asked is counterfactual by construction ("what would this role find?"), so the role is the
+    argument. It is still resolved through ``scoped_documents``, ``scoped_meetings`` and
+    ``scoped_chunks``, so an unknown role counts nothing (fails closed). No request handler
+    calls it, and it must not be wired to a route: a count over a scope wider than the caller's
+    is the disclosure invariant 1 forbids.
+
+    Raises SearchQueryTooShort and SearchQueryContainsNullCharacter exactly as ``search`` does,
+    before any query runs.
+    """
+    _check_term(query_text)
+    match = _match(role_name=role_name, query_text=query_text)
+    return match.documents.count() + match.meetings.count()
+
+
+def _check_term(query_text: str) -> None:
+    """FR-12's two refusals of a search term, raised before any query runs.
+
+    Shared by ``search`` and ``search_total`` so the two cannot accept different terms. The
+    upper bound is not here: ``search`` alone applies it (SearchQueryTooLong).
     """
     if len(query_text) < MINIMUM_SEARCH_LENGTH:
         raise SearchQueryTooShort(
@@ -492,7 +611,24 @@ def search(*, query_text: str, user) -> SearchResults:
             "A search term cannot contain a null character."
         )
 
-    role_name = permission_scope(user)
+
+@dataclass(frozen=True)
+class _Match:
+    """The scoped matching sources for one term: the snippet map and the two ordered querysets."""
+
+    # The snippet per source, and whether it is from a meeting's AI-generated summary (D-125).
+    snippets: dict[tuple[str, str], tuple[str, bool]]
+    documents: object  # QuerySet[Document]
+    meetings: object  # QuerySet[Meeting]
+
+
+def _match(*, role_name: str, query_text: str) -> _Match:
+    """Every in-scope document and meeting whose title or chunk text contains the term.
+
+    The one implementation of the match, shared by ``search`` (which groups and logs it) and
+    ``search_total`` (which counts it). ``query_text`` is the term as typed; it is collapsed
+    here for matching (D-71) and nowhere else.
+    """
     # D-71: matched with whitespace runs collapsed on both sides. ``query_text`` itself is kept
     # as typed for the SearchLog row and the reply's ``query``.
     term = collapse_whitespace(query_text)
@@ -519,35 +655,4 @@ def search(*, query_text: str, user) -> SearchResults:
         .filter(Q(id__in=matched_ids[MEETING_SOURCE_TYPE]) | Q(collapsed_title__icontains=term))
         .order_by("-meeting_date", "-created_at", "pk")
     )
-
-    results = SearchResults(
-        query_text=query_text,
-        documents=_group(
-            source_type=DOCUMENT_SOURCE_TYPE,
-            sources=documents,
-            snippets=snippets,
-            role_name=role_name,
-            title_of=lambda source: source.title,
-            # D-09: a document's department may be blank, and blank is "" already.
-            department_of=lambda source: source.department,
-            date_of=lambda source: source.uploaded_at,
-        ),
-        meetings=_group(
-            source_type=MEETING_SOURCE_TYPE,
-            sources=meetings,
-            snippets=snippets,
-            role_name=role_name,
-            title_of=lambda source: source.title,
-            # Meetings model no department. See SearchResult's docstring for why this is
-            # an empty string and not an invented value.
-            department_of=lambda source: "",
-            date_of=lambda source: source.meeting_date,
-        ),
-    )
-
-    SearchLog.objects.create(
-        user=user,
-        query_text=query_text,  # verbatim, as typed
-        result_count=results.total_count,  # the post-filter total, the same one returned
-    )
-    return results
+    return _Match(snippets=snippets, documents=documents, meetings=meetings)

@@ -1,0 +1,210 @@
+> corpus/objective-06/runs/2026-11-11-anthropic-draws/pre-measurement-asks/citation_harness_fr12_declines.py --questions corpus/objective-06/pre-measurement-asks.json --dump-sha256 8e79cb37...5a70 --out corpus/objective-06/runs/2026-11-11-anthropic-draws/pre-measurement-asks/draw-3/harness.json
+  (draw 3, started 2026-11-11 14:05:22 +1100, commit 3cd0726)
+Question set: corpus\objective-06\pre-measurement-asks.json, 14 question(s) valid, 0 asked by both roles, so 14 run(s)
+Provider gate: anthropic (Voyage voyage-4 at 1024, Claude), the Voyage copy, D-120's values
+Provider gate: PASS
+
+Citation reliability harness — Stage 4 item 0
+  RECORD          : recorded
+  commit          : 3cd0726883eac7af7d9703586d2b3d9cb5565bcf
+  FLM version     : none, FLM takes no part (D-113)
+  dump sha256     : 8e79cb377965075dd322d2fb098780cc0d45bc4fdfb5eb5f05d6c59628765a70
+  database        : kmp_fr12_declines_20261111
+  provider        : anthropic (AnthropicService)
+  endpoint        : the Anthropic API (Claude) and https://api.voyageai.com/v1 (Voyage)
+  chat model      : claude-haiku-5-5
+  embed model     : voyage-4, dimension 1024
+  D-120 values    : threshold 0.2687, partial-match floor 0.2468
+  health          : True — Anthropic API reachable
+  server          : none, in-process (D-85: the pipeline's functions are called here)
+  question set    : corpus\objective-06\pre-measurement-asks.json  (14 question(s), 14 run(s)), sha256 db8b1d73bd4aa4f4
+  set status      : DEVELOPMENT MATERIAL, 8 November 2026. The 8 unanswerable and 6 permission-only asks of the draft thirty (objective-06 queries.json), in scripts/citation_harness.py's question-set shape so the shipped pipeline measures them with nothing written. Run three times before the thirty are frozen, as the lead decided on 8 November. Not a frozen set; not tuned against.
+  indexed chunks  : 43, recorded embedding model(s): ['voyage-4']
+  constants       : TOP_K=25, RELEVANCE_THRESHOLD=0.3, MAXIMUM_CONTEXT_TOKENS=4000, MAXIMUM_GENERATION_ATTEMPTS=3
+  prompt          : apps/ai/prompting.py SYSTEM_PROMPT, 2484 characters
+  schema          : apps/ai/schema.py, required key(s) ['statements'], per statement ['chunk_id', 'text']
+  corpus          : exactly the 25 items of corpus/objective-02/manifest.json
+[1/14] U01 (no-answer, Employee) ...
+[2/14] U02 (no-answer, Employee) ...
+[3/14] U04 (no-answer, Employee) ...
+[4/14] U05 (no-answer, Administrator) ...
+[5/14] U07 (no-answer, Employee) ...
+[6/14] U08 (no-answer, Administrator) ...
+[7/14] U10 (no-answer, Employee) ...
+[8/14] U11 (no-answer, Administrator) ...
+[9/14] P01 (scoped, Employee) ...
+[10/14] P02 (scoped, Employee) ...
+[11/14] P04 (scoped, Employee) ...
+[12/14] P06 (scoped, Employee) ...
+[13/14] P07 (scoped, Employee) ...
+[14/14] P08 (scoped, Employee) ...
+
+====================================================================================================
+PER-QUESTION DETAIL
+====================================================================================================
+
+[U01] no-answer / as Employee (expects no answer)
+  question    : When are salaries reviewed each year?
+  top score   : 0.4052   retrieved: 9  [D04:b661cabc, D04:b75fd0e9, D04:c2bab4c2, D04:f1b614a1, D04:9ca8c5f5, D04:386536d7, D04:c64b812b, D05:52edd5b9, D08:0e0a0c8f]
+  partial     : D04 0.405, D05 0.333, D08 0.332, D03 0.302, D12 0.296
+  attempts    : 1:parsed
+  parsed      : True
+    (empty statement list)
+  seconds     : 2.74
+
+[U02] no-answer / as Employee (expects no answer)
+  question    : How do I ask for a pay rise?
+  top score   : 0.3139   retrieved: 3  [D05:52edd5b9, D10:2cfdb96a, D08:0e0a0c8f]
+  partial     : D05 0.314, D10 0.309, D08 0.279, D01 0.268, D03 0.262
+  attempts    : 1:parsed
+  parsed      : True
+    (empty statement list)
+  seconds     : 1.83
+
+[U04] no-answer / as Employee (expects no answer)
+  question    : Can I get a corporate credit card for work purchases?
+  top score   : 0.3626   retrieved: 6  [D10:2cfdb96a, D19:271e0513, D05:52edd5b9, D02:b413413d, D07:10201834, D14:f30565eb]
+  partial     : D10 0.363, D19 0.345, D05 0.322, D02 0.281, D07 0.276
+  attempts    : 1:parsed
+  parsed      : True
+    (empty statement list)
+  seconds     : 1.30
+
+[U05] no-answer / as Administrator (expects no answer)
+  question    : Who is allowed to hold a company credit card?
+  top score   : 0.3894   retrieved: 8  [D19:271e0513, D02:b413413d, D10:2cfdb96a, D07:10201834, D04:f1b614a1, D05:52edd5b9, D04:c2bab4c2, D16:6ebada06]
+  partial     : D19 0.389, D02 0.343, D10 0.317, D07 0.298, D04 0.296
+  attempts    : 1:parsed
+  parsed      : True
+    (empty statement list)
+  seconds     : 1.96
+
+[U07] no-answer / as Employee (expects no answer)
+  question    : Is the office closed between Christmas and New Year?
+  top score   : 0.3834   retrieved: 5  [D20:5c000741, D01:a2aceadb, D18:8121d762, D17:de45dc94, D07:10201834]
+  partial     : D20 0.383, D01 0.376, D18 0.305, D17 0.296, D07 0.279
+  attempts    : 1:parsed
+  parsed      : True
+    (empty statement list)
+  seconds     : 1.84
+
+[U08] no-answer / as Administrator (expects no answer)
+  question    : Do we have a shutdown period over the Christmas holidays?
+  top score   : 0.3382   retrieved: 2  [D01:a2aceadb, D20:5c000741]
+  partial     : D01 0.338, D20 0.302, T01 0.259
+  attempts    : 1:parsed
+  parsed      : True
+    (empty statement list)
+  seconds     : 1.20
+
+[U10] no-answer / as Employee (expects no answer)
+  question    : Do I still get paid if I'm called up for jury duty?
+  top score   : 0.2172   retrieved: 0  [(none above threshold)]
+  partial     : (none)
+  generation  : NOT CALLED (no-answer path A: nothing above threshold)
+  seconds     : 0.47
+
+[U11] no-answer / as Administrator (expects no answer)
+  question    : How much notice does someone need to give before taking jury service leave?
+  top score   : 0.3872   retrieved: 1  [D01:a2aceadb]
+  partial     : D01 0.387, D20 0.260, D11 0.260, D17 0.258, T01 0.257
+  attempts    : 1:parsed
+  parsed      : True
+    (empty statement list)
+  seconds     : 1.43
+
+[P01] scoped / as Employee (expects no answer)
+  question    : Who is the project manager for Project Atlas?
+  top score   : 0.2454   retrieved: 0  [(none above threshold)]
+  source      : D09, not a candidate for this role
+  partial     : (none)
+  generation  : NOT CALLED (no-answer path A: nothing above threshold)
+  expected    : 'head of digital services' -> not found
+  seconds     : 0.46
+
+[P02] scoped / as Employee (expects no answer)
+  question    : What gets decided at the Quartz Harbour milestone gate?
+  top score   : 0.2364   retrieved: 0  [(none above threshold)]
+  source      : D09, not a candidate for this role
+  partial     : (none)
+  generation  : NOT CALLED (no-answer path A: nothing above threshold)
+  expected    : 'steering group' -> not found
+  seconds     : 0.40
+
+[P04] scoped / as Employee (expects no answer)
+  question    : Who on the team is rated four in project management?
+  top score   : 0.2456   retrieved: 0  [(none above threshold)]
+  source      : D16, not a candidate for this role
+  partial     : (none)
+  generation  : NOT CALLED (no-answer path A: nothing above threshold)
+  expected    : 'Ben Carter' -> not found
+  seconds     : 0.44
+
+[P06] scoped / as Employee (expects no answer)
+  question    : How much is in the Fernwood contingency reserve?
+  top score   : 0.2122   retrieved: 0  [(none above threshold)]
+  source      : T02, not a candidate for this role
+  partial     : (none)
+  generation  : NOT CALLED (no-answer path A: nothing above threshold)
+  expected    : 'two million' -> not found
+  seconds     : 0.41
+
+[P07] scoped / as Employee (expects no answer)
+  question    : What did the risk committee decide to do about supplier concentration?
+  top score   : 0.3067   retrieved: 2  [D12:98e84a3b, D05:52edd5b9]
+  source      : T02, not a candidate for this role
+  partial     : D12 0.307, D05 0.294
+  attempts    : 1:parsed
+  parsed      : True
+    (empty statement list)
+  expected    : 'alternatives' -> not found
+  seconds     : 1.24
+
+[P08] scoped / as Employee (expects no answer)
+  question    : How many people reported the Cobalt Reef phishing email to the service desk?
+  top score   : 0.3022   retrieved: 1  [D02:b413413d]
+  source      : T05, not a candidate for this role
+  partial     : D02 0.302, D06 0.249, D18 0.248
+  attempts    : 1:parsed
+  parsed      : True
+    (empty statement list)
+  expected    : 'ninety' -> not found
+  seconds     : 1.36
+
+====================================================================================================
+SUMMARY
+====================================================================================================
+questions              : 14  (ordinary 0, scoped 6, no-answer 8)
+generation calls made  : 9  over 9 question(s); 5 question(s) took no-answer path A
+transport failures     : 0  (not counted as schema failures)
+
+schema conformance rate            : 100.0%  (9/9)   [responses that parsed into STATEMENT_LIST_SCHEMA]
+  first-attempt conformance        : 100.0%  (9/9)
+  questions answered within 3 tries : 100.0%  (9/9)
+
+fabricated-identifier rate         : n/a (0 samples)   [identifiers not supplied in that prompt, per statement]
+  questions with any fabrication   : 0.0%  (0/14)
+  statements proposed / verified   : 0 / 0   [verify_citations() removed the difference]
+
+empty-answer rate where an answer was available (ordinary only) : n/a (0 samples)
+  reported separately, because an empty answer is the CORRECT outcome here:
+    scoped questions empty (correct)    : 100.0%  (6/6)
+    no-answer questions empty (correct) : 100.0%  (8/8)
+
+expected-answer match (ordinary)   : n/a (0 samples)   [diagnostic, not one of the three rates]
+out-of-scope chunks in any prompt or answer : 0  (must be 0; the harness checks every question)
+
+timing, seconds, this one sequential process (nearest-rank percentiles):
+  per generation attempt  : n=9  min 0.80  median 0.90  mean 0.93  p90 1.10  max 1.10   [the 8.90 s baseline's measure]
+  per question, all       : n=14  min 0.40  median 1.24  mean 1.22  p90 1.96  max 2.74   [embed, rank, generate, verify]
+  per question, answered  : n=0
+
+misses (0): where the expected source stood, and where each run ended
+  none
+
+elapsed: 0.3 minutes
+Claude usage    : 9 call(s), 33268 input and 147 output tokens, about US$0.0034 at Haiku 5.5's prices (0 call(s) without counts)
+full record written to corpus\objective-06\runs\2026-11-11-anthropic-draws\pre-measurement-asks\draw-3\harness.json
+
+RESULT: schema conformance meets the 95% bar.
+exit code: 0

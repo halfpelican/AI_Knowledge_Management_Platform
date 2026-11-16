@@ -15,8 +15,9 @@ The policy under test (CLAUDE.md section 5, D-19, invariant 10):
   correcting the constant to 2.
 - A reply that does not conform is a failed attempt, not a partial answer.
 - A reply that conforms on a later attempt is returned, and no further calls are made.
-- A 4xx consumes no retries: it is a configuration error, it would fail identically three
-  times, and it surfaces as itself.
+- Since D-118, a 429 is a failed attempt like an outage and is retried to the limit. Any
+  other 4xx is ProviderRefused and ends the loop after one call. Each is logged, a 429 as
+  a WARNING and the rest as ERRORs.
 
 Exercised through FLMService against the openai SDK's MockTransport, in-process, so the
 transport failures are real SDK exceptions rather than stand-ins. Nothing here reaches a
@@ -24,13 +25,16 @@ network.
 """
 
 import json
+import logging
+import sys
 
 import httpx2
 import openai
 import pytest
 from django.test import override_settings
 
-from apps.ai.base import Passage, ProviderUnavailable
+from apps.ai import attempt_log
+from apps.ai.base import Passage, ProviderRefused, ProviderUnavailable
 from apps.ai.flm import FLMService
 from apps.ai.generation import GENERATION_MAX_TOKENS, GENERATION_TIMEOUT_SECONDS
 from apps.ai.prompting import SYSTEM_PROMPT
@@ -219,6 +223,55 @@ def test_a_reply_that_is_the_wrong_shape_is_a_failed_attempt_not_a_partial_answe
     assert len(handler.seen) == 3
 
 
+# Replies json.loads cannot decode: past a few thousand levels of nesting it raises
+# RecursionError, and past Python's digit limit on converting a string to an int, ValueError.
+DIGITS = sys.get_int_max_str_digits() + 1  # PYTHONINTMAXSTRDIGITS=0 lifts the limit: skipped
+
+
+@pytest.mark.parametrize(
+    "reply,message",
+    [
+        pytest.param('{"statements": ' + "[" * 100_000 + "]" * 100_000 + "}",
+                     "JSON nested too deeply to decode", id="nested too deeply"),
+        pytest.param('{"statements": [], "n": ' + "7" * DIGITS + "}", "a JSON number too long to decode",
+                     id="a number too long", marks=pytest.mark.skipif(DIGITS == 1, reason="no digit limit")),
+    ],
+)
+def test_a_reply_json_cannot_decode_is_retried_and_ends_in_a_503_not_a_500(reply, message):
+    """NFR-19 for the replies that broke the loop until 13 November 2026: their RecursionError or
+    ValueError escaped after ONE call, and POST /api/ask answered 500. Each is a failed attempt now:
+    exactly MAXIMUM_GENERATION_ATTEMPTS calls, then ProviderUnavailable, which the view answers 503."""
+    handler = scripted(reply, reply, reply)
+
+    with pytest.raises(ProviderUnavailable) as excinfo:
+        make_service(handler).generate_statements(QUESTION, PASSAGES)
+
+    assert len(handler.seen) == MAXIMUM_GENERATION_ATTEMPTS
+    assert f"last failure: schema violation: {message}" in str(excinfo.value)
+
+
+@pytest.mark.parametrize(
+    "reply,message",
+    [
+        pytest.param(json.dumps({"statements": [{"text": "Twenty days.\x00", "chunk_id": CHUNK_ID}]}),
+                     "a NUL character in a JSON string", id="a NUL"),
+        pytest.param(json.dumps({"statements": [{"text": "Twenty days.\ud800", "chunk_id": CHUNK_ID}]}),
+                     "an unpaired surrogate in a JSON string", id="an unpaired surrogate"),
+    ],
+)
+def test_a_string_nothing_downstream_can_take_is_retried_and_ends_in_a_503(reply, message):
+    """Until 13 November 2026 such a reply parsed, passed verification, and broke the QueryLog write
+    or the rendering, so POST /api/ask answered 500. Each is a failed attempt now: exactly
+    MAXIMUM_GENERATION_ATTEMPTS calls, then ProviderUnavailable, which the view answers 503."""
+    handler = scripted(reply, reply, reply)
+
+    with pytest.raises(ProviderUnavailable) as excinfo:
+        make_service(handler).generate_statements(QUESTION, PASSAGES)
+
+    assert len(handler.seen) == MAXIMUM_GENERATION_ATTEMPTS
+    assert f"last failure: schema violation: {message}" in str(excinfo.value)
+
+
 def test_an_empty_choices_list_is_a_failed_attempt():
     """No reply at all, which FLM can answer with; treated as the non-response it is."""
     empty = httpx2.Response(
@@ -295,33 +348,62 @@ def test_a_mixture_of_failure_kinds_still_stops_at_three_attempts():
     assert len(handler.seen) == 3
 
 
-# --- The 4xx that must not be retried ---------------------------------------------------
+# --- A 4xx ends in the 503: a 429 is retried, any other 4xx is refused (D-118) ----------
 
 
-def test_a_client_error_surfaces_as_itself_and_consumes_no_retries():
-    """4xx is a misconfiguration, not an outage: one call, and the SDK error surfaces.
+def test_a_refused_request_ends_the_loop_at_once_with_its_cause_logged(caplog):
+    """D-118: a 4xx other than a rate limit is ProviderRefused.
 
-    Retrying an unknown model name twice more collects the same 404 twice more, and
-    dressing it up as ProviderUnavailable would make a typo in FLM_CHAT_MODEL look like a
-    transient NPU fault and be reported to the user as a 503.
+    A mistyped FLM_CHAT_MODEL would be refused the same way three times, so the loop stops
+    after one call. The view's 503 still catches it as the ProviderUnavailable it is, and
+    the cause is one ERROR line naming the status. Until 10 November 2026 a 4xx surfaced as
+    the SDK's own exception, which reached the user as a 500 on the anthropic provider,
+    where rate limits and an exhausted credit are routine.
     """
     handler = scripted(httpx2.Response(404, json={"error": {"message": "unknown model"}}))
 
-    with pytest.raises(openai.APIStatusError) as excinfo:
-        make_service(handler).generate_statements(QUESTION, PASSAGES)
+    with caplog.at_level(logging.WARNING, logger=attempt_log.ATTEMPT_LOGGER_NAME):
+        with pytest.raises(ProviderRefused, match="HTTP 404"):
+            make_service(handler).generate_statements(QUESTION, PASSAGES)
 
-    assert excinfo.value.status_code == 404
-    assert not isinstance(excinfo.value, ProviderUnavailable)
-    assert len(handler.seen) == 1  # no retries
+    assert len(handler.seen) == 1
+    refusals = [r for r in caplog.records if "refused the request" in r.getMessage()]
+    assert [r.levelno for r in refusals] == [logging.ERROR]
 
 
-@pytest.mark.parametrize("status", [400, 401, 403, 404, 422, 429])
-def test_no_4xx_is_retried(status):
+@pytest.mark.parametrize("status", [400, 401, 403, 404, 422])
+def test_no_refusal_is_retried(status):
     handler = scripted(httpx2.Response(status, json={"error": {"message": "nope"}}))
 
-    with pytest.raises(openai.APIStatusError):
+    with pytest.raises(ProviderRefused):
         make_service(handler).generate_statements(QUESTION, PASSAGES)
     assert len(handler.seen) == 1
+
+
+def test_a_rate_limit_is_retried_to_the_attempt_limit():
+    """A 429 is a failed attempt like an outage: three calls, then ProviderUnavailable,
+    and not ProviderRefused, because a rate limit passes."""
+    handler = scripted(httpx2.Response(429, json={"error": {"message": "rate limited"}}))
+
+    with pytest.raises(ProviderUnavailable) as excinfo:
+        make_service(handler).generate_statements(QUESTION, PASSAGES)
+
+    assert not isinstance(excinfo.value, ProviderRefused)
+    assert len(handler.seen) == MAXIMUM_GENERATION_ATTEMPTS == 3
+
+
+def test_a_rate_limit_is_a_warning_and_a_later_conforming_reply_is_returned(caplog):
+    """A 429 passes, so it is a WARNING rather than an ERROR, and the next attempt's
+    conforming reply is the answer."""
+    handler = scripted(httpx2.Response(429, json={"error": {"message": "rate limited"}}), CONFORMING)
+
+    with caplog.at_level(logging.WARNING, logger=attempt_log.ATTEMPT_LOGGER_NAME):
+        result = make_service(handler).generate_statements(QUESTION, PASSAGES)
+
+    assert result.statements != []
+    assert len(handler.seen) == 2
+    (refusal,) = [r for r in caplog.records if "refused the request" in r.getMessage()]
+    assert refusal.levelno == logging.WARNING
 
 
 # --- The diagnostic hook the harness measures with ---------------------------------------

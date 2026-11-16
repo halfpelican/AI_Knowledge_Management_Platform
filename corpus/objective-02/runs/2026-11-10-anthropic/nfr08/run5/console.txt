@@ -1,0 +1,280 @@
+Reset the password of loadtest01@example.com
+Reset the password of loadtest02@example.com
+Reset the password of loadtest03@example.com
+Reset the password of loadtest04@example.com
+Reset the password of loadtest05@example.com
+0 created and 5 reset: 5 Employee account(s), loadtest01@example.com to loadtest05@example.com.
+
+=== the copied run.ps1, attempt 1 of 3 ===
+
+== Waitress's version, from C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.venv\Scripts\python.exe
+stated: waitress 3.0.2 (installed in that venv), 24 threads (-ServerThreads)
+
+== the provider gate, C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-anthropic-verify\corpus\objective-02\runs\2026-11-10-anthropic\load\provider_gate.py, with C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.venv\Scripts\python.exe
+configuration: anthropic, claude-haiku-5-5, voyage-4 at 1024; database kmp_obj02_anthropic_20261110
+health: available
+embedding probe: voyage-4, 1024 wide
+PROVIDER GATE: PASS (anthropic, claude-haiku-5-5, voyage-4 at 1024, both keys present, D-120's values, database kmp_obj02_anthropic_20261110)
+the provider gate passed at 2026-11-10T23:43:44.502Z
+
+== scripts\server_record.py preflight, for http://127.0.0.1:8000
+server         : waitress 3.0.2, 24 threads (--threads on the command line), pid 68232, DEBUG off
+command line   : "C:\Users\mozza\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\python.exe"  "C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.venv\Scripts\waitress-serve.exe" --listen=127.0.0.1:8000 --threads=24 config.wsgi:application
+process start  : 2026-11-10T23:41:57.514Z
+version from   : the Waitress installed in C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.venv, the venv the listening process's command line runs from
+Server header  : waitress (GET /api/), waitress (the DEBUG probe)
+DEBUG          : off: GET /api/__preflight_not_a_route__ -> 404 application/json; a 404 in handler404's JSON, which Django sends only with DEBUG off
+Waitress log   : C:\kmp-measurement\2026-11-10-obj02-anthropic\logs\waitress.log (from -WaitressLog)
+server started : 2026-11-11T10:41:58.284+11:00 (line 6: 2026-11-11 10:41:58,284 INFO waitress Serving on http://127.0.0.1:8000)
+previous run   : C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-anthropic-verify\tests\load\results\nfr08_summary.json, ended 2026-11-11T10:00:50.991+11:00 (when the file was last written)
+PREFLIGHT: READY
+
+== git rev-parse HEAD
+commit: 0d4dd853a3e4a278f7f39826dd822121b5f8cd6f
+
+== k6
+k6 run -e GIT_SHA=0d4dd853a3e4a278f7f39826dd822121b5f8cd6f -e GIT_TRACKED_CHANGES=none -e PROVIDER=anthropic -e CHAT_MODEL=claude-haiku-5-5 -e EMBED_MODEL=voyage-4 -e PROVIDER_GATE_PASSED_AT=2026-11-10T23:43:44.502Z -e DB_DUMP_SHA256=6e514170055c685f32f839a22f3a3d2f7571e98ea69bb2b58150d770ec9fe6fc -e SERVER=waitress -e SERVER_VERSION=3.0.2 -e SERVER_VERSION_SOURCE=the Waitress installed in C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.venv, the venv the listening process's command line runs from -e SERVER_THREADS=24 -e SERVER_THREADS_SOURCE=--threads on the command line -e SERVER_PID=68232 -e SERVER_DEBUG=off -e SERVER_STARTED_AT=2026-11-11T10:41:58.284+11:00 -e PREVIOUS_RUN_FILE=C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-anthropic-verify\tests\load\results\nfr08_summary.json -e PREVIOUS_RUN_ENDED_AT=2026-11-11T10:00:50.991+11:00 -e SERVER_OBSERVED_BY=scripts/server_record.py preflight, run by tests/load/run.ps1 -e SERVER_STATED=waitress -e SERVER_THREADS_STATED=24 -e SERVER_VERSION_STATED=3.0.2 -e SERVER_VERSION_READ_FROM=C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.venv\Scripts\python.exe -e WAITRESS_LOG=C:\kmp-measurement\2026-11-10-obj02-anthropic\logs\waitress.log -e TEST_PASSWORD=*** -e BASE_URL=http://127.0.0.1:8000 corpus/objective-02/runs/2026-11-10-anthropic/load/nfr08_query_p90.js
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+
+     execution: local
+        script: corpus/objective-02/runs/2026-11-10-anthropic/load/nfr08_query_p90.js
+        output: -
+
+     scenarios: (100.00%) 1 scenario, 5 max VUs, 3h57m20s max duration (incl. graceful stop):
+              * query_p90: 25 iterations shared among 5 VUs (maxDuration: 3h56m50s, gracefulStop: 30s)
+
+
+Run         [ 100% ] setup()
+query_p90   [   0% ]
+
+Run         [ 100% ] setup()
+query_p90   [   0% ]
+
+Run         [ 100% ] setup()
+query_p90   [   0% ]
+
+Run         [ 100% ] setup()
+query_p90   [   0% ]
+
+Run         [ 100% ] setup()
+query_p90   [   0% ]
+
+Run         [ 100% ] setup()
+query_p90   [   0% ]
+
+Run         [ 100% ] setup()
+query_p90   [   0% ]
+
+Run         [ 100% ] setup()
+query_p90   [   0% ]
+
+Run         [ 100% ] setup()
+query_p90   [   0% ]
+
+Run         [ 100% ] setup()
+query_p90   [   0% ]
+
+Run         [ 100% ] setup()
+query_p90   [   0% ]
+
+Run         [ 100% ] setup()
+query_p90   [   0% ]
+
+Run         [ 100% ] setup()
+query_p90   [   0% ]
+
+Run         [ 100% ] setup()
+query_p90   [   0% ]
+time="2026-11-11T10:44:00+11:00" level=info msg="Server header at login: \"waitress\" on all 5 logins (stated: waitress)." source=console
+
+Run         [ 100% ] setup()
+query_p90   [   0% ]
+
+Run         [ 100% ] setup()
+query_p90   [   0% ]
+
+Run         [ 100% ] setup()
+query_p90   [   0% ]
+
+Run         [ 100% ] setup()
+query_p90   [   0% ]
+
+Run         [ 100% ] setup()
+query_p90   [   0% ]
+
+Run         [ 100% ] setup()
+query_p90   [   0% ]
+
+Run         [ 100% ] setup()
+query_p90   [   0% ]
+
+Run         [ 100% ] setup()
+query_p90   [   0% ]
+
+Run         [ 100% ] setup()
+query_p90   [   0% ]
+
+Run         [ 100% ] setup()
+query_p90   [   0% ]
+
+Run         [ 100% ] setup()
+query_p90   [   0% ]
+
+Run         [ 100% ] setup()
+query_p90   [   0% ]
+
+Run         [ 100% ] setup()
+query_p90   [   0% ]
+
+Run         [ 100% ] setup()
+query_p90   [   0% ]
+
+running (0h00m29.0s), 5/5 VUs, 0 complete and 0 interrupted iterations
+query_p90   [   0% ] 5 VUs  0h00m00.8s/3h56m50s  00/25 shared iters
+
+running (0h00m30.0s), 5/5 VUs, 0 complete and 0 interrupted iterations
+query_p90   [   0% ] 5 VUs  0h00m01.8s/3h56m50s  00/25 shared iters
+
+running (0h00m31.0s), 5/5 VUs, 0 complete and 0 interrupted iterations
+query_p90   [   0% ] 5 VUs  0h00m02.8s/3h56m50s  00/25 shared iters
+
+running (0h00m32.0s), 5/5 VUs, 0 complete and 0 interrupted iterations
+query_p90   [   0% ] 5 VUs  0h00m03.8s/3h56m50s  00/25 shared iters
+
+running (0h00m33.0s), 5/5 VUs, 0 complete and 0 interrupted iterations
+query_p90   [   0% ] 5 VUs  0h00m04.8s/3h56m50s  00/25 shared iters
+
+running (0h00m34.0s), 5/5 VUs, 0 complete and 0 interrupted iterations
+query_p90   [   0% ] 5 VUs  0h00m05.8s/3h56m50s  00/25 shared iters
+
+running (0h00m35.0s), 5/5 VUs, 0 complete and 0 interrupted iterations
+query_p90   [   0% ] 5 VUs  0h00m06.8s/3h56m50s  00/25 shared iters
+
+running (0h00m36.0s), 5/5 VUs, 5 complete and 0 interrupted iterations
+query_p90   [  20% ] 5 VUs  0h00m07.8s/3h56m50s  05/25 shared iters
+
+running (0h00m37.0s), 5/5 VUs, 5 complete and 0 interrupted iterations
+query_p90   [  20% ] 5 VUs  0h00m08.8s/3h56m50s  05/25 shared iters
+
+running (0h00m38.0s), 5/5 VUs, 5 complete and 0 interrupted iterations
+query_p90   [  20% ] 5 VUs  0h00m09.8s/3h56m50s  05/25 shared iters
+
+running (0h00m39.0s), 5/5 VUs, 5 complete and 0 interrupted iterations
+query_p90   [  20% ] 5 VUs  0h00m10.8s/3h56m50s  05/25 shared iters
+
+running (0h00m40.0s), 5/5 VUs, 5 complete and 0 interrupted iterations
+query_p90   [  20% ] 5 VUs  0h00m11.8s/3h56m50s  05/25 shared iters
+
+running (0h00m41.0s), 5/5 VUs, 5 complete and 0 interrupted iterations
+query_p90   [  20% ] 5 VUs  0h00m12.8s/3h56m50s  05/25 shared iters
+
+running (0h00m42.0s), 5/5 VUs, 5 complete and 0 interrupted iterations
+query_p90   [  20% ] 5 VUs  0h00m13.8s/3h56m50s  05/25 shared iters
+
+running (0h00m43.0s), 5/5 VUs, 10 complete and 0 interrupted iterations
+query_p90   [  40% ] 5 VUs  0h00m14.8s/3h56m50s  10/25 shared iters
+
+running (0h00m44.0s), 5/5 VUs, 10 complete and 0 interrupted iterations
+query_p90   [  40% ] 5 VUs  0h00m15.8s/3h56m50s  10/25 shared iters
+
+running (0h00m45.0s), 5/5 VUs, 10 complete and 0 interrupted iterations
+query_p90   [  40% ] 5 VUs  0h00m16.8s/3h56m50s  10/25 shared iters
+
+running (0h00m46.0s), 5/5 VUs, 10 complete and 0 interrupted iterations
+query_p90   [  40% ] 5 VUs  0h00m17.8s/3h56m50s  10/25 shared iters
+
+running (0h00m47.0s), 5/5 VUs, 10 complete and 0 interrupted iterations
+query_p90   [  40% ] 5 VUs  0h00m18.8s/3h56m50s  10/25 shared iters
+
+running (0h00m48.0s), 5/5 VUs, 10 complete and 0 interrupted iterations
+query_p90   [  40% ] 5 VUs  0h00m19.8s/3h56m50s  10/25 shared iters
+
+running (0h00m49.0s), 5/5 VUs, 10 complete and 0 interrupted iterations
+query_p90   [  40% ] 5 VUs  0h00m20.8s/3h56m50s  10/25 shared iters
+
+running (0h00m50.0s), 5/5 VUs, 15 complete and 0 interrupted iterations
+query_p90   [  60% ] 5 VUs  0h00m21.8s/3h56m50s  15/25 shared iters
+
+running (0h00m51.0s), 5/5 VUs, 15 complete and 0 interrupted iterations
+query_p90   [  60% ] 5 VUs  0h00m22.8s/3h56m50s  15/25 shared iters
+
+running (0h00m52.0s), 5/5 VUs, 15 complete and 0 interrupted iterations
+query_p90   [  60% ] 5 VUs  0h00m23.8s/3h56m50s  15/25 shared iters
+
+running (0h00m53.0s), 5/5 VUs, 15 complete and 0 interrupted iterations
+query_p90   [  60% ] 5 VUs  0h00m24.8s/3h56m50s  15/25 shared iters
+
+running (0h00m54.0s), 5/5 VUs, 15 complete and 0 interrupted iterations
+query_p90   [  60% ] 5 VUs  0h00m25.8s/3h56m50s  15/25 shared iters
+
+running (0h00m55.0s), 5/5 VUs, 15 complete and 0 interrupted iterations
+query_p90   [  60% ] 5 VUs  0h00m26.8s/3h56m50s  15/25 shared iters
+
+running (0h00m56.0s), 5/5 VUs, 15 complete and 0 interrupted iterations
+query_p90   [  60% ] 5 VUs  0h00m27.8s/3h56m50s  15/25 shared iters
+
+running (0h00m57.0s), 5/5 VUs, 20 complete and 0 interrupted iterations
+query_p90   [  80% ] 5 VUs  0h00m28.8s/3h56m50s  20/25 shared iters
+
+running (0h00m58.0s), 5/5 VUs, 20 complete and 0 interrupted iterations
+query_p90   [  80% ] 5 VUs  0h00m29.8s/3h56m50s  20/25 shared iters
+
+running (0h00m59.0s), 5/5 VUs, 20 complete and 0 interrupted iterations
+query_p90   [  80% ] 5 VUs  0h00m30.8s/3h56m50s  20/25 shared iters
+
+running (0h01m00.0s), 5/5 VUs, 20 complete and 0 interrupted iterations
+query_p90   [  80% ] 5 VUs  0h00m31.8s/3h56m50s  20/25 shared iters
+
+running (0h01m01.0s), 5/5 VUs, 20 complete and 0 interrupted iterations
+query_p90   [  80% ] 5 VUs  0h00m32.8s/3h56m50s  20/25 shared iters
+
+running (0h01m02.0s), 5/5 VUs, 20 complete and 0 interrupted iterations
+query_p90   [  80% ] 5 VUs  0h00m33.8s/3h56m50s  20/25 shared iters
+
+running (0h01m03.0s), 5/5 VUs, 20 complete and 0 interrupted iterations
+query_p90   [  80% ] 5 VUs  0h00m34.8s/3h56m50s  20/25 shared iters
+
+NFR-08: p90 of POST /api/ask at 5 concurrent users
+  p90, with 503s       : 4130 ms against 4000 ms (24 samples)
+  503s                 : 0
+  p90, answered only   : 4130 ms (24 samples)
+  p90, all replies     : 4125 ms (25 samples)
+  answered rate        : 96% (24 of 25 asks)
+  single-user baseline : 8900 ms, not measured by this run: p90 of one generation call, in-process, without embedding, retrieval or HTTP (docs/flm-baseline.md, Stage 4 item 9a)
+  commit               : 0d4dd853a3e4a278f7f39826dd822121b5f8cd6f (no uncommitted changes to tracked files)
+  provider             : anthropic, claude-haiku-5-5, voyage-4; provider gate PASS at 2026-11-10T23:43:44.502Z
+  DB snapshot SHA-256  : 6e514170055c685f32f839a22f3a3d2f7571e98ea69bb2b58150d770ec9fe6fc
+  server               : waitress 3.0.2; 24 threads, observed (--threads on the command line); DEBUG off
+  server, stated       : waitress 3.0.2; 24 threads
+  server started       : 2026-11-11T10:41:58.284+11:00, after the previous run's end: 2026-11-11T10:00:50.991+11:00 (C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-anthropic-verify\tests\load\results\nfr08_summary.json)
+  server, observed     : "waitress" on 5 logins, matching the stated server
+  VUs / iterations     : 5 / 25
+  ask timeout / max    : 2835 s / 14210 s
+  run valid            : true
+  verdict              : FAIL
+
+running (0h01m03.2s), 0/5 VUs, 25 complete and 0 interrupted iterations
+query_p90 ✓ [ 100% ] 5 VUs  0h00m35.0s/3h56m50s  25/25 shared iters
+time="2026-11-11T10:44:49+11:00" level=error msg="thresholds on metrics 'ask_p90_sample_ms' have been crossed"
+
+k6 exited 99. The run's window: 2026-11-10T23:43:45.868Z to 2026-11-10T23:44:49.456Z.
+
+== scripts\server_record.py finalise: Waitress's log for the run's window
+queue depth    : none in the run's window
+outside window : 0 before, 0 after, 0 untimed (not copied)
+restart inside : 0 'Serving on' line(s) in the window
+at the end     : pid None listening on port 8000, NOT pid 68232 as before the run
+INVALID: the process listening on port 8000 after the run (nothing is listening on port 8000) is not the one observed before it (pid 68232) (D-87 decision 2)
+verdict        : FAIL -> INVALID RUN
+FINALISED: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-anthropic-verify\tests\load\results\nfr08_summary.json, copied to C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-anthropic-verify\corpus\objective-02\runs\2026-11-10-anthropic\nfr08_summary.json
+
+k6 exited 99. The verdict is in C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-anthropic-verify\tests\load\results\nfr08_summary.json and C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-anthropic-verify\corpus\objective-02\runs\2026-11-10-anthropic, not in the exit code.
+
+D-89: 5 load-test account(s) retired, rows kept; 0 with a usable password
+the copied run.ps1 ended with exit code 99 after 1 attempt(s)
