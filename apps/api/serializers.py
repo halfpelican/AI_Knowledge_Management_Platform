@@ -168,10 +168,16 @@ class LoginSerializer(serializers.Serializer):
     returned whether or not the address is registered; the generic 401 is kept for a
     well-formed address that is unknown and for a wrong password, which is where the
     enumeration protection actually lives (D-02). Bounded by the column length, as
-    the registration serializer is, so the two agree."""
+    the registration serializer is, so the two agree.
+
+    ``remember`` is the sign-in page's "Remember me" (D-137): optional, false when absent,
+    and true keeps the session for REMEMBERED_SESSION_DAYS without use instead of 60 minutes.
+    A value DRF cannot read as a boolean, null included, is a 400 with a field error, checked
+    with the other two fields before the account is read, so it discloses nothing either."""
 
     email = serializers.EmailField(max_length=User._meta.get_field("email").max_length)
     password = serializers.CharField(trim_whitespace=False)
+    remember = serializers.BooleanField(default=False)
 
     def validate_email(self, value):
         return value.strip().lower()  # D-02

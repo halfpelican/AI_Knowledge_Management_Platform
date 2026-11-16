@@ -53,6 +53,7 @@ from apps.core.constants import (
     MEETING_INDEXED,
     MINIMUM_CONTENT_LENGTH,
     RELEASE_ACCOUNT_LOCKS_PERMISSION,
+    REMEMBERED_SESSION_DAYS,
     REVIEW_KNOWLEDGE_GAPS_PERMISSION,
     ROLE_NAMES,
     TRANSCRIPTION_BUSY_RETRY_SECONDS,
@@ -567,7 +568,9 @@ class SendsCsrfCookieMixin:
 
 
 class LoginView(SendsCsrfCookieMixin, APIView):
-    """FR-02 login, and the lockout FR-02 enforces (D-25, D-26).
+    """FR-02 login, and the lockout FR-02 enforces (D-25, D-26). A sign-in with
+    ``"remember": true`` gets a session of REMEMBERED_SESSION_DAYS without use instead of
+    FR-04's 60 minutes (D-137).
 
     **The order is what makes the lock hold under concurrency (D-130, security finding
     H1).** ``authenticate()`` runs first, outside any transaction, so the account row is
@@ -599,6 +602,7 @@ class LoginView(SendsCsrfCookieMixin, APIView):
         serializer.is_valid(raise_exception=True)
         email = serializer.validated_data["email"]
         password = serializer.validated_data["password"]
+        remember = serializer.validated_data["remember"]  # "Remember me" (D-137)
         # The password is verified on every path, a locked account's included, because
         # its result only selects the response and can never grant access (FR-03
         # Validation). Django's ModelBackend runs the hasher even when the address is
@@ -691,6 +695,19 @@ class LoginView(SendsCsrfCookieMixin, APIView):
             # (D-130). ``user`` rather than ``account``, because it carries the backend
             # authenticate() recorded; the two are the same row.
             django_login(request, user)
+            # "Remember me" (D-137), set on every sign-in, ticked or not.
+            # - **Ticked:** whole seconds, an int, never a timedelta. Django keeps an int as an
+            #   inactivity age, which SESSION_SAVE_EVERY_REQUEST restarts on every request, so the
+            #   seven days slide with use as FR-04's 60 minutes do. A timedelta or a datetime is
+            #   kept as a fixed end, seven days after this sign-in however much the session is used.
+            # - **Unticked or absent:** set_expiry(None), explicitly, which drops any custom expiry
+            #   and leaves SESSION_COOKIE_AGE, FR-04's 60 minutes. django_login() neither flushes
+            #   nor cycles the session when the same user signs in again on it, so without this an
+            #   unticked sign-in after a remembered one would keep the seven days.
+            if remember:
+                request.session.set_expiry(REMEMBERED_SESSION_DAYS * 24 * 60 * 60)
+            else:
+                request.session.set_expiry(None)
             if account.failed_attempts or account.locked_until:
                 # Both, not just the counter. A success that left locked_until standing
                 # would refuse the user's next login for the rest of the window, which is

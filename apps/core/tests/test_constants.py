@@ -54,9 +54,14 @@ VOCABULARIES = [
 ]
 
 
-@pytest.mark.parametrize(
-    "name", SECTION_5_NAMES + PASSWORD_NAMES + VOCABULARIES + ["SESSION_INACTIVITY_MINUTES"]
-)
+# FR-04's session lengths: D-10's inactivity window, and D-137's "Remember me" (16 November 2026).
+SESSION_NAMES = [
+    "SESSION_INACTIVITY_MINUTES",
+    "REMEMBERED_SESSION_DAYS",
+]
+
+
+@pytest.mark.parametrize("name", SECTION_5_NAMES + PASSWORD_NAMES + VOCABULARIES + SESSION_NAMES)
 def test_every_constant_is_defined(name):
     assert hasattr(constants, name), f"{name} missing from apps.core.constants"
 
@@ -336,6 +341,14 @@ def test_a_threshold_first_model_has_its_own_threshold_at_or_under_its_lowest_re
 def test_session_inactivity_is_sixty_minutes():
     # FR-04, docs/decisions.md D-10.
     assert constants.SESSION_INACTIVITY_MINUTES == 60
+
+
+def test_a_remembered_session_is_seven_days_in_whole_days():
+    """D-137, Benjamin's decision of 16 November 2026: "7 days without use, both roles". A whole
+    number of days, so LoginView's seconds are an int, which Django keeps as an inactivity age that
+    slides with use. A float would still slide, but would no longer be whole seconds."""
+    assert constants.REMEMBERED_SESSION_DAYS == 7
+    assert type(constants.REMEMBERED_SESSION_DAYS) is int
 
 
 def test_effective_roles_are_closed_under_generalisation():

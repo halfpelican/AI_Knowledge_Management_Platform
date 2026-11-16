@@ -816,6 +816,14 @@ ASSIGNMENT_OUTCOMES = ("applied", "provisional", "discarded", "confirmed")
 # Inactivity expiry; config/settings.py derives SESSION_COOKIE_AGE from it.
 SESSION_INACTIVITY_MINUTES = 60
 
+# "Remember me" (D-137, the lead's decision of 16 November 2026): a session started with
+# "remember": true on POST /api/auth/login expires after this many days without use, for both
+# roles, instead of SESSION_INACTIVITY_MINUTES. D-137 supersedes FR-04's 60 minutes for those
+# sessions and for no other. LoginView passes it to set_expiry() in whole seconds. Django keeps a
+# whole number of seconds as an inactivity age, which SESSION_SAVE_EVERY_REQUEST restarts on every
+# request, so the seven days slide with use as the 60 minutes do.
+REMEMBERED_SESSION_DAYS = 7
+
 # --- Knowledge gaps (FR-19; docs/decisions.md D-107, D-108, D-109) --------------------------
 # A KnowledgeGap's status (FR-19 Front-End: "the ability to mark an entry as addressed"). Every
 # entry starts Open; PATCH /api/knowledge-gaps/{id} moves it either way. Only an Open entry is a

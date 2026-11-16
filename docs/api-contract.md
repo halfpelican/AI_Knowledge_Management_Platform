@@ -43,7 +43,7 @@ Every code below is quoted from the FR's own Responses clause unless marked
 | Method | Path | Auth | Success | Failures |
 |---|---|---|---|---|
 | POST | `/api/auth/register` | none | `201` user object; role is Employee | `400` a field is missing, the address is not a valid format, or the password fails the complexity rules; `409` the address is already registered |
-| POST | `/api/auth/login` | none | `200` user object; sets the session cookie and the `csrftoken` cookie | `400` a field is missing, or the address is not a valid format (checked before the database lookup); `401 {"detail": "Invalid email or password."}` for an unknown address, a wrong password, or a locked account whose password was also wrong, byte-identical in every case; `403 {"detail": "...", "code": "account_locked"}` only when the account is locked **and** the password matched |
+| POST | `/api/auth/login` | none | `200` user object; sets the session cookie and the `csrftoken` cookie. The body is `{"email", "password"}` and, since D-137, an optional `"remember"` boolean, `false` when absent: `true` gives the session 7 days without use instead of 60 minutes (see "FR-04 — account self-service" at the end of this file) | `400` a field is missing, the address is not a valid format (checked before the database lookup), or `remember` is not a boolean; `401 {"detail": "Invalid email or password."}` for an unknown address, a wrong password, or a locked account whose password was also wrong, byte-identical in every case; `403 {"detail": "...", "code": "account_locked"}` only when the account is locked **and** the password matched |
 | POST | `/api/auth/logout` | session | `200`; the session record is destroyed server-side | `401` no valid session |
 | GET | `/api/auth/me` | session | `200` user object; refreshes the `csrftoken` cookie | `401` |
 | GET | `/api/roles` | session | `200 [{"role_id": "uuid", "name": "Employee", "description": "...", "permissions": ["..."]}]` | `401` |
@@ -121,7 +121,8 @@ case they return there. Both routes exist; FR-14 replaces what they render in St
 so today the destination differs by role and the content does not.
 
 Session: 60-minute inactivity expiry (D-10). An expired or invalid session cookie is
-`401` on every route that needs one.
+`401` on every route that needs one. Since D-137, a session started with `"remember": true`
+expires after 7 days without use instead, and every other session keeps the 60 minutes.
 
 Response bodies the front end relies on (Stage 2 implementation):
 
@@ -1771,3 +1772,42 @@ Administrators hold it. A requester without it gets the plain user object.
 **`LoginAttempts`** (`login_attempts`, `docs/schema-v1.md` §1) gets one row for each lockout and one
 for each release, and nothing for an ordinary attempt (D-130 decision 5). No route lists it. Its Read
 is the `lock` object above.
+
+## FR-04 — account self-service (D-137)
+
+D-137 records Benjamin's decisions of 16 November 2026, which give PR #119's account screens a
+server. Each part is recorded here as it is built.
+
+### "Remember me" on sign-in
+
+`POST /api/auth/login` takes one more field, `remember`:
+
+```json
+{"email": "ada@example.com", "password": "...", "remember": true}
+```
+
+- **`remember` is optional, and `false` when absent.** It is read as DRF's `BooleanField` reads a
+  value: JSON `true` and `false`, and the strings and numbers that field accepts for them, such as
+  `"true"` and `1`.
+- **Anything else is a `400`,** `null` included: `{"remember": ["Must be a valid boolean."]}`, or
+  `["This field may not be null."]` for `null`. It is checked with `email` and `password`, before
+  any account is read, so like their `400`s it is the same for every address and is not a failed
+  attempt.
+- **`true` gives the session `REMEMBERED_SESSION_DAYS` (7) days without use,** for both roles,
+  instead of FR-04's 60 minutes. The `sessionid` cookie's `Max-Age` is `604800`, and the
+  `django_session` row's `expire_date` is seven days ahead.
+- **The seven days slide.** Every request restarts them, as it restarts the 60 minutes, and the
+  refreshed cookie carries `Max-Age` `604800` again. (Django saves no session and sends no cookie
+  with a `5xx`, for either kind of session.) Seven days without a request end the session, and the
+  next request is `401`.
+- **`false`, or no `remember`, is FR-04's session exactly:** 60 minutes without use, `Max-Age`
+  `3600`.
+- **The latest sign-in decides.** A sign-in without `remember`, from a browser that already holds a
+  remembered session for the same user, ends the seven days. That browser holds a session, so the
+  sign-in carries `X-CSRFToken`.
+- **Logout destroys a remembered session** server-side, as it does any other (D-10).
+- **Nothing else about login changes:** the `200` user object, the `401`, the `403` with
+  `retry_after`, the lockout and the `auth` throttle.
+
+D-137 supersedes FR-04's "Sessions also expire automatically after 60 minutes of inactivity" for a
+session started with "Remember me" ticked, and for no other session.
