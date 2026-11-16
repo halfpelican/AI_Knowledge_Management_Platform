@@ -33,6 +33,7 @@ from apps.core.constants import (
     MANAGE_TAGS_PERMISSION,
     RELEASE_ACCOUNT_LOCKS_PERMISSION,
     REVIEW_KNOWLEDGE_GAPS_PERMISSION,
+    VIEW_KNOWLEDGE_MAP_PERMISSION,
 )
 
 pytestmark = pytest.mark.django_db
@@ -46,13 +47,17 @@ EARLIER_ADMINISTRATOR_CODES = {
     MANAGE_ROLES_PERMISSION, CONTRIBUTE_CONTENT_PERMISSION, MANAGE_DOCUMENTS_PERMISSION,
     MANAGE_MEETINGS_PERMISSION, REVIEW_KNOWLEDGE_GAPS_PERMISSION, MANAGE_TAGS_PERMISSION,
 }
+# accounts 0011 (FR-20, D-132) seeds view_knowledge_map for both roles after this migration, so
+# unseeding 0010's own code alone leaves it in place, on the Employee too.
+LATER_CODES = {VIEW_KNOWLEDGE_MAP_PERMISSION}
 # docs/schema-v1.md section 1, LoginAttempts: the proposal's five columns, then FR-03's four.
 LOGIN_ATTEMPT_COLUMNS = {
     "attempt_id", "attempted_email", "source_ip", "success", "attempted_at",
     "event", "user_id", "released_by", "locked_until",
 }
-# accounts 0012 (D-137, 16 November 2026) follows 0010 and adds these two columns to users, so
-# migrating accounts back to 0008 reverses it too, and they are the only users columns that go.
+# accounts 0012 (D-137, 16 November 2026) adds these two columns to users. It follows 0011, which
+# follows 0010, so migrating accounts back to 0008 reverses 0012, 0011 and 0010, and these are the
+# only users columns that go.
 LATER_USERS_COLUMNS = {"picture", "picture_updated_at"}
 
 
@@ -100,9 +105,10 @@ def test_seed_is_reversible(employee_role, administrator_role):
     assert not RolePermission.objects.filter(
         permission__permission_name=RELEASE_ACCOUNT_LOCKS_PERMISSION
     ).exists()
-    # 0003's to 0008's seeds are untouched: unseeding one migration must not undo another.
-    assert permission_names(administrator_role) == EARLIER_ADMINISTRATOR_CODES
-    assert permission_names(employee_role) == {CONTRIBUTE_CONTENT_PERMISSION}
+    # 0003's to 0008's seeds, and 0011's, are untouched: unseeding one migration must not undo
+    # another.
+    assert permission_names(administrator_role) == EARLIER_ADMINISTRATOR_CODES | LATER_CODES
+    assert permission_names(employee_role) == {CONTRIBUTE_CONTENT_PERMISSION} | LATER_CODES
     assert Role.objects.count() == 2  # the roles themselves are 0002's
 
     seed.seed_permissions(registry, None)
@@ -127,7 +133,8 @@ def migrate_accounts_to(node):
 
 def test_the_migrations_apply_and_reverse_through_the_executor(employee_role, administrator_role):
     """Back to 0008: 0010's seed is undone and 0009's table is dropped, and ``users`` loses only
-    the two columns of accounts 0012 (D-137), which follows 0010 and so is reversed with it.
+    the two columns of accounts 0012 (D-137). 0012 follows 0011, which follows 0010, so going back
+    to 0008 reverses 0012, 0011 and 0010.
     Forward to 0009: the table returns with its nine columns and no seed, and ``users`` is
     unchanged. Forward to the leaf: the seed returns, Administrator only, and ``users`` has every
     column it had.

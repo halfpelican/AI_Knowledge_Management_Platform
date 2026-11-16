@@ -15,7 +15,45 @@ import { FacetGroup, SortHeader } from '../src/components/Browse.jsx'
 import Button from '../src/components/Button.jsx'
 import PasswordRequirements from '../src/components/PasswordRequirements.jsx'
 import ProgressBar from '../src/components/ProgressBar.jsx'
-import { TEXT } from '../src/constants.js'
+import { KNOWLEDGE_MAP_NODE_TYPE, KNOWLEDGE_MAP_RELATIONSHIP, TEXT } from '../src/constants.js'
+import { KnowledgeMapDiagram, KnowledgeMapLegend } from '../src/pages/KnowledgeMap.jsx'
+
+/* FR-20's diagram (D-132), from sample data: one node of each type, the document
+   selected, and a line for each kind of relationship. */
+const MAP_NODES = [
+  { id: 'document:d1', type: KNOWLEDGE_MAP_NODE_TYPE.document, item_id: 'd1', label: 'Leave policy 2026', dimension: null, connection_count: 2 },
+  { id: 'tag:t1', type: KNOWLEDGE_MAP_NODE_TYPE.tag, item_id: 't1', label: 'people', dimension: 'Topic', connection_count: 1 },
+  { id: 'contributor:u1', type: KNOWLEDGE_MAP_NODE_TYPE.contributor, item_id: 'u1', label: 'Jane Doe', dimension: null, connection_count: 2 },
+  { id: 'meeting:m1', type: KNOWLEDGE_MAP_NODE_TYPE.meeting, item_id: 'm1', label: 'Q3 planning sync', dimension: null, connection_count: 1 },
+]
+
+function mapRelationship(source, relationship, target) {
+  return { key: `${source.id}|${relationship}|${target.id}`, relationship, source, target }
+}
+
+const MAP_RELATIONSHIPS = [
+  mapRelationship(MAP_NODES[0], KNOWLEDGE_MAP_RELATIONSHIP.tagged, MAP_NODES[1]),
+  mapRelationship(MAP_NODES[2], KNOWLEDGE_MAP_RELATIONSHIP.uploaded, MAP_NODES[0]),
+  mapRelationship(MAP_NODES[2], KNOWLEDGE_MAP_RELATIONSHIP.attended, MAP_NODES[3]),
+]
+
+/** The legend and the diagram as the knowledge map page puts them together. */
+function SampleMap() {
+  return (
+    <div>
+      <KnowledgeMapLegend />
+      <h2 id="sample-map-heading">{TEXT.mapDiagramHeading}</h2>
+      <KnowledgeMapDiagram
+        nodes={MAP_NODES}
+        relationships={MAP_RELATIONSHIPS}
+        selected={MAP_NODES[0]}
+        labelledBy="sample-map-heading"
+      />
+    </div>
+  )
+}
+
+const FOCUSABLE = 'a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])'
 
 describe('FR-08: the progress bar carries its state as text', () => {
   it('a determinate bar names its file and holds the percentage as value, text and visible figure', () => {
@@ -125,6 +163,90 @@ describe('FR-01: the strength meter is decoration beside a sentence that says th
   })
 })
 
+describe('FR-20 / NFR-17: the diagram’s lines and shapes are decoration beside words (D-132)', () => {
+  it('hides every SVG from assistive technology, with nothing focusable and no text inside, and names each node in words', () => {
+    const { container } = render(
+      <MemoryRouter>
+        <SampleMap />
+      </MemoryRouter>,
+    )
+
+    // The lines' layer, the four legend shapes and their sample line, and a shape per node.
+    const drawings = [...container.querySelectorAll('svg')]
+    expect(container.querySelectorAll('svg.knowledge-map__lines')).toHaveLength(1)
+    expect(container.querySelectorAll('svg.knowledge-map__lines line')).toHaveLength(MAP_RELATIONSHIPS.length)
+    expect(drawings.length).toBe(1 + 4 + 1 + MAP_NODES.length)
+    for (const svg of drawings) {
+      expect(svg.getAttribute('aria-hidden')).toBe('true')
+      expect(svg.getAttribute('focusable')).toBe('false')
+      expect(svg.querySelectorAll(FOCUSABLE)).toHaveLength(0)
+      expect(svg.querySelectorAll('[tabindex]')).toHaveLength(0)
+      // Nothing to read is lost with it: no label or count is drawn in the SVG.
+      expect(svg.textContent).toBe('')
+    }
+
+    // What the shapes and lines say to the eye is said in words. A node: its type,
+    // its label, its count, and for the selected one that it is and what a second
+    // selection does.
+    const diagram = screen.getByRole('region', { name: TEXT.mapDiagramHeading })
+    expect(
+      within(diagram)
+        .getAllByRole('link')
+        .map((link) => link.textContent),
+    ).toEqual([
+      `${TEXT.mapTypeContributor}: Jane Doe, ${TEXT.mapConnectionsShown(2)}`,
+      `${TEXT.mapTypeDocument}: Leave policy 2026, ${TEXT.mapConnectionsShown(2)}, ${TEXT.mapSelectedMark}. ${TEXT.mapSelectAgainDocument}`,
+      `${TEXT.mapTypeMeeting}: Q3 planning sync, ${TEXT.mapConnectionsShown(1)}`,
+      `${TEXT.mapTypeTag}: ${TEXT.mapTagLabel('Topic', 'people')}, ${TEXT.mapConnectionsShown(1)}`,
+    ])
+    expect(within(diagram).getByRole('link', { current: true }).textContent).toContain('Leave policy 2026')
+    // The legend: each shape beside its word, and the line's meaning as a sentence.
+    const legend = screen.getByRole('region', { name: TEXT.mapLegendHeading })
+    expect(
+      within(legend)
+        .getAllByRole('listitem')
+        .map((entry) => entry.textContent),
+    ).toEqual([TEXT.mapTypeDocument, TEXT.mapTypeMeeting, TEXT.mapTypeTag, TEXT.mapTypeContributor])
+    expect(within(legend).getByText(TEXT.mapLegendLine)).toBeTruthy()
+  })
+
+  it('sets no colour as an SVG attribute or an inline style: every colour is a class the contrast sweep reads', () => {
+    const { container } = render(
+      <MemoryRouter>
+        <SampleMap />
+      </MemoryRouter>,
+    )
+
+    // Presentation attributes that take a colour. tests/contrast.test.js and
+    // tests/stylesheets.test.js read the stylesheets, so a colour written here
+    // would be seen by neither.
+    expect(
+      [...container.querySelectorAll('[fill], [stroke], [color], [stop-color], [flood-color], [lighting-color]')].map(
+        (element) => element.outerHTML.slice(0, 80),
+      ),
+    ).toEqual([])
+    // Every shape and line gets its colour from a class instead.
+    const shapes = container.querySelectorAll('svg rect, svg circle, svg polygon, svg line')
+    expect(shapes.length).toBe(4 + 1 + MAP_NODES.length + MAP_RELATIONSHIPS.length)
+    for (const shape of shapes) {
+      expect(shape.getAttribute('class')).toMatch(/^knowledge-map__/)
+    }
+    // Inline style is position only: where a node sits on the grid, and the grid's tracks.
+    const styled = [...container.querySelectorAll('[style]')]
+    expect(styled.length).toBeGreaterThan(0)
+    for (const element of styled) {
+      const properties = element
+        .getAttribute('style')
+        .split(';')
+        .map((declaration) => declaration.split(':')[0].trim())
+        .filter(Boolean)
+      for (const property of properties) {
+        expect(property, element.outerHTML.slice(0, 80)).toMatch(/^grid-(column|row|template-columns)$/)
+      }
+    }
+  })
+})
+
 describe('nothing interactive hides inside aria-hidden decoration', () => {
   it('keeps every aria-hidden subtree free of focusable elements', () => {
     const statements = [{ position: 1, text: 'Statement.', chunk_id: 'chunk-1' }]
@@ -145,15 +267,17 @@ describe('nothing interactive hides inside aria-hidden decoration', () => {
           <PasswordRequirements id="req" password="x" />
           <FacetGroup heading="Department" values={[{ value: 'Finance', count: 3 }]} selected="" onChoose={() => {}} />
           <AnswerBody idPrefix="sweep" statements={statements} sources={sources} />
+          <SampleMap />
         </div>
       </MemoryRouter>,
     )
     // Both shapes of the failure: a focusable element inside aria-hidden
     // decoration, and decoration that is itself made focusable.
-    const FOCUSABLE = 'a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])'
     const offenders = [...document.querySelectorAll(FOCUSABLE)].filter(
       (el) => el.closest('[aria-hidden="true"]') !== null,
     )
     expect(offenders.map((el) => el.outerHTML.slice(0, 60))).toEqual([])
+    // The sweep saw the diagram: its links are there to be caught, and none was.
+    expect(document.querySelectorAll('.knowledge-map__node').length).toBeGreaterThan(0)
   })
 })

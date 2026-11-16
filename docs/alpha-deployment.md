@@ -405,6 +405,21 @@ cd $root
 `manage.py summarise_meetings --missing`, once, after `migrate`. It costs one model call per
 meeting, and it skips a transcript under 200 words.
 
+## 11. Confirm the knowledge map's permission (FR-20)
+
+The knowledge map (`/knowledge-map`, D-132) is behind the permission `view_knowledge_map`, which
+both roles hold only once `accounts 0011_seed_view_knowledge_map` has run. Until then
+`GET /api/knowledge-map` answers 403 to everybody, and the screen says the user is not permitted.
+
+- **After step 4's `migrate`,** sign in in the browser and open `http://127.0.0.1:8000/api/roles`.
+  Both roles must list `view_knowledge_map`.
+- **`accounts 0011` follows FR-03's `0009` and `0010` in one line.** A database at 0008 gets all
+  three from step 4's `migrate`, in order. There is no merge migration: 0011 was re-pointed onto
+  0010 before it was pushed or applied anywhere (D-132's dated note of 15 November 2026; D-130).
+
+The map reads existing tables only, so it needs no data step: a document's uploader, a meeting's
+attendees and the applied tags are what it draws.
+
 ## Redeploying
 
 1. Ctrl+C in the server window, and close it.

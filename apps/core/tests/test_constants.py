@@ -25,6 +25,9 @@ SECTION_5_NAMES = [
     "LOCKOUT_THRESHOLD",
     "LOCKOUT_DURATION",
     "NO_ANSWER_MESSAGE",
+    # FR-20's two caps (D-132), in section 5's table since 14 November 2026.
+    "MAXIMUM_NODE_COUNT",
+    "MAXIMUM_TRAVERSAL_DEPTH",
 ]
 
 # FR-01's complexity rules, stated once here and nowhere else (D-25).
@@ -51,6 +54,11 @@ VOCABULARIES = [
     "KNOWLEDGE_GAP_STATUS_VALUES",
     # FR-03 (D-130), 13 November 2026: what a LoginAttempts row records.
     "LOGIN_ATTEMPT_EVENTS",
+    # FR-20 (D-132), 14 November 2026: the knowledge map's node types, relationships and the
+    # reasons a view is cut short.
+    "KNOWLEDGE_MAP_NODE_TYPES",
+    "KNOWLEDGE_MAP_RELATIONSHIPS",
+    "KNOWLEDGE_MAP_TRUNCATION_REASONS",
 ]
 
 
@@ -317,6 +325,28 @@ def test_the_knowledge_gap_constants_are_d107s_and_d109s():
     assert constants.CYCLE_GRACE_SECONDS == 60
     assert constants.REVIEW_KNOWLEDGE_GAPS_PERMISSION == "review_knowledge_gaps"
     assert constants.DASHBOARD_GAP_ITEMS == constants.DASHBOARD_RECENT_ITEMS
+
+
+def test_the_knowledge_map_constants_are_d132s():
+    """FR-20 (D-132). The two caps are the lead's decision of 14 November 2026, each by a rule
+    measured on the Objective 02 corpus (the whole map is 34 and 41 nodes), and pinned so a change
+    is a decision. The node types begin with the two source types, in their order, so a document
+    and a meeting are named once."""
+    assert constants.MAXIMUM_TRAVERSAL_DEPTH == 2
+    assert constants.MAXIMUM_NODE_COUNT == 50
+    # The rule behind 50: the smallest multiple of 50 that holds that corpus's whole map.
+    assert constants.MAXIMUM_NODE_COUNT % 50 == 0 and constants.MAXIMUM_NODE_COUNT >= 41
+    assert constants.KNOWLEDGE_MAP_NODE_TYPES == ("document", "meeting", "tag", "contributor")
+    assert constants.KNOWLEDGE_MAP_NODE_TYPES[:2] == constants.SOURCE_TYPES
+    assert constants.KNOWLEDGE_MAP_RELATIONSHIPS == ("tagged", "uploaded", "attended")
+    assert constants.KNOWLEDGE_MAP_TRUNCATION_REASONS == ("node_count", "depth")
+    assert constants.VIEW_KNOWLEDGE_MAP_PERMISSION == "view_knowledge_map"
+    assert (constants.KNOWLEDGE_MAP_DOCUMENT, constants.KNOWLEDGE_MAP_MEETING,
+            constants.KNOWLEDGE_MAP_TAG, constants.KNOWLEDGE_MAP_CONTRIBUTOR) == constants.KNOWLEDGE_MAP_NODE_TYPES
+    assert (constants.KNOWLEDGE_MAP_TAGGED, constants.KNOWLEDGE_MAP_UPLOADED,
+            constants.KNOWLEDGE_MAP_ATTENDED) == constants.KNOWLEDGE_MAP_RELATIONSHIPS
+    assert (constants.KNOWLEDGE_MAP_TRUNCATED_BY_NODE_COUNT,
+            constants.KNOWLEDGE_MAP_TRUNCATED_BY_DEPTH) == constants.KNOWLEDGE_MAP_TRUNCATION_REASONS
 
 
 def test_the_gap_exclusion_rules_are_d108s_and_d126s():

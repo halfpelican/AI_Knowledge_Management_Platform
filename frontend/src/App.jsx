@@ -16,6 +16,7 @@ import DocumentDetail from './pages/DocumentDetail.jsx'
 import DocumentRepository from './pages/DocumentRepository.jsx'
 import Home from './pages/Home.jsx'
 import KnowledgeGaps from './pages/KnowledgeGaps.jsx'
+import KnowledgeMap from './pages/KnowledgeMap.jsx'
 import Login from './pages/Login.jsx'
 import MeetingDetail from './pages/MeetingDetail.jsx'
 import Meetings from './pages/Meetings.jsx'
@@ -24,6 +25,7 @@ import RoleManagement from './pages/RoleManagement.jsx'
 import Search from './pages/Search.jsx'
 import Tags from './pages/Tags.jsx'
 import Upload from './pages/Upload.jsx'
+import { KNOWLEDGE_MAP_PATH } from './utils/knowledgeMap.js'
 import './App.css'
 
 /**
@@ -70,6 +72,11 @@ function PrimaryNav({ onLogoutError }) {
               are one endpoint. FR-13 asks for it to be "reachable from any page",
               which is what this link is. */}
           <NavLink to="/ask">{TEXT.askNavLabel}</NavLink>
+          {/* FR-20's knowledge map (D-132): for every signed-in user, after Ask and
+              ahead of the Administrator's links. Usability, as above: the server
+              checks `view_knowledge_map`, which both roles hold (accounts 0011), on
+              every request (invariant 4). */}
+          <NavLink to={KNOWLEDGE_MAP_PATH}>{TEXT.mapHeading}</NavLink>
         </>
       ) : null}
       {/* FR-05: the role management screen "is entirely hidden and inaccessible
@@ -193,6 +200,10 @@ export default function App() {
                 which is also FR-13's conversational turn. */}
             <Route path="search" element={<Search />} />
             <Route path="ask" element={<Ask />} />
+            {/* FR-20's knowledge map, with NFR-17's table view (NIT3004, D-132).
+                Both roles, so RequireAuth alone; its selection is in the query
+                string. */}
+            <Route path="knowledge-map" element={<KnowledgeMap />} />
           </Route>
           {/* FR-06: where a guarded route sends an unauthorised navigation attempt. */}
           <Route path="403" element={<AccessDenied />} />

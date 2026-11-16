@@ -10,7 +10,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 import ComponentSheet from '../src/components/ComponentSheet.jsx'
 import { CONTRAST_PAIRS } from '../src/components/contrastPairs.js'
-import { TEXT } from '../src/constants.js'
+import { KNOWLEDGE_MAP_NODE_TYPE, TEXT } from '../src/constants.js'
 import { contrast, tokenColour } from './stylesheets.js'
 
 function renderSheet() {
@@ -73,6 +73,41 @@ describe('the sheet shows every shared component in its states', () => {
     // A loading and an empty dashboard panel.
     expect(screen.getByText(TEXT.dashboardLoadingDocuments)).toBeTruthy()
     expect(screen.getByText(TEXT.dashboardNoMeetings)).toBeTruthy()
+  })
+
+  it('shows the knowledge map’s legend with its four types and a sample map with a node of each, from sample data, asking the API for nothing', () => {
+    renderSheet()
+    const section = screen.getByRole('region', { name: 'Knowledge map (FR-20, NFR-17)' })
+    const types = Object.values(KNOWLEDGE_MAP_NODE_TYPE)
+    const words = [TEXT.mapTypeDocument, TEXT.mapTypeMeeting, TEXT.mapTypeTag, TEXT.mapTypeContributor]
+
+    // The legend: the four types in the vocabulary's order, each a shape with its
+    // own class beside its word, under a heading one level below the section's.
+    const legend = within(section).getByRole('region', { name: TEXT.mapLegendHeading })
+    expect(within(legend).getByRole('heading', { level: 3, name: TEXT.mapLegendHeading })).toBeTruthy()
+    const entries = within(legend).getAllByRole('listitem')
+    expect(entries.map((entry) => entry.textContent)).toEqual(words)
+    const legendShapes = entries.map((entry) => entry.querySelector('.knowledge-map__glyph'))
+    expect(legendShapes.map((shape) => shape.getAttribute('class'))).toEqual(
+      types.map((type) => `knowledge-map__glyph knowledge-map__glyph--${type}`),
+    )
+    expect(new Set(legendShapes.map((shape) => `${shape.tagName} ${shape.getAttribute('points') ?? ''}`)).size).toBe(4)
+    expect(within(legend).getByText(TEXT.mapLegendLine)).toBeTruthy()
+
+    // The sample map: a node of each type, drawn with the legend's shape for it,
+    // and the selected state.
+    const sample = within(section).getByRole('region', { name: 'Sample map' })
+    for (const [index, type] of types.entries()) {
+      const drawn = sample.querySelectorAll(`.knowledge-map__glyph--${type}`)
+      expect(drawn).toHaveLength(1)
+      expect(drawn[0].tagName).toBe(legendShapes[index].tagName)
+      expect(drawn[0].getAttribute('points')).toBe(legendShapes[index].getAttribute('points'))
+    }
+    expect(within(sample).getByRole('link', { current: true }).textContent).toContain(TEXT.mapSelectedMark)
+
+    // Sample data only: the sheet is a walked route that requests nothing
+    // (tests/routeWalk.jsx), and tests/setup.js would refuse a request anyway.
+    expect(globalThis.fetch).not.toHaveBeenCalled()
   })
 
   it('documents contrast pairs that pass their bars, one rendered row per pair', () => {

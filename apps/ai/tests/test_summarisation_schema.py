@@ -546,13 +546,43 @@ def test_a_brace_inside_a_string_does_not_end_the_object():
     assert parsed.narrative[0].text == "The {draft} budget was reviewed."
 
 
+# Text inside a JSON string is never repaired (16 November 2026, D-136): the statement parser's
+# three tests of it, through this parser (apps/ai/tests/test_schema.py has the history).
+
+
+def test_a_code_block_quoted_in_an_element_is_not_a_fence():
+    text = "The team agreed to run ```npm audit``` before each release."
+
+    parsed = parse(reply(decisions=[element(text, ("P2",))]))
+
+    assert parsed.decisions[0].text == text
+
+
+def test_a_fence_inside_an_element_does_not_close_the_reply_s_fence():
+    description = "Document the ``` convention for pasted logs"
+    raw = "```json\n" + json.dumps(reply(action_items=[item(description=description)])) + "\n```"
+
+    assert parse_summary(raw).action_items[0].description == description
+
+
+def test_the_trailing_comma_repair_leaves_element_text_alone():
+    text = "The list read [a, b, ] and {c, }."
+    raw = (
+        '{"summary": [{"text": "%s", "passages": ["P1",],},], '
+        '"decisions": [], "highlights": [], "action_items": [],}' % text
+    )
+
+    assert parse_summary(raw).narrative == (SummaryElement(text=text, passages=(1,)),)
+
+
 def test_the_repairs_are_the_statement_parsers_own_code():
     """One definition of what is repaired: this module imports the three, it does not copy them."""
     assert summarisation.strip_code_fences is schema.strip_code_fences
     assert summarisation.outermost_json_object is schema.outermost_json_object
-    assert summarisation.TRAILING_COMMA_PATTERN is schema.TRAILING_COMMA_PATTERN
+    assert summarisation.remove_trailing_commas is schema.remove_trailing_commas  # since 16 November
     assert summarisation.SchemaViolation is schema.SchemaViolation
     assert summarisation.loads_reply is schema.loads_reply  # the decode step, since 13 November
+    assert not hasattr(summarisation, "TRAILING_COMMA_PATTERN")
 
 
 # --- Non-object and non-JSON replies ------------------------------------------------------------------

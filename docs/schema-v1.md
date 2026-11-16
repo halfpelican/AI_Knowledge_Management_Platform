@@ -146,8 +146,12 @@ meeting; nothing relies on it being so.
 
 A participation record, never an access rule (D-16). Since FR-16 it is also read to decide
 whose name an action item's owner means: an extracted item's owner is always one of the meeting's
-attendees, and one whose role can read the meeting (D-125, its third note). Nothing about who may
-see a meeting consults it.
+attendees, and one whose role can read the meeting (D-125, its third note). Since FR-20 it is read
+for the knowledge map's "attended" relationship (D-132): the attendees of a meeting the caller's
+role already reads are contributor nodes of that caller's map. The rows are read through the
+scoped meetings and never the other way round, so an attendee of a meeting their role cannot read
+is not shown it. Neither link table is unique on its pair, so a person recorded twice on one
+meeting is one edge. Nothing about who may see a meeting consults it.
 
 ### MeetingSummaries — FR-16
 
@@ -581,6 +585,10 @@ SUMMARY_FAILURE_REASONS = ("provider_unavailable", "provider_refused", "malforme
 ACTION_ITEM_ORIGINS = ("ai", "user")
 # FR-03 (D-130), 13 November 2026:
 LOGIN_ATTEMPT_EVENTS = ("lockout", "release")
+# FR-20 (D-132), 14 November 2026:
+KNOWLEDGE_MAP_NODE_TYPES = (*SOURCE_TYPES, "tag", "contributor")
+KNOWLEDGE_MAP_RELATIONSHIPS = ("tagged", "uploaded", "attended")
+KNOWLEDGE_MAP_TRUNCATION_REASONS = ("node_count", "depth")
 ```
 
 These live in `apps/core/constants.py`. Status values are fixed rather than free text
@@ -611,6 +619,16 @@ kept apart as invariant 7 keeps the two no-answer paths apart), the summary coul
 embedded, the server stopped mid-run, or something unexpected was raised. `ACTION_ITEM_ORIGINS`
 is where an item came from: extracted by the model, or added by a person. `SOURCE_TYPES` did not
 gain a value for a summary: its passages are the meeting's (D-125, choice 1).
+
+The three `KNOWLEDGE_MAP_` vocabularies are FR-20's, and are values of a response, not of a
+column: FR-20 stores nothing. `KNOWLEDGE_MAP_NODE_TYPES` is what `GET /api/knowledge-map` calls
+each kind of node, the two source types and then the two kinds with no visibility column of their
+own, a tag and a contributor, which are nodes only through a link to a source the caller reads.
+`KNOWLEDGE_MAP_RELATIONSHIPS` are the three links FR-20's Server-End clause names: a source is
+**tagged** with a tag (`ContentTags`), a contributor **uploaded** a document
+(`Documents.uploaded_by`), a contributor **attended** a meeting (`MeetingAttendees`).
+`KNOWLEDGE_MAP_TRUNCATION_REASONS` says which cap cut a view short, `MAXIMUM_NODE_COUNT` or
+`MAXIMUM_TRAVERSAL_DEPTH`; `node_count` is reported when both apply (D-132).
 
 `DOCUMENT_STATUS_VALUES` is the proposal's own §7.0 set. It **supersedes** the five
 values this section carried until 2026-09-21 — `Uploaded`, `Extracting`, `Indexed`,
@@ -731,11 +749,16 @@ QueryLog and SearchLogs; the executor plans them immediately after `retrieval 00
 `accounts 0008` (the `manage_tags` seed, D-119 finding 5) immediately after `accounts 0007`.
 `LoginAttempts` (v2, `accounts 0009`, FR-03) follows Users. The executor plans it immediately after
 `accounts 0008`, and `accounts 0010` (the `release_account_locks` seed) immediately after 0009,
-both before `documents 0001` (D-130). `accounts 0012_user_picture` (Users' `picture` and
-`picture_updated_at`, D-137) depends on 0010, and the executor plans it immediately after 0010,
-before `documents 0001`. It is numbered 0012 because FR-20's `accounts 0011` (D-132) was built on
-another branch from the same 0010. Once both are on one branch, a merge migration with no
-operations joins them, as `documents 0014` joined two 0012s.
+both before `documents 0001` (D-130).
+`accounts 0011` (the `view_knowledge_map` seed, held by both roles, FR-20, D-132) depends on
+`accounts 0010` and is planned immediately after it. It adds no table: FR-20 reads existing ones.
+It was written against `accounts 0008` while FR-03's branch held 0009 and 0010, and was re-pointed
+to 0010 in the merge of 15 November 2026, before it had been pushed or applied to any database
+(D-132's dated note of that day).
+`accounts 0012_user_picture` (Users' `picture` and `picture_updated_at`, D-137) depends on
+`accounts 0011` and is planned immediately after it, before `documents 0001`. It was re-pointed
+from 0010 in the merge of 17 November 2026, as 0011 was in the merge of 15 November, with no
+merge migration.
 
 Enable the `vector` extension in its own migration before any table carrying a vector
 column.

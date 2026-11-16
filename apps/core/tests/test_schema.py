@@ -275,9 +275,13 @@ SECTION_5_PLAN = [
     # them.
     ("accounts", "0009_login_attempts"),
     ("accounts", "0010_seed_release_account_locks"),
-    # D-137, 16 November 2026: users.picture and users.picture_updated_at, immediately after 0010,
-    # where its dependency puts it. Numbered 0012 because 0011 is FR-20's (D-132), on a branch of
-    # its own from the same 0010.
+    # FR-20 (D-132), 14 November 2026: view_knowledge_map, both roles, immediately after 0010,
+    # which it depends on. It was written against 0008 while FR-03's branch held 0009 and 0010,
+    # and was re-pointed in the merge of 15 November 2026, before any database had applied it.
+    ("accounts", "0011_seed_view_knowledge_map"),
+    # D-137, 16 November 2026: users.picture and users.picture_updated_at, immediately after 0011,
+    # which it depends on. It was written against 0010 while FR-20's branch held 0011, and was
+    # re-pointed in the merge of 17 November 2026, before any database had applied it.
     ("accounts", "0012_user_picture"),
     ("documents", "0001_initial"),
     ("meetings", "0001_initial"),

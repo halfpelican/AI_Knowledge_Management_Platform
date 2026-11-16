@@ -1,13 +1,15 @@
 """Accounts migration 0012: ``users.picture`` and ``users.picture_updated_at`` (D-137).
 
 CLAUDE.md section 7: migrations are additive and reversible. Tested through the migration executor,
-as 0010's and 0008's are: back to 0010, which drops exactly the two columns and keeps every row,
+as 0010's and 0008's are: back to 0011, which drops exactly the two columns and keeps every row,
 then forward to the leaf, which adds them back, an existing row getting an empty ``picture`` and a
 null ``picture_updated_at``.
 
-0012 depends on 0010. 0011 is FR-20's (D-132), built on another branch from the same 0010, and the
-two are joined by a merge migration once both are on one branch, so this test asks only that 0012
-is on the path to the leaf of ``accounts``, never that it is the leaf.
+0012 depends on 0011, FR-20's seed (D-132). It was written against 0010 while 0011 was on a branch
+of its own, and was re-pointed to 0011 in the merge of ``main`` on 17 November 2026, before it had
+been pushed, so ``accounts`` has one leaf and no merge migration. This test still asks only that
+0012 is on the path to the leaf of ``accounts``, never that it is the leaf, so a later migration
+does not break it.
 """
 
 import pytest
@@ -17,7 +19,7 @@ from django.db.migrations.executor import MigrationExecutor
 pytestmark = pytest.mark.django_db
 
 THIS_MIGRATION = ("accounts", "0012_user_picture")
-PREVIOUS_MIGRATION = ("accounts", "0010_seed_release_account_locks")
+PREVIOUS_MIGRATION = ("accounts", "0011_seed_view_knowledge_map")
 PICTURE_COLUMNS = {"picture", "picture_updated_at"}
 
 
@@ -39,7 +41,7 @@ def picture_columns_of(user_id):
         return cursor.fetchone()
 
 
-def test_0012_depends_on_0010_and_is_on_the_path_to_the_leaf():
+def test_0012_depends_on_0011_and_is_on_the_path_to_the_leaf():
     graph = MigrationExecutor(connection).loader.graph
     [leaf] = [key for key in graph.leaf_nodes() if key[0] == "accounts"]
     plan = graph.forwards_plan(leaf)
