@@ -311,7 +311,9 @@ class DocumentAnalysis(models.Model):
       ``{"dimension", "value", "confidence"}`` with the normalised value.
       - ``proposed_tags``: a Topic value outside the scheme, HELD here at any confidence for a
         person to confirm or reject: FR-10's controlled taxonomy growth and Objective 05's clause 3
-        as written (D-129, 13 November 2026, which reverses D-128's creation of values).
+        as written (D-129, 13 November 2026, which reverses D-128's creation of values). Since
+        D-134 (15 November 2026) none is longer than a tag name, so every entry a run makes can be
+        confirmed; a longer entry is one stored before D-134, and can still be rejected (D-133).
         Deduplicated by dimension and value, and replaced by each run. A Project or Process entry
         is one a run made while D-128 was in force, when such a value was held below the threshold
         and created at or above it; it can still be confirmed or rejected. The field was
@@ -320,7 +322,8 @@ class DocumentAnalysis(models.Model):
       - ``discarded_suggestions``: every Project or Process value outside the scheme, at any
         confidence, which FR-10 and clause 3 say is "discarded" (D-129). Also any value that cannot
         be stored, holding a NUL or a lone surrogate, recorded with U+FFFD in place of each such
-        character (the 500 fix of D-128's security review). Replaced by each run. Nothing reads it
+        character (the 500 fix of D-128's security review), and since D-134 any Topic outside the
+        scheme longer than a tag name, recorded as written. Replaced by each run. Nothing reads it
         as a tag and the API does not expose it. A department outside the scheme is discarded
         through ``department_outcome``. While D-128 was in force this list held only refused names.
       - ``rejected_tags`` (``documents 0013``; the requirements audit of D-128, finding A5, the
@@ -374,13 +377,14 @@ class DocumentAnalysis(models.Model):
     department_applied_by = vocabulary_field(TAG_APPLIED_BY_VALUES, null=True, blank=True)
     user_edited = models.BooleanField(default=False)
     # [{"dimension": "Topic", "value": <normalised name>, "confidence": <float>}]: the Topic values
-    # outside the scheme the run held, at any confidence (D-129), replaced by each run. A Project or
-    # Process entry is a run's from while D-128 was in force. Renamed from ``proposed_topics`` by
-    # ``documents 0012``; the column keeps its name.
+    # outside the scheme the run held, at any confidence (D-129), replaced by each run; since D-134
+    # none longer than NAME_MAX_LENGTH. A Project or Process entry is a run's from while D-128 was in
+    # force. Renamed from ``proposed_topics`` by ``documents 0012``; the column keeps its name.
     proposed_tags = models.JSONField(default=list, blank=True, db_column="proposed_topics")
     # [{"dimension": ..., "value": ..., "confidence": ...}], replaced by each run: every Project or
-    # Process value outside the scheme, at any confidence (D-129), and any value holding a NUL or a
-    # lone surrogate, recorded with U+FFFD in its place (classification.py ``_recordable``).
+    # Process value outside the scheme, at any confidence (D-129), any Topic outside it longer than
+    # NAME_MAX_LENGTH (D-134), and any value holding a NUL or a lone surrogate, recorded with U+FFFD
+    # in its place (classification.py ``_recordable``).
     discarded_suggestions = models.JSONField(default=list, blank=True)
     # [{"dimension": ..., "value": <normalised name>, "confidence": <the proposal's>}]: each proposal a
     # person rejected on this document, deduplicated by dimension and value and never replaced by a

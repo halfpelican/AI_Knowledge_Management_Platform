@@ -377,8 +377,10 @@ CHARACTERS_A_TOKEN = 6.25
 
 def test_the_reject_bound_is_at_least_6_25_characters_a_token_of_either_classification_ceiling():
     """D-133, the lead's decision of 15 November 2026: the reject route reads a proposed value up to
-    MAXIMUM_PROPOSED_TAG_LENGTH, 100,000 characters. A run proposes a Topic whatever its length
-    (D-129) and nothing bounds a tag value in the reply, so the bound is scaled to the longest reply,
+    MAXIMUM_PROPOSED_TAG_LENGTH, 100,000 characters. When D-133 was decided a run proposed a Topic
+    whatever its length (D-129), and since D-134 a run discards one longer than the Tags column, so
+    the bound now serves proposals stored before D-134. Nothing bounds a tag value in the reply, so
+    the bound is scaled to the longest reply,
     Claude's classification ceiling, CLAUDE_MAX_TOKENS: 100,000 is 16,000 tokens at 6.25 characters
     a token. That ratio was worked back from the bound, not measured, so this asserts what was
     decided, not that every reply fits: at 10 characters a token the ceiling would be 160,000, and a

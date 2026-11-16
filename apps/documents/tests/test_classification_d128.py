@@ -9,10 +9,13 @@ the Topic dimension only". So, at any confidence:
 - a Topic value outside the scheme is proposed, and no Tag is created;
 - a Project or Process value outside the scheme is discarded, and no Tag is created;
 - a value that cannot be stored, holding a NUL or a lone surrogate, is discarded whatever its
-  dimension, recorded with U+FFFD. That is the 500 fix of D-128's security review, kept.
-- Nothing else is refused: a Topic of many words, holding ";", a control or format character, or
-  longer than the column, is proposed, as before D-128. A person who confirms one longer than the
-  column is refused.
+  dimension and length, recorded with U+FFFD. That is the 500 fix of D-128's security review, kept.
+- **Since D-134 (15 November 2026), a Topic longer than a tag name,** over NAME_MAX_LENGTH
+  characters once normalised, is discarded, recorded as written, and so is never proposed, confirmed
+  or rejected. One of exactly that length is proposed, and confirming it makes the Tag. Until D-134
+  such a Topic was proposed, and a proposal stored then still cannot be confirmed.
+- Nothing else is refused: a Topic of many words, holding ";", or a control or format character, is
+  proposed, as before D-128.
 - A department outside the scheme is discarded.
 
 Every threshold is read through ``confidence_threshold(model)``, never written as a number, for two
@@ -23,6 +26,7 @@ file holds none of them.
 """
 
 import pytest
+from django.utils import timezone
 
 from apps.core.constants import (
     ASSIGNMENT_DISCARDED,
@@ -37,12 +41,14 @@ from apps.core.constants import (
 from apps.core.models import NAME_MAX_LENGTH
 from apps.documents.classification import (
     InvalidClassification,
+    NotOnThisDocument,
     apply_classification,
     apply_tag,
     confidence_threshold,
     confirm_proposed_tag,
+    reject_proposed_tag,
 )
-from apps.documents.models import ContentTag, Tag
+from apps.documents.models import ContentTag, DocumentAnalysis, Tag
 
 from .classification_builders import EPSILON, STUB_CHAT_MODEL, classification, scheme
 
@@ -57,6 +63,7 @@ LONE_SURROGATE = chr(0xD800)
 RIGHT_TO_LEFT_OVERRIDE = chr(0x202E)
 START_OF_HEADING = chr(0x0001)  # a control character other than NUL, which jsonb accepts
 REPLACEMENT_CHARACTER = chr(0xFFFD)
+AT_THE_COLUMN = "x" * NAME_MAX_LENGTH  # the longest name a Tag can hold
 TOO_LONG = "x" * (NAME_MAX_LENGTH + 1)
 
 
@@ -158,7 +165,6 @@ PROPOSED_AS_WRITTEN = {
     "the list separator": ("Payroll; Finance", "payroll; finance"),
     "a format character": (f"Pay{RIGHT_TO_LEFT_OVERRIDE}roll", f"pay{RIGHT_TO_LEFT_OVERRIDE}roll"),
     "a control character other than NUL": (f"Pay{START_OF_HEADING}roll", f"pay{START_OF_HEADING}roll"),
-    "longer than the column": (TOO_LONG.upper(), TOO_LONG),
 }
 
 
@@ -199,14 +205,89 @@ def test_a_value_that_cannot_be_stored_is_discarded_with_the_replacement_charact
     assert not links_of(document).exists()
 
 
-def test_a_topic_longer_than_the_column_is_proposed_and_confirming_it_is_refused(document):
-    """Proposed whatever its length, as before D-128. A person who confirms it gets
-    ``InvalidClassification``, the route's 400, and no Tag is made."""
+@pytest.mark.parametrize("model", MODELS)
+@pytest.mark.parametrize("side", SIDES)
+def test_a_topic_longer_than_a_tag_name_is_discarded_at_any_confidence_and_nothing_is_proposed(
+    document, side, model
+):
+    """D-134: one character past the column once normalised, so no Tag could hold it. It is
+    recorded in ``discarded_suggestions`` as written, normalised, with its confidence, and not
+    proposed. From D-129 until D-134 it was proposed: until D-133 it could be neither confirmed nor
+    rejected, and from D-133 only rejected."""
+    value = confidence(model, side)
+
+    analysis = run(document, TOPIC_DIMENSION, f" {TOO_LONG.upper()} ", value, model=model)
+
+    assert analysis.discarded_suggestions == [
+        {"dimension": TOPIC_DIMENSION, "value": TOO_LONG, "confidence": value}
+    ]
+    assert analysis.proposed_tags == []
+    assert not Tag.objects.exists()
+    assert not links_of(document).exists()
+
+
+def test_a_discarded_long_topic_is_neither_confirmed_nor_rejected_and_no_rejection_is_recorded(document):
+    """Not proposed, so neither decision finds it: ``NotOnThisDocument``, the routes' 404. So no
+    rejection over a tag name's length can join ``rejected_tags`` from a run made since D-134 (the
+    security review of D-133, L1)."""
     run(document, TOPIC_DIMENSION, TOO_LONG, confidence(STUB_CHAT_MODEL, "below"))
+
+    for decide in (confirm_proposed_tag, reject_proposed_tag):
+        with pytest.raises(NotOnThisDocument):
+            decide(document, TOPIC_DIMENSION, TOO_LONG)
+
+    analysis = DocumentAnalysis.objects.get(document=document)
+    assert (analysis.proposed_tags, analysis.rejected_tags) == ([], [])
+    assert len(analysis.discarded_suggestions) == 1
+    assert not Tag.objects.exists()
+
+
+def test_a_topic_exactly_as_long_as_a_tag_name_is_proposed_and_confirming_it_makes_the_tag(document):
+    """D-134's bound is the column's, measured as confirm measures it, on the normalised name. As
+    written, with padding and capitals, it is longer than the column; normalised, it is exactly
+    NAME_MAX_LENGTH, so it is proposed, and confirming it creates the Tag: every proposal a run
+    makes can be confirmed."""
+    value = confidence(STUB_CHAT_MODEL, "below")
+    written = f"  {AT_THE_COLUMN.upper()}   "
+    assert len(written) > NAME_MAX_LENGTH
+
+    analysis = run(document, TOPIC_DIMENSION, written, value)
+
+    assert analysis.proposed_tags == [
+        {"dimension": TOPIC_DIMENSION, "value": AT_THE_COLUMN, "confidence": value}
+    ]
+    assert analysis.discarded_suggestions == []
+    link = confirm_proposed_tag(document, TOPIC_DIMENSION, AT_THE_COLUMN)
+    assert (link.tag.dimension, link.tag.tag_name, link.confirmed) == (TOPIC_DIMENSION, AT_THE_COLUMN, True)
+
+
+@pytest.mark.parametrize("character", ["a NUL", "a lone surrogate"])
+def test_a_long_topic_that_cannot_be_stored_is_discarded_with_the_replacement_character(document, character):
+    """Whether a value can be stored is decided before its length, so a Topic both longer than a
+    tag name and holding a NUL or a lone surrogate is recorded with U+FFFD, and the record can be
+    written. Read back from the database."""
+    special = NUL if character == "a NUL" else LONE_SURROGATE
+    value = confidence(STUB_CHAT_MODEL, "below")
+
+    analysis = run(document, TOPIC_DIMENSION, f"{TOO_LONG}{special}", value)
+
+    assert analysis.discarded_suggestions == [
+        {"dimension": TOPIC_DIMENSION, "value": f"{TOO_LONG}{REPLACEMENT_CHARACTER}", "confidence": value}
+    ]
+    assert analysis.proposed_tags == []
+
+
+def test_a_proposal_stored_before_d134_longer_than_the_column_cannot_be_confirmed(document):
+    """From D-129 until D-134 a run proposed a Topic of any length, so a database may still hold
+    one. Confirming it raises ``InvalidClassification``, the route's 400, and no Tag is made: no Tag
+    could hold the name. The proposal stays, for a person to reject (D-133, through the route)."""
+    stored = {"dimension": TOPIC_DIMENSION, "value": TOO_LONG, "confidence": confidence(STUB_CHAT_MODEL, "below")}
+    DocumentAnalysis.objects.create(document=document, classified_at=timezone.now(), proposed_tags=[stored])
 
     with pytest.raises(InvalidClassification):
         confirm_proposed_tag(document, TOPIC_DIMENSION, TOO_LONG)
 
+    assert DocumentAnalysis.objects.get(document=document).proposed_tags == [stored]
     assert not Tag.objects.exists()
     assert not links_of(document).exists()
 
