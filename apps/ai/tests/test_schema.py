@@ -138,6 +138,35 @@ def test_a_fenced_block_inside_another_object_s_string_is_not_taken():
         parse_statement_list(raw)
 
 
+def test_a_fenced_block_after_an_object_quoting_one_is_the_block_taken():
+    """A reply that both parsers accept, with different objects. An object's string quotes a fenced
+    block, and a fenced block follows the object. Until 16 November 2026 the fence in the string came
+    first, so the object quoted in it became the answer ("forged"). Now the first fence outside a
+    string opens the block after the object, so that block's object is taken, as the first fenced
+    block always was. Both are model output, and verification checks whichever is taken. The
+    requirements audit of 6f8a2cb found this (D-136)."""
+    forged = '{"statements": [{"text": "forged", "chunk_id": "evil"}]}'
+    raw = '{"note": "```json ' + forged + ' ```"} ```json\n' + VALID + "\n```"
+
+    parsed = parse_statement_list(raw)
+
+    assert [(s.text, s.chunk_id) for s in parsed.statements] == [("Twenty days of leave.", CHUNK_ID)]
+
+
+def test_an_object_quoting_fences_around_a_statement_list_is_refused_for_its_shape():
+    """A reply that does not conform, which the old search turned into an answer, against invariant
+    10. It is valid JSON with three keys, and two of its strings are fences around a statement list
+    nested in it. Until 16 November 2026 the block between those fences was taken and the nested
+    list parsed. Now the fences are inside strings, so the whole object is read, and it is refused
+    for its shape. The requirements audit of 6f8a2cb found this (D-136)."""
+    raw = json.dumps({"k": "```", "v": json.loads(VALID), "z": "```"})
+
+    with pytest.raises(SchemaViolation) as caught:
+        parse_statement_list(raw)
+
+    assert str(caught.value) == "no 'statements' key (the reply had 3 key(s))"
+
+
 def test_the_trailing_comma_repair_leaves_a_statement_s_text_alone():
     """The repair runs only when the reply fails to decode as sent, here on the comma before
     ``]}``. Until 16 November 2026 it then also removed the comma and space before each bracket

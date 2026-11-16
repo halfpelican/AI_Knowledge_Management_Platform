@@ -28,9 +28,10 @@ Since 16 November 2026 neither repair touches text inside a JSON string (D-136).
 fence repair read three backticks anywhere as a fence, so a reply that quoted a code block was cut
 in the wrong place and refused. The trailing-comma repair removed a comma before a bracket inside a
 string as well as outside, so it changed the string's text. Both now read a string as
-``_outermost_json_object`` reads one. That changes what the parser accepts, and D-136 says how. It
-moves none of the committed numbers: on 15 November none of the 685 distinct raw replies committed
-under corpus/ decoded differently.
+``_outermost_json_object`` reads one. That changes what the parser accepts, and D-136 says how. On
+16 November none of the 685 distinct raw replies committed under corpus/ parsed differently under
+this code. D-136 names the committed failed attempts whose raw replies were not kept, so cannot be
+replayed.
 
 A response that does not parse is a FAILED ATTEMPT, never a partial answer: the caller
 retries to MAXIMUM_GENERATION_ATTEMPTS and then raises ProviderUnavailable, which the
@@ -178,10 +179,15 @@ def _strip_code_fences(raw: str) -> str:
     in a string closed there. Both were refused, as no JSON object or an unbalanced one, and each
     cost an attempt. The security review of PR #107 found it.
 
-    The other way round, a malformed reply that the old search parsed is refused when its first fence
-    lies inside a string as the scan reads one. That happens when prose before the fence leaves a
-    string open, or when a fenced block sits inside another object's string with its quotes
-    unescaped. No block is taken, and what is left does not parse.
+    The other way round, where the first fence the old search found lies inside a string as the
+    scan reads one, the old search parsed the block after it, and this does not. The reply is read
+    whole, or from its first fence outside a string. So such a reply can now be refused, or answered
+    from a different object (D-136 lists the shapes):
+    - refused, when prose before the fence leaves a string open;
+    - refused, when a fenced block sits in another object's string with its quotes unescaped;
+    - refused for its shape, when the reply is an object of the wrong shape quoting fences around a
+      statement list, which the old search turned into an answer;
+    - answered from a different object, when a fenced block outside strings follows.
 
     The block is found by a scan since 13 November 2026, not by
     ``re.search(r"```[a-zA-Z0-9_-]*\\s*(.*?)```", text, re.DOTALL)``. With an opening fence and no

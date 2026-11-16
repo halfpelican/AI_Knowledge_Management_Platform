@@ -126,9 +126,10 @@ PIECES = (
 def test_generated_replies_strip_as_the_regex_did_outside_strings():
     """50,000 replies of up to 24 pieces each, from a fixed seed, so a failure reproduces. Until 16
     November 2026 every one had to strip exactly as the frozen function did. Since then the replies
-    with a fence inside a JSON string, 774 of them, are held to it with those backticks masked
-    (D-136). The other 49,226 are held to it exactly. Both kinds are counted, so neither can pass
-    empty; the next test generates thousands of the first kind."""
+    with a backtick inside a JSON string are held to it with those backticks masked (D-136). There
+    are 774 of those, and 540 of them hold a fence there. The other 49,226 are held to it exactly.
+    Both kinds are counted, so neither can pass empty; the next test generates thousands of the
+    first kind."""
     rng = random.Random(20261113)
     replies = ["".join(rng.choice(PIECES) for _ in range(rng.randint(0, 24))) for _ in range(50_000)]
     untouched = [raw for raw in replies if mask_backticks_inside_strings(raw) == raw]
@@ -147,8 +148,9 @@ STRING_PIECES = (
 
 
 def test_generated_replies_full_of_strings_strip_as_the_regex_did_outside_strings():
-    """50,000 replies from STRING_PIECES and a fixed seed: 14,618 with a fence inside a JSON string,
-    and 6,806 on which the frozen function strips differently, because it reads such a fence."""
+    """50,000 replies from STRING_PIECES and a fixed seed. 14,618 have a backtick inside a JSON string,
+    and 11,545 of those have a fence there. On 6,806 the frozen function strips differently,
+    because it reads such a fence."""
     rng = random.Random(20261116)
     replies = ["".join(rng.choice(STRING_PIECES) for _ in range(rng.randint(0, 24))) for _ in range(50_000)]
     masked = [raw for raw in replies if mask_backticks_inside_strings(raw) != raw]
@@ -222,13 +224,20 @@ def regex_outside_strings(raw: str) -> str:
                      '{"a": 1}', id="an escaped quote in a preamble leaves its string open"),
         pytest.param('{"note": "```json {"a": 1} ```"}', '{"note": "```json {"a": 1} ```"}', '{"a": 1}',
                      id="a fenced block inside another object's string, its quotes unescaped"),
+        pytest.param('{"note": "```json {"a": 1} ```"} ```json\n{"b": 2}\n```', '{"b": 2}', '{"a": 1}',
+                     id="a fenced block after an object whose string quotes one"),
+        pytest.param('{"k": "```", "v": {"a": 1}, "z": "```"}', '{"k": "```", "v": {"a": 1}, "z": "```"}',
+                     '", "v": {"a": 1}, "z": "', id="fences quoted in two strings around an object"),
     ],
 )
 def test_a_fence_inside_a_json_string_is_not_a_fence(raw, expected, regex_gave):
-    """Each case pins what the frozen function gave as well, so it records a change. The last three
-    are the rule's cost, and each is a malformed reply. Prose that opens a brace and then a string
-    it never closes reads as JSON, and so does a block whose quotes go unescaped inside another
-    string, so the fence is no fence. test_schema.py follows both through the parser."""
+    """Each case pins what the frozen function gave as well, so it records a change. The last five
+    are replies that the old function let through and that the parser no longer answers the same way.
+    - Two preambles leave a string open, and a block's quotes go unescaped inside another string:
+      the parser refuses them.
+    - An object quotes fences around another object: the parser refuses it for its shape.
+    - A fenced block follows an object that quotes one: the parser answers from the later block.
+    test_schema.py follows each of these through the parser."""
     assert regex_strip_code_fences(raw) == regex_gave
     assert schema.strip_code_fences(raw) == expected
     assert regex_outside_strings(raw) == expected
