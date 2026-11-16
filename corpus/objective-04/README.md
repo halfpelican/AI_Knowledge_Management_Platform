@@ -58,6 +58,29 @@ run the system first, and don't look at any output it produces for these ten.
   - `evidence`: a short quote from the transcript showing the commitment.
 - **`notes`:** any judgement call you made.
 
+**Dated note, 16 November 2026: the `expected_owner` instruction above is corrected for any new
+reference set** (D-125's dated note of 16 November). It disagrees with the application's owner rule
+for a first name that two roster users share, and Benjamin Morovan kept the application's rule. The
+frozen reference was written under the instruction above, and this note does not change it. Nor
+does it apply to `O01` to `O10`, whose reference may not be changed to fit a result (D-125's note
+of 15 November on Objective 04). A new set uses this instead. *The wording awaits Benjamin
+Morovan's approval.*
+
+- `expected_owner`: the roster user the task belongs to, as a full name from `roster.json`, or
+  `unassigned`. Read the owner's name against the meeting's recorded attendees (here, in
+  `manifest.json`) as well as the transcript.
+  - A first name, or a full name, that exactly one attendee has is that attendee, even where a
+    roster user who did not attend shares it, unless the transcript shows the task is for someone
+    else.
+  - Any other name the transcript ties to exactly one roster user, such as the full name of a user
+    who did not attend or a surname only one roster user has, is that user.
+  - Write `unassigned` for anyone not on the roster, a team or role, two people jointly, a first
+    name two attendees share unless the transcript shows which of them it is, any other name you
+    cannot tie to exactly one roster user, or no name at all.
+  - `unassigned` means you cannot tell which single roster user owns the task. It does not mean the
+    name alone would be ambiguous: the scorer counts any user the system resolves against
+    `unassigned` as the wrong person.
+
 **Two people.** One of you writes each block and the other checks it. Where you disagree, agree on
 an answer and say so in `notes`. Fill in `prepared_by` and `checked_by`.
 
