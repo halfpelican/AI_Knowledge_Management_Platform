@@ -5,12 +5,12 @@ import { changePassword, uploadProfilePicture } from '../api/profile.js'
 import useAuth from '../auth/useAuth.js'
 import Button from '../components/Button.jsx'
 import Notice from '../components/Notice.jsx'
-import PasswordInput from '../components/PasswordInput.jsx'
 import TextInput from '../components/TextInput.jsx'
 import useDocumentTitle from '../hooks/useDocumentTitle.js'
 import { extractFieldErrors } from '../utils/fieldErrors.js'
 import './Profile.css'
 
+export default function Profile() {
   /* ---- State ---- */
   const [passwordErrors, setPasswordErrors] = useState({})
   const [passwordFormError, setPasswordFormError] = useState(null)
@@ -27,7 +27,6 @@ import './Profile.css'
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
 
-export default function Profile() {
   useDocumentTitle('My Profile')
   const { user, loading } = useAuth()
 
@@ -110,7 +109,7 @@ export default function Profile() {
   async function handlePictureSubmit(event) {
     event.preventDefault()
     if (!pictureFile) return
-    setUploading(true)
+    setUploadingPicture(true)
     setUploadError(null)
     setUploadSuccess(false)
     try {
@@ -126,7 +125,7 @@ export default function Profile() {
         setUploadError('Could not upload your picture. Please try again.')
       }
     } finally {
-      setUploading(false)
+      setUploadingPicture(false)
     }
   }
 
