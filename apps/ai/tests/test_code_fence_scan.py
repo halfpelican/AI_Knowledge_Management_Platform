@@ -218,12 +218,17 @@ def regex_outside_strings(raw: str) -> str:
                      id="a fence after the object is a fence"),
         pytest.param('Note {see "x: ```json\n{"a": 1}\n```', 'Note {see "x: ```json\n{"a": 1}\n```', '{"a": 1}',
                      id="a preamble that opens a brace and then a quote hides the fence after it"),
+        pytest.param('Note {path "C:\\" ```json\n{"a": 1}\n```', 'Note {path "C:\\" ```json\n{"a": 1}\n```',
+                     '{"a": 1}', id="an escaped quote in a preamble leaves its string open"),
+        pytest.param('{"note": "```json {"a": 1} ```"}', '{"note": "```json {"a": 1} ```"}', '{"a": 1}',
+                     id="a fenced block inside another object's string, its quotes unescaped"),
     ],
 )
 def test_a_fence_inside_a_json_string_is_not_a_fence(raw, expected, regex_gave):
-    """Each case pins what the frozen function gave as well, so it records a change. The last is the
-    cost of the rule: prose that opens a brace and then a double quote reads as a JSON string, so
-    the fence after it is no fence (test_schema.py follows such a reply through the parser)."""
+    """Each case pins what the frozen function gave as well, so it records a change. The last three
+    are the rule's cost, and each is a malformed reply. Prose that opens a brace and then a string
+    it never closes reads as JSON, and so does a block whose quotes go unescaped inside another
+    string, so the fence is no fence. test_schema.py follows both through the parser."""
     assert regex_strip_code_fences(raw) == regex_gave
     assert schema.strip_code_fences(raw) == expected
     assert regex_outside_strings(raw) == expected

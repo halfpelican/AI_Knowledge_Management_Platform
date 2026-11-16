@@ -164,13 +164,21 @@ def test_generated_objects_are_repaired_as_the_regex_did_between_strings():
 # --- Through the parser -------------------------------------------------------------------------
 
 
-def test_a_raw_newline_between_a_comma_and_a_bracket_in_a_string_is_refused():
-    """One of the two replies D-136 turns from accepted to refused, and it is malformed. JSON forbids
-    a raw newline in a string. Until 16 November 2026 the repair deleted this one with the comma
-    before the bracket, and the statement decoded as "Bring forms A] and B.". Now the string is left
-    alone, so the reply is not valid JSON: a violation, retried like any other. The other such reply
-    is in apps/ai/tests/test_schema.py."""
-    raw = '{"statements": [{"text": "Bring forms A,\n] and B.", "chunk_id": "c"},]}'
+# The control characters that JSON forbids raw in a string and that str.isspace, like the regex's
+# \s, calls whitespace. There are nine: tab, newline, vertical tab, form feed, carriage return and
+# U+001C to U+001F.
+RAW_CONTROL_WHITESPACE = tuple(c for c in map(chr, range(0x20)) if c.isspace())
+
+
+@pytest.mark.parametrize("character", RAW_CONTROL_WHITESPACE, ids=lambda c: f"U+{ord(c):04X}")
+def test_a_raw_control_character_between_a_comma_and_a_bracket_in_a_string_is_refused(character):
+    """The comma repair's kind of reply that D-136 turns from accepted to refused, and it is
+    malformed. JSON forbids a raw control character in a string. Until 16 November 2026 the repair
+    deleted any of these nine between a comma and a bracket, with the comma, and the statement
+    decoded as "Bring forms A] and B.". Now the string is left alone, so the reply is not valid
+    JSON: a violation, retried like any other. The fence rule's kinds are in
+    apps/ai/tests/test_schema.py."""
+    raw = '{"statements": [{"text": "Bring forms A,' + character + '] and B.", "chunk_id": "c"},]}'
 
     with pytest.raises(SchemaViolation, match="not valid JSON"):
         parse_statement_list(raw)

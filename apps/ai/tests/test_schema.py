@@ -114,14 +114,27 @@ def test_a_fence_inside_a_statement_does_not_close_the_reply_s_fence():
 
 
 def test_a_preamble_that_opens_a_brace_and_a_quote_hides_the_fence_after_it():
-    """One of the two replies D-136 turns from accepted to refused, and it is malformed. Prose before
-    the fence opens a brace and then a double quote that it never closes, so the fence reads as
-    inside a JSON string. Until 16 November 2026 the fenced block was taken and parsed. Now no block
-    is taken, and the object found from the prose's brace never closes. The other such reply is in
-    apps/ai/tests/test_trailing_comma_repair.py."""
+    """A kind of reply that D-136 turns from accepted to refused, and it is malformed. Prose before
+    the fence opens a brace and then a string that it never closes, so the fence reads as inside a
+    JSON string. A quote whose closing quote is escaped leaves the string open too
+    (test_code_fence_scan.py). Until 16 November 2026 the fenced block was taken and parsed. Now no
+    block is taken, and the object found from the prose's brace never closes. The next test is the
+    fence rule's other kind; the comma repair's is in apps/ai/tests/test_trailing_comma_repair.py."""
     raw = 'Note {see "the policy: ```json\n' + VALID + "\n```"
 
     with pytest.raises(SchemaViolation, match="unbalanced"):
+        parse_statement_list(raw)
+
+
+def test_a_fenced_block_inside_another_object_s_string_is_not_taken():
+    """The fence rule's other kind of reply turned from accepted to refused, and it is malformed. A
+    fenced block sits inside another object's string with its quotes unescaped. Until 16 November
+    2026 the fence inside that string opened a block, and the object in it became the answer. Now
+    the fence is inside a string, no block is taken, and the outer object is not valid JSON. The
+    security review of 389ec9e found this kind (D-136)."""
+    raw = '{"note": "```json ' + VALID + ' ```"}'
+
+    with pytest.raises(SchemaViolation, match="not valid JSON"):
         parse_statement_list(raw)
 
 

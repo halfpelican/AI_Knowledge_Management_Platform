@@ -178,6 +178,11 @@ def _strip_code_fences(raw: str) -> str:
     in a string closed there. Both were refused, as no JSON object or an unbalanced one, and each
     cost an attempt. The security review of PR #107 found it.
 
+    The other way round, a malformed reply that the old search parsed is refused when its first fence
+    lies inside a string as the scan reads one. That happens when prose before the fence leaves a
+    string open, or when a fenced block sits inside another object's string with its quotes
+    unescaped. No block is taken, and what is left does not parse.
+
     The block is found by a scan since 13 November 2026, not by
     ``re.search(r"```[a-zA-Z0-9_-]*\\s*(.*?)```", text, re.DOTALL)``. With an opening fence and no
     closing one, that search backtracked through every split of the tag and the whitespace and
@@ -261,8 +266,10 @@ def _remove_trailing_commas(candidate: str) -> str:
 
     That regex was the repair until 16 November 2026 (D-136). It reached inside strings, so a reply
     that needed the repair had "a, ]" in a string decoded as "a]". It could even make a reply
-    decode by deleting a raw newline or tab between a comma and a bracket in a string, which JSON
-    forbids. That reply is refused now. The security review of PR #107 found it.
+    decode, by deleting a raw control character between a comma and a bracket in a string, which
+    JSON forbids. Any of the nine that ``str.isspace`` matches did it: tab, newline, vertical tab,
+    form feed, carriage return and U+001C to U+001F. Such a reply is refused now. The security
+    review of PR #107 found it.
 
     Linear: a whitespace run is read once after the comma before it and once more in passing.
     """
