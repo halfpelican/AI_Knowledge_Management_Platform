@@ -11859,6 +11859,83 @@ hourly runs in that time did not start either.
 
     Either is judged on the development set first, with a reference that follows the chosen rule.
 
+**Dated note, 16 November 2026: the application's owner rule is kept, and rule (b) is recorded as a
+departure from FR-16's words.**
+
+- **The decision.** The note of 15 November on Objective 04 left to the team "which of the two rules
+  the system should follow for a first name that two roster users share". Asked that question,
+  Benjamin Morovan chose "Keep the app's rule".
+  - The rule stands as `apps/meetings/owners.py` and the note of 13 November state it: an owner is
+    one of the meeting's recorded attendees whose role can read the meeting, matched by full name
+    or by a lone first name that exactly one attendee has. Who a name means is decided among the
+    attendees.
+  - No code changes.
+- **Rule (b) is a departure from FR-16's words, recorded here as the full-name narrowing already
+  is.**
+  - FR-16 says a named owner is "matched against the user list".
+  - This entry's rule (b), recorded on 11 November (`4111137`), matched a lone first name only among
+    the meeting's recorded attendees. It sat under "The session's choices where the brief was
+    silent" and was never named as a departure. The note of 13 November names only the full-name
+    narrowing.
+  - Rule (b) departs from FR-16's words in each direction:
+    - a first name that two users share is no confident match against the whole user list, so it
+      would be unassigned, and rule (b) gives it to the one attendee who has it;
+    - a first name that only one user has, where that user was not recorded as attending, is a
+      unique match against the list, and rule (b) leaves it unassigned, because the name "may be
+      someone who is not a user at all" (`test_owners.py`'s
+      `test_a_lone_first_name_held_by_a_user_who_did_not_attend_is_unassigned`). FR-16 does not
+      define a confident match, and the rule's docstring before `08ddd31` held that "A first name
+      is a confident match only among the people who were in the room".
+
+    These are recorded here rather than presented as the requirement's own rule.
+  - The original "Owners (attribution)" bullet is left as written. The note of 13 November replaced
+    its rule (a), "exactly one user whose full name equals the name", and made rule (b) subject to
+    the same reading check.
+- **Why it is kept, as the choice was put to Benjamin.**
+  - It is the rule this entry recorded and the tests pin, and the fix that followed the security
+    review (`08ddd31`) kept it and extended it to full names. The tests are `test_owners.py`'s
+    `test_a_lone_first_name_is_matched_among_attendees_even_where_another_user_shares_it` and, end
+    to end, `test_summary_runs.py`'s
+    `test_extracted_items_get_their_owner_their_date_and_the_words_as_said`.
+  - The README's instruction disagreed with it from the start.
+  - It gives more items an owner. Across an organisation's whole user list, shared first names are
+    common.
+  - Registration is open (FR-01). Deciding ambiguity across every user would let anyone who
+    registers with a first name make every lone use of it unassigned. That is the weakness the
+    security review found, and `08ddd31` closed, for full names.
+  - **Its cost.** A task given by first name to a colleague not recorded as attending, who shares
+    that first name with exactly one attendee, goes to that attendee: the wrong person. So does a
+    task given by a surname alone that is exactly one attendee's first name, since every one-word
+    name is read as a first name. A task given by first name to a colleague not recorded as
+    attending, whose first name no other user has, is stored unassigned. In each case the
+    transcript's words stay beside the item (`ActionItem.owner_name`), and a person can reassign it
+    to anyone whose role can read the meeting.
+- **The reference's writing instruction is corrected for any new set, not for the frozen one.**
+  - The README's instruction that "a name that fits more than one roster user" is `unassigned`
+    disagrees with rule (b). Claude wrote it on 11 November (`fd34d68`), minutes after this entry.
+  - The frozen reference was written under it and stays as it is. The result of 15 November stands
+    as measured (D-93), and `O01-A4` stays a wrong owner on that set.
+  - `corpus/objective-04/README.md` now carries a dated note with the instruction a new set uses.
+    Its last bullet states what `unassigned` means in a reference, and why. It does not apply to
+    `O01` to `O10`, whose reference may not be changed to fit a result (the note of 15 November on
+    Objective 04).
+  - The README note's wording is Claude's, approved by Benjamin Morovan on 16 November 2026.
+- **Unchanged.**
+  - `O07-A8` is not affected: the note of 15 November on Objective 04 records `O01-A4` as the only
+    extracted item stored for a first name that two roster users share.
+  - Still for the team: whether any re-measurement uses a new frozen set. Any change is judged on
+    the development set first, whose reference resolved such a name to the attendee (`X02-A3`, the
+    note of 15 November on Objective 04).
+  - `corpus/objective-04/roster.json` still says "FR-16 matches a named owner against the user
+    list". It records the users the frozen measurement's database held (the README's table), and is
+    left as it was.
+  - `corpus/objective-04/manifest.json`, where the new instruction sends a writer for the
+    attendees, is left as it was too. Its `attendees_note` still says FR-16 uses the attendees
+    "only to match a lone first name to an owner", untrue since `08ddd31` matched full names among
+    them as well. Its `status` still calls the set a draft, untrue since the freeze (`06bfe73`). No
+    script or test reads `attendees_note` or `status`: `scripts/objective04_run.py` reads only the
+    set lists.
+
 ## D-126 · FR-19's permission exclusion is per embedding model: voyage-4 is threshold-first, D-108's rule as first written, and EmbeddingGemma keeps rank-one
 
 **Status:** Settled by the user · **Date:** 2026-11-11 · **Concerns:** FR-19, Objective 06, D-108,
