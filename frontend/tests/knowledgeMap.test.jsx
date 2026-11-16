@@ -929,8 +929,9 @@ describe.each(BOTH_ROLES)('FR-20 knowledge map, as an $role', (user) => {
         relationshipRow(BUDGET, TAGGED, PROJECT_PEOPLE),
         relationshipRow(SAM, UPLOADED, BUDGET),
       ])
-      // The relationship in the words D-132 gives it, written out here: a person
-      // "uploaded" a document and "attended" a meeting; a source "is tagged".
+      // The relationship in the words the screen's text gives it (the three
+      // `mapRelationship…` entries of TEXT), written out here: a person "uploaded" a
+      // document and "attended" a meeting; a source "is tagged".
       expect(rowsOf(relationshipsTable()).map((row) => row[1])).toEqual([
         'is tagged',
         'uploaded',

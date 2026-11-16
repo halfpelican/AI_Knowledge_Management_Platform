@@ -36,7 +36,8 @@ export const SELECTION_KIND = {
 }
 
 /**
- * The selection an address holds (D-132: "the selection lives in the address").
+ * The selection an address holds (D-132, "The screen": an unselected node links to
+ * the map's own address "with the selection in it").
  *
  * - Neither parameter, or both empty: the overview. The contract reads an empty
  *   value as an absent one, so the address does too.

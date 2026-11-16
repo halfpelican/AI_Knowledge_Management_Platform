@@ -1597,7 +1597,8 @@ export const TEXT = {
   mapRelationshipsColumnFrom: 'From',
   mapRelationshipsColumnRelationship: 'Relationship',
   mapRelationshipsColumnTo: 'To',
-  // Read "from, relationship, to": "Jane Doe uploaded Leave policy", "Leave policy is tagged Topic: people".
+  // Read "from, relationship, to", each end opening with its type: "Contributor: Jane Doe",
+  // "uploaded", "Document: Leave policy"; "Document: Leave policy", "is tagged", "Tag: Topic: people".
   mapRelationshipUploaded: 'uploaded',
   mapRelationshipAttended: 'attended',
   mapRelationshipTagged: 'is tagged',
