@@ -89,3 +89,6 @@ The audit of this record found claims with no evidence in the repository. These 
 - **The passwords,** which are the user's to set.
 - **D-40's screening of demonstration questions** on this database. The threads and questions
   screened for the FLM alpha were screened on EmbeddingGemma's vectors.
+  - **Done since, on a copy of this database** (15 November 2026): `kmp_alpha_screen_20261115`,
+    made by `pg_dump`, with the alpha's code. The record is
+    `corpus/demo/screening-2026-11-15-anthropic/` (D-131's note of 15 November).
