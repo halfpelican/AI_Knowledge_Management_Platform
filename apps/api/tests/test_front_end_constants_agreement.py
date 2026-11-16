@@ -47,6 +47,9 @@ copies a value of ``apps/core/constants.py``:
   relationships and truncation reasons ``GET /api/knowledge-map`` returns. The page picks a
   shape, a word and a notice by each, so a value it does not list would be drawn with none. The
   two caps are not copied: they reach the page in the response.
+- ``EVIDENCE_MAP_NODE_TYPE`` and ``EVIDENCE_MAP_RELATIONSHIP`` (since 16 November 2026, D-138):
+  the node types and the relationship ``GET /api/knowledge-map/evidence`` returns, for the same
+  reason.
 
 **What it does not hold.** ``TEXT.noAnswerFallback`` and ``TEXT.provenanceRemovedFallback``
 are held by the front-end suite, which reads ``apps/core/constants.py`` itself
@@ -103,6 +106,9 @@ VOCABULARIES = [
     ("KNOWLEDGE_MAP_NODE_TYPE", "KNOWLEDGE_MAP_NODE_TYPES"),
     ("KNOWLEDGE_MAP_RELATIONSHIP", "KNOWLEDGE_MAP_RELATIONSHIPS"),
     ("KNOWLEDGE_MAP_TRUNCATION_REASON", "KNOWLEDGE_MAP_TRUNCATION_REASONS"),
+    # The knowledge map's second view, claims and passages (D-138).
+    ("EVIDENCE_MAP_NODE_TYPE", "EVIDENCE_MAP_NODE_TYPES"),
+    ("EVIDENCE_MAP_RELATIONSHIP", "EVIDENCE_MAP_RELATIONSHIPS"),
 ]
 
 # `key: 'value',` inside an exported object, a single-quoted string on one line.

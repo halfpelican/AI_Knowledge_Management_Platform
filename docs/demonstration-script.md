@@ -112,6 +112,12 @@
 > - **that walk was written from the build's tests and its contract and has not been walked on the
 >   alpha.** The alpha must first be redeployed and migrated, and `GET /api/roles` checked
 >   (`docs/alpha-deployment.md`, step 11).
+>
+> **Amended 16 November 2026,** for the knowledge map's second view (D-138). The changes:
+>
+> - FR-20's walk gains steps 8 to 12, the view of claims and the passages they cite;
+> - **those steps are written from the build's tests and its contract and have not been
+>   walked on the alpha,** as steps 1 to 7 have not.
 
 Stage 5 item 9. This walks all twelve MUST-HAVE requirements, in the gate's order, on the
 deployed alpha (`docs/alpha-deployment.md`, D-64, D-88, D-131). It is also item 8's live
@@ -716,6 +722,37 @@ the alpha**: the alpha needs the build that holds FR-20, `migrate`, and step 11 
      smaller.
    - Nothing in window B says that anything is left out, and a tag or a person known only through
      an Administrator-only item is not there at all.
+8. **The second view, window B:** "Show claims and passages", the link straight after "Skip to the
+   table view" (D-138).
+   - **Expected:** the address gains `view=evidence`. A line counts what is shown ("… claims · …
+     passages shown"), the legend gives a claim a square and a passage a circle, and the map has
+     two columns, Claims and Passages. Under them, **Items** and **Relationships**, the second
+     with a "Times admitted" column.
+   - **The claims are the statements of the answers given so far on this database:** FR-12's and
+     FR-13's steps above, and anything asked before the walk. A line is heavier where the same
+     statement was admitted from the same passage more than once.
+   - **If it reads "No claims yet …",** no answer on this database can be shown to this role. A
+     reprocess or a re-index since the last answer does that: it replaces the passages the
+     claims cited.
+9. **Select a claim.**
+   - **Expected:** the pane is headed "Claim review". It shows the claim's text, "Admitted in …
+     answers.", **Supported by** with its passages, **First admitted** and **Last admitted**. A
+     claim resting on one passage is tagged "Single source".
+   - **Expected:** "A claim has no page of its own, so there is nothing to open." The question
+     that was asked, and who asked it, are nowhere on the screen.
+10. **Select a passage,** for example one under **Supported by**.
+    - **Expected:** its **Source** (the document or the meeting), and **Cited by** with the claims
+      that rest on it.
+    - Select it again, or "Open the document": the document's own page. The browser's Back returns
+      to the view with the selection still made.
+11. **Scope, in both windows** (invariant 1): the same view in window A.
+    - **Expected:** window A holds claims from the Administrator's own answers that drew on
+      Administrator-only passages. Window B holds none of them.
+    - **That includes a claim citing a passage both roles read,** when its answer was also
+      generated from a passage the Employee cannot read. The statement may carry what that
+      passage said, so the Employee is not shown it (D-138, rule 2).
+12. **"Show documents, meetings, tags and contributors"** returns to the first view, with nothing
+    selected.
 
 **What this walk cannot show, and what does.**
 
@@ -728,7 +765,11 @@ the alpha**: the alpha needs the build that holds FR-20, `migrate`, and step 11 
   The same file records an Employee on an Administrator-only meeting and asserts that their map
   holds neither the meeting nor the line.
 - **A screen reader, and a narrow window.** NFR-17's NVDA or VoiceOver run and the 320 px reflow
-  are owed in a browser by a person (`docs/accessibility.md`, section 8).
+  are owed in a browser by a person (`docs/accessibility.md`, sections 8 and 9).
+- **The second view's three scoping rules, one at a time.** A walk shows their result.
+  `apps/api/tests/test_evidence_map.py` shows each rule on its own, from both roles.
+- **What the mock-up shows and the build does not:** unsupported claims, "Open the … answers",
+  "Add a source", the review queue, "Owner" and the two filters. D-138 gives the reason for each.
 
 ## The D-40 screen
 

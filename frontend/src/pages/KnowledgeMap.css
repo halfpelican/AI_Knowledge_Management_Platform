@@ -307,3 +307,87 @@ a.knowledge-map__node:hover .knowledge-map__node-label {
 .knowledge-map__figure {
   font-variant-numeric: tabular-nums;
 }
+
+/* ---- The two views, and the second: claims and passages (D-138) ------------- */
+
+/* The link that switches between the two views sits beside "Skip to the table
+   view" where there is room and under it where there is not. The two are
+   neighbouring paragraphs, the skip link first, so the tab order is the same
+   either way. The link has the secondary button's look (Button.css). */
+.knowledge-map__skip,
+.knowledge-map__switch {
+  display: inline-block;
+  margin-right: var(--space-4);
+  vertical-align: middle;
+}
+
+/* The second view's two node types: colour and shape, as the first view's four.
+   A claim is a square in --color-text and a passage a circle in --color-primary,
+   14.76 and 6.70 to 1 on --color-surface (SC 1.4.11). tests/contrast.test.js
+   holds each pair and that the two differ. The type is also always a word. */
+.knowledge-map__glyph--claim {
+  fill: var(--color-text);
+}
+
+.knowledge-map__glyph--passage {
+  fill: var(--color-primary);
+}
+
+/* A line's weight is how often its pairing was admitted: once, two to four times,
+   five times or more (src/utils/evidenceMap.js). Three widths, each twice the
+   last. Declared after the selected line's rule above, so a selected node's lines
+   keep the weight of their pairing and are marked by the darker stroke; the
+   selected node itself has the heavier outline and the word. The number is in
+   the Relationships table, so the weight is never the only place it is said. */
+.knowledge-map__line--light {
+  stroke-width: var(--border-width);
+}
+
+.knowledge-map__line--medium {
+  stroke-width: var(--border-width-strong);
+}
+
+.knowledge-map__line--heavy {
+  stroke-width: var(--border-width-emphasis);
+}
+
+/* A passage that is AI-generated content: the dashed boundary such content has
+   everywhere, from the one token (NFR-15, AiMark.css), as a second cue beside the
+   words "Suggested by AI" in the node. */
+.knowledge-map__node--ai {
+  border-style: var(--border-style-ai);
+}
+
+/* The Claim review's "Single source": words in a boundary of their own.
+   --color-warning on --color-warning-surface is 7.21:1. */
+.knowledge-map__flag {
+  display: inline-block;
+  padding: var(--space-1) var(--space-2);
+  border: var(--border-width) solid var(--color-warning);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-warning-surface);
+  color: var(--color-warning);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+/* The pane's facts: a term and its value on a line, the term muted. */
+.knowledge-map__facts {
+  margin: 0 0 var(--space-4);
+}
+
+.knowledge-map__fact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  margin-bottom: var(--space-1);
+}
+
+.knowledge-map__fact dt {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.knowledge-map__fact dd {
+  margin: 0;
+}
