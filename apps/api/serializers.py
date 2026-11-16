@@ -183,6 +183,55 @@ class LoginSerializer(serializers.Serializer):
         return value.strip().lower()  # D-02
 
 
+# --- A signed-in user changes their password, under FR-01's rules (D-137) ------------------
+
+# A wrong current password is a 400 on that field, never a 401 (D-137): the front end treats every
+# 401 as an expired session and signs the user out (frontend/src/api/client.js, notifyUnauthorized).
+CURRENT_PASSWORD_INCORRECT_MESSAGE = "Your current password is incorrect."
+NEW_PASSWORD_UNCHANGED_MESSAGE = "Your new password must be different from your current password."
+
+
+class PasswordChangeSerializer(serializers.Serializer):
+    """``POST /api/auth/change-password`` body (D-137). The view passes the signed-in user as
+    ``context["user"]``.
+
+    Each field is checked on its own, and DRF reports every field's errors in one 400, so a wrong
+    current password and a weak new one are named together:
+
+    - ``current_password`` must be the user's password, checked with ``check_password()``, never
+      through login. A wrong one touches neither ``failed_attempts`` nor ``locked_until``. The
+      ``password_change`` throttle bounds guessing instead.
+    - ``new_password`` passes ``validate_password(new, user)``: registration's
+      AUTH_PASSWORD_VALIDATORS (FR-01), run against this user, so the similarity validator
+      compares it with their own name and address.
+
+    Only once both pass is the new password compared with the current one, as typed. The current
+    one has just been verified, so equal strings mean the same password, and no third hash is run.
+    Comparing the new one with the stored hash instead, on every request, would be a second guess
+    at the password in each.
+    """
+
+    current_password = serializers.CharField(write_only=True, trim_whitespace=False)
+    new_password = serializers.CharField(write_only=True, trim_whitespace=False)
+
+    def validate_current_password(self, value):
+        if not self.context["user"].check_password(value):
+            raise serializers.ValidationError(CURRENT_PASSWORD_INCORRECT_MESSAGE)
+        return value
+
+    def validate_new_password(self, value):
+        try:
+            validate_password(value, user=self.context["user"])
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.messages)
+        return value
+
+    def validate(self, attrs):
+        if attrs["new_password"] == attrs["current_password"]:
+            raise serializers.ValidationError({"new_password": [NEW_PASSWORD_UNCHANGED_MESSAGE]})
+        return attrs
+
+
 # --- FR-05 ----------------------------------------------------------------------------
 
 

@@ -46,6 +46,7 @@ Every code below is quoted from the FR's own Responses clause unless marked
 | POST | `/api/auth/login` | none | `200` user object; sets the session cookie and the `csrftoken` cookie. The body is `{"email", "password"}` and, since D-137, an optional `"remember"` boolean, `false` when absent: `true` gives the session 7 days without use instead of 60 minutes (see "FR-04 — account self-service" at the end of this file) | `400` a field is missing, the address is not a valid format (checked before the database lookup), or `remember` is not a boolean; `401 {"detail": "Invalid email or password."}` for an unknown address, a wrong password, or a locked account whose password was also wrong, byte-identical in every case; `403 {"detail": "...", "code": "account_locked"}` only when the account is locked **and** the password matched |
 | POST | `/api/auth/logout` | session | `200`; the session record is destroyed server-side | `401` no valid session |
 | GET | `/api/auth/me` | session | `200` user object; refreshes the `csrftoken` cookie | `401` |
+| POST | `/api/auth/change-password` | session | Since D-137: `200 {"detail": "Your password has been changed."}`; this session stays signed in and every other session of the user ends (see "FR-04 — account self-service" at the end of this file) | `400` field errors, a wrong current password included, never `401`; `401` no valid session; `403` CSRF; `429` past the `password_change` rate, all as listed there |
 | GET | `/api/roles` | session | `200 [{"role_id": "uuid", "name": "Employee", "description": "...", "permissions": ["..."]}]` | `401` |
 | GET | `/api/users` | Administrator | `200 [user object, ...]` ordered by `created_at` | `401`; `403` Employee |
 | GET | `/api/users/directory` | session | `200 [{"id", "name", "email"}, ...]` ordered by name | `401` |
@@ -71,8 +72,8 @@ cannot drift.
 **Rate limiting.** `POST /api/auth/register` and `POST /api/auth/login` are limited
 per client address and answer `429` past the rate (D-26). Since Stage 5 item 5, asks, ingestion
 and thread creation are limited per user as well, and keyword search and a person applying a tag
-since 10 November 2026, and a recording segment sent for transcription since D-123;
-"Stage 5 item 5" below lists every throttled route (D-79).
+since 10 November 2026, a recording segment sent for transcription since D-123, and a password
+change since D-137; "Stage 5 item 5" below lists every throttled route (D-79).
 
 **FR-02 login side effects.** A failed attempt increments `failed_attempts`; five
 consecutive failures lock the account for `LOCKOUT_DURATION`. While the lock holds,
@@ -132,8 +133,8 @@ Response bodies the front end relies on (Stage 2 implementation):
 - `403`: `{"detail": "Your role does not hold the 'manage_roles' permission."}`.
 - Unmatched path under `/api/`: JSON `404 {"detail": "Not found."}`. Since Stage 5 item 9 a path
   outside `/api/` is the SPA's (see "Stage 5 item 9" at the end of this file).
-- CSRF: `POST /api/auth/logout` and `PATCH` always require `X-CSRFToken`; so does
-  `POST /api/auth/login` when the browser already holds a session.
+- CSRF: `POST /api/auth/logout`, `POST /api/auth/change-password` (since D-137) and `PATCH` always
+  require `X-CSRFToken`; so does `POST /api/auth/login` when the browser already holds a session.
   - **The token is read from that header only, never from a `csrfmiddlewaretoken` form field
     (D-124).** That is so the check never reads the request body. Every client already sends the
     header.
@@ -1044,6 +1045,7 @@ not grant it, and it does not grant `manage_documents`.
 | `tagging` | `POST /api/documents/{id}/tags`, since D-79's note on tagging of the same night; checked before the document is looked up, so past the rate the `429` comes before the `404` and the `403`. Since D-128 also `POST /api/tags`, the Administrator's add, checked after its `401` and `403`; one budget per user across both routes. Since D-129 also `POST /api/departments`, on the same budget | 30/min |
 | `transcription` | `POST /api/transcriptions`, one recording segment per request, and `GET /api/transcriptions/status`, which asks FLM each time (D-123; see "Recording transcription" at the end of this file) | 60/min |
 | `action_items` | FR-16's `POST /api/meetings/{id}/action-items` and `PATCH` and `DELETE /api/meetings/{id}/action-items/{item_id}`, one budget (the security review of 12 November 2026, D-125's third note); checked before the meeting is looked up, so past the rate the `429` comes before the `404` and the `403` | 30/min |
+| `password_change` | `POST /api/auth/change-password` (D-137), per user across all their sessions, wrong current passwords included; checked after the `401` and a CSRF `403`, before the body is read (see "FR-04 — account self-service" at the end of this file) | 10/hour |
 
 A request over its rate is answered with DRF's 429, `{"detail": "Request was throttled. Expected
 available in N seconds."}`, and a `Retry-After` header in seconds. The rate is checked before the
@@ -1811,3 +1813,50 @@ server. Each part is recorded here as it is built.
 
 D-137 supersedes FR-04's "Sessions also expire automatically after 60 minutes of inactivity" for a
 session started with "Remember me" ticked, and for no other session.
+
+### Changing one's own password
+
+A signed-in user changes their own password, under FR-01's rules. No FR enumerates these codes;
+each is D-137's, or a rule this contract already has.
+
+| Method | Path | Auth | Success | Failures |
+|---|---|---|---|---|
+| POST | `/api/auth/change-password` | session, both roles, no permission code | `200 {"detail": "Your password has been changed."}`. Body `{"current_password": "...", "new_password": "..."}`. Sets a new `sessionid` cookie: the session continues under a new key | `400` with field errors, below; `401` no valid session; `403 {"detail": "CSRF Failed: ..."}` without `X-CSRFToken`; `429` past `PASSWORD_CHANGE_THROTTLE_RATE`, with DRF's body and `Retry-After`, nothing changed |
+
+**The `400`s.** Every refusal is a `400` with field errors, never a `401`, because the front end treats
+every `401` as an expired session and signs the user out (D-137). Nothing is changed by any of them.
+
+- **A wrong current password:** `{"current_password": ["Your current password is incorrect."]}`.
+- **A new password registration would refuse:** `{"new_password": [...]}`, carrying exactly the
+  messages `AUTH_PASSWORD_VALIDATORS` give for it, as registration's `400` carries them for
+  `password`. The validators run against the signed-in user, so a password too like their own name
+  or address is refused.
+- **A new password equal to the current one:**
+  `{"new_password": ["Your new password must be different from your current password."]}`.
+- **A field missing, blank or null:** DRF's own messages, `["This field is required."]`,
+  `["This field may not be blank."]` or `["This field may not be null."]`, for each such field.
+- **Errors in both fields come in one `400`.** A wrong current password and a weak new one are
+  named together. The unchanged-password check is the exception: it runs only once both fields
+  pass, so a new password equal to a wrong current one draws only the `current_password` error.
+
+**The order** is fixed: `401` for no session, then the CSRF `403`, then the `429`, then the body.
+
+**What a change does to sessions.**
+
+- **The session that made it stays signed in,** under a new key. The response's `sessionid` cookie
+  carries the key, and the old key names nothing. The session keeps its expiry: `Max-Age` `604800`
+  if it was remembered, `3600` if not.
+- **Every other session of the user ends.** Each still holds the old password's hash, so its next
+  request is `401`, remembered sessions included.
+- **Other users' sessions are not touched.**
+- **The `csrftoken` cookie is not rotated,** so the page's next unsafe request carries the same
+  `X-CSRFToken`.
+
+**What a change does not touch.**
+
+- **A wrong current password is not a failed sign-in.** It never touches `failed_attempts` or
+  `locked_until`, so it can neither lock the account nor count towards a lock. The `password_change`
+  throttle, 10 an hour per user across all their sessions, is the bound on guessing.
+- **A change leaves FR-03's lock and count as they were.** A locked account stays locked, and the
+  new password meets the lock's `403` at sign-in, as D-137 has a completed reset leave the lock.
+- **Only the password column is written.** A role change committed while the request runs is kept.

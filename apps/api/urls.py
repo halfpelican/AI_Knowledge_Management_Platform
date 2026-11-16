@@ -20,6 +20,8 @@ urlpatterns = [
     # Stage 2: FR-04
     path("auth/logout", views.LogoutView.as_view(), name="auth-logout"),
     path("auth/me", views.MeView.as_view(), name="auth-me"),
+    # D-137: a signed-in user changes their own password, under FR-01's rules.
+    path("auth/change-password", views.PasswordChangeView.as_view(), name="auth-change-password"),
     # Stage 2: FR-05
     path("roles", views.RoleListView.as_view(), name="role-list"),
     path("users", views.UserListView.as_view(), name="user-list"),

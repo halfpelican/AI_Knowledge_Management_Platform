@@ -15,7 +15,9 @@ The per-user scopes, each a DRF ``ScopedRateThrottle`` rate from ``apps/core/con
   ``GET /api/transcriptions/status``, which asks FLM for its model list (D-123);
 - ``action_items`` on FR-16's ``POST /api/meetings/{id}/action-items`` and on ``PATCH`` and
   ``DELETE /api/meetings/{id}/action-items/{item_id}``, one budget (the security review of 12
-  November 2026, finding 2, D-125's third note).
+  November 2026, finding 2, D-125's third note);
+- ``password_change`` on ``POST /api/auth/change-password`` (D-137), wrong current passwords
+  included. ``apps/api/tests/test_fr01_password_change.py`` tests the rest of the route.
 
 Each test sends real requests at the real rates and counts to the limit, so a rate changed in
 ``constants.py`` moves the tests with it and a rate dropped from the wiring fails them. The
@@ -56,6 +58,7 @@ from apps.core.constants import (
     DOCUMENT_INDEXED,
     EMPLOYEE_ROLE_NAME,
     INGESTION_THROTTLE_RATE,
+    PASSWORD_CHANGE_THROTTLE_RATE,
     SEARCH_THROTTLE_RATE,
     TAGGING_THROTTLE_RATE,
     TOPIC_DIMENSION,
@@ -63,6 +66,7 @@ from apps.core.constants import (
 )
 from apps.documents.models import ContentTag, Document, Tag
 from apps.retrieval.models import Conversation, QueryLog, SearchLog
+from conftest import PASSWORD
 
 pytestmark = pytest.mark.django_db
 
@@ -143,6 +147,7 @@ def test_the_rates_are_the_ones_d79_settles_and_reach_drf():
     assert TAGGING_THROTTLE_RATE == "30/min"
     assert TRANSCRIPTION_THROTTLE_RATE == "60/min"
     assert ACTION_ITEM_THROTTLE_RATE == "30/min"
+    assert PASSWORD_CHANGE_THROTTLE_RATE == "10/hour"  # D-137
     expected = {
         "auth": AUTHENTICATION_THROTTLE_RATE,
         "ask": ASK_THROTTLE_RATE,
@@ -152,6 +157,7 @@ def test_the_rates_are_the_ones_d79_settles_and_reach_drf():
         "tagging": TAGGING_THROTTLE_RATE,
         "transcription": TRANSCRIPTION_THROTTLE_RATE,
         "action_items": ACTION_ITEM_THROTTLE_RATE,
+        "password_change": PASSWORD_CHANGE_THROTTLE_RATE,
     }
     assert settings.REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] == expected
     # DRF binds the rates to the throttle class when it is imported, so read them from there too.
@@ -556,3 +562,52 @@ def test_one_users_action_item_budget_is_not_anothers(employee_client, administr
     assert_rate_throttled(add_item(clients[spender], meeting.id))
 
     assert add_item(clients[other], meeting.id).status_code == 201
+
+
+# --- password_change (D-137) --------------------------------------------------------------------
+
+PASSWORD_CHANGE_URL = "/api/auth/change-password"
+PASSWORD_CHANGE_LIMIT = allowed(PASSWORD_CHANGE_THROTTLE_RATE)
+NEW_PASSWORD = "Fresh-Lantern-42-Orbit"  # passes AUTH_PASSWORD_VALIDATORS for both fixtures' users
+
+
+def change_password(client, current_password):
+    return client.post(
+        PASSWORD_CHANGE_URL,
+        {"current_password": current_password, "new_password": NEW_PASSWORD},
+        format="json",
+    )
+
+
+def test_the_password_change_scope_answers_429_past_its_rate_and_changes_nothing(session_client):
+    """D-137. Each wrong guess at the current password is one of the ten requests an hour, so a
+    session left open gives ten guesses an hour. Past the rate the right password is refused too,
+    and nothing changes: not the password, not FR-02's counters, which the guesses never touch, and
+    not the session. The budget is the user's, so another session of theirs is held as well."""
+    client = session_client.client
+    user = session_client.user
+    for number in range(1, PASSWORD_CHANGE_LIMIT + 1):
+        assert change_password(client, f"Wrong-Guess-{number}!").status_code == 400, number
+
+    assert_rate_throttled(change_password(client, PASSWORD))
+    second_session = APIClient()
+    second_session.force_login(user)
+    assert_rate_throttled(change_password(second_session, PASSWORD))
+    user.refresh_from_db()
+    assert user.check_password(PASSWORD)
+    assert (user.failed_attempts, user.locked_until) == (0, None)
+    assert client.get("/api/auth/me").status_code == 200
+    assert second_session.get("/api/auth/me").status_code == 200
+
+
+@pytest.mark.parametrize("spender", [EMPLOYEE_ROLE_NAME, ADMINISTRATOR_ROLE_NAME])
+def test_one_users_password_change_budget_is_not_anothers(employee_client, administrator_client, spender):
+    """Spent on empty bodies, each a 400 that runs no hash, because the rate counts a request before
+    its body is read."""
+    clients = {EMPLOYEE_ROLE_NAME: employee_client, ADMINISTRATOR_ROLE_NAME: administrator_client}
+    [other] = set(clients) - {spender}
+    for number in range(PASSWORD_CHANGE_LIMIT):
+        assert clients[spender].post(PASSWORD_CHANGE_URL, {}, format="json").status_code == 400, number
+    assert_rate_throttled(change_password(clients[spender], PASSWORD))
+
+    assert change_password(clients[other], PASSWORD).status_code == 200

@@ -25,6 +25,7 @@ from apps.core.constants import (
     LOCKOUT_DURATION as DEFAULT_LOCKOUT_DURATION,
     LOCKOUT_DURATION_MAXIMUM,
     LOCKOUT_THRESHOLD as DEFAULT_LOCKOUT_THRESHOLD,
+    PASSWORD_CHANGE_THROTTLE_RATE,
     SEARCH_THROTTLE_RATE,
     TAGGING_THROTTLE_RATE,
     TRANSCRIPTION_THROTTLE_RATE,
@@ -234,6 +235,8 @@ REST_FRAMEWORK = {
     #   tag (D-79's two notes of 10 November 2026).
     # - "transcription": per signed-in user, one recording segment sent for transcription
     #   (D-123).
+    # - "password_change": per signed-in user, a password change, wrong current passwords
+    #   included (D-137).
     #
     # The counters live in the default cache. No CACHES is set, so that is Django's
     # per-process LocMemCache: the one Waitress process (D-64) shares them, a restart clears
@@ -247,6 +250,7 @@ REST_FRAMEWORK = {
         "tagging": TAGGING_THROTTLE_RATE,
         "transcription": TRANSCRIPTION_THROTTLE_RATE,
         "action_items": ACTION_ITEM_THROTTLE_RATE,
+        "password_change": PASSWORD_CHANGE_THROTTLE_RATE,
     },
     # X-Forwarded-For is not trusted: an anonymous throttle is keyed on REMOTE_ADDR, the
     # connecting address. Unset, DRF keys it on the client-sent header, so the auth limit

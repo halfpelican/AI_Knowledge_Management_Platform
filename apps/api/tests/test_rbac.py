@@ -95,7 +95,10 @@ PROTECTED_ROUTES = {"api-root", "auth-logout", "auth-me", "role-list", "user-lis
                     "meeting-summary", "meeting-action-items", "meeting-action-item",
                     # NIT3004: FR-03's administrator release, behind release_account_locks
                     # (D-130)
-                    "user-unlock"}
+                    "user-unlock",
+                    # D-137: a signed-in user changes their own password. A session and no
+                    # permission code, for both roles
+                    "auth-change-password"}
 # Routes that need more than a session, with the permission code they check.
 # document-list is absent on purpose: its GET needs only a session, and the
 # contribute permission its POST needs is returned by get_permissions() per method

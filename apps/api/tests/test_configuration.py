@@ -209,6 +209,9 @@ THROTTLED_ROUTES = {
     ("meeting-action-items", "POST"): "action_items",
     ("meeting-action-item", "PATCH"): "action_items",
     ("meeting-action-item", "DELETE"): "action_items",
+    # D-137: a password change, in a budget of its own, which is the only bound on guessing the
+    # current password from a session left open.
+    ("auth-change-password", "POST"): "password_change",
 }
 
 

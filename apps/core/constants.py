@@ -527,6 +527,13 @@ TRANSCRIPTION_THROTTLE_RATE = "60/min"
 # rate bounds how fast one account can fill or rewrite a meeting's Action Items panel, which every
 # reader of the meeting loads. The page sends one request per save, addition or deletion.
 ACTION_ITEM_THROTTLE_RATE = "30/min"
+# POST /api/auth/change-password, scope "password_change" (D-137, the lead's decision of 16 November
+# 2026). Counted per user, so every session of one account shares it, and counted before the body
+# is read, so a wrong current password counts. That is what bounds guessing from a session left
+# open: ten guesses an hour at the account's password. A wrong guess there never touches FR-02's
+# failed_attempts or locked_until, so the rate is the only bound on it. A person changing their
+# password sends one request.
+PASSWORD_CHANGE_THROTTLE_RATE = "10/hour"
 
 # How much longer than generation's worst case a user's in-flight ask slot is held before it
 # expires on its own, in seconds. The slot's timeout is GENERATION_TIMEOUT_SECONDS times

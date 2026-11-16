@@ -61,7 +61,17 @@ SESSION_NAMES = [
 ]
 
 
-@pytest.mark.parametrize("name", SECTION_5_NAMES + PASSWORD_NAMES + VOCABULARIES + SESSION_NAMES)
+# D-137's account self-service (16 November 2026), beyond its session length above: the password
+# change's throttle rate, which apps/api/tests/test_throttles.py pins with the other rates.
+ACCOUNT_SELF_SERVICE_NAMES = [
+    "PASSWORD_CHANGE_THROTTLE_RATE",
+]
+
+
+@pytest.mark.parametrize(
+    "name",
+    SECTION_5_NAMES + PASSWORD_NAMES + VOCABULARIES + SESSION_NAMES + ACCOUNT_SELF_SERVICE_NAMES,
+)
 def test_every_constant_is_defined(name):
     assert hasattr(constants, name), f"{name} missing from apps.core.constants"
 

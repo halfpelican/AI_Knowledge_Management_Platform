@@ -9,7 +9,7 @@ import logging
 import math
 
 from django.conf import settings
-from django.contrib.auth import authenticate, get_user_model
+from django.contrib.auth import authenticate, get_user_model, update_session_auth_hash
 from django.contrib.auth import login as django_login
 from django.contrib.auth import logout as django_logout
 from django.core.exceptions import SuspiciousFileOperation
@@ -163,6 +163,7 @@ from .serializers import (
     ActionItemSerializer,
     ActionItemWriteSerializer,
     MeetingSerializer,
+    PasswordChangeSerializer,
     ProposedTagRejectSerializer,
     ProposedTagSerializer,
     RecentQuestionSerializer,
@@ -208,6 +209,8 @@ ACCOUNT_LOCKED_MESSAGE = (
 ACCOUNT_LOCKED_CODE = "account_locked"
 # FR-04 Front-End: "a brief confirmation 'You've been logged out'".
 LOGGED_OUT_MESSAGE = "You have been logged out."
+# POST /api/auth/change-password's 200 (D-137). The refusals are PasswordChangeSerializer's.
+PASSWORD_CHANGED_MESSAGE = "Your password has been changed."
 # FR-05 Validation: "a user cannot remove their own administrator role, preventing
 # accidental lockout of the last administrator."
 SELF_DEMOTION_MESSAGE = "You cannot remove your own Administrator role."
@@ -765,6 +768,59 @@ class LogoutView(APIView):
 class MeView(SendsCsrfCookieMixin, APIView):
     def get(self, request):
         return Response(UserSerializer(request.user).data)
+
+
+# --- A signed-in user changes their password (D-137) ------------------------------------
+
+
+class PasswordChangeView(APIView):
+    """``POST /api/auth/change-password`` (D-137): a signed-in user changes their own password.
+
+    **Who:** any session, both roles, under the global ``IsAuthenticated``. No role permission is
+    checked, because a password is its holder's own. No session is a 401. CSRF is checked as on
+    every other unsafe request from a session (``apps/api/authentication.py``), before the throttle
+    and before the body is read.
+
+    **Throttled per user** in ``password_change`` (``PASSWORD_CHANGE_THROTTLE_RATE``), before the
+    body is read, so a wrong current password counts. That rate is the only bound on guessing here:
+    the check is ``check_password()``, never login's path, so a wrong guess touches neither
+    ``failed_attempts`` nor ``locked_until``.
+
+    **The body** is ``PasswordChangeSerializer``'s. Every refusal is a 400 with field errors, a wrong
+    current password included, never a 401: the front end treats every 401 as an expired session
+    and signs the user out (D-137).
+
+    **On success:**
+
+    - ``set_password()`` hashes the new password with bcrypt (FR-01). Only that column is saved.
+    - ``update_session_auth_hash()`` keeps this session, under a new key, with its data. So it keeps
+      a remembered expiry if it has one (D-137's "Remember me").
+    - Every other session of the user ends, because the hash it stores no longer matches the new
+      password's. Django flushes each one on its next request, which is a 401. Other users'
+      sessions are not touched.
+    - FR-03's lock and count stay as they are, as a completed reset leaves them (D-137).
+
+    Two changes racing on one account each verified the current password, so either caller could
+    have made the change alone. The later save wins, and the other session is signed out.
+    """
+
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "password_change"
+
+    def post(self, request):
+        user = request.user
+        serializer = PasswordChangeSerializer(data=request.data, context={"user": user})
+        serializer.is_valid(raise_exception=True)  # 400 in DRF's shape
+        user.set_password(serializer.validated_data["new_password"])
+        with transaction.atomic():
+            # The password column alone. This row was read when the request was authenticated, so
+            # a full save would write back what it held then, undoing a role change an
+            # Administrator made since, or a lock FR-02 set since.
+            user.save(update_fields=["password"])
+            # Cycles this session's key, keeping its data, its expiry among them, and stores the
+            # new password's hash in it, in the transaction that changes the password.
+            update_session_auth_hash(request, user)
+        return Response({"detail": PASSWORD_CHANGED_MESSAGE}, status=status.HTTP_200_OK)
 
 
 # --- FR-05 role management ---------------------------------------------------------------
