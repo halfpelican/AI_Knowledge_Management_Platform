@@ -16528,6 +16528,76 @@ transcript. Its line numbers are at `cc01e09`. Its closing line:
   (`apps/api/tests/test_fr10_proposed_tags.py`), and only `POST /api/tags` is tested at 255. The page
   now offers Confirm at 255, and by reading the server accepts it: `max_length`, then a strict `>`.
   This predates the branch (the requirements audit, O1).
+
+  *Covered on 16 November 2026, on the branch `test/FR-10-confirm-at-column-width`:*
+  `test_a_value_exactly_as_long_as_the_column_is_confirmed_whole`, beside the over-long case in
+  `apps/api/tests/test_fr10_proposed_tags.py` (`c297902`).
+  - **What it confirms:** a proposal of 255 ASCII characters, and one of 255 ships (U+1F6A2), which
+    are 510 UTF-16 units and 1,020 UTF-8 bytes. Each value is normalised as a run holds a proposal,
+    so the value sent back is the value held. It runs in Project, Process and Topic, as the 256 case
+    beside it does, from an Employee and an Administrator session through `session_client`: 12
+    cases. A Topic is proposed through the classify route, the stub suggesting it upper-cased. A
+    Project or Process value is written onto the analysis row, as in the file's other tests.
+  - **What each case asserts:** before the confirm, the proposal is held whole. Then: 200; the
+    proposal leaves `proposed_tags`, in the reply and on the row; the `tag_details` entry names the
+    whole value, `applied_by="ai"`, confirmed, not provisional, with the proposal's confidence; the
+    one Tag, read back from the database, holds the whole value; and the document's one link is to
+    that Tag.
+  - **Deliberate breaks.** Each case failed under at least one break before it was relied on, and
+    every break was reverted.
+    - **How:** a script applied each break alone to the committed tree. Each run used the 16 test
+      files that reach the confirm route, `confirm_proposed_tag` or `ProposedTagSerializer`, on a
+      newly created test database. The script restored every touched file byte for byte. It checked
+      each file's SHA-256 against the bytes before the break and against the committed blob, and it
+      required the tree clean before and after each break.
+    - **A first attempt was discarded.** It reused the test database between runs.
+      `apps/documents/tests/test_classification_lock_order.py` is transactional, and its teardown
+      empties every table, the seeded roles included. So every break run after the control errored
+      in setup, and showed nothing about its break. The script now creates the database for each
+      run, and stops if any test errors in setup.
+    - **The table** is generated from the runs' junit reports by a script, not typed. The scripts
+      and the reports are in the session's scratchpad, not in the repository.
+
+  The control run, with no break, at `d8327c8`: 497 tests in 16 files, 0 failed (exit 0).
+
+  | `test_a_value_exactly_as_long_as_the_column_is_confirmed_whole[...]` | Fails under |
+  |---|---|
+  | `[administrator-Process-ascii]` | B1, B2, B4, B5 |
+  | `[administrator-Process-astral]` | B1, B2, B3, B4, B5, B6 |
+  | `[administrator-Project-ascii]` | B1, B2, B4, B5 |
+  | `[administrator-Project-astral]` | B1, B2, B3, B4, B5, B6 |
+  | `[administrator-Topic-ascii]` | B1, B2, B4, B5 |
+  | `[administrator-Topic-astral]` | B1, B2, B3, B4, B5, B6 |
+  | `[employee-Process-ascii]` | B1, B2, B4, B5 |
+  | `[employee-Process-astral]` | B1, B2, B3, B4, B5, B6 |
+  | `[employee-Project-ascii]` | B1, B2, B4, B5 |
+  | `[employee-Project-astral]` | B1, B2, B3, B4, B5, B6 |
+  | `[employee-Topic-ascii]` | B1, B2, B4, B5 |
+  | `[employee-Topic-astral]` | B1, B2, B3, B4, B5, B6 |
+
+  The breaks, each applied alone, run, and reverted:
+
+  - **B1** (`apps/api/serializers.py`): `ProposedTagSerializer`'s `value` has `max_length=NAME_MAX_LENGTH - 1`, 254. 12 of the 497 tests failed, all of them new.
+  - **B2** (`apps/documents/classification.py`): `confirm_proposed_tag` refuses a name with `>=` rather than `>`. 12 of the 497 tests failed, all of them new.
+  - **B3** (`apps/documents/classification.py`): `confirm_proposed_tag` counts the name in UTF-16 units, as JavaScript's `length` does, not in code points. 6 of the 497 tests failed, all of them new.
+  - **B4** (`apps/documents/classification.py`): `confirm_proposed_tag` creates the Tag from the name cut to `NAME_MAX_LENGTH - 1` characters. 12 of the 497 tests failed, all of them new.
+  - **B5** (`apps/documents/classification.py`): `confirm_proposed_tag` drops the proposal by the name cut to `NAME_MAX_LENGTH - 1` characters, so one at the column's width stays. 12 of the 497 tests failed, all of them new.
+  - **B6** (`apps/api/serializers.py`): `ProposedTagSerializer`'s `value` also refuses more than `NAME_MAX_LENGTH` UTF-16 units (a field validator, so the reject serializer, which redefines `value`, is unchanged). 6 of the 497 tests failed, all of them new.
+
+  No test outside the new one failed under any break.
+
+  - **What each break tripped,** read from the runs' reports. B1, B2, B3 and B6 tripped on the
+    confirm's 400 keyed on `value`: under B1 with the serializer's 254 message, under B2 and B3
+    with `confirm_proposed_tag`'s message, and under B6 with that break's own. B4 tripped on the
+    `tag_details` entry, whose name was cut short. B5 tripped on the reply's `proposed_tags`, which
+    still held the proposal.
+  - **D-134 was read, not run.** On its branch, `fix/FR-10-discard-long-topic`, a run discards a
+    Topic only when it is over 255 characters (`len(name) > NAME_MAX_LENGTH`), and
+    `confirm_proposed_tag` changes only in its docstring. So the Topic cases should still be
+    proposed and confirmed once both are on `main`, and each break above should still apply. These
+    tests were not run on that branch.
+  - **The suites:** the control run above. No server code changed, only that test file and this
+    note, so the whole of `pytest` was not run here. CI runs it on the pull request.
 - **The code-point count is not shared:** `lengthOf` here, and `tagNameError` and
   `departmentNameError` in `frontend/src/utils/validation.js`, each count for themselves. They agree.
   No shared helper was made (the requirements audit, O2, low).
