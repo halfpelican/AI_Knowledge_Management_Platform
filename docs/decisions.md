@@ -11915,7 +11915,7 @@ departure from FR-16's words.**
     Its last bullet states what `unassigned` means in a reference, and why. It does not apply to
     `O01` to `O10`, whose reference may not be changed to fit a result (the note of 15 November on
     Objective 04).
-  - The README note's wording is Claude's and awaits Benjamin's approval.
+  - The README note's wording is Claude's, approved by Benjamin Morovan on 16 November 2026.
 - **Unchanged.**
   - `O07-A8` is not affected: the note of 15 November on Objective 04 records `O01-A4` as the only
     extracted item stored for a first name that two roster users share.

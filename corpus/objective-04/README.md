@@ -63,8 +63,8 @@ reference set** (D-125's dated note of 16 November). It disagrees with the appli
 for a first name that two roster users share, and Benjamin Morovan kept the application's rule. The
 frozen reference was written under the instruction above, and this note does not change it. Nor
 does it apply to `O01` to `O10`, whose reference may not be changed to fit a result (D-125's note
-of 15 November on Objective 04). A new set uses this instead. *The wording awaits Benjamin
-Morovan's approval.*
+of 15 November on Objective 04). A new set uses this instead. *The wording was approved by
+Benjamin Morovan on 16 November 2026.*
 
 - `expected_owner`: the roster user the task belongs to, as a full name from `roster.json`, or
   `unassigned`. Read the owner's name against the meeting's recorded attendees (here, in
