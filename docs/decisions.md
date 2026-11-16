@@ -11880,12 +11880,14 @@ departure from FR-16's words.**
   - Rule (b) departs from FR-16's words in each direction:
     - a first name that two users share is no confident match against the whole user list, so it
       would be unassigned, and rule (b) gives it to the one attendee who has it;
-    - a first name that only one user has, where that user did not attend, is a confident match
-      against the list, and rule (b) leaves it unassigned, because the name "may be someone who is
-      not a user at all" (`test_owners.py`'s
-      `test_a_lone_first_name_held_by_a_user_who_did_not_attend_is_unassigned`).
+    - a first name that only one user has, where that user was not recorded as attending, is a
+      unique match against the list, and rule (b) leaves it unassigned, because the name "may be
+      someone who is not a user at all" (`test_owners.py`'s
+      `test_a_lone_first_name_held_by_a_user_who_did_not_attend_is_unassigned`). FR-16 does not
+      define a confident match, and the rule's docstring before `08ddd31` held that "A first name
+      is a confident match only among the people who were in the room".
 
-    Both are recorded here rather than presented as the requirement's own rule.
+    These are recorded here rather than presented as the requirement's own rule.
   - The original "Owners (attribution)" bullet is left as written. The note of 13 November replaced
     its rule (a), "exactly one user whose full name equals the name", and made rule (b) subject to
     the same reading check.
@@ -11895,15 +11897,17 @@ departure from FR-16's words.**
     `test_a_lone_first_name_is_matched_among_attendees_even_where_another_user_shares_it` and, end
     to end, `test_summary_runs.py`'s
     `test_extracted_items_get_their_owner_their_date_and_the_words_as_said`.
-  - The README's instruction disagreed with it from the day both were written.
+  - The README's instruction disagreed with it from the start.
   - It gives more items an owner. Across an organisation's whole user list, shared first names are
     common.
   - Registration is open (FR-01). Deciding ambiguity across every user would let anyone who
     registers with a first name make every lone use of it unassigned. That is the weakness the
     security review found, and `08ddd31` closed, for full names.
-  - **Its cost.** A task given by first name to an absent colleague, who shares that first name
-    with exactly one attendee, goes to that attendee: the wrong person. A task given by first name
-    to an absent colleague whose first name no other user has is stored unassigned. Either way the
+  - **Its cost.** A task given by first name to a colleague not recorded as attending, who shares
+    that first name with exactly one attendee, goes to that attendee: the wrong person. So does a
+    task given by a surname alone that is exactly one attendee's first name, since every one-word
+    name is read as a first name. A task given by first name to a colleague not recorded as
+    attending, whose first name no other user has, is stored unassigned. In each case the
     transcript's words stay beside the item (`ActionItem.owner_name`), and a person can reassign it
     to anyone whose role can read the meeting.
 - **The reference's writing instruction is corrected for any new set, not for the frozen one.**
@@ -11925,6 +11929,12 @@ departure from FR-16's words.**
   - `corpus/objective-04/roster.json` still says "FR-16 matches a named owner against the user
     list". It records the users the frozen measurement's database held (the README's table), and is
     left as it was.
+  - `corpus/objective-04/manifest.json`, where the new instruction sends a writer for the
+    attendees, is left as it was too. Its `attendees_note` still says FR-16 uses the attendees
+    "only to match a lone first name to an owner", untrue since `08ddd31` matched full names among
+    them as well. Its `status` still calls the set a draft, untrue since the freeze (`06bfe73`). No
+    script or test reads `attendees_note` or `status`: `scripts/objective04_run.py` reads only the
+    set lists.
 
 ## D-126 · FR-19's permission exclusion is per embedding model: voyage-4 is threshold-first, D-108's rule as first written, and EmbeddingGemma keeps rank-one
 
