@@ -446,12 +446,14 @@ class ProposedTagRejectSerializer(ProposedTagSerializer):
     """The body of the proposed-tags reject route (D-133): ``ProposedTagSerializer``'s, except that
     ``value`` may be up to MAXIMUM_PROPOSED_TAG_LENGTH characters rather than the column's 255.
 
-    A run proposes a Topic whatever its length (D-129), and a rejection writes only JSON
-    (``reject_proposed_tag``'s ``rejected_tags`` entry, matched by normalised value), so no column
-    limits it. Until D-133 this route read the confirm serializer, and a Topic over 255 characters
-    could be neither confirmed nor rejected: the requirements re-audit of ``d909537``, finding C15.
-    Blank, or over MAXIMUM_PROPOSED_TAG_LENGTH, is 400 keyed on ``value``. A value within the bound
-    that is not proposed on the document is the route's 404, as before."""
+    From D-129 until D-134 a run proposed a Topic whatever its length, and a rejection writes only
+    JSON (``reject_proposed_tag``'s ``rejected_tags`` entry, matched by normalised value), so no
+    column limits it. Until D-133 this route read the confirm serializer, and a Topic over 255
+    characters could be neither confirmed nor rejected: the requirements re-audit of ``d909537``,
+    finding C15. Since D-134 a run discards a Topic over 255 characters instead of proposing it, so
+    the longer bound serves proposals stored before D-134. Blank, or over
+    MAXIMUM_PROPOSED_TAG_LENGTH, is 400 keyed on ``value``. A value within the bound that is not
+    proposed on the document is the route's 404, as before."""
 
     value = serializers.CharField(
         max_length=MAXIMUM_PROPOSED_TAG_LENGTH, allow_blank=False, trim_whitespace=True
