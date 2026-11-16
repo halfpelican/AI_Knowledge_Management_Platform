@@ -11,6 +11,22 @@ import useDocumentTitle from '../hooks/useDocumentTitle.js'
 import { extractFieldErrors } from '../utils/fieldErrors.js'
 import './Profile.css'
 
+  /* ---- State ---- */
+  const [passwordErrors, setPasswordErrors] = useState({})
+  const [passwordFormError, setPasswordFormError] = useState(null)
+  const [passwordSuccess, setPasswordSuccess] = useState(false)
+  const [savingPassword, setSavingPassword] = useState(false)
+
+  const [uploadError, setUploadError] = useState(null)
+  const [uploadSuccess, setUploadSuccess] = useState(false)
+  const [uploadingPicture, setUploadingPicture] = useState(false)
+  const [pictureFile, setPictureFile] = useState(null)
+  const [picturePreview, setPicturePreview] = useState(null)
+
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+
 export default function Profile() {
   useDocumentTitle('My Profile')
   const { user, loading } = useAuth()
@@ -28,22 +44,6 @@ export default function Profile() {
   if (!user) {
     return <Navigate to="/login" replace />
   }
-
-  /* ---- State ---- */
-  const [passwordErrors, setPasswordErrors] = useState({})
-  const [passwordFormError, setPasswordFormError] = useState(null)
-  const [passwordSuccess, setPasswordSuccess] = useState(false)
-  const [savingPassword, setSavingPassword] = useState(false)
-
-  const [uploadError, setUploadError] = useState(null)
-  const [uploadSuccess, setUploadSuccess] = useState(false)
-  const [uploadingPicture, setUploadingPicture] = useState(false)
-  const [pictureFile, setPictureFile] = useState(null)
-  const [picturePreview, setPicturePreview] = useState(null)
-
-  const [currentPassword, setCurrentPassword] = useState('')
-  const [newPassword, setNewPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
 
   /* ---- Change password ---- */
   function validatePasswordForm() {
