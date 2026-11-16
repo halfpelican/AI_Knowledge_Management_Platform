@@ -27,6 +27,7 @@ from apps.core.constants import (
     DOCUMENT_STATUS_VALUES,
     DOCUMENT_TYPES,
     KNOWLEDGE_GAP_STATUS_VALUES,
+    KNOWLEDGE_MAP_NODE_TYPES,
     LOGIN_ATTEMPT_LOCKOUT,
     MAXIMUM_PROPOSED_TAG_LENGTH,
     NO_ANSWER_MESSAGE,
@@ -1688,6 +1689,60 @@ class DocumentBrowseQuerySerializer(serializers.Serializer):
 
     def validate_sort(self, value):
         return value or DEFAULT_DOCUMENT_SORT
+
+
+# --- FR-20 knowledge map (docs/decisions.md D-132) -----------------------------------------
+
+# A focus is a type and an identifier, so one without the other names nothing. Keyed in the 400
+# body on the parameter that is missing, the one the caller has to add.
+FOCUS_INCOMPLETE_MESSAGE = "focus_type and focus_id are given together or not at all."
+
+
+class KnowledgeMapQuerySerializer(serializers.Serializer):
+    """``GET /api/knowledge-map``'s query parameters, read only through this (D-65, D-132).
+
+    The view hands it ``request.query_params`` as ``data=`` and uses ``validated_data`` alone.
+    ``focus_type`` is a fixed vocabulary read through a ``ChoiceField`` and ``focus_id`` a UUID,
+    so a NUL byte in either is a 400 at the boundary, since it is neither a valid choice nor a
+    valid UUID, and never reaches an ORM lookup.
+
+    **Both or neither.** With neither, the request is the overview. With both, it is a selection.
+    One without the other is a 400 keyed on the missing parameter. An empty value is the same as
+    an absent one, as on the dashboard and browse: DRF treats ``focus_id=`` on a field that is not
+    required as omitted.
+
+    **Shape only: the focus is never looked up here, and nothing about it decides a status code.**
+    A serializer that checked whether the node exists would answer 400 for an identifier that
+    names nothing and 200 for one that names a source the caller cannot read, and the difference
+    would disclose the restricted one (D-65). Every well-formed pair reaches the walk, where a
+    focus that is not in the caller's own graph gets the one empty answer, whatever the reason
+    (``apps/api/knowledge_map.py``). 400 for a malformed parameter is this API's convention, not
+    one of FR-20's codes, which names only 200.
+
+    ``focus`` is the validated pair, or ``None`` for the overview. The identifier is a ``UUID``,
+    so however the caller spelt it, upper case or without hyphens, the walk sees one form.
+    """
+
+    focus_type = serializers.ChoiceField(
+        choices=KNOWLEDGE_MAP_NODE_TYPES, required=False, default=None
+    )
+    focus_id = serializers.UUIDField(required=False, default=None)
+
+    def validate(self, attrs):
+        focus_type, focus_id = attrs.get("focus_type"), attrs.get("focus_id")
+        if focus_type is not None and focus_id is None:
+            raise serializers.ValidationError({"focus_id": [FOCUS_INCOMPLETE_MESSAGE]})
+        if focus_id is not None and focus_type is None:
+            raise serializers.ValidationError({"focus_type": [FOCUS_INCOMPLETE_MESSAGE]})
+        return attrs
+
+    @property
+    def focus(self) -> tuple[str, UUID] | None:
+        """``(focus_type, focus_id)`` after validation, or ``None`` when no focus was sent."""
+        focus_type = self.validated_data["focus_type"]
+        if focus_type is None:
+            return None
+        return focus_type, self.validated_data["focus_id"]
 
 
 # --- FR-19 knowledge-gap log (docs/decisions.md D-107 to D-109) ----------------------------

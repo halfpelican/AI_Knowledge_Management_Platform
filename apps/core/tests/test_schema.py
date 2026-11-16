@@ -272,6 +272,10 @@ SECTION_5_PLAN = [
     # them.
     ("accounts", "0009_login_attempts"),
     ("accounts", "0010_seed_release_account_locks"),
+    # FR-20 (D-132), 14 November 2026: view_knowledge_map, both roles, immediately after 0010,
+    # which it depends on. It was written against 0008 while FR-03's branch held 0009 and 0010,
+    # and was re-pointed in the merge of 15 November 2026, before any database had applied it.
+    ("accounts", "0011_seed_view_knowledge_map"),
     ("documents", "0001_initial"),
     ("meetings", "0001_initial"),
     # D-16: visible_to_roles on Meetings. Planned here, before documents 0002, since documents 0011

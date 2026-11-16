@@ -33,6 +33,7 @@ from apps.core.constants import (
     MANAGE_TAGS_PERMISSION,
     RELEASE_ACCOUNT_LOCKS_PERMISSION,
     REVIEW_KNOWLEDGE_GAPS_PERMISSION,
+    VIEW_KNOWLEDGE_MAP_PERMISSION,
 )
 
 pytestmark = pytest.mark.django_db
@@ -46,6 +47,9 @@ EARLIER_ADMINISTRATOR_CODES = {
     MANAGE_ROLES_PERMISSION, CONTRIBUTE_CONTENT_PERMISSION, MANAGE_DOCUMENTS_PERMISSION,
     MANAGE_MEETINGS_PERMISSION, REVIEW_KNOWLEDGE_GAPS_PERMISSION, MANAGE_TAGS_PERMISSION,
 }
+# accounts 0011 (FR-20, D-132) seeds view_knowledge_map for both roles after this migration, so
+# unseeding 0010's own code alone leaves it in place, on the Employee too.
+LATER_CODES = {VIEW_KNOWLEDGE_MAP_PERMISSION}
 # docs/schema-v1.md section 1, LoginAttempts: the proposal's five columns, then FR-03's four.
 LOGIN_ATTEMPT_COLUMNS = {
     "attempt_id", "attempted_email", "source_ip", "success", "attempted_at",
@@ -97,9 +101,10 @@ def test_seed_is_reversible(employee_role, administrator_role):
     assert not RolePermission.objects.filter(
         permission__permission_name=RELEASE_ACCOUNT_LOCKS_PERMISSION
     ).exists()
-    # 0003's to 0008's seeds are untouched: unseeding one migration must not undo another.
-    assert permission_names(administrator_role) == EARLIER_ADMINISTRATOR_CODES
-    assert permission_names(employee_role) == {CONTRIBUTE_CONTENT_PERMISSION}
+    # 0003's to 0008's seeds, and 0011's, are untouched: unseeding one migration must not undo
+    # another.
+    assert permission_names(administrator_role) == EARLIER_ADMINISTRATOR_CODES | LATER_CODES
+    assert permission_names(employee_role) == {CONTRIBUTE_CONTENT_PERMISSION} | LATER_CODES
     assert Role.objects.count() == 2  # the roles themselves are 0002's
 
     seed.seed_permissions(registry, None)

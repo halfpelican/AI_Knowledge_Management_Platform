@@ -15604,6 +15604,1243 @@ record is `corpus/demo/screening-2026-11-15-anthropic/`.
   - the alpha after a redeploy from `main`. That changes the generation parser (#106, #107) and not
     retrieval, and it does not touch the database.
 
+## D-132 · FR-20's knowledge map: one read-only route behind `view_knowledge_map`, scoped before it is capped, a hand-built diagram and a table equivalent
+
+**Status:** Settled by the user (the choices below, 14 November 2026) · **Date:** 2026-11-14 ·
+**Concerns:** FR-20, UC-11, NFR-14, NFR-16, NFR-17, FR-06, FR-09, FR-10, FR-11, FR-15, invariants 1,
+3 and 4, D-07, D-16, D-34, D-53, D-65, D-66, D-72, D-105, D-119, D-130, `apps/api/knowledge_map.py`,
+`apps/api/repository.py`, `apps/api/views.py`, `apps/api/serializers.py`, `apps/api/urls.py`,
+`apps/core/constants.py`, `apps/accounts/migrations/0011_seed_view_knowledge_map.py`,
+`frontend/src/pages/KnowledgeMap.jsx`, `scripts/knowledge_map_reach.py`, `docs/api-contract.md`,
+`docs/accessibility.md`, `docs/schema-v1.md`, `CLAUDE.md` section 5 · **Stage:** NIT3004, a COULD
+requirement built after M7's freeze at the user's instruction · **Area:** presentation and
+retrieval scoping, Benjamin Morovan's (CLAUDE.md §1)
+
+**What the proposal asks for, in its words.**
+
+- **FR-20, Front-End:** "A node-link diagram showing documents, meetings, tags, and contributors,
+  with node type distinguished by colour and shape." "Selecting a node reveals its connections;
+  selecting again opens the underlying item." "A tabular equivalent presents the same relationships
+  as sortable rows, since a node-link diagram cannot be used with a screen reader and colour-coded
+  types are indistinguishable to many users."
+- **FR-20, Server-End:** "Assembles nodes and edges from existing tables (ContentTags for
+  classification links, Documents.uploaded_by for authorship, MeetingAttendees for participation)
+  rather than maintaining a separate relationship store." "traversal depth and returned node count
+  are capped, and truncation is reported to the interface so that a partial view is not presented as
+  complete." "nodes the user cannot access are removed entirely rather than anonymised, and
+  connection counts are recomputed after filtering, since a visible placeholder would disclose both
+  the existence and the volume of restricted content." "200 OK with nodes, edges, and a truncation
+  indicator."
+- **FR-20, Database:** "Documents, Meetings, ContentTags, Tags, Users (Read)", with a field list for
+  each: Documents `doc_id`, `uploaded_by`; Meetings `meeting_id`, `title`; ContentTags
+  `content_tag_id`, `tag_id`, `source_id`; Tags `tag_id`, `tag_name`; Users `user_id`, `name`.
+- **NFR-17:** the visualisation "must provide an equivalent accessible alternative — a
+  keyboard-navigable, sortable table view conveying the same nodes and relationships — for users
+  who cannot use the graphical, colour-coded diagram." Its test: "Screen-reader test
+  (NVDA/Voiceover) confirming all node and relationship information is reachable through the
+  tabular view, satisfying WCAG 2.1 SC 1.1.1."
+- **UC-11, Explore Knowledge Map.** Primary actor: "Employee". Main flow: "03 The system assembles
+  nodes and edges from the ContentTags, Documents. Uploaded_by and MeetingAttendees relationships,
+  restricted to that scope. 04 The system applies the configured cap on traversal depth and returned
+  node count. 05 The system removes any node the Employee cannot access entirely, rather than
+  displaying it anonymised, and recomputes connection counts after that removal." "07 The Employee
+  selects a node; the system reveals its direct connections. 08 The Employee selects the same node
+  again; the system opens the underlying item." **A1:** "Instead of, or alongside, the diagram, the
+  system presents the same nodes and relationships as sortable rows"; "Selecting a row has the same
+  effect as selecting a node at step 7." **A2:** "The configured depth or node-count limit was
+  reached before every accessible relationship could be included."; "The system displays a
+  truncation indicator alongside the map or table, so a partial view is never presented as
+  complete." **E1:** "The system presents an empty map or table rather than an error, so that
+  neither reveals the existence of content the Employee cannot see." **E2:** "The system directs the
+  Employee to UC02 Log In and, on success, returns them to the knowledge map." **On failure:** "No
+  map or table is presented."
+- **The two settings:** `MAXIMUM_TRAVERSAL_DEPTH`, "To be tuned", "Maximum number of relationship
+  hops explored from any single node"; `MAXIMUM_NODE_COUNT`, "To be tuned", "Ceiling on nodes
+  returned in one request before truncation is reported".
+
+**Gaps in the proposal, recorded rather than filled silently.**
+
+- **Tags and people carry no visibility field.** The proposal's only one is
+  `Documents.visible_to_roles`. Its pseudocode assembles nodes "FROM Documents, Meetings, Tags,
+  Users WHERE permissionFilter IS SATISFIED", which has nothing to test on a Tag or a User row.
+  Read literally, a tag carried only by restricted documents, or a person who only uploaded them,
+  survives as a node with no edge, and can still take a place under the cap.
+- **The depth setting presumes a start node the request does not carry.** "Hops explored from any
+  single node" describes a walk from one node; the pseudocode's signature is `(requestingUser,
+  selectedFilters)` and it covers the use case's steps 2 to 6 only. How step 07's connections are
+  fetched is not stated.
+- **Both caps are "To be tuned" against "the verification criteria stated in the corresponding
+  objective", and no objective mentions the visualisation.**
+- **No permission, role restriction or navigation placement is stated.** The use-case diagram gives
+  UC-11 to the Employee, whom the Administrator generalises.
+- **"The underlying item" is defined for nothing.** A document has a detail view (FR-15) and a
+  meeting a page (FR-09, FR-16). The proposal has no page for a tag or for a person.
+- **"Contributor" is never defined.** The nearest text is the gap analysis: "the record of who
+  contributed to a discussion, and of which documents and meetings a person is connected to".
+- **`selectedFilters` and `filtersMatch` occur only in the pseudocode.** No FR-20 clause and no
+  UC-11 step defines a filter.
+- **The only figure of the knowledge map is Figure 8.2,** a wireframe that is an image. The user
+  supplied Figure 8.7, the Evidence mock-up ("Claims to passages, unsupported claims beneath,
+  selected claim at the right"), as the layout to follow.
+
+### The user's choices (14 November 2026, each put as a tabbed question with a recommendation)
+
+| Question | Choice |
+|---|---|
+| The diagram: a library or hand-built | **Hand-built, no package installed.** The alternatives put to him: `d3-force` 3.0.0 for layout only (5.7 kB gzipped, ISC, with `d3-dispatch`, `d3-quadtree` and `d3-timer`; pure computation with no jsdom mock, but it draws nothing and has no accessibility support); `@xyflow/react` 12 (60.1 kB gzipped, MIT, at least 18 lockfile packages; focusable HTML nodes with ARIA, but an editor whose drag and arrow-key moves must be switched off, needing four global jsdom mocks in `tests/setup.js` and bringing a stylesheet the contrast sweep cannot see). Canvas and WebGL libraries were not put: their nodes are not elements, so nothing is focusable or named |
+| The layout | The proposal's Evidence mock-up (Figure 8.7), which he supplied: a legend on the left, the diagram in columns, a "Selected" panel on the right that carries the open action |
+| The two caps | **`MAXIMUM_TRAVERSAL_DEPTH = 2`, `MAXIMUM_NODE_COUNT = 50`**, by the rules below. Not chosen: 2 hops and 100 nodes; 1 hop and 50 nodes |
+| Who may open it | **Both roles, behind a new permission code `view_knowledge_map`** held by Employee and Administrator, with the link "Knowledge map" after "Ask". Not chosen: both roles with a session only, as the dashboard and the repository are (no migration, and no 403 to prove); Administrators only |
+| Contributor nodes | **Both roles see them; the name only.** Never the email, never the role. Not chosen: name and email; Administrators only |
+| Who a contributor is | **A person who uploaded a document or attended a meeting the viewer can read.** His answer was that contributors are those who review the documents. No table records who reviewed a document (a confirmed or corrected tag stores `applied_by` as "user", not which user), so he chose to **add reviewers later, as a follow-up**, over adding a reviewed-by record in this pull request |
+| "Selecting again opens the underlying item" for a tag and a contributor | **A tag opens the repository filtered by it; a contributor opens nothing, and the screen says so.** Not chosen: both open nothing |
+| UC-11 E2, the return to the map after signing in again | **Left as it is and recorded** (item 7 below). Not chosen: the change in this pull request; a separate follow-up |
+| `CLAUDE.md` section 5 | **The two cap rows are added in this pull request** |
+| `npm ci` in the worktree's `frontend/` | Approved: the locked versions only, nothing added |
+
+### The rules behind the two caps
+
+`scripts/knowledge_map_reach.py` reads `corpus/objective-02/manifest.json` and builds, for each
+role, the graph FR-20 builds from it. Its output on 14 November 2026:
+
+```
+Employee: 34 nodes (sources 20, tags 13, contributors 1), 59 edges
+  1 hop: from one start, min 1, median 4, max 18 of 34
+  2 hops: from one start, min 1, median 20, max 31 of 34
+  3 hops: from one start, min 1, median 31, max 31 of 34
+Administrator: 41 nodes (sources 25, tags 14, contributors 2), 68 edges
+  1 hop: from one start, min 1, median 4, max 18 of 41
+  2 hops: from one start, min 1, median 11, max 31 of 41
+  3 hops: from one start, min 1, median 26, max 34 of 41
+```
+
+- **Depth 2.** One hop holds what the item's own page already lists. Two hops are the shortest walk
+  that joins one item to another through a tag or a person they share. Three hops hold most of the
+  connected map again, which is the overview.
+- **50 nodes.** The smallest multiple of 50 that holds that corpus's whole map (41 for an
+  Administrator), so a demonstration on it is not cut by the cap.
+- **What the measurement does not cover:** any other corpus; the alpha's database; attendance (no
+  loader of that corpus writes an attendee, and none of its transcripts carries a tag, so its
+  meetings are nodes with no edge); the manifest's `invalid` items, of which the stored ones would
+  add document nodes with no tag. On that corpus the node cap cannot bind: node-count truncation is
+  shown by tests, and "attended" edges by a meeting ingested with attendees.
+
+### The session's choices where the brief and the proposal were silent
+
+**The route.** `GET /api/knowledge-map`, with an optional `focus_type` and `focus_id` (both or
+neither, validated for shape only, D-65), behind `[IsAuthenticated, CanViewKnowledgeMap]`. Nothing
+on the route is a single scoped object, so the 403 has no 404 to precede, the arrangement FR-19's
+routes use. It is not throttled, as the dashboard, the repository and the meetings list are not.
+`docs/api-contract.md` holds the shape.
+
+**Two parts, and only the first touches the database.**
+
+- **Assembly** runs a fixed set of queries for the role `permission_scope` re-reads on the request,
+  each starting from or constrained by `scoped_documents` or `scoped_meetings`, and returns plain
+  nodes and edges. A tag link is a `ContentTags` row with `provisional` false, `removed` false and a
+  dimension in `REPOSITORY_TAG_DIMENSIONS`, matched on `source_type` and `source_id` together: the
+  rule FR-15's reads apply, defined once in `apps/api/repository.py`. `Tag.active` and `Tag.grown`
+  are not consulted. Attendee rows are read only for meetings already in scope. A tag or a person is
+  a node only when such a link reaches it. Edges are de-duplicated, because neither link table is
+  unique.
+- **The walk** is a pure function over those nodes and edges, the focus and the two caps. It
+  receives no queryset, no user and no identifier to look up, and it decides the returned nodes and
+  edges, both truncation fields and the counts. The focus is found by membership in the assembled
+  graph, so no statement takes it as a parameter.
+
+**The walk.** Without a focus it takes each source in turn, newest first, with its tags and its
+contributors, and includes a source only when it and its not-yet-included neighbours fit under the
+node cap; one that does not fit is skipped and the walk carries on. With a focus it starts from that
+node and takes up to `MAXIMUM_TRAVERSAL_DEPTH` hops, ring by ring, each ring ordered as a whole
+(sources newest first, then tags by dimension and name, then contributors by name), until the node
+cap. Returned edges are the scoped edges with both ends returned. Connection counts are taken last,
+over the returned edges.
+
+**Truncation.** `truncated` is true when a returned node has an in-scope neighbour that was not
+returned, or in the overview when an in-scope source was not returned. `truncated_by` is
+`"node_count"` if and only if a node within reach was left out because the count was reached,
+otherwise `"depth"`; `"node_count"` when both apply.
+
+**One answer for a focus that is not in the viewer's map.** An unknown identifier, a source outside
+the scope, a tag with no live link on an in-scope source, a person with no in-scope contribution and
+a type that does not match its identifier all get the same body: `focus` null, no nodes, no edges,
+not truncated. It is the body an empty overview gets, and it holds nothing the caller sent.
+
+**The screen.** `/knowledge-map` for both roles. Each node is a real link: an unselected one links
+to the map's own address with the selection in it, and the selected document, meeting or tag links
+to its item instead, so "selecting again" is a second activation of the same control. The selected
+contributor is not a link. The diagram is three columns from a pure layout function (contributors,
+then documents and meetings, then tags) over an `aria-hidden` layer of lines, and the links are
+rendered column by column so the tab order is the reading order. The four node types are a square,
+a circle, a diamond and a triangle, filled from `--color-primary`, `--color-success`,
+`--color-warning` and `--color-text-muted`, each of which already had a tested pair at 3:1 or better
+on `--color-surface`. Two tables, one row per node and one row per relationship, are always beside
+the diagram and sort in the page.
+
+**The migration.** `accounts 0011_seed_view_knowledge_map` depends on `0008_seed_manage_tags`. It is
+numbered 0011 because FR-03's unmerged branch holds 0009 and 0010 (D-130). Both branches build on
+0008, so once both are on `main` the accounts app has two leaves. **The pull request that merges
+second adds a merge migration naming both leaves and edits no existing migration.** After a deploy:
+run `migrate`, then confirm `GET /api/roles` lists `view_knowledge_map` under both roles. A database
+without the row answers 403 to everybody.
+
+> **Superseded on 15 November 2026.** The dependency was re-pointed to
+> `0010_seed_release_account_locks` in the merge of `main`, and no merge migration was added.
+> Item 1 of the dated note on the build, below, records it and the evidence for it.
+
+### Departures from the proposal, and readings of it
+
+1. **All removal before the cap.** The proposal scopes at assembly (UC-11 step 03), caps (04), then
+   removes again (05). Built with every removal before the cap, including the tags and people step
+   03 cannot filter, so step 05 has nothing left to remove. Otherwise the capped set and the
+   truncation flag could turn on restricted material (invariant 1). Counts are still taken last.
+2. **"Accessible" is defined for a tag and a person:** linked to at least one in-scope source.
+3. **A permission code the proposal does not name,** at the user's choice.
+4. **No filters.**
+5. **A document node shows its title,** which FR-20's Documents field list omits, and **a tag shows
+   its dimension,** which its Tags list omits: a name is unique only within a dimension.
+6. **Tables read beyond FR-20's Database line:** `MeetingAttendees`, which its own Server-End
+   clause names, and through FR-06 `Roles`, `Permissions` and `RolePermissions`. The route's own
+   code runs SELECT statements only; the session row is still saved on every request by FR-04's
+   sliding expiry.
+7. **UC-11 E2 is met in part,** at the user's choice. Opening `/knowledge-map` while signed out
+   returns there after sign-in, without the selection, because `RequireAuth` passes the path only. A
+   session that expires during use returns to the dashboard, as FR-02 has it. No authentication code
+   changes.
+8. **NFR-17's stated test is a screen-reader run, and NFR-16's reflow at 320 px and its axe run are
+   browser measurements.** The suite asserts structure. The three are owed by a person.
+9. **Reviewers are not contributors yet** (the user's choice above).
+10. **Built after M7's freeze** ("No new functionality after this point", 13 November), at the
+    user's instruction.
+11. **A contributor has no underlying item: declined.** The second selection opens nothing and the
+    screen says so. **A tag's underlying item is read as** FR-15's repository filtered by that tag;
+    a tag carried only by meetings, which nothing writes today, would open an empty repository.
+12. **The request takes a focus, and step 07 is a second request.**
+13. **A 400 for a malformed query,** this API's convention (D-65). FR-20 states only 200.
+14. **The depth cap binds only on a focused request.** In the overview every node is one hop from a
+    source, so the depth cap is not what limits it.
+15. **Sources in every status are nodes,** as the repository and the meetings list show them.
+16. **Provisional and removed links are not edges, a retired tag still linked is a node, and
+    Department is not a tag node** (it is a column, D-72): FR-15's reading of each.
+17. **`connection_count` is the number of returned edges,** so one node can show different counts in
+    different views, and the screen says "connections shown". The response also carries `focus`,
+    `truncated_by` and the two maximums beyond "nodes, edges, and a truncation indicator".
+18. **The overview skips a source that does not fit.** A source with as many connections as the cap
+    never appears in the overview and is reached by selecting one of its connections. A person's or
+    a tag's full list is not reachable through the map when it exceeds the cap: a tag has the
+    repository filter, a person has nothing. **Added 16 November 2026:** "is reached by
+    selecting one of its connections" holds only where the overview shows one of them; item 9
+    of the dated note on the build, below, says what follows when it shows none.
+19. **Two people with one name, or two documents with one title, read alike on the map,** since the
+    email is not shown. A display name is free text at registration. Each connected document's and
+    meeting's own page shows the address.
+20. **A retired tag's identifier reaches an Employee here for the first time,** when the tag is
+    still linked to a readable source. Accepted: the apply route answers one 400 for an unknown, an
+    inactive and a withheld identifier alike, and the tag routes are the Administrator's.
+
+### The design review, before anything was built (14 November 2026)
+
+The design note was reviewed by the `security-reviewer` and the `requirements-auditor`, each
+read-only, neither running anything. Their reports are in the session's records, not in the
+repository; what follows is each finding and what was done with it.
+
+**What the design rested on, and how far that was checked.** A read-only pass before the design
+mapped the requirement text, the data and its scope rules, the tag rules, the server test gates,
+the front end's gates and the diagram libraries. Each map was to be checked by a second agent told
+to refute it. The usage limit cut that short:
+
+- **checked:** the map of the requirement text (its facts were confirmed against the proposal's
+  lines, none found wrong);
+- **not checked by a second agent:** the maps of the data and scope rules, the tag rules, the server
+  test gates, the front end's gates and the diagram libraries;
+- **not produced:** the map of the records and of the two unmerged branches' conflicts.
+
+The unchecked maps were used as leads. The two reviewers above opened the code for what their
+findings rely on, and the build's tests are what hold the rest. The library sizes in the table of
+choices are bundlephobia's figures as one agent read them on 14 November 2026, and were not read a
+second time.
+
+**The `security-reviewer`'s verdict, in its words:** "I found no path in the design as written by
+which restricted material becomes a node, an edge, a count, an order, a truncation flag or a status
+difference for an Employee: section 3.1 scopes before everything, and every later step reads only
+that set."
+
+| Finding | What it is | Disposition |
+|---|---|---|
+| F1, medium | Echoing the requested focus made two byte-level tests unsatisfiable, and would trip the fail-closed probe | `focus` is null unless the focus is a returned node, so every not-in-scope cause gets one constant body |
+| F2, medium | Leaking implementations the test list would not catch: a depth flag read from an unscoped degree; a cap before scope with the restricted rows sorted last; a process-level memo of the graph; a tag whose only in-scope link is removed or provisional | The tests it specified are in the list: focus with depth, focus at the node cap, an overview over the cap with restricted rows newer, between and older, one process serving both roles in turn, the removed-only and provisional-only tags, a meeting link sharing a document's identifier |
+| F3, medium | "Re-point one dependencies line" could leave a deployed database with an applied migration whose dependency is unapplied | The merge-migration rule above, and the `GET /api/roles` check after a deploy |
+| F4, medium | "Stop at the first source that does not fit" let one source with many tags or attendees hide everything older, for every reader | The overview skips it and carries on (item 18) |
+| F5, low | "The D-53 scan covers it" overstated: the scan checks Document, Meeting and ContentChunk managers only | The two-part structure above, and a module check that the reader holds no `Tag.objects`, no user-model manager and no reverse-relation read |
+| F6, low | The focus must be found in the assembled graph, or the cost of a request would vary with restricted links | No statement takes the focus; a test compares the SQL of the probe requests |
+| F7, low | Two contributors with one name cannot be told apart, and a name is chosen at registration | Accepted, item 19 |
+| F8, low | Unthrottled is acceptable beside the meetings list and browse only if no transcript or extracted text is selected and the statement count does not grow with the corpus | Sources are read as identifiers, titles and timestamps; a test holds the statement count; nothing is cached |
+| F9, low | A tag name holding `&` or `#` would break a hand-built address; a non-canonical identifier in the address would mark nothing selected; a malformed address would offer a retry that cannot succeed; a module-level cache would cross a sign-out | Addresses are built with `URLSearchParams`; the selected node is the one the response names; a malformed selection makes no request; the API module holds no cache |
+| F10, low | Returning Tag identifiers is new surface for retired tags only | Kept, item 20 |
+| F11, low | Ring order and the reason reported at exactly the cap were not determined | Stated above |
+
+**The `requirements-auditor`'s verdict, in its words:** "INCOMPLETE as a build specification; it
+does not contradict the requirement." "I tried to break the scoping order (scope, then cap, then
+count) and found no way for restricted material to reach the cap, the truncation fields, a count or
+a focus answer".
+
+| Finding | What it is | Disposition |
+|---|---|---|
+| F-01, medium | The contributor that opens nothing, and the tag's reading, were not recorded departures | Item 11 |
+| F-02, medium | Further readings built but not listed | Items 12 to 17 |
+| F-03, medium | "Only SELECT statements run" is false at the request level: the session row is saved | Item 6; the test allows `django_session` alone |
+| F-04, medium | A table user could skip past the truncation notice | The notice comes before the skip link, and its sentence is each table's accessible description |
+| F-05, medium | A tag's dimension was in the response and nowhere on the screen | A tag reads "Topic: people" in the diagram, the panel and both tables |
+| F-06, medium | The tab order of the node links was not specified | Column by column, in the DOM |
+| F-07, medium | Colour and shape were tested by class name only | A stylesheet test of the node classes' fill tokens, a different shape element per type, and the legend against the diagram |
+| F-08, medium | Server clauses with no test | Added: the overview cap and its skip, the cap on a focused request, no email and no role in the bytes, the response contract, E1 without a focus, each 400, an isolated node, counts on a truncated view, a role change, the seed, a source in a failure status, a Department link |
+| F-09, medium | Interface clauses with no test | Added: a row selects as a node does, the served counts, no map or table on failure, the count line, focus after a selection, the navigation link, the address restoring a selection, the table regions as stops, the legend |
+| F-10, medium | The migration plan understated the second pull request's work | The merge-migration rule; the tests that pin the accounts leaf and each role's exact set change in this build |
+| F-11, medium | Records that must change and were not named | Named in the build |
+| F-12, low | The truncation reason and the ring order were open | Stated above |
+| F-13, low | The first departure described the proposal's order inaccurately | Reworded as item 1 |
+| F-14, low | UC-11 E2 was recorded imprecisely | Item 7, with a test of the path that works |
+| F-15, low | The node-count notice gave advice that is false on a focused view; counts were not said to be of what is shown | Two wordings; "connections shown"; item 18 |
+| F-16, low | A hand-edited address would get "Try again" for a 400 | No request, and no retry |
+| F-17, low | Whether a Relationships row selects, and where the sort lives | Its ends are the same links; the sort is page state and resets when the page is left |
+| F-18, low | Reflow, long labels, the selected node's own mark, and text on a fill | A labelled scroll region, wrapping labels, a heavier outline and the word "selected", and text on the surface only; the browser measurements are item 8 |
+| F-19, low | On the measured corpus meetings connect to nothing and the node cap never binds | Said under the caps' rules |
+| F-20, low | The live-link rule would be written a fifth time, and the node types restated `SOURCE_TYPES` | One predicate in `repository.py`; `KNOWLEDGE_MAP_NODE_TYPES` is built from `SOURCE_TYPES` |
+
+**Not covered by this entry, as first written:**
+
+- the build itself, its tests and its deliberate breaks;
+- the security review of the built code;
+- the requirements audit of the built code.
+
+Each gets a dated note below.
+
+**Dated note, 15 November 2026: the build, the merges of `main`, and the migration's dependency.**
+
+This note covers the first of the three things the entry left for later: the build, its tests and
+its deliberate breaks. The two reviews of the built code have notes of their own below it.
+
+It was written on 15 November 2026 and finished on 16 November 2026, when `main` was merged a
+third, a fourth, a fifth and a sixth time and the last runs were made. The records that cite "D-132's
+dated note of 15 November 2026" mean this note.
+
+**The commits,** on `feat/FR-20-relationship-visualisation`:
+
+- `afe95e7`: this entry, the cap measurement (`scripts/knowledge_map_reach.py`), `CLAUDE.md`
+  section 5's two rows, and the front end's three vocabularies.
+- `6d00576`: the route. `apps/api/knowledge_map.py`, `live_tag_links` in `apps/api/repository.py`,
+  the view, the query serializer, the permission and its seed, and the server tests.
+- `7604b35`: the screen. `frontend/src/pages/KnowledgeMap.jsx`, its stylesheet, its utilities and
+  its API module, the route and the navigation link, and the front-end tests.
+- `42dc7f5`: the screen's remaining tests, with the break list of that day in its message.
+- `030bb75`: the demonstration script's walk.
+- `5c3b941`, `e0f1acd`, `377eff0`, `b44b75b`, `3d94e40` and `71d2391`: the six merges of `main`,
+  below.
+- `28136c2`: one test title shortened so Vitest prints it whole.
+- `89fc063`: the corrections the requirements audit asked for (its note is below).
+- `8122258`: one test, for the Name column's tie-break by type (item 5).
+- `ba2893d`: three comments corrected (the follow-up audit's R5, at the end of this entry).
+- `c97745c`, `ea0d336` and the commits after `71d2391`: these notes.
+
+**`CLAUDE.md` section 5 gained two rows,** `MAXIMUM_TRAVERSAL_DEPTH` and `MAXIMUM_NODE_COUNT`, in
+`afe95e7`. That file changes only with the user's approval. He was asked on 14 November 2026
+whether to add them, and answered: "Yes, add the two rows (Recommended)".
+
+**Where the build differs from the entry above, or adds to it.**
+
+1. **The migration was re-pointed; no merge migration was added.** The entry's paragraph "The
+   migration" says the pull request that merges second "adds a merge migration naming both leaves
+   and edits no existing migration". This item supersedes that paragraph, and with it the
+   dispositions of the design reviews' F3 (security) and F-10 (audit), which rested on that rule.
+   - **What was done.** FR-03 (#110) reached `main` first, with `accounts 0009` and `0010`. In the
+     merge of 15 November 2026 (`5c3b941`), the dependency of
+     `accounts 0011_seed_view_knowledge_map` was changed from `0008_seed_manage_tags` to
+     `0010_seed_release_account_locks`. The same merge rewrote two passages of the migration's
+     docstring to say so. Its operations and both of its functions are unchanged.
+   - **Why this is allowed.** CLAUDE.md section 7 forbids editing a pushed migration's operations,
+     and lets a dependency be corrected in place while no other environment has applied the
+     migration. This one had never been pushed: no remote branch held `6d00576`, the commit that
+     added it. Its operations are unchanged.
+   - **The evidence that no environment had applied it.** Before the merge, a read-only script
+     listed every database on the local PostgreSQL server and, for each, the newest `accounts`
+     migration in `django_migrations` and whether `0011_seed_view_knowledge_map` was among them. It
+     ran `SELECT` statements only. There were 21 databases. One, `postgres`, has no
+     `django_migrations` table. None of the other 20 had applied it; the alpha's
+     `kmp_alpha_20261113` and `kmp_anthropic` were at 0008. The same check after the merge found
+     it applied to one database, `test_kmp_anthropic_fr20`, which is this build's own test
+     database, created and dropped by each run of the suite. The check covers the local server,
+     where the alpha's database also lives. A database on another machine could not be checked,
+     and this session knows of none.
+   - **What follows.** `accounts` has one leaf, 0011. A database at 0008 gets 0009, 0010 and 0011
+     from one `migrate`. `docs/alpha-deployment.md` step 11, `docs/schema-v1.md`, the migration's
+     docstring and `apps/accounts/tests/test_view_knowledge_map_seed.py` say so, and
+     `test_the_migration_depends_on_0010_and_nothing_else` holds the dependency.
+   - **The tests F-10 named** pin the accounts leaf and each role's exact set. They changed in the
+     merge: the Administrator holds eight codes and the Employee two.
+2. **One of FR-03's tests was changed in the merge.**
+   `apps/accounts/tests/test_release_account_locks_seed.py` asserted the exact codes left after
+   unseeding 0010. 0011 now seeds a later code on both roles, so the test names it, as each earlier
+   seed test names the seeds after its own.
+3. **Four things on the screen were recorded only in the design review's dispositions,** and are
+   listed here so the numbered list is whole (the audit's A6). None adds a route or data:
+   - a count line above the diagram, "3 documents · 1 meeting · 2 tags · 4 contributors shown",
+     counted from the nodes the reply holds and stating no total;
+   - "Skip to the table view", a link ahead of the diagram;
+   - "Show the whole map", the way from a selection back to the overview;
+   - focus moves to the Selected panel's heading once a selection made on the page has loaded.
+4. **UC-11 E1's "empty map or table" is one sentence on the screen,** with no diagram and no
+   table. The server's reply is still the empty map: empty lists, status 200.
+5. **Each table sorts by the text its cells show** (the audit's A3). The Items table's Name column
+   sorts by what the node is called, so the tag "Topic: people" sorts under T. The Relationships
+   table's From and To columns sort by the cell's text, which opens with the type, so every
+   "Contributor: …" row comes before every "Document: …" row. Rows that are still equal keep the
+   reply's order when the sort is ascending. Descending is the ascending order reversed, so
+   equal rows then come out in the reverse of the reply's order. As first built, all three
+   sorted by the bare label; `89fc063` changed that.
+   - **Two items that show the same name sort by their type:** a document before a meeting of
+     the same title. That rule was in the code from the start.
+   - **The change left it without a test.** The fixture's two tags named "people" had been the
+     only tie, and they no longer tie once each is shown with its dimension. The break run on
+     `89fc063` showed it: break F094, which removes the rule, failed no test. `8122258` adds the
+     test, and F094 fails it as each role.
+6. **A long label makes every row of the diagram taller.** The diagram's rows are of equal height,
+   so that a line can end at the middle of a row without anything being measured. One label that
+   wraps to several lines raises the height of every row.
+7. **A document opened from the map has "Back to documents",** not a link back to the map. The
+   browser's Back button returns to the map with its selection, and a test holds that.
+8. **The front end's clause table is the audit's.** `docs/stage-5-front-end-clauses.md` covers the
+   twelve Stage 5 requirements and was not extended. FR-20's interface clauses, each with its code
+   and its test, are in the requirements audit's table below.
+9. **Past the cap, an older source with nothing shown beside it cannot be reached through the
+   map** (the security review's S3 and the audit's A8; an addition to item 18). Item 18 says a
+   source left out of the overview "is reached by selecting one of its connections". That holds
+   only where the overview shows one. A source with no tag and no contributor, or none among those
+   shown, has no connection to select, and there is no paging and no filter. `truncated` is true
+   in every such case, and the source is still in the repository or the meetings list. On the
+   reference corpus the map is under the cap for both roles, so this does not arise there.
+   `docs/api-contract.md` says the same since `89fc063`.
+
+**The merges of `main`.**
+
+- **`5c3b941`, 15 November 2026:** #102 (FR-10, D-128 and D-129), #108 and #109 (the alpha on
+  Anthropic, D-131), #110 (FR-03, D-130) and #111. Fifteen files conflicted, each because both
+  sides had added an entry to the same list, and each was resolved keeping both, `main`'s first:
+  - the four earlier accounts seed tests;
+  - `apps/api/serializers.py`, where both sides added an import;
+  - `apps/api/tests/test_never_cache.py`, `test_rbac.py` and `test_roles.py`;
+  - `apps/core/constants.py`, where both sides edited one comment;
+  - `apps/core/tests/test_constants.py` and `test_schema.py`;
+  - `docs/api-contract.md`, `docs/decisions.md`, `docs/demonstration-script.md` and
+    `docs/schema-v1.md`.
+- **`e0f1acd`, 15 November 2026:** #112 (FR-10's reject of a long proposal, D-133). One file
+  conflicted, this one, where `main` added D-133 at the place this branch added D-132. Both are
+  kept, in number order.
+- **`377eff0`, 16 November 2026:** #113 (FR-10's Confirm on a long proposal, D-135) and #114
+  (Objective 04's run). Nothing conflicted. `main` touched no file under `apps/`. It added a
+  comment, a number format and one sentence for FR-10 to `frontend/src/constants.js`, which also
+  holds the map's vocabularies and text, and changed no line the map reads.
+- **`b44b75b`, 16 November 2026:** #115 (FR-10 discards a Topic longer than a tag name, D-134).
+  Nothing conflicted, and it brought no migration.
+  - Under `apps/` it changed `apps/api/serializers.py`, `apps/api/views.py`,
+    `apps/core/constants.py`, `apps/documents/classification.py` and
+    `apps/documents/models.py`, and FR-10's tests.
+  - The first three also hold the map's serializer, view and caps. No changed line is inside
+    any of those, and `apps/api/knowledge_map.py`, `apps/api/repository.py`,
+    `apps/api/urls.py` and `apps/accounts` are untouched.
+  - Under `frontend/` it changed one test file, which is not among the map's.
+- **`3d94e40`, 16 November 2026:** #116 (FR-10's route test for Confirm at the column's width).
+  Nothing conflicted. It added cases to one FR-10 test file and a note to D-135, and changed
+  no code.
+- **`71d2391`, 16 November 2026:** #117 (the demonstration script describes the Anthropic alpha).
+  It was merged after the pull request was opened, and changed documents and files under
+  `corpus/` only. Two files conflicted, each because both sides had added text at one place, and
+  both sides are kept whole in each:
+  - **this file:** `main` added a dated note at the end of D-131 where this branch added D-132.
+    `main`'s note is first, then D-132;
+  - **`docs/demonstration-script.md`:** both sides added an "Amended" note at its head. `main`'s is
+    first, because it refers to the note directly above it. This branch's follows, and its
+    heading now says it was written on 14 November and merged after. FR-20's walk, after
+    FR-15's, merged without conflict;
+  - every line either side added to the script since the merge base is in the merged file, but
+    for that one reworded heading.
+- **What `main` put under the map.** D-128 and D-129 added proposed and rejected tags, grown tags
+  and the department list. `apps/api/repository.py` did not change on `main`, so `live_tag_links`
+  is still FR-15's rule as this entry describes it, and the map still reads tags through it alone.
+
+**The suites, on `ba2893d`.**
+
+- **`pytest`, the whole suite:** 5,096 passed in 28 minutes, on a test database of its own. The
+  dual-role matrix printed "49/49 protected endpoints exercised from both Employee and
+  Administrator sessions (100.0%)". `GET /api/knowledge-map` is one of the 49.
+- **`npm test` in `frontend/`:** 49 files, 842 tests passed.
+- **`npm run lint`:** clean.
+- **`npm run build`:** succeeds.
+- **`manage.py makemigrations --check --dry-run`:** "No changes detected", run on `b44b75b`. No
+  file under `apps/` differs between `b44b75b` and `ba2893d`.
+- **After the fifth merge, `3d94e40`:** it changed one server test file,
+  `apps/api/tests/test_fr10_proposed_tags.py`, and no code. That file was run on `3d94e40`: 104
+  passed. The whole server suite was not run again after it, and nothing under `frontend/`
+  changed. The pull request's CI runs both suites on the merged result.
+- **After the sixth merge, `71d2391`:** it changed documents and files under `corpus/`, and no
+  file under `apps/` or `frontend/`. Neither suite was run again here after it.
+- **Earlier heads.** At `28136c2`, the head both reviews read, the whole server suite was 5,066
+  passed and the front-end suite 835. At `377eff0` they were 5,083 and 842. The differences are
+  the audit's corrections, the tie-break test and what `main` brought in #112 to #116.
+
+**The build's one JavaScript chunk is over Vite's 500 kB advisory, and was before FR-20.** `main`
+at `f82fb1a` built to 506.65 kB and printed the same advisory. This branch built to 530.14 kB at
+`89fc063`, 23.49 kB more, and builds to 530.53 kB at `377eff0`, after the merge of #113, and at
+`ba2893d`. `main` was not built again after that merge. The build passes; the advisory is not an error. Splitting
+the chunk is not part of FR-20.
+
+**Three agent runs were cut off by the account's usage limit, and one left a break applied.**
+
+- The server build's agent, the screen's test agent and the first run of the two final reviewers
+  each stopped mid-work. The first two were not resumed: their work was recovered from the working
+  tree, read, and finished by script. The reviewers were resumed and finished.
+- The screen's test agent stopped with one of its own deliberate breaks applied: `tabIndex={0}` on
+  the diagram's SVG lines, in `frontend/src/pages/KnowledgeMap.jsx`. It is break F132 in the list
+  below. The file was restored from `HEAD` before anything else was done, and
+  `git diff -- frontend/src apps` was empty before every commit.
+- No commit was made with a break applied.
+
+**Tests and breaks.** Every new test failed under at least one deliberate break before it counted.
+Each break is an exact replacement of a text that occurs once, applied alone, checked by SHA-256
+before and after, and restored. Both tables are generated from the runs' own output, after the
+reviews' corrections:
+
+- **The server table** is from a run on `ffb9d67`, after the sixth merge, with 41 breaks. It
+  replaces the table of a run on `89fc063`, which had 40: S41 was added for the follow-up
+  audit's R6.
+  - **The two runs agree on every break they share but one, S16.** S16 orders nodes by their
+    identifier, a random UUID, so which tests it fails varies from run to run: 24 in the
+    earlier run and 24 in this one, 18 of them the same.
+  - **No case rests on S16 alone.** In both runs, every case that fails under S16 also fails
+    under another break.
+- **The front-end table** is from a run on `377eff0`. An earlier run on `89fc063` is the one
+  that found break F094 failing no test (item 5).
+  - No file under `frontend/src`, and none of the eight test files run, differs between
+    `377eff0` and `b44b75b`.
+  - `ba2893d` then changed comments in two of those source files and one of those test
+    files. The built JavaScript and stylesheet are byte for byte the same before and after
+    it, and each break's text still occurs exactly once. The front-end breaks were not run
+    again after it.
+  - `3d94e40` changed nothing under `frontend/`.
+
+**The server side.**
+
+- **The files run:** `apps/api/tests/test_knowledge_map.py`, `apps/accounts/tests/test_view_knowledge_map_seed.py`, `apps/api/tests/test_source_rows_fail_closed.py`, `apps/api/tests/test_rbac.py`, `apps/api/tests/test_never_cache.py`.
+- **Unbroken,** they pass: 229 passed in 140.94s (0:02:20). After the last break, restored: 229 passed in 112.59s (0:01:52).
+- **41 breaks,** each failing at least one test and each restored. Those that change the seed migration rebuild the test database.
+- **118 new test cases** in 59 test functions: every case fails under at least one break. A function with several cases is one row, with the breaks that fail any of its cases.
+- **8 tests that existed before this build** also fail under a break, and are listed after the breaks.
+
+| Test | Fails under |
+|---|---|
+| **`apps/api/tests/test_knowledge_map.py`** | |
+| `test_a_restricted_source_and_what_only_it_carries_are_absent` (2 cases) | S01, S02, S12, S13, S29, S30, S38, S39, S41 |
+| `test_the_administrator_is_shown_what_the_employee_is_not` | S01, S02, S10, S12, S13, S29, S30, S38, S39, S41 |
+| `test_an_employees_bytes_are_identical_with_and_without_restricted_rows` (5 cases) | S01, S02, S13, S29, S30, S38, S39, S41 |
+| `test_an_overview_over_the_cap_is_not_moved_by_restricted_rows_of_any_age` | S01, S12, S13, S15, S16, S20, S21, S22, S23, S29, S30, S38, S39, S41 |
+| `test_an_overview_exactly_at_the_cap_is_not_truncated_by_restricted_rows` | S01, S12, S13, S20, S21, S23, S29, S30, S38, S39, S41 |
+| `test_a_selections_depth_flag_is_not_raised_by_restricted_material` | S01, S12, S13, S19, S20, S21, S25, S29, S30, S38, S39, S41 |
+| `test_a_selection_exactly_at_the_cap_is_not_truncated_by_restricted_rows` | S01, S12, S13, S15, S16, S19, S20, S21, S24, S29, S30, S38, S39, S41 |
+| `test_an_overview_over_the_cap_is_not_moved_by_rows_the_viewer_cannot_read` (2 cases) | S01, S12, S13, S15, S16, S20, S21, S22, S23, S29, S30, S38, S39, S41 |
+| `test_an_overview_exactly_at_the_cap_is_not_truncated_by_rows_the_viewer_cannot_read` (2 cases) | S01, S12, S13, S29, S30, S38, S39, S41 |
+| `test_a_selections_depth_flag_is_not_raised_by_material_the_viewer_cannot_read` (2 cases) | S01, S12, S13, S16, S29, S30, S38, S39, S41 |
+| `test_a_selection_exactly_at_the_cap_is_not_truncated_by_rows_the_viewer_cannot_read` (2 cases) | S01, S12, S13, S15, S16, S29, S30, S38, S39, S41 |
+| `test_the_walk_does_not_pass_through_a_restricted_node` (2 cases) | S01, S02, S12, S13, S29, S30, S38, S39, S41 |
+| `test_the_administrator_walks_through_the_same_nodes_an_employee_cannot` | S01, S12, S13, S15, S16, S29, S30, S38, S39, S41 |
+| `test_every_absent_focus_gets_the_literal_empty_body_from_identical_statements` (2 cases) | S01, S04, S12, S13, S14, S17, S18, S29, S30, S38, S39, S41 |
+| `test_the_same_focuses_are_answered_for_the_administrator_they_admit` | S01, S04, S12, S13, S17, S18, S21, S29, S30, S38, S39, S41 |
+| `test_the_viewers_own_attendance_of_a_restricted_meeting_admits_nothing` (2 cases) | S02, S12, S13, S17, S18, S29, S30, S38, S39 |
+| `test_an_employees_attendance_shows_only_to_a_role_that_reads_the_meeting` | S02, S12, S13, S29, S30, S38, S39 |
+| `test_one_process_serves_each_role_its_own_map_and_a_demotion_takes_effect_at_once` (3 cases) | S01, S02, S13, S29, S30, S38, S39, S41 |
+| `test_a_tag_whose_only_readable_link_is_removed_or_provisional_is_not_a_node` | S01, S04, S06, S07, S12, S13, S18, S29, S30, S38, S39, S41 |
+| `test_a_link_is_matched_on_its_source_type_and_identifier_together` (2 cases) | S02, S05, S08, S12, S13, S15, S16, S17, S18, S29, S30, S38, S39 |
+| `test_a_contributor_is_a_name_and_an_identifier_and_nothing_else` (2 cases) | S10, S12, S13, S29, S30, S38, S39 |
+| `test_the_module_reads_no_tag_table_no_user_table_and_no_reverse_relation` | S10, S14, S41 |
+| `test_the_assembly_takes_no_focus_and_the_walk_touches_no_database` | S17, S30 |
+| `test_the_body_has_exactly_the_contracts_keys_and_the_two_maximums` (2 cases) | S12, S13, S29, S30, S38, S39 |
+| `test_the_focus_is_the_returned_node_in_its_canonical_form` (2 cases) | S12, S13, S18, S29, S30, S33, S38, S39 |
+| `test_the_same_request_gives_the_same_bytes` (2 cases) | S29, S30, S38, S39 |
+| `test_the_overview_returns_at_most_the_real_node_cap` (2 cases) | S12, S13, S15, S16, S20, S21, S23, S29, S30, S38, S39 |
+| `test_a_source_that_does_not_fit_is_skipped_and_older_smaller_ones_still_appear` (2 cases) | S12, S13, S15, S16, S20, S21, S22, S23, S24, S29, S30, S38, S39 |
+| `test_when_no_source_fits_the_newest_is_returned_with_as_many_neighbours_as_fit` (2 cases) | S12, S13, S16, S19, S20, S21, S23, S29, S30, S38, S39 |
+| `test_a_ring_is_cut_at_the_node_cap_and_the_count_is_the_reason` (2 cases) | S12, S13, S15, S16, S19, S20, S21, S24, S29, S30, S38, S39 |
+| `test_a_first_ring_that_fills_the_cap_leaves_the_second_out_by_count` (2 cases) | S12, S13, S15, S16, S19, S20, S21, S24, S29, S30, S38, S39 |
+| `test_a_walk_that_ends_at_exactly_the_cap_with_more_beyond_reports_depth` (2 cases) | S12, S13, S16, S19, S20, S21, S25, S29, S30, S38, S39 |
+| `test_a_node_three_hops_from_the_selection_is_absent_and_depth_is_the_reason` (2 cases) | S12, S13, S19, S20, S21, S25, S29, S30, S38, S39 |
+| `test_the_depth_cap_is_read_where_the_module_reads_it` (2 cases) | S12, S13, S16, S19, S20, S21, S25, S29, S30, S38, S39 |
+| `test_the_overview_is_in_walk_order_and_its_edges_in_the_order_of_their_ends` (2 cases) | S12, S13, S15, S16, S29, S30, S38, S39 |
+| `test_each_ring_of_a_selection_is_ordered_as_a_whole` (2 cases) | S12, S13, S15, S16, S19, S20, S21, S25, S29, S30, S38, S39 |
+| `test_duplicate_link_rows_are_one_edge` (2 cases) | S12, S13, S29, S30, S38, S39 |
+| `test_a_retired_tag_two_dimensions_of_one_name_and_a_failed_source_are_nodes` (2 cases) | S09, S11, S12, S13, S26, S29, S30, S38, S39 |
+| `test_an_isolated_meeting_is_a_node_with_no_connections` (2 cases) | S13, S29, S30, S38, S39 |
+| `test_a_count_is_of_the_edges_shown_on_a_truncated_view` (2 cases) | S12, S13, S19, S21, S24, S29, S30, S38, S39 |
+| `test_nothing_in_scope_is_the_same_bytes_as_an_empty_database` (2 cases) | S01, S02, S03, S13, S18, S29, S30, S38, S39, S41 |
+| `test_an_anonymous_request_is_401` | S31 |
+| `test_a_role_without_view_knowledge_map_is_forbidden` (2 cases) | S27, S29, S31, S38, S39 |
+| `test_a_malformed_query_is_400_keyed_on_its_parameter` (20 cases) | S28, S29, S32, S33, S34, S38, S39 |
+| `test_one_parameter_without_the_other_names_the_rule_under_the_missing_one` (2 cases) | S28, S29, S34, S38, S39 |
+| `test_two_empty_parameters_are_the_overview` (2 cases) | S29, S30, S35, S38, S39 |
+| `test_the_route_writes_nothing_and_its_statements_do_not_grow_with_the_corpus` (4 cases) | S13, S29, S38, S39 |
+| `test_the_walk_skips_what_does_not_fit_and_takes_tags_before_people_in_the_corner` | S15, S16, S20, S21, S22, S23, S30 |
+| `test_the_walk_ignores_an_edge_whose_end_is_not_a_node` | S30, S36 |
+| **`apps/accounts/tests/test_view_knowledge_map_seed.py`** | |
+| `test_the_migration_uses_the_permission_constant` | S29, S38, S39 |
+| `test_the_migration_depends_on_0010_and_nothing_else` | S37 |
+| `test_it_is_a_new_code_and_not_one_already_seeded` | S38 |
+| `test_both_roles_may_view_the_knowledge_map` | S29, S38, S39 |
+| `test_administrator_still_generalises_employee` | S39 |
+| `test_seed_is_idempotent` | S40 |
+| `test_seed_is_reversible` | S29, S38, S39 |
+| `test_the_migration_reverses_through_the_executor` | S29, S38, S39 |
+| **`apps/api/tests/test_source_rows_fail_closed.py`** | |
+| `test_a_source_its_chunks_disagree_with_is_withheld_from_an_employee` | S01, S02, S29, S38, S41 |
+| `test_the_same_source_is_returned_to_the_administrator_it_admits` | S13, S38, S39 |
+
+The breaks, each applied alone:
+
+- **S01:** Documents are read in the Administrator's scope for every caller (`apps/api/knowledge_map.py`).
+- **S02:** Meetings are read in the Administrator's scope for every caller (`apps/api/knowledge_map.py`).
+- **S03:** Attendee rows are read for every meeting, and the guard that drops a link to a source outside the graph is gone (`apps/api/knowledge_map.py`).
+- **S04:** Document tag links are read in the Administrator's scope, and the guard that drops a link to a source outside the graph is gone (`apps/api/knowledge_map.py`).
+- **S05:** A tag link is matched on its source identifier alone (`apps/api/repository.py`).
+- **S06:** A provisional link is read as a tag (`apps/api/repository.py`).
+- **S07:** A removed link is read as a tag (`apps/api/repository.py`).
+- **S08:** A link in any dimension, Department included, is read as a tag (`apps/api/repository.py`).
+- **S09:** A link to a retired tag is not read (`apps/api/repository.py`).
+- **S10:** A contributor's label is the uploader's email (`apps/api/knowledge_map.py`).
+- **S11:** Only documents whose status is Indexed are nodes (`apps/api/knowledge_map.py`).
+- **S12:** Every edge is returned twice (`apps/api/knowledge_map.py`).
+- **S13:** The assembled graph is kept in the process and reused by the next request (`apps/api/knowledge_map.py`).
+- **S14:** A tag focus costs a statement of its own, keyed on the focus (`apps/api/knowledge_map.py`).
+- **S15:** Sources are ordered oldest first (`apps/api/knowledge_map.py`).
+- **S16:** Nodes are ordered by identifier alone, not by kind and their stable order (`apps/api/knowledge_map.py`).
+- **S17:** A focus that is not in the graph is answered as the overview (`apps/api/knowledge_map.py`).
+- **S18:** The requested focus is echoed when it is not a returned node (`apps/api/views.py`).
+- **S19:** truncated is never true for a missing neighbour (`apps/api/knowledge_map.py`).
+- **S20:** The two truncation reasons are swapped (`apps/api/knowledge_map.py`).
+- **S21:** Connection counts are taken over every scoped edge, not the returned ones (`apps/api/knowledge_map.py`).
+- **S22:** The overview stops at the first source that does not fit (`apps/api/knowledge_map.py`).
+- **S23:** The overview ignores the node cap (`apps/api/knowledge_map.py`).
+- **S24:** A selection's ring ignores the node cap (`apps/api/knowledge_map.py`).
+- **S25:** A selection walks one hop further than the depth cap (`apps/api/knowledge_map.py`).
+- **S26:** The overview leaves out a source with no connection (`apps/api/knowledge_map.py`).
+- **S27:** The route needs a session only (`apps/api/views.py`).
+- **S28:** focus_type without focus_id is accepted (`apps/api/serializers.py`).
+- **S29:** The seed gives view_knowledge_map to the Administrator alone (`apps/accounts/migrations/0011_seed_view_knowledge_map.py`).
+- **S30:** The body carries a value that differs from one request to the next (`apps/api/knowledge_map.py`).
+- **S31:** The route is open to a request with no session (`apps/api/views.py`).
+- **S32:** focus_type is any text, not one of the node types (`apps/api/serializers.py`).
+- **S33:** focus_id is any text, not a UUID (`apps/api/serializers.py`).
+- **S34:** focus_id without focus_type is accepted (`apps/api/serializers.py`).
+- **S35:** An empty focus_id is refused instead of being read as absent (`apps/api/serializers.py`).
+- **S36:** The walk keeps an edge whose end is not a node (`apps/api/knowledge_map.py`).
+- **S37:** The seed migration depends on a second migration (`apps/accounts/migrations/0011_seed_view_knowledge_map.py`).
+- **S38:** The seed's code is one an earlier migration already seeds (`apps/accounts/migrations/0011_seed_view_knowledge_map.py`).
+- **S39:** The seed gives view_knowledge_map to the Employee alone (`apps/accounts/migrations/0011_seed_view_knowledge_map.py`).
+- **S40:** The seed creates its rows without checking for them (`apps/accounts/migrations/0011_seed_view_knowledge_map.py`).
+- **S41:** Documents are read with no scope at all, so a document stamped for no role reaches every caller, the Administrator included (`apps/api/knowledge_map.py`).
+
+Tests outside this build that a break also fails:
+
+- `apps/api/tests/test_never_cache.py` `test_every_api_route_is_never_cached_when_it_answers_401`
+- `apps/api/tests/test_never_cache.py` `test_every_permission_guarded_route_is_never_cached_when_it_answers_403`
+- `apps/api/tests/test_rbac.py` `test_each_permissioned_route_checks_its_own_code`
+- `apps/api/tests/test_rbac.py` `test_every_permission_code_in_use_is_seeded`
+- `apps/api/tests/test_rbac.py` `test_every_route_but_the_opt_outs_is_401_anonymously`
+- `apps/api/tests/test_rbac.py` `test_every_route_but_the_opt_outs_is_401_with_a_forged_session`
+- `apps/api/tests/test_rbac.py` `test_the_url_conf_is_exactly_the_contract`
+- `apps/api/tests/test_source_rows_fail_closed.py` `test_request_serving_code_reads_source_rows_only_through_the_scoped_helpers`
+
+**The eight cases the audit's A7 added, one by one** (the follow-up audit's R6). The table above gives a test one row for both of its roles, so it cannot show which case a break fails. S01 gives every caller the Administrator's scope, which still leaves out a row stamped for no role, so it cannot fail a case run as the Administrator. S41 reads documents with no scope at all.
+
+| Case | Fails under |
+|---|---|
+| `test_an_overview_over_the_cap_is_not_moved_by_rows_the_viewer_cannot_read[employee]` | S01, S12, S13, S15, S16, S20, S21, S22, S23, S29, S30, S38, S41 |
+| `test_an_overview_over_the_cap_is_not_moved_by_rows_the_viewer_cannot_read[administrator]` | S12, S13, S15, S16, S20, S21, S22, S23, S30, S38, S39, S41 |
+| `test_an_overview_exactly_at_the_cap_is_not_truncated_by_rows_the_viewer_cannot_read[employee]` | S01, S12, S13, S29, S30, S38, S41 |
+| `test_an_overview_exactly_at_the_cap_is_not_truncated_by_rows_the_viewer_cannot_read[administrator]` | S12, S13, S30, S38, S39, S41 |
+| `test_a_selections_depth_flag_is_not_raised_by_material_the_viewer_cannot_read[employee]` | S01, S12, S13, S29, S30, S38, S41 |
+| `test_a_selections_depth_flag_is_not_raised_by_material_the_viewer_cannot_read[administrator]` | S12, S13, S16, S30, S38, S39, S41 |
+| `test_a_selection_exactly_at_the_cap_is_not_truncated_by_rows_the_viewer_cannot_read[employee]` | S01, S12, S13, S15, S16, S29, S30, S38, S41 |
+| `test_a_selection_exactly_at_the_cap_is_not_truncated_by_rows_the_viewer_cannot_read[administrator]` | S12, S13, S15, S16, S30, S38, S39, S41 |
+
+**The front end.**
+
+- **The files run:** `frontend/tests/knowledgeMap.test.jsx`, `frontend/tests/tabOrder.test.jsx`, `frontend/tests/textEquivalents.test.jsx`, `frontend/tests/contrast.test.js`, `frontend/tests/componentSheet.test.jsx`, `frontend/tests/askNavLink.test.jsx`, `frontend/tests/headerSearchField.test.jsx`, `frontend/tests/stylesheets.test.js`.
+- **Unbroken,** they pass: 318 passed, 0 failed of 318 tests; 0 failed of 60 suites. After the last break, restored: 318 passed, 0 failed of 318 tests; 0 failed of 60 suites.
+- **151 breaks,** each failing at least one test and each restored.
+- **172 new test cases,** 90 rows below: every case fails under at least one break. A test that runs once as each role is one row, with the breaks that fail either case.
+- **Breaks that fail only a test older than this build:** F141, F142.
+- **4 cases fail only under breaks that fail more than 40 tests** (the route removed, the page not rendering), so no break is narrow to them:
+  - `askNavLink.test.jsx :: FR-13: the Ask link is in the primary navigation of every page, for each role /knowledge-map as an Administrator`
+  - `askNavLink.test.jsx :: FR-13: the Ask link is in the primary navigation of every page, for each role /knowledge-map as an Employee`
+  - `headerSearchField.test.jsx :: FR-12: the search field is in the header of every page, for each role /knowledge-map as an Administrator`
+  - `headerSearchField.test.jsx :: FR-12: the search field is in the header of every page, for each role /knowledge-map as an Employee`
+
+| Test | Fails under |
+|---|---|
+| **`frontend/tests/askNavLink.test.jsx`** | |
+| FR-13: the Ask link is in the primary navigation of every page, for each role /knowledge-map as each role | F036, F071, F080, F163 |
+| **`frontend/tests/componentSheet.test.jsx`** | |
+| the sheet shows every shared component in its states shows the knowledge map’s legend with its four types and a sample map with a node of each, from sample data, asking the API for nothing | F032, F033, F120, F121, F128, F129, F180, F181, F182, F183 |
+| **`frontend/tests/contrast.test.js`** | |
+| FR-20: "node type distinguished by colour and shape", the colour half (D-132) draws the lines in a tested 3:1 colour, never the decorative border, and the selected node’s in another | F133, F134 |
+| FR-20: "node type distinguished by colour and shape", the colour half (D-132) gives each of the four node classes one fill token, four different ones, each a tested 3:1 pair on the surface | F122, F123, F124, F125 |
+| SC 1.4.11: component boundaries and fills meet 3:1 against what they sit on --color-text against --color-surface | F140 |
+| SC 1.4.11: component boundaries and fills meet 3:1 against what they sit on --color-text-muted against --color-surface | F139 |
+| **`frontend/tests/headerSearchField.test.jsx`** | |
+| FR-12: the search field is in the header of every page, for each role /knowledge-map as each role | F036, F080, F163 |
+| **`frontend/tests/knowledgeMap.test.jsx`**, each test under "FR-20 knowledge map, as <role>" and run as each role | |
+| FR-20: "Selecting a node reveals its connections; selecting again opens the underlying item" a contributor: the first selection lists what they uploaded and attended; nothing opens, and the screen says so | F007, F031, F033, F036, F037, F039, F040, F041, F042, F043, F048, F071, F074, F080, F121, F129, F163 |
+| FR-20: "Selecting a node reveals its connections; selecting again opens the underlying item" a document: the first selection puts it in the address and lists its direct connections; the second opens it | F007, F030, F032, F033, F034, F036, F037, F038, F039, F043, F048, F071, F080, F086, F121, F163, F192 |
+| FR-20: "Selecting a node reveals its connections; selecting again opens the underlying item" a meeting: the first selection puts it in the address and lists its direct connections; the second opens it | F007, F030, F032, F033, F034, F037, F038, F043, F046, F048, F071, F074, F080, F121, F129, F163 |
+| FR-20: "Selecting a node reveals its connections; selecting again opens the underlying item" a tag: the first selection puts it in the address and lists its direct connections; the second opens it | F007, F030, F032, F033, F034, F037, F038, F039, F043, F048, F049, F057, F071, F074, F080, F086, F087, F121, F163 |
+| FR-20: "Selecting a node reveals its connections; selecting again opens the underlying item" says how to select while nothing is selected, and marks no node | F036, F042, F163 |
+| FR-20: "a partial view is not presented as complete" a selection cut by depth: says so before the skip link, worded from the reply’s own maximum, and as each table’s description | F011, F013, F014, F020, F021, F022, F023, F037, F071, F163 |
+| FR-20: "a partial view is not presented as complete" a selection cut by the node count: says so before the skip link, worded from the reply’s own maximum, and as each table’s description | F010, F012, F016, F018, F020, F021, F022, F023, F037, F071, F163 |
+| FR-20: "a partial view is not presented as complete" says nothing of the kind about a whole view, and describes neither table | F019, F037, F163 |
+| FR-20: "a partial view is not presented as complete" still says a view is partial when the reply’s reason is not one it knows | F017, F021, F071, F163 |
+| FR-20: "a partial view is not presented as complete" the overview cut by the node count: says so before the skip link, worded from the reply’s own maximum, and as each table’s description | F010, F015, F018, F020, F021, F022, F023, F036, F071, F163 |
+| FR-20: "a partial view is not presented as complete" words no sentence so as to suggest that anything is kept from the reader | F024 |
+| FR-20: "node type distinguished by colour and shape" draws each of the four types as a different shape with its own class, names its type in a word, and lists the same four in the legend | F007, F036, F086, F120, F121, F128, F129, F131, F163, F190 |
+| FR-20: "node type distinguished by colour and shape" gives the four shapes four different fills in the stylesheets, each from one colour token | F007, F036, F086, F121, F122, F123, F125, F129, F163 |
+| NFR-17: "a … table view conveying the same nodes and relationships" draws no line and no row for an edge whose end is not among the served nodes, and makes no node of it | F001, F003, F005, F036, F071, F080, F083, F084, F085, F102, F103, F163 |
+| NFR-17: "a … table view conveying the same nodes and relationships" holds exactly the served nodes and edges in the two tables and on the diagram, the unconnected meeting included | F036, F080, F081, F082, F083, F084, F086, F087, F100, F102, F103, F129, F155, F163, F191 |
+| NFR-17: "a … table view conveying the same nodes and relationships" reads a tag with its dimension everywhere, so two tags with one name in two dimensions read differently | F007, F086, F087, F102, F103, F163 |
+| NFR-17: "a … table view conveying the same nodes and relationships" says so in a sentence, not an empty table, when the items shown have no line between them | F036, F071, F080, F081, F088, F103, F129, F163 |
+| NFR-17: "sortable" keeps each table’s sort its own: sorting one leaves the other sorted as it was | F036, F080, F081, F083, F086, F087, F091, F092, F098, F100, F101, F102, F103, F129, F163, F190, F193, F194 |
+| NFR-17: "sortable" keeps the selection in the address and drops the sort when the page is left and returned to | F007, F030, F032, F033, F034, F036, F037, F043, F047, F048, F080, F086, F087, F092, F100, F103, F129, F163 |
+| NFR-17: "sortable" moves the sort to another column when that one is pressed, and names the direction in words | F092, F093, F163 |
+| NFR-17: "sortable" orders two items that show the same name by their type | F036, F071, F080, F081, F091, F092, F094, F100, F103, F129, F163, F190 |
+| NFR-17: "sortable" sorts the Items table by Connections shown, ascending then descending, with aria-sort | F036, F080, F081, F086, F087, F091, F092, F095, F099, F100, F103, F129, F163 |
+| NFR-17: "sortable" sorts the Items table by Name, ascending then descending, with aria-sort | F036, F080, F081, F086, F087, F091, F092, F099, F100, F103, F129, F163, F193 |
+| NFR-17: "sortable" sorts the Items table by Type, ascending then descending, with aria-sort | F036, F080, F081, F086, F087, F090, F091, F092, F099, F100, F103, F129, F163, F190 |
+| NFR-17: "sortable" sorts the Relationships table by From, ascending then descending, with aria-sort | F036, F080, F081, F083, F086, F087, F091, F092, F096, F100, F102, F103, F129, F163, F190, F194 |
+| NFR-17: "sortable" sorts the Relationships table by Relationship, ascending then descending, with aria-sort | F036, F080, F081, F083, F086, F087, F091, F092, F097, F100, F102, F103, F111, F129, F163, F191 |
+| NFR-17: "sortable" sorts the Relationships table by To, ascending then descending, with aria-sort | F036, F080, F081, F083, F086, F087, F091, F092, F098, F100, F102, F103, F129, F163, F190, F194 |
+| UC-11 A1: "Selecting a row has the same effect as selecting a node" a contributor from a Relationships row: the first selection, focus on the Selected panel, and the second selection from the same table | F007, F031, F033, F037, F044, F071, F102, F110, F112, F116, F163 |
+| UC-11 A1: "Selecting a row has the same effect as selecting a node" a contributor from an Items row: the first selection, focus on the Selected panel, and the second selection from the same table | F007, F031, F033, F037, F043, F071, F080, F110, F112, F115, F163 |
+| UC-11 A1: "Selecting a row has the same effect as selecting a node" a document from a Relationships row: the first selection, focus on the Selected panel, and the second selection from the same table | F007, F030, F032, F033, F034, F036, F037, F048, F071, F102, F110, F112, F116, F163 |
+| UC-11 A1: "Selecting a row has the same effect as selecting a node" a document from an Items row: the first selection, focus on the Selected panel, and the second selection from the same table | F007, F030, F032, F033, F034, F036, F037, F043, F048, F071, F080, F110, F112, F115, F163 |
+| UC-11 A1: "Selecting a row has the same effect as selecting a node" a meeting from a Relationships row: the first selection, focus on the Selected panel, and the second selection from the same table | F007, F030, F032, F033, F034, F037, F045, F046, F048, F071, F102, F110, F112, F116, F129, F163 |
+| UC-11 A1: "Selecting a row has the same effect as selecting a node" a meeting from an Items row: the first selection, focus on the Selected panel, and the second selection from the same table | F007, F030, F032, F033, F034, F037, F043, F046, F048, F071, F080, F110, F112, F115, F129, F163 |
+| UC-11 A1: "Selecting a row has the same effect as selecting a node" a tag from a Relationships row: the first selection, focus on the Selected panel, and the second selection from the same table | F007, F030, F032, F033, F034, F037, F045, F048, F057, F071, F086, F102, F110, F112, F116, F163 |
+| UC-11 A1: "Selecting a row has the same effect as selecting a node" a tag from an Items row: the first selection, focus on the Selected panel, and the second selection from the same table | F007, F030, F032, F033, F034, F037, F043, F048, F057, F071, F080, F086, F110, F112, F115, F163 |
+| UC-11 A1: "Selecting a row has the same effect as selecting a node" selecting a connection listed in the Selected panel selects that node, and focus returns to the panel’s heading | F007, F032, F033, F034, F036, F037, F038, F039, F048, F071, F110, F112, F118, F163 |
+| UC-11 A1: "Selecting a row has the same effect as selecting a node" selecting from the From end of a Relationships row selects that node | F007, F033, F037, F044, F071, F102, F163 |
+| UC-11 A1: "Selecting a row has the same effect as selecting a node" selecting the document from its Items row: the same address, the same request, the same selection | F007, F030, F032, F033, F034, F036, F037, F038, F043, F048, F071, F080, F086, F163 |
+| UC-11 A1: "Selecting a row has the same effect as selecting a node" selecting the document from the To end of a Relationships row: the same address, the same request, the same selection | F007, F030, F032, F033, F034, F036, F037, F038, F043, F045, F048, F071, F080, F086, F102, F163 |
+| UC-11 A1: "Selecting a row has the same effect as selecting a node" selecting the document from the node: the same address, the same request, the same selection | F007, F030, F032, F033, F034, F036, F037, F038, F043, F048, F071, F080, F086, F163 |
+| UC-11: "Connection counts shown against each node", and the count line counts the line again for each reply: the overview’s, then the selection’s | F003, F004, F005, F006, F007, F032, F033, F034, F037, F048, F129, F163 |
+| UC-11: "Connection counts shown against each node", and the count line counts the line from the served nodes, by type, and states no total: a view with no contributor | F004, F005, F006, F037, F071, F163 |
+| UC-11: "Connection counts shown against each node", and the count line counts the line from the served nodes, by type, and states no total: a view with unequal numbers per type | F003, F004, F005, F006, F071, F163 |
+| UC-11: "Connection counts shown against each node", and the count line shows the count the server sent on each node and in each Items row, and recounts nothing from the edges | F001, F007, F036, F071, F080, F081, F082, F086, F087, F100, F103, F129, F163 |
+| UC-11: "Connection counts shown against each node", and the count line shows the served count in the Selected panel, not a count of the lines drawn to the selection | F001, F002, F007, F032, F033, F034, F037, F071, F080, F100, F163 |
+| addresses, and the selection that lives in one marks nothing when the reply names no focus, whatever the address says | F035, F036, F037, F042, F071, F163 |
+| addresses, and the selection that lives in one marks the node of the type the reply’s focus names, where a node of another type has the same identifier | F007, F032, F033, F034, F037, F043, F048, F049, F058, F086, F087, F163 |
+| addresses, and the selection that lives in one marks the node the reply’s focus names when the address spells the identifier in upper case | F007, F030, F032, F033, F034, F035, F037, F071, F073, F163 |
+| addresses, and the selection that lives in one opens the repository filtered by Process for a tag in that dimension | F030, F032, F037, F043, F051, F057, F071, F080, F163 |
+| addresses, and the selection that lives in one opens the repository filtered by Project for a tag in that dimension | F030, F032, F037, F043, F051, F057, F080, F163 |
+| addresses, and the selection that lives in one opens the repository filtered by Topic for a tag in that dimension | F030, F032, F037, F043, F057, F071, F080, F163 |
+| addresses, and the selection that lives in one opens the right filter for a tag named "r&d #1 100%", and adds no filter of its own | F030, F032, F037, F050, F057, F163 |
+| addresses, and the selection that lives in one restores the selection from the address on a reload | F007, F032, F033, F034, F037, F038, F071, F086, F163 |
+| addresses, and the selection that lives in one restores the selection when the item it opened is left with Back | F007, F030, F032, F033, F034, F036, F037, F047, F048, F071, F163 |
+| addresses, and the selection that lives in one sends an identifier typed into the address to the server as one encoded value, and adds no parameter of its own | F037, F052, F060, F071, F163 |
+| text from a document, a tag or a person is rendered as text draws two contributors with one name as two nodes and two rows, each selecting its own | F007, F071, F083, F089, F102, F163 |
+| text from a document, a tag or a person is rendered as text renders markup in a selected tag’s name as characters in the panel and in its open action, which still opens that tag | F007, F032, F033, F034, F037, F057, F086, F163, F170, F171, F172, F173 |
+| text from a document, a tag or a person is rendered as text renders markup in a title, a tag name and a person’s name as the characters it is, and creates no element from it | F007, F033, F034, F037, F043, F080, F086, F100, F163, F170, F171, F172 |
+| the diagram is drawn from the data, with nothing measured (D-132) draws the selected node’s lines heavier, by class, and after the others | F007, F032, F037, F059, F084, F134, F135, F136, F137, F138, F163 |
+| the diagram is drawn from the data, with nothing measured (D-132) puts each node in its type’s column, one row each in the reply’s order, and ends every line on the facing edges of its two columns at the middle of its two rows | F036, F082, F084, F086, F150, F151, F152, F153, F163 |
+| the states: UC-11 "No map or table is presented" on failure, and E1’s empty map ignores a failure that lands after the address has moved on, and keeps the reply for the address it is at | F003, F004, F005, F036, F037, F042, F063, F065, F071, F080, F081, F086, F087, F100, F103, F129, F163 |
+| the states: UC-11 "No map or table is presented" on failure, and E1’s empty map ignores a map that lands after the address has moved on, and keeps the reply for the address it is at | F003, F004, F005, F036, F037, F042, F062, F065, F071, F080, F081, F086, F087, F100, F103, F129, F163 |
+| the states: UC-11 "No map or table is presented" on failure, and E1’s empty map reads two empty parameters as no selection, and asks for the overview | F036, F042, F056, F071, F163 |
+| the states: UC-11 "No map or table is presented" on failure, and E1’s empty map says it is loading, with neither diagram nor table, until the reply lands | F006, F064, F065, F071, F080, F081, F163 |
+| the states: UC-11 "No map or table is presented" on failure, and E1’s empty map sends no request for a type outside the vocabulary, and shows the empty selection | F054, F072, F163 |
+| the states: UC-11 "No map or table is presented" on failure, and E1’s empty map sends no request for a type with an empty identifier, and shows the empty selection | F053, F072, F163 |
+| the states: UC-11 "No map or table is presented" on failure, and E1’s empty map sends no request for a type without an identifier, and shows the empty selection | F053, F072, F163 |
+| the states: UC-11 "No map or table is presented" on failure, and E1’s empty map sends no request for an identifier without a type, and shows the empty selection | F055, F072, F163 |
+| the states: UC-11 "No map or table is presented" on failure, and E1’s empty map shows a 400 as the same empty selection, with no retry and none of the server’s words | F037, F060, F071, F072, F163 |
+| the states: UC-11 "No map or table is presented" on failure, and E1’s empty map shows a 403 as the not-permitted notice alone, saying nothing about a map | F066, F071, F163 |
+| the states: UC-11 "No map or table is presented" on failure, and E1’s empty map shows a failure as an error with the client’s own words and "Try again", which reads again | F070, F071, F163 |
+| the states: UC-11 "No map or table is presented" on failure, and E1’s empty map shows nothing of the overview while a selection is loading, nor after it has failed | F007, F036, F037, F048, F061, F064, F065, F071, F110, F113, F163 |
+| the states: UC-11 "No map or table is presented" on failure, and E1’s empty map shows the empty map as one sentence, with no diagram, no table and no error | F067, F069, F071, F163 |
+| the states: UC-11 "No map or table is presented" on failure, and E1’s empty map shows the empty selection, with the way back to the whole map, for a focus the reply holds nothing for | F037, F068, F069, F071, F072, F163 |
+| the way in offers "Knowledge map" in the navigation straight after Ask, ahead of anything an Administrator alone is offered | F037, F160, F161, F162, F163, F165 |
+| the way in returns to the knowledge map after signing in, when it was opened signed out (UC-11 E2, in part) | F071, F163, F164 |
+| where focus goes "Skip to the table view" is a link ahead of the diagram that lands on the table view | F114, F117, F163 |
+| where focus goes leaves focus alone when the page is opened at a selection nobody made on it | F037, F111, F163 |
+| where focus goes moves focus to the Selected panel’s heading once a selection made on the page has loaded | F007, F032, F033, F034, F036, F037, F048, F110, F112, F163 |
+| **`frontend/tests/tabOrder.test.jsx`** | |
+| FR-20 / NFR-17: the knowledge map, its diagram and its table view (D-132) a selected contributor is not a stop on the diagram: there is nothing for a second selection to open | F031, F132, F154, F156, F157, F163 |
+| FR-20 / NFR-17: the knowledge map, its diagram and its table view (D-132) as each role: the skip link, the nodes column by column, the Selected panel, then each table region ahead of its headings and rows | F038, F043, F044, F045, F080, F083, F086, F117, F132, F150, F151, F154, F155, F156, F157, F158, F161, F162, F163 |
+| **`frontend/tests/textEquivalents.test.jsx`** | |
+| FR-20 / NFR-17: the diagram’s lines and shapes are decoration beside words (D-132) hides every SVG from assistive technology, with nothing focusable and no text inside, and names each node in words | F007, F032, F033, F034, F084, F086, F128, F129, F130, F131, F132, F150, F151 |
+| FR-20 / NFR-17: the diagram’s lines and shapes are decoration beside words (D-132) sets no colour as an SVG attribute or an inline style: every colour is a class the contrast sweep reads | F084, F126, F127, F128 |
+
+The breaks, each applied alone:
+
+- **F001:** Every node's count is recounted from the edges of the reply, not the served connection_count (`frontend/src/utils/knowledgeMap.js`).
+- **F002:** The Selected panel's count is the number of connections it lists, not the served count (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F003:** The count line is taken from a constant (1, 2, 3, 0), not counted from the nodes (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F004:** The count line leaves out a node with no connection (`frontend/src/utils/knowledgeMap.js`).
+- **F005:** The count line ends with a total it invents from the node maximum (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F006:** The count line is not a status region (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F007:** A node on the diagram does not show its count (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F010:** The node-count sentences say 50 whatever the reply's maximum is (`frontend/src/utils/knowledgeMap.js`).
+- **F011:** The depth sentence says 2 whatever the reply's maximum is (`frontend/src/utils/knowledgeMap.js`).
+- **F012:** The selection's node-count sentence has 50 written into its words (`frontend/src/constants.js`).
+- **F013:** The depth sentence is worded from the node maximum (`frontend/src/utils/knowledgeMap.js`).
+- **F014:** No notice when the view is cut by depth (`frontend/src/utils/knowledgeMap.js`).
+- **F015:** No notice when the overview is cut by the node count (`frontend/src/utils/knowledgeMap.js`).
+- **F016:** No notice when a selection is cut by the node count (`frontend/src/utils/knowledgeMap.js`).
+- **F017:** No notice when the reply is truncated for a reason outside the vocabulary (`frontend/src/utils/knowledgeMap.js`).
+- **F018:** The overview and the selection get each other's node-count sentence (`frontend/src/utils/knowledgeMap.js`).
+- **F019:** A view that is not truncated is still said to be partial (`frontend/src/utils/knowledgeMap.js`).
+- **F020:** The truncation notice comes after the skip link (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F021:** The Items table is not described by the truncation sentence (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F022:** The Relationships table is not described by the truncation sentence (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F023:** The notice adds that other items are not shown (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F024:** The fallback truncation sentence says items are withheld (`frontend/src/constants.js`).
+- **F030:** The selected document, meeting or tag still links to the map, so a second selection opens nothing (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F031:** A selected contributor is a link to a page that does not exist (`frontend/src/utils/knowledgeMap.js`).
+- **F032:** The selected node's link is not marked aria-current (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F033:** The selected node does not say "Selected" (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F034:** The selected node does not say what a second selection does (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F035:** The selected node is the one the address names, not the one the reply's focus names (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F036:** With no focus in the reply, the first node is treated as selected (`frontend/src/utils/knowledgeMap.js`).
+- **F037:** The request is always for the overview, whatever the address selects (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F038:** The Selected panel lists every edge of the reply, not the selected node's own (`frontend/src/utils/knowledgeMap.js`).
+- **F039:** A connection in the Selected panel links to the item, not to the map with that node selected (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F040:** The panel does not say a contributor has nothing to open (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F041:** "Show the whole map" in the panel links to the same selection (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F042:** The panel's empty-state words are gone (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F043:** A name in the Items table is text, not the control that selects the node (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F044:** The From end of a Relationships row is text, not the control that selects the node (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F045:** The To end of a Relationships row is text, not the control that selects the node (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F046:** A selected meeting opens the documents' address for its identifier (`frontend/src/utils/knowledgeMap.js`).
+- **F047:** Opening the selected item replaces the selection's history entry, so Back loses the selection (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F048:** A node that is not selected links straight to its item, with no selection first (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F049:** The Selected panel names a tag's type without its dimension (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F074:** The Selected panel draws the document's shape whatever is selected (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F058:** The selected node is matched on the focus's identifier alone, not its type as well (`frontend/src/utils/knowledgeMap.js`).
+- **F059:** The selected node carries no class of its own, so no heavier outline (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F057:** A tag opens the repository with its dimension as written, not the lower-case parameter (`frontend/src/utils/knowledgeMap.js`).
+- **F073:** The identifier in the address is put in lower case before it is sent (`frontend/src/utils/knowledgeMap.js`).
+- **F050:** The open link for a tag is built by string concatenation (`frontend/src/utils/knowledgeMap.js`).
+- **F051:** A tag in any dimension opens the Topic filter (`frontend/src/utils/knowledgeMap.js`).
+- **F052:** The map's own query, for the address and the API alike, is built by string concatenation (`frontend/src/utils/knowledgeMap.js`).
+- **F053:** A focus_type with no focus_id is sent to the server (`frontend/src/utils/knowledgeMap.js`).
+- **F054:** A focus_type outside the vocabulary is sent to the server (`frontend/src/utils/knowledgeMap.js`).
+- **F055:** A focus_id with no focus_type is sent to the server (`frontend/src/utils/knowledgeMap.js`).
+- **F056:** Two empty parameters are read as a malformed selection, not the overview (`frontend/src/utils/knowledgeMap.js`).
+- **F060:** A 400 is shown as a failure with "Try again" (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F061:** A reply is shown whatever request it answered, so the earlier map stays up while the next loads (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F062:** A map that lands for a request the page has left is kept (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F063:** A failure that lands for a request the page has left is kept (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F064:** An Items table is drawn while the request is loading (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F065:** The page does not say it is loading (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F066:** A 403 is shown as a failure with "Try again", not the not-permitted notice (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F067:** An empty overview is shown as the empty selection (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F068:** An empty selection is shown as the empty map, with no way back (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F069:** An empty reply draws the diagram and the tables with nothing in them (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F070:** "Try again" sends no request (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F071:** The API module keeps each reply and answers the next call for the same view from it (`frontend/src/api/knowledgeMap.js`).
+- **F072:** The empty selection has no link back to the whole map (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F080:** The Items table leaves out its first row (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F081:** The Items table leaves out a node with no connection (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F082:** The diagram leaves out a node with no connection (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F083:** The Relationships table leaves out its first row (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F084:** The diagram leaves out one line (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F085:** An edge whose end is not among the served nodes is not left out (`frontend/src/utils/knowledgeMap.js`).
+- **F086:** A tag is named without its dimension (`frontend/src/utils/knowledgeMap.js`).
+- **F087:** The Type cell of a tag does not name its dimension (`frontend/src/utils/knowledgeMap.js`).
+- **F088:** With no edge, an empty Relationships table is drawn instead of the sentence (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F089:** Two nodes of one type with one name are shown as one (`frontend/src/utils/knowledgeMap.js`).
+- **F090:** The Items table's Type column does not sort (`frontend/src/utils/knowledgeMap.js`).
+- **F091:** A second press does not reverse the order (`frontend/src/utils/knowledgeMap.js`).
+- **F092:** A sorted column heading carries no aria-sort (`frontend/src/components/Browse.jsx`).
+- **F093:** A sorted column heading does not name its direction in words (`frontend/src/components/Browse.jsx`).
+- **F094:** Name sorts by the text shown alone, not then by type (`frontend/src/utils/knowledgeMap.js`).
+- **F193:** Name sorts by the label without a tag's dimension, not by the text the cell shows (`frontend/src/utils/knowledgeMap.js`).
+- **F194:** From and To sort by the name without the type the cell opens with (`frontend/src/utils/knowledgeMap.js`).
+- **F095:** The Connections shown column sorts by name (`frontend/src/utils/knowledgeMap.js`).
+- **F096:** The From column sorts by the To end (`frontend/src/utils/knowledgeMap.js`).
+- **F097:** The Relationship column does not sort (`frontend/src/utils/knowledgeMap.js`).
+- **F098:** The To column does not sort (`frontend/src/utils/knowledgeMap.js`).
+- **F099:** Sorting a table reorders the reply's own list, and with it the diagram (`frontend/src/utils/knowledgeMap.js`).
+- **F100:** The Items table's sort is kept when the page is left and returned to (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F101:** The Relationships table is given the Items table's sort (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F102:** The From and To ends of a Relationships row do not name the node's type (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F103:** The Items table's Type cell shows the type as sent, not in words (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F118:** A selection made from the Selected panel does not move focus (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F117:** "Skip to the table view" comes after the diagram and the panel (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F110:** Focus is not moved when a selection made on the page has loaded (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F111:** Focus is moved to the panel heading on every load, also one nobody selected on the page (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F112:** After a selection focus goes to the page heading, not the panel heading (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F113:** After a selection that fails, focus is left where the removed link was (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F114:** "Skip to the table view" does not move focus (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F115:** A selection made from the Items table does not move focus (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F116:** A selection made from the Relationships table does not move focus (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F120:** The tag is drawn with the contributor's triangle (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F121:** A shape carries no class of its type (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F122:** The tag's class is filled with the document's token (`frontend/src/pages/KnowledgeMap.css`).
+- **F123:** The meeting's class has no rule in the stylesheet (`frontend/src/pages/KnowledgeMap.css`).
+- **F124:** The contributor's class is filled with the decorative border colour, which has no 3:1 pair (`frontend/src/pages/KnowledgeMap.css`).
+- **F125:** The document's fill is a colour literal, not a token (`frontend/src/pages/KnowledgeMap.css`).
+- **F126:** The document's shape has its fill set as an SVG attribute (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F127:** The meeting's shape has its fill set as an inline style (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F128:** The legend lists three of the four types (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F129:** A meeting's type is given in the document's word (`frontend/src/utils/knowledgeMap.js`).
+- **F130:** The SVG layer of lines is not aria-hidden (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F131:** A node's shape is not aria-hidden (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F132:** Each line in the hidden layer is a tab stop (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F133:** The lines are drawn in the decorative border colour (`frontend/src/pages/KnowledgeMap.css`).
+- **F134:** The selected node's lines are the colour of every other line (`frontend/src/pages/KnowledgeMap.css`).
+- **F135:** The selected node's lines are no heavier than the others (`frontend/src/pages/KnowledgeMap.css`).
+- **F136:** No line is marked as the selected node's (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F137:** The selected node's lines are not drawn after the others (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F138:** The selected node's outline is no heavier than the others (`frontend/src/pages/KnowledgeMap.css`).
+- **F139:** --color-text-muted, the contributor's fill, is lightened below 3:1 on the surface (`frontend/src/styles/tokens.css`).
+- **F140:** --color-text, the selected node's outline and lines, is lightened below 3:1 on the surface (`frontend/src/styles/tokens.css`).
+- **F141:** The component sheet documents the tag node's pair with the decorative border colour (`frontend/src/components/contrastPairs.js`).
+- **F142:** A node's own outline, the boundary of a control, is the decorative border colour (`frontend/src/pages/KnowledgeMap.css`).
+- **F150:** The diagram's links are rendered in the reply's order, not column by column (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F151:** A contributor is placed in the tags' column (`frontend/src/utils/knowledgeMap.js`).
+- **F152:** A line ends on the far edge of its right-hand node's column (`frontend/src/utils/knowledgeMap.js`).
+- **F153:** The diagram's rows are not of equal height, which the lines' arithmetic relies on (`frontend/src/pages/KnowledgeMap.css`).
+- **F154:** The diagram's scroll region is not a tab stop (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F155:** The Items table's scroll region is not a tab stop (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F156:** A stylesheet rule hides the skip link while it is still a tab stop (`frontend/src/pages/KnowledgeMap.css`).
+- **F157:** A stylesheet rule hides every node's cell while its link is still a tab stop (`frontend/src/pages/KnowledgeMap.css`).
+- **F158:** The Selected panel comes before the diagram in the page (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F160:** The navigation link sits before Ask (`frontend/src/App.jsx`).
+- **F161:** There is no navigation link to the knowledge map (`frontend/src/App.jsx`).
+- **F162:** The navigation link is offered to an Administrator only (`frontend/src/App.jsx`).
+- **F163:** The route table has no knowledge-map route (`frontend/src/App.jsx`).
+- **F164:** The knowledge-map route is outside RequireAuth (`frontend/src/App.jsx`).
+- **F165:** The page does not name the browser tab (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F170:** A node's label on the diagram is rendered as markup (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F171:** A node's label in a table or a panel group is rendered as markup (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F172:** The selected node's name in the panel is rendered as markup (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F173:** The panel's open action renders the tag's name as markup (`frontend/src/pages/KnowledgeMap.jsx`).
+- **F190:** A document is called a Meeting and a meeting a Document (`frontend/src/constants.js`).
+- **F191:** A person is said to have attended what they uploaded, and uploaded what they attended (`frontend/src/constants.js`).
+- **F192:** The document's open action is worded as the meeting's (`frontend/src/constants.js`).
+- **F180:** The component sheet does not show the legend (`frontend/src/components/ComponentSheet.jsx`).
+- **F181:** The component sheet's sample map has no tag node (`frontend/src/components/ComponentSheet.jsx`).
+- **F182:** The component sheet's sample map shows no selected node (`frontend/src/components/ComponentSheet.jsx`).
+- **F183:** The component sheet's map section sends a request to the map route (`frontend/src/components/ComponentSheet.jsx`).
+
+**Owed in a browser.** jsdom applies no stylesheet and paints nothing, so these are not tested:
+
+- NFR-17's own test, a screen-reader run (NVDA or VoiceOver) through the table view;
+- reflow at 320 CSS pixels, and the diagram's scroll region at that width;
+- an axe run on the screen;
+- that the four shapes, the lines and the focus ring paint as the stylesheet says;
+- the walk in `docs/demonstration-script.md`, which nobody has walked on the alpha. The alpha must
+  first be redeployed and migrated (`docs/alpha-deployment.md`, step 11).
+
+**Dated note, 15 November 2026: the security review of the built code.**
+
+The `security-reviewer` agent read the built code at `28136c2`, after the merge of `main`. It ran
+no test, sent no request and read no database: every finding is "traced" in code or "inferred",
+in its own terms. It read the server module, the view, the serializer, the scoping helpers, the
+seed and the screen's three source files. It did not read the whole of either test file.
+
+**Its verdict, in its words:** "I found no path by which material outside the caller's role scope
+reaches the response or can be inferred from it. There are no high or medium findings. There is
+one low finding, which is a record defect and not a disclosure, and two informational notes."
+
+**What it found clean,** each traced in code:
+
+- **Invariant 1.** All five statements in `assemble` start from the scoped documents or meetings,
+  and there is no cap before the scope. A tag is a node only through `live_tag_links` on a scoped
+  source, and a person only as the uploader or an attendee of one. The order, both truncation
+  fields and every count are computed from the scoped graph. A focus that is unknown, out of scope
+  or of the wrong type gets one constant empty body with status 200.
+- **Invariant 3.** Attendee rows are read only for scoped meetings. Attendance admits nothing,
+  the caller's own attendance of a restricted meeting included.
+- **Invariant 4.** The permission classes are on the view, so the 401 and the 403 come before the
+  400 and before any read. The role and its permissions are read on each request.
+- **What the merge put underneath.** Provisional and removed links are excluded. Proposed and
+  rejected tags and the department list are never read. A retired or grown tag is shown only where
+  it is a live tag of a source the caller reads, as FR-15 shows it (item 20).
+- **Contributors.** The identifier and the name only, both of which `GET /api/users/directory`
+  already gives every session.
+- **Input.** It found no path to a 500.
+- **The screen.** Every label is a text node, no label is placed in the SVG, every address is
+  built with `URLSearchParams` or `encodeURIComponent`, and nothing from the response is used as a
+  URL.
+- **Caching.** The route is never cached, and neither the server nor the page keeps a reply.
+
+**It checked the design review's eleven findings against the code.** F1, F2, F4, F5, F6, F8, F9
+and F11 are honoured. F7 and F10 stand as recorded (items 19 and 20). F3 is "not as recorded",
+which is its finding S1.
+
+| Finding | Severity | What | Disposition |
+|---|---|---|---|
+| S1 | low, a record defect | This entry still said `accounts 0011` depends on 0008 and that a merge migration would follow, when the merge had re-pointed it to 0010. Four files cited a dated note of 15 November 2026 that did not exist yet | **Fixed** by the dated note on the build, item 1, which records the re-pointing and the database check CLAUDE.md section 7 asks for. The paragraph under "The migration" carries a pointer to it. The reviewer could not check the databases; the check is this session's |
+| S2 | informational | Every request loads the caller's whole scoped graph in five statements, and the route has no throttle. One account can add tag links to a document every role reads and then repeat the request. Nothing restricted is learned | **Recorded, not changed.** The proposal names no rate limit for FR-20. `GET /api/meetings` is unthrottled too and reads more, and the reviewer "would not hold the pull request for it". Putting the route under the search throttle is one line and is the user's to decide |
+| S3 | informational | Once a viewer's map passes 50 nodes, an older source with no tag and no contributor shown beside it cannot be reached through the map: the overview takes the newest sources, and such a source has no connection to select | **Recorded** as item 9 of the build's note, an addition to item 18, and in `docs/api-contract.md`. `truncated` is true in every such case, so the view is not presented as complete |
+
+**Not covered by the review,** in its words: "Anything requiring execution: timing differences,
+real query plans, actual response bytes, behaviour in a browser or with a screen reader." It also
+did not cover the alpha, the stylesheet, or FR-10's and FR-03's code beyond where the map touches
+it. Its full report is in this session's shared notes, `fr20-built-review-security.md`.
+
+**The requirements audit of `28136c2` (15 November 2026), verbatim.** The `requirements-auditor` agent's report, quoted whole and unedited, extracted mechanically from the agent's transcript. What changed because of it follows the quotation.
+
+> ## Audit: FR-20 (Document and Meeting Relationship Visualisation), NFR-17 and UC-11, as built — 15 November 2026
+>
+> **Verdict:** COMPLETE WITH RECORDED DEVIATIONS. Every FR-20 clause is met by code with a test, from both roles where a role matters. It is built and tested, not demonstrated: nobody has seen it in a browser and the alpha does not hold it.
+>
+> **Audited:** branch `feat/FR-20-relationship-visualisation`, head `28136c2`, clean, 7 commits ahead of `origin/main` and 0 behind. Root: `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-20-relationship-visualisation-136f6b`. Every path below is under that root. Requirement text was read in place at `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\proposal.txt`.
+>
+> **How this was checked.** I read the code, the tests and the records. I ran no suite. I ran two read-only things: `scripts/knowledge_map_reach.py`, and a read of `corpus/objective-02/manifest.json` against the demonstration script.
+>
+> **Reported to me, not verified:**
+> - Front-end suite: 49 files, 835 tests passed; lint clean; build succeeds.
+> - Server suite: 5,066 passed, dual-role coverage 49 of 49 protected endpoints.
+> - `makemigrations --check --dry-run` reports no changes.
+> - Deliberate breaks (40 server, 149 screen) were run before the merge and are to be repeated on the final code.
+>
+> ### Clause coverage
+>
+> Line numbers after a test file are where the test starts. `TKM` is `apps/api/tests/test_knowledge_map.py`; `KMT` is `frontend/tests/knowledgeMap.test.jsx`.
+>
+> | Clause | Verdict | Code | Test |
+> |---|---|---|---|
+> | FR-20 Front-End: "A node-link diagram showing documents, meetings, tags, and contributors" | MEETS (never rendered in a browser) | `frontend/src/pages/KnowledgeMap.jsx:282-326`; `frontend/src/utils/knowledgeMap.js:332-372` | KMT:915, KMT:1785 |
+> | "node type distinguished by colour and shape" | MEETS | `KnowledgeMap.jsx:56-75`; `frontend/src/pages/KnowledgeMap.css:129-143` | KMT:444, KMT:493; `frontend/tests/contrast.test.js` ("gives each of the four node classes one fill token…") |
+> | "Selecting a node reveals its connections" | MEETS, as a second request (D-132 item 12) | `KnowledgeMap.jsx:167-251`, `360-418`; `utils/knowledgeMap.js:194-207` | KMT:547 (document, meeting, tag), KMT:604 (contributor) |
+> | "selecting again opens the underlying item" | Document, meeting: MEETS. Tag: DEPARTS, recorded (item 11, opens the repository filtered by it). Contributor: DEPARTS, recorded (item 11, opens nothing and says so) | `utils/knowledgeMap.js:109-125` | KMT:547, 604, 1497, 1524 |
+> | "A tabular equivalent presents the same relationships as sortable rows" | MEETS | `KnowledgeMap.jsx:433-503`; `utils/knowledgeMap.js:384-444` | KMT:915, 1054, 1101 |
+> | Server-End: "Assembles nodes and edges from existing tables (ContentTags…, Documents.uploaded_by…, MeetingAttendees…) rather than maintaining a separate relationship store" | MEETS; no table or model added | `apps/api/knowledge_map.py:166-233`; `apps/api/repository.py:120-141` | TKM:910, 973, 1518 |
+> | Validation: "traversal depth and returned node count are capped" | MEETS; DEPARTS recorded in two respects: caps come after the scope (item 1), depth binds only on a focused request (item 14) | `knowledge_map.py:327-361`; `apps/core/constants.py:325`, `330` | TKM:1038, 1069, 1092, 1111, 1129, 1146, 1168, 1189, 1571 |
+> | "truncation is reported to the interface so that a partial view is not presented as complete" | MEETS | `knowledge_map.py:290-302`; `KnowledgeMap.jsx:686-702`; `utils/knowledgeMap.js:223-233` | Server tests above; KMT:1232, 1273 |
+> | Business logic: "nodes the user cannot access are removed entirely rather than anonymised" | MEETS | `knowledge_map.py:178-231` through `scoped_documents` and `scoped_meetings` | TKM:356, 380, 412, 564, 782, 815; `apps/api/tests/test_source_rows_fail_closed.py` (`_maps`, both roles) |
+> | "connection counts are recomputed after filtering" | MEETS; the count is of returned edges (item 17) | `knowledge_map.py:309-314` | TKM:356, 380, 1373; `assert_well_formed` on every body |
+> | Responses: "200 OK with nodes, edges, and a truncation indicator" | MEETS; extra keys and a 400 recorded (items 13, 17) | `knowledge_map.py:364-390`; `apps/api/views.py:2905-2940`; `apps/api/serializers.py:1677` onward | TKM:973, 1472 |
+> | Database: "Documents, Meetings, ContentTags, Tags, Users (Read)" | MEETS; `MeetingAttendees` and the role tables also read (item 6); the only write is the session row | `knowledge_map.py` (SELECT only) | TKM:1518 |
+> | Settings: `MAXIMUM_TRAVERSAL_DEPTH`, `MAXIMUM_NODE_COUNT`, "To be tuned" | MEETS by a recorded rule; I ran the measurement and it reproduces D-132's figures (34 and 41 nodes) | `constants.py:325`, `330`; `scripts/knowledge_map_reach.py` | `apps/core/tests/test_constants.py` (`test_the_knowledge_map_constants_are_d132s`) |
+> | NFR-17: "a keyboard-navigable, sortable table view conveying the same nodes and relationships" | MEETS, structurally | `KnowledgeMap.jsx:433-503`, `734-761` | `frontend/tests/tabOrder.test.jsx` (FR-20 / NFR-17 block, both roles); KMT:915, 1054, 1101; `frontend/tests/textEquivalents.test.jsx` |
+> | NFR-17 Test: "Screen-reader test (NVDA/Voiceover)…" | PARTLY: not run; recorded (item 8; `docs/accessibility.md` section 7) | none | none |
+> | UC-11 01 "opens the knowledge map" | MEETS | `frontend/src/App.jsx` (nav link and route) | KMT:1896 |
+> | UC-11 02 "determines the permission scope" | MEETS; role re-read on each request | `views.py:2939` | TKM:756 |
+> | UC-11 03-04 assemble in scope, apply the caps | MEETS | as above | as above |
+> | UC-11 05 "removes any node the Employee cannot access… and recomputes connection counts after that removal" | DEPARTS, recorded (item 1): all removal precedes the cap; counts are still last | `knowledge_map.py:23-30` | TKM:433, 474, 505, 533 |
+> | UC-11 06-08 render, select, select again | As the three Front-End rows above | | |
+> | A1 "the same nodes and relationships as sortable rows" / "Selecting a row has the same effect as selecting a node" | MEETS; the tables are always alongside; the control is the link in the row | `KnowledgeMap.jsx:447-451`, `488-496` | KMT:670, 693, 747 |
+> | A2 "displays a truncation indicator alongside the map or table" | MEETS; ahead of the skip link and each table's description | `KnowledgeMap.jsx:697-702`, `437`, `474` | KMT:1232 |
+> | E1 "presents an empty map or table rather than an error" | MEETS on the server (one literal body). On the screen it is a sentence with no diagram and no table: a reading, not recorded (A6) | `knowledge_map.py:283-284`; `KnowledgeMap.jsx:678-682` | TKM:659, 1399; KMT:1420, 1431 |
+> | E2 "directs the Employee to UC02 Log In and, on success, returns them to the knowledge map" | PARTLY, recorded (item 7); its stated reasons are true in the code | `frontend/src/auth/RequireAuth.jsx:21` (path only); `frontend/src/auth/AuthProvider.jsx:64-74` | KMT:1921 (the half that works) |
+> | On failure: "No map or table is presented" | MEETS | `KnowledgeMap.jsx:522-558`, `657-677` | KMT:1324, 1347, 1373, 1407 |
+> | "No error discloses the existence of content the Employee's role does not permit them to see" | MEETS | `serializers.py:1677` onward (shape only); `knowledge_map.py:283-284` | TKM:659 (one body, identical SQL), 1472 |
+> | Primary actor Employee | MEETS; the permission code `view_knowledge_map` is not in the proposal: DEPARTS, recorded (item 3) | `apps/accounts/migrations/0011_seed_view_knowledge_map.py` | `apps/accounts/tests/test_view_knowledge_map_seed.py`; TKM:1430 |
+> | Pseudocode `selectedFilters` | DEPARTS, recorded (item 4): no filters | none | none |
+>
+> No clause is MISSED.
+>
+> ### Definition of done (`CLAUDE.md` section 8)
+>
+> 1. **Behaviour and status codes: met, with recorded deviations.** FR-20 states only 200; 401, 403 and 400 are tested at TKM:1422, 1430 and 1472.
+> 2. **Both suites pass: met on reported results only.** Server tests run from both roles through `session_client` or an Employee/Administrator mirror; the route is in `apps/api/tests/test_rbac.py:68` and `:141`. Interface clauses are tested in the front-end suite as both roles (`describe.each(BOTH_ROLES)`, KMT:442).
+> 3. **Happy and failure paths: met.**
+> 4. **Committed with the FR ID: met.** Six commits, each `(FR-20)`, tests in the same commits as the code. The branch is not pushed: no upstream, and no remote-tracking ref holds its commits.
+> 5. **This audit:** no clause gap; nine findings below, one medium and eight low, none in the scoping.
+>
+> ### Invariant check
+>
+> | Invariant | Result | Tests |
+> |---|---|---|
+> | An inaccessible node is absent | Pass, both roles | TKM:356 (both); mirror TKM:380; `test_source_rows_fail_closed.py` `_maps` |
+> | Its edges are gone | Pass, both roles | TKM:356 (exact edge set), 564; `assert_well_formed` |
+> | Counts recomputed after filtering | Pass, both roles | TKM:356 (shared tag and person count 2), TKM:380 (3 and 4 for the Administrator), TKM:1373 |
+> | Truncation and totals reveal no restricted volume (invariant 1) | Pass; thin at a binding cap (A7) | TKM:412, 433, 474, 505, 533 (Employee denied, Administrator mirror); TKM:356, 564, 1399 (both roles); TKM:1373 (no total in the body) |
+> | 401 unauthenticated, 403 without the permission (invariant 4) | Pass, both roles | TKM:1422, 1430; `test_rbac.py` registries |
+> | Meetings scoped by role, never attendance (invariant 3) | Pass, both roles | TKM:712 (both), 736 (mirror), 1399 |
+>
+> The scope is a predicate on the query and the walk receives only scoped values (TKM:910, 942). I looked for a path by which restricted material could reach a node, an edge, a count, an order, a truncation field or a status code. I found none.
+>
+> ### Findings
+>
+> **A1 — medium, record. D-132's standing text on the migration contradicts the code.**
+> - `docs/decisions.md:15696-15701` says 0011 depends on `0008_seed_manage_tags` and that the second pull request "adds a merge migration naming both leaves and edits no existing migration". The dispositions of security F3 (`:15782`) and audit F-10 (`:15808`) rest on that rule.
+> - The code depends on 0010, has no merge migration, and its dependency line was edited in merge `5c3b941` (`apps/accounts/migrations/0011_seed_view_knowledge_map.py:58-60`).
+> - Four records cite a "D-132's dated note of 15 November 2026" that does not exist: the migration's docstring (`:18`), `apps/accounts/tests/test_view_knowledge_map_seed.py:16`, `docs/alpha-deployment.md:418`, `docs/schema-v1.md:747`.
+> - The evidence `CLAUDE.md` section 7 wants logged in `docs/decisions.md` is so far only in the merge commit's message.
+> - I confirmed "never pushed". "Applied to no database" I could not check.
+> - Closes when the owed merge note supersedes that paragraph and both dispositions by name, and carries both pieces of evidence.
+>
+> **A2 — low, record. Three citations of D-132 do not resolve.**
+> - `frontend/src/utils/knowledgeMap.js:395` quotes D-132 as saying "Name, From and To sort by label then type". D-132 holds no such words.
+> - "The lead's decision 4" (`apps/api/knowledge_map.py:49`, TKM:856) and "decision 5" (`frontend/src/constants.js:1566`, `KnowledgeMap.jsx:147` and `:355`, `utils/knowledgeMap.js:97`) point at an unnumbered table (`docs/decisions.md:15604-15615`); by position they are rows 5 and 7.
+> - Closes by numbering the table or citing the row by name, and recording the sort rule.
+>
+> **A3 — low, behaviour. The Name, From and To sorts do not follow the text shown.**
+> - The key is the bare label (`utils/knowledgeMap.js:396-398`), while a tag's cell reads "Topic: people". Sorted by Name, "Topic: people" sits among the p's, before "Q3 Planning Sync" (pinned at KMT:1037-1039).
+> - NFR-17's "sortable" is met.
+> - Closes by sorting on the displayed text, or recording the rule.
+>
+> **A4 — low, record. The contract's example breaks its own rule.**
+> - `docs/api-contract.md:1796` gives the document `"connection_count": 3`; two of the example's three edges touch it.
+> - Closes by writing 2.
+>
+> **A5 — low, code. A copy of both caps sits in `frontend/src`.**
+> - `frontend/src/components/ComponentSheet.jsx:144-145` holds `maximum_node_count: 50` and `maximum_traversal_depth: 2` in `SAMPLE_MAP`. Nothing reads them and no test ties them to `apps/core/constants.py`.
+> - This is against `CLAUDE.md` section 5 and the docstring of `apps/api/tests/test_front_end_constants_agreement.py` ("The two caps are not copied").
+> - Closes by deleting the two keys.
+>
+> **A6 — low, record. Readings and additions outside D-132's numbered list.**
+> - The count line, "Skip to the table view", "Show the whole map" and the focus moved to the Selected heading appear only in review-table dispositions.
+> - UC-11 E1's "empty map or table" is a sentence on the screen, recorded nowhere.
+> - None adds a route or data, and neither out-of-scope line was built (overlays; export and sharing).
+> - Closes with one line in the build note.
+>
+> **A7 — low, test. At a binding cap, the denied role is always the Employee.**
+> - TKM:433, 474, 505 and 533 use an Administrator-only stamp with the Administrator as the mirror.
+> - The Administrator as the denied role (rows stamped `[]`) is tested only where no cap binds (TKM:356, 564, 1399).
+> - One code path serves both roles, so I expect no defect.
+> - Closes by running those four from `session_client` with `unreadable_scope`.
+>
+> **A8 — low, record. Item 18 and the contract say a skipped source "is reached by selecting one of its connections".**
+> - That is false when none of its connections is returned (`docs/decisions.md:15741`, `docs/api-contract.md:1877`).
+> - On a map above the cap, an older source sharing no tag or contributor with what is shown cannot be reached through the map at all: there are no filters and no paging.
+> - All five meetings in the reference corpus are such nodes (T01 to T05 have no edge).
+> - FR-20 asks only that truncation be reported, and it is.
+> - Closes with one sentence in each place.
+>
+> **A9 — low, record. The demonstration script misquotes the Relationships rows.**
+> - `docs/demonstration-script.md:520-521` quotes "Demo Employee uploaded …" and "… is tagged Topic: people". The screen reads "Contributor: Demo Employee" and "Tag: Topic: people" (`KnowledgeMap.jsx:491-495`, KMT:977).
+> - The rest of the walk agrees with the manifest: D01's two tags, `Project: atlas` on D09 and D15 only, and the depth notice on selecting D01.
+> - Closes when the script is walked.
+>
+> ### The records against the code
+>
+> - **`docs/api-contract.md`:** agrees, except A4 and A8.
+> - **`docs/accessibility.md`:** agrees; the tests it names exist; it claims no browser measurement.
+> - **`docs/schema-v1.md` and `docs/alpha-deployment.md` step 11:** agree, each citing the absent note (A1).
+> - **`CLAUDE.md` section 5:** both rows equal `apps/core/constants.py:325` and `:330`.
+> - **D-132's twenty items:** each is what the code does. Only the migration paragraph is recorded and not done (A1).
+> - **Set-level:** no AI SDK import in the slice; no literal cap in server code; the live-link rule is written once (`repository.py:120`); nothing is enforced only in the interface.
+>
+> ### What I did not or could not check
+>
+> - Neither suite, the lint, the build nor the break runs; the figures above are reported to me.
+> - Anything a browser shows: whether the lines meet their nodes, the 320 px reflow, an axe run, a screen reader. jsdom lays nothing out, so the diagram's drawing is asserted as arithmetic only.
+> - Any database, including the claim that 0011 was applied to none, and the alpha.
+> - The remote beyond local remote-tracking refs; I made no network call.
+> - `docs/decisions.md` outside D-132. D-132 is used in no other worktree; D-133 is claimed by `fix/FR-10-reject-long-proposal`.
+>
+> ### Gate impact
+>
+> None. FR-20 is a COULD requirement, not one of the twelve, built after M7's freeze at the lead's instruction (item 10).
+>
+> **One thing for the follow-up, not this build.** Reviewers as contributors needs a reviewed-by record. The proposal lists "Formal knowledge-record lifecycle management (curation workflow, review cycles, …)" as out of scope, so check that follow-up against it before building.
+>
+> **COMPLETE WITH RECORDED DEVIATIONS:** no FR-20 clause is missed and the scoping holds from both roles. The deviations are recorded in D-132: UC-11 E2 met in part, NFR-17's screen-reader test and the browser measurements owed, reviewers deferred. A1 must be closed by the merge note before "recorded" is true of the migration.
+
+**What was done with each finding.** The audit read `28136c2`. `main` was merged five times more
+after it: `e0f1acd` (#112), `377eff0` (#113 and #114), `b44b75b` (#115), `3d94e40` (#116) and
+`71d2391` (#117). Each of the first three changed files that also hold the map's code or record,
+and none changed a line of the map. The fourth changed one FR-10 test file and this file. The
+fifth changed documents and files under `corpus/`; in `docs/demonstration-script.md` it
+conflicted with this branch's note at the head, and both are kept. The corrections are in
+`89fc063`, `8122258`, `ba2893d` and these notes.
+
+| Finding | Severity | What | Disposition |
+|---|---|---|---|
+| A1 | medium, record | This entry's paragraph "The migration" contradicted the code, and four records cited a dated note that did not exist | **Fixed** by the dated note on the build, item 1. It supersedes that paragraph and the dispositions of F3 and F-10 by name, and carries both pieces of evidence: never pushed, and applied to no database. The paragraph has a pointer to it |
+| A2 | low, record | Three citations of D-132 did not resolve | **Fixed** in `89fc063`. Each comment that said "decision 4" or "decision 5" names the user's choice it means. The sort rule the third citation quoted is now item 5 of the build's note |
+| A3 | low, behaviour | Name, From and To sorted by the bare label, so "Topic: people" sat among the p's | **Fixed** in `89fc063`: each sorts by the text its cell shows. The expected orders in `frontend/tests/knowledgeMap.test.jsx` changed with it, and breaks F193 and F194 put the old rule back. The fix left the Name column's tie-break by type without a test; `8122258` adds one (item 5 of the build's note) |
+| A4 | low, record | The contract's example gave a count of 3 to a node two edges touch | **Fixed** in `89fc063` |
+| A5 | low, code | The component sheet's sample map held a copy of both caps | **Fixed** in `89fc063`: the two keys are deleted. Nothing read them |
+| A6 | low, record | Readings and additions outside the numbered list | **Fixed**: items 3 and 4 of the build's note |
+| A7 | low, test | At a binding cap the denied role was always the Employee | **Fixed** in `89fc063`: items 5 to 8 also run as each role, with the added rows stamped for no role the viewer's scope reaches. Eight cases, in the server break table above |
+| A8 | low, record | "Is reached by selecting one of its connections" is false where none of them is shown | **Fixed**: `docs/api-contract.md` in `89fc063`, and item 9 of the build's note for item 18 |
+| A9 | low, record | The demonstration script misquoted the Relationships rows | **Fixed in part.** The misquote is corrected in `89fc063`. The audit said this closes when the script is walked, and it has not been walked: that is owed by a person, on the alpha ("Owed in a browser", above) |
+
+**The auditor's note on the follow-up** is kept for whoever builds it: reviewers as contributors
+needs a record of who reviewed a document, and the proposal lists "Formal knowledge-record
+lifecycle management (curation workflow, review cycles, …)" as out of scope. That follow-up is to
+be checked against the proposal before it is built.
+
+**The follow-up audit of `b44b75b` (16 November 2026), verbatim.** A new run of the `requirements-auditor` agent was asked whether A1 to A9 are closed and whether the corrections introduced anything wrong. It read only: it ran no suite and no break. Its report is quoted whole and unedited, extracted mechanically from the agent's transcript. What changed because of it follows the quotation.
+
+> **Verdict: the closure is INCOMPLETE.** A1 to A8 are closed. A9 is closed in part: the misquote is corrected, and the walk the audit named as its closing step is still owed. The corrections introduced nothing that is wrong against FR-20, NFR-17 or UC-11, and I found no defect in the code or tests they changed. Six low findings are open (R1 to R6), in the records, three comments and the break evidence. R1 means D-132 does not yet describe the head.
+>
+> **Read:** branch `feat/FR-20-relationship-visualisation`, head `b44b75b`, clean. Root: `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-20-relationship-visualisation-136f6b`; every path below is under it. Requirement text read in place at `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\proposal.txt`. I ran no suite and no break. `DEC` is `docs/decisions.md`, `TKM` is `apps/api/tests/test_knowledge_map.py`, `KMT` is `frontend/tests/knowledgeMap.test.jsx`, `UKM` is `frontend/src/utils/knowledgeMap.js`.
+>
+> | Finding | Closed? | Evidence |
+> |---|---|---|
+> | A1 | Closed | DEC:15768-15770 is the pointer under "The migration". Item 1 of the build note (DEC:15928-15955) supersedes that paragraph and the dispositions of F3 and F-10 by name, and carries both pieces of evidence. The code agrees: `apps/accounts/migrations/0011_seed_view_knowledge_map.py:58-60` depends on 0010 alone, `accounts` ends at 0011 with no merge migration, and no local remote-tracking branch holds `6d00576`. The four records that cited the note resolve to it (DEC:15903-15904). One sentence of item 1 is inexact (R3). The database check is the session's; I could not repeat it |
+> | A2 | Closed | `89fc063`. `apps/api/knowledge_map.py:49`, TKM:968, `frontend/src/constants.js:1580`, `frontend/src/pages/KnowledgeMap.jsx:148` and `:357`, and UKM:96 each name a row of the choices table (DEC:15675, 15677). UKM:407 cites the build note, whose item 5 (DEC:15969-15979) holds the sort rule. Two citations of the same kind that the first audit did not list are in R5 |
+> | A3 | Closed | `89fc063`. Name sorts by `displayLabel`, then type (UKM:409-411). From and To sort by `typedLabel`, the function the cell itself renders (UKM:266-268, 414-416, 429-438; `KnowledgeMap.jsx:217`). I worked the new expected orders by hand from the fixture and they are right: KMT:1040, 1120, 1123. The old rule gives a different order in all three, so F193 and F194 can fail them. The tie-break test is KMT:1087 (`8122258`), inside the both-roles block |
+> | A4 | Closed | `docs/api-contract.md:1803` reads 2, and two of the example's three edges touch the document. The other three counts agree with the edges too |
+> | A5 | Closed | `frontend/src/components/ComponentSheet.jsx:93-144`: both keys are gone. Neither key name occurs in `frontend/src` except where the reply is read (UKM:225) and described (`frontend/src/api/knowledgeMap.js:23-24`) |
+> | A6 | Closed | Items 3 and 4 of the build note, DEC:15960-15968 |
+> | A7 | Closed | `89fc063`. TKM:572, 605, 631 and 651 take `session_client` and stamp the added rows with `unreadable_scope`, which is `[]` for the Administrator. Eight cases. I traced each premise through `walk` and each holds for both roles. The file has 49 functions and 108 cases, as the break table says. R6 is about what the breaks show |
+> | A8 | Closed | `docs/api-contract.md:1883-1887` (`89fc063`) and item 9 of the build note, DEC:15988-15995. Item 18 itself is unmarked (R4) |
+> | A9 | In part | `docs/demonstration-script.md:520-522` now reads as the screen does: "Contributor: Demo Employee", "uploaded", "is tagged", "Tag: Topic: people". The audit said it "closes when the script is walked". It is not walked, and the record says so (DEC:16676, 16459-16460) |
+>
+> **What I checked beyond the nine, and found right.**
+> - **The sort change.** FR-20 and NFR-17 ask for "sortable" rows and state no order, so the new rule departs from nothing. No other record states the old rule.
+> - **The eight cases.** Sound, as in the A7 row.
+> - **The commit list.** The eleven commits named exist and each holds what the note says of it.
+> - **The merges,** by `git show --remerge-diff` on each. `5c3b941` brought #102, #108, #109, #110 and #111, with exactly the fifteen conflicted files the note names. `e0f1acd` brought #112, with one conflict, `docs/decisions.md`. `377eff0` brought #113 and #114, with no conflict and no file under `apps/`. No file under `apps/` differs between `89fc063` and `377eff0`. `apps/api/repository.py` has not changed since `6d00576`.
+> - **The break tables' own counts.** 59 rows, 118 cases and 40 breaks; 90 rows and 151 breaks, with F141 and F142 the only two in no row.
+> - **The quotations.** The quoted audit (DEC:16512-16660) is identical, line for line, to the saved report: 149 lines. The security review's quoted sentences are in its report.
+>
+> ### New findings
+>
+> **R1 — low, record, stale. D-132 does not hold the fourth merge, `b44b75b` (#115, D-134).** This is beyond the suite and break figures already known to be owed.
+> - The commit list names three merges (DEC:15916). "The merges of `main`" ends at `377eff0` (DEC:15997-16018). The note says it was finished "when `main` was merged a third time" (DEC:15902-15903). The disposition preface says `main` "was merged twice more" (DEC:16662-16664).
+> - What `b44b75b` brought, as I read it: no conflict, no migration, and one comment in one test under `frontend/`. Under `apps/` it brought FR-10 changes to `apps/api/serializers.py`, `apps/api/views.py`, `apps/core/constants.py` and `apps/documents/classification.py`, comments in `apps/documents/models.py`, and tests. No changed line mentions the map. None is inside `KnowledgeMapView` (`apps/api/views.py:2923`), `KnowledgeMapQuerySerializer` (`apps/api/serializers.py:1701`) or the map's constants (`apps/core/constants.py:325-338`, `696-707`).
+> - So "No file under `apps/` differs between `89fc063` and `377eff0`" (DEC:16055-16056) is true and no longer reaches the head.
+> - Closes by adding the merge in those four places, with the re-run figures.
+>
+> **R2 — low, record.** DEC:16663 says `e0f1acd` (#112) "touches no file of the map". It touched five files that hold the map's code or record: `apps/api/views.py`, `apps/api/serializers.py`, `apps/core/constants.py`, `apps/core/tests/test_constants.py` and `docs/api-contract.md`. It changed no line of the map in any of them. Closes by saying that, as the same sentence says of `377eff0`.
+>
+> **R3 — low, record. Two sentences of the build note are inexact.**
+> - Item 1 (DEC:15932-15935) says the merge changed the dependency "and nothing else in it". The same merge rewrote two passages of the migration's docstring (`git diff 5c3b941^1 5c3b941` on the file). The operations and both functions are unchanged, as the next bullet says.
+> - Item 5 (DEC:15972-15973) says "Rows that are still equal keep the reply's order". That holds ascending. Descending is the ascending order reversed (UKM:445-451), so equal rows come out in the reverse of the reply's order.
+>
+> **R4 — low, record.** Item 18 (DEC:15809-15812) still reads "is reached by selecting one of its connections", with no pointer to item 9 of the build note. "The migration" paragraph was given one. Closes with a pointer of the same kind.
+>
+> **R5 — low, comments. Three comments of the kinds A2 and A9 named remain.** All three are older than the corrections.
+> - UKM:39 quotes D-132 as saying "the selection lives in the address". D-132's words are "with the selection in it" (DEC:15751).
+> - KMT:932 gives the relationship "in the words D-132 gives it". D-132 gives no words for a relationship: "is tagged" occurs there only inside the quoted audit.
+> - `frontend/src/constants.js:1600` gives the rows as "Jane Doe uploaded Leave policy" and "Leave policy is tagged Topic: people", the wording A9 corrected in the script.
+>
+> **R6 — low, test evidence, inferred from the break descriptions. The break table does not show that A7's four Administrator cases can fail for the reason they were added.**
+> - The four tests use documents only. No listed break lets a document stamped `[]` reach an Administrator: S01 and S04 read "in the Administrator's scope", and that scope excludes `[]` (`apps/retrieval/scoping.py:127-139`). Under them only the Employee case can fail.
+> - The Administrator cases can then fail only under breaks that are not about scope: S12, S13, S30, S38, S39, and the order and cap breaks. The table gives one row for both cases, so this is inference and not something I saw.
+> - The server list had 40 breaks when the first audit was told of it and has 40 now. The eight cases got no break of their own, where A3's change got two (F193, F194).
+> - "Every case fails under at least one break" (DEC:16065) is still true as worded.
+> - Closes with one break in the re-run that gives the Administrator an unscoped read in `assemble` (`apps/api/knowledge_map.py:178-179`), and its row.
+>
+> **What I did not check.** I ran neither suite, no break, no lint, no build and no `manage.py` command, so every figure in the notes and every "fails under" cell is as reported. I checked no database, so the 21-database evidence in item 1 is the session's. I made no network call: "never pushed" is from local remote-tracking refs. I did not check the chunk sizes, the account of the cut-off agent runs, or anything a browser shows. The 172 front-end cases I checked only as arithmetic over the table's rows. I did not read how each of the fifteen conflicts was resolved. I did not re-audit the first audit's clause table, and I read `docs/decisions.md` only inside D-132.
+>
+> **INCOMPLETE:** A1 to A8 closed, A9 in part, R1 to R6 open and all low; no defect found in the code or tests against FR-20, NFR-17 or UC-11.
+
+**What was done with each of its findings.**
+
+| Finding | Severity | What | Disposition |
+|---|---|---|---|
+| A9 | low, record | Closed in part: the walk the first audit named as its closing step is not walked | **Open, and owed by a person.** The alpha must be redeployed and migrated first, which is the user's to do. It is listed under "Owed in a browser" |
+| R1 | low, record | This entry did not hold the fourth merge, `b44b75b` | **Fixed**: the commit list, "The merges of `main`", the sentence on when the build's note was finished and the preface to the first audit's table name it. The suites' figures are from `ba2893d` |
+| R2 | low, record | "Touches no file of the map" was wrong of `e0f1acd` | **Fixed**: the preface says that `e0f1acd`, `377eff0` and `b44b75b` each changed files that also hold the map's code or record, and that none changed a line of the map |
+| R3 | low, record | Two inexact sentences in the build's note | **Fixed**: item 1 says the merge also rewrote two passages of the migration's docstring. Item 5 says equal rows come out reversed when the sort is descending |
+| R4 | low, record | Item 18 had no pointer to item 9 of the build's note | **Fixed**: a dated sentence at the end of item 18 |
+| R5 | low, comments | Three comments misquoted D-132 or the screen | **Fixed** in `ba2893d`. Comments only: the built JavaScript and stylesheet are byte for byte the same before and after it |
+| R6 | low, test evidence | No listed break showed that A7's four cases run as the Administrator can fail for the reason they were added | **Fixed.** Break S41 is added: documents are read with no scope at all, so a document stamped for no role reaches every caller. All eight cases fail under it, the four run as the Administrator among them. They are listed one by one under the server table |
+
+**The corrections above were not read by an auditor again.** A9's walk cannot be closed from here, so a third run would not return a clean verdict either. The line numbers in the quotation are the auditor's, read at `b44b75b`; the corrections moved some of them.
+
 ## D-133 · A proposed Topic longer than a tag name can be rejected: the reject route reads a value up to 100,000 characters, and confirm keeps its 255
 
 **Status:** Settled by the user · **Date:** 2026-11-15 · **Concerns:** FR-10 (controlled taxonomy

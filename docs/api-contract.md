@@ -1771,3 +1771,141 @@ Administrators hold it. A requester without it gets the plain user object.
 **`LoginAttempts`** (`login_attempts`, `docs/schema-v1.md` §1) gets one row for each lockout and one
 for each release, and nothing for an ordinary attempt (D-130 decision 5). No route lists it. Its Read
 is the `lock` object above.
+
+## NIT3004 — FR-20 knowledge map (D-132)
+
+### FR-20 — knowledge map
+
+The documents, meetings, tags and contributors the caller's role may see, and how they relate:
+"Assembles nodes and edges from existing tables (ContentTags for classification links,
+Documents.uploaded_by for authorship, MeetingAttendees for participation) rather than maintaining
+a separate relationship store." Decision: D-132. The route needs a session **and**
+`view_knowledge_map`, which accounts 0011 gives **both** roles: `401` without a session, `403` for a
+role that lacks the code (invariant 4), checked before anything else on the request. Nothing on
+the route is a single scoped object, so the `403` has no `404` to precede. It is not throttled,
+as the dashboard, the repository and the meetings list are not.
+
+| Method | Path | Auth | Success | Errors |
+|---|---|---|---|---|
+| GET | `/api/knowledge-map` | session + `view_knowledge_map` | `200` the map object (below): the overview. Always `200` from a permitted session, the empty map included | `401`; `403` |
+| GET | `/api/knowledge-map?focus_type=<type>&focus_id=<uuid>` | session + `view_knowledge_map` | `200` the map object: the walk from that node. A focus that is not in the caller's own map gets the empty map object, whatever the reason | `401`; `403`; `400 {"<parameter>": ["..."]}` a `focus_type` outside the vocabulary, a `focus_id` that is not a UUID, or one given without the other, keyed on the missing one (*convention*: FR-20 lists only `200`; D-65) |
+
+`focus_type` is one of `document`, `meeting`, `tag`, `contributor`, matched exactly. `focus_id` is
+a UUID in any spelling a UUID has. **Both or neither**: with neither the request is the overview,
+and an empty value for either is the same as leaving it out. Both are validated for shape only.
+No value is looked up to decide a status code, so an identifier that names nothing and one that
+names something the caller cannot read get the same answer.
+
+```json
+{
+  "focus": {"type": "document", "id": "0b7c..."},
+  "nodes": [
+    {"id": "document:0b7c...", "type": "document", "item_id": "0b7c...", "label": "Employee Leave Policy 2026", "dimension": null, "connection_count": 2},
+    {"id": "tag:9e01...", "type": "tag", "item_id": "9e01...", "label": "people", "dimension": "Topic", "connection_count": 1},
+    {"id": "contributor:77f2...", "type": "contributor", "item_id": "77f2...", "label": "Jane Doe", "dimension": null, "connection_count": 2},
+    {"id": "meeting:51aa...", "type": "meeting", "item_id": "51aa...", "label": "Q3 Planning Sync", "dimension": null, "connection_count": 1}
+  ],
+  "edges": [
+    {"source": "document:0b7c...", "target": "tag:9e01...", "relationship": "tagged"},
+    {"source": "contributor:77f2...", "target": "document:0b7c...", "relationship": "uploaded"},
+    {"source": "contributor:77f2...", "target": "meeting:51aa...", "relationship": "attended"}
+  ],
+  "truncated": true,
+  "truncated_by": "depth",
+  "maximum_node_count": 50,
+  "maximum_traversal_depth": 2
+}
+```
+
+The empty map object, for an empty database, a role with nothing in scope, and a focus that is not
+in the caller's map (UC-11 E1: "an empty map or table rather than an error"):
+
+```json
+{"focus": null, "nodes": [], "edges": [], "truncated": false, "truncated_by": null,
+ "maximum_node_count": 50, "maximum_traversal_depth": 2}
+```
+
+- **The body has exactly these seven keys,** every node the same six and every edge the same
+  three. The same request gives the same bytes.
+- **`focus`** is `null` for the overview and for a focus that is not one of the returned nodes.
+  Otherwise it is that node's `type` and its identifier in canonical form, never the caller's
+  spelling. The page marks the selected node from this, not from its own address. A focus that is
+  unknown, outside the caller's scope, a tag with no applied link on a source in scope, a person
+  with no contribution in scope, or a type that does not match its identifier: each gets the empty
+  map object, which holds nothing the caller sent.
+- **A node's `id`** is its `type`, a colon and its `item_id`, and is what an edge refers to.
+  **`item_id`** is the row's own identifier: a `doc_id`, a `meeting_id`, a `tag_id` or a user's
+  `id`. **`label`** is the document's or meeting's title, the tag's name, or the person's name.
+  **`dimension`** is a tag's dimension (`Project`, `Process` or `Topic`) and `null` for the other
+  three types. A tag's name is unique only within its dimension, so the page shows both.
+- **`type`** is one of `KNOWLEDGE_MAP_NODE_TYPES`. A document or a meeting is a node in every
+  status, as the repository and the meetings list show them. **A tag or a contributor is a node
+  only when a link reaches it from a source in the caller's scope**: a tag through an applied
+  link, a contributor as the uploader of a document or an attendee of a meeting. One known only
+  through material outside the scope is absent, with no placeholder and no zero-count node.
+- **An edge** reads "source, relationship, target", and `relationship` is one of
+  `KNOWLEDGE_MAP_RELATIONSHIPS`:
+
+  | `relationship` | `source` | `target` | From |
+  |---|---|---|---|
+  | `uploaded` | contributor | document | `Documents.uploaded_by` |
+  | `attended` | contributor | meeting | `MeetingAttendees` |
+  | `tagged` | document or meeting | tag | `ContentTags` |
+
+  A `tagged` edge is an applied link, by FR-15's rule: not provisional, not removed, in Project,
+  Process or Topic, matched on the source's type and identifier together. A retired tag still
+  linked is a node. Department is a column, not a tag (D-72), and is neither a node nor an edge.
+  Duplicate link rows are one edge. Both ends of every edge are in `nodes`.
+- **`connection_count`** is the number of returned edges touching the node: the connections shown
+  in this view. It is taken last, so the same node can show a different count in another view. An
+  unconnected meeting is returned with `0`.
+- **`truncated`** is `true` when a returned node has a connection in the caller's scope that was
+  not returned, or, in the overview, when a source in scope was not returned. **`truncated_by`**
+  is one of `KNOWLEDGE_MAP_TRUNCATION_REASONS`: `"node_count"` if and only if a node within reach
+  was left out because `maximum_node_count` was reached, otherwise `"depth"`; `"node_count"` when
+  both apply; `null` when `truncated` is `false`. Within reach means within
+  `maximum_traversal_depth` hops of the focus. In the overview every node is one hop from a
+  source, so every node is within reach and a truncated overview always reports `"node_count"`.
+- **`maximum_node_count`** and **`maximum_traversal_depth`** are `MAXIMUM_NODE_COUNT` (50) and
+  `MAXIMUM_TRAVERSAL_DEPTH` (2), so the page words its notice from the response and holds no copy
+  of either.
+
+**Which nodes a view holds, and in what order** (D-132). Every step below runs over the caller's
+own scoped map and nothing wider, so the caps come after the scope and never before it
+(invariant 1).
+
+1. **The stable orders.** Documents and meetings are one list, newest first by when they were
+   added (`uploaded_at`, `created_at`), then by identifier. Tags by dimension, name, identifier.
+   Contributors by name without regard to case, then identifier.
+2. **The overview** takes each source in turn, newest first, with one hop: the source, then its
+   tags, then its contributors, those not yet included. A source is included only when it and all
+   of those fit under `maximum_node_count`. One that does not fit is skipped and the walk carries
+   on with the next, so a source with as many connections as the cap is never in the overview. A
+   source left out is reached by selecting one of its connections, where the overview shows one.
+   Where it shows none (an older source with no tag and no contributor, or none among those
+   shown) the map gives no way to it: `truncated` says the view is partial, and the source is
+   still in the repository or the meetings list. If no source fits at all, the newest is
+   returned with as many of its neighbours as fit, tags before contributors. The depth cap does
+   not limit the overview: every node is one hop from a source.
+3. **A selection** starts from the focus and takes up to `maximum_traversal_depth` hops, ring by
+   ring. Each ring is the not-yet-included neighbours of the ring before it, ordered as a whole:
+   sources, then tags, then contributors. Nodes are added in that order until
+   `maximum_node_count` is reached. The walk passes only through nodes that are in the caller's
+   scope.
+4. **`nodes` is in walk order.** `edges` holds every edge whose two ends are both returned, in the
+   order of its source's place in `nodes`, then its target's.
+
+**What is never returned.** A source outside the caller's scope; a tag or a person known only
+through one; an email, a role or any other field of a user; `Tag.active` and `Tag.grown`; a link's
+provenance (`applied_by`, `confidence`, `confirmed`); a transcript or extracted text; any total,
+"N of M" or count of what was left out, and any count taken before the scope. Attendance never
+admits a meeting: an attendee of a meeting the caller's role cannot read does not see it, and
+their own node does not count it (invariant 3). The Employee's bytes are the same whether or not
+restricted material exists.
+
+**Read only.** The route's own code runs SELECT statements and nothing else, the same number
+whatever the corpus holds. The session row is still saved on every request by FR-04's sliding
+expiry. It reads `documents`, `meetings`, `content_tags`, `tags`, `users` and `meeting_attendees`,
+and through FR-06 `roles`, `permissions` and `role_permissions`. The scope is the role re-read
+from the users table on each request, and nothing is cached between requests, so a change of role
+takes effect on the next one.
