@@ -53,6 +53,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 from apps.core.constants import (
+    EVIDENCE_MAP_CLAIM,
+    EVIDENCE_MAP_PASSAGE,
     KNOWLEDGE_MAP_ATTENDED,
     KNOWLEDGE_MAP_CONTRIBUTOR,
     KNOWLEDGE_MAP_DOCUMENT,
@@ -78,6 +80,11 @@ _KIND = {
     KNOWLEDGE_MAP_MEETING: _SOURCES,
     KNOWLEDGE_MAP_TAG: _TAGS,
     KNOWLEDGE_MAP_CONTRIBUTOR: _CONTRIBUTORS,
+    # The second view's two kinds (D-138, ``apps/api/evidence_map.py``), which ``walk`` serves
+    # too: a claim is walked as a source is, and a passage as a tag is. One graph never holds
+    # both views' nodes.
+    EVIDENCE_MAP_CLAIM: _SOURCES,
+    EVIDENCE_MAP_PASSAGE: _TAGS,
 }
 
 _EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)

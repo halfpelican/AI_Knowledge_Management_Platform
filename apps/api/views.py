@@ -129,6 +129,7 @@ from apps.retrieval.search import (
 from .answers import reply_for
 from .ask_slot import release_ask_slot, take_ask_slot
 from .ingestion_slot import release_ingestion_slot, take_ingestion_slot
+from .evidence_map import evidence_map
 from .knowledge_map import knowledge_map
 from .negotiation import IgnoreClientContentNegotiation
 from .transcription_slot import (
@@ -157,6 +158,7 @@ from .serializers import (
     KnowledgeGapCycleSerializer,
     KnowledgeGapSerializer,
     KnowledgeGapStatusSerializer,
+    EvidenceMapQuerySerializer,
     KnowledgeMapQuerySerializer,
     LoginSerializer,
     MeetingDetailSerializer,
@@ -2953,6 +2955,36 @@ class KnowledgeMapView(APIView):
         query.is_valid(raise_exception=True)  # 400 in DRF's shape (D-65, a convention)
         role_name = permission_scope(request.user)
         return Response(knowledge_map(role_name=role_name, focus=query.focus))
+
+
+class EvidenceMapView(APIView):
+    """``GET /api/knowledge-map/evidence`` — the knowledge map's second view (D-138): claims and
+    the passages they cite, capped, with a truncation indicator. docs/api-contract.md is its
+    shape.
+
+    Behind the first view's two classes: 401 without a session, 403 for a role that lacks
+    ``view_knowledge_map`` (invariant 4). Not throttled, as the first view is not.
+
+    **The request** is the first view's, for two other types: no parameters is the overview, and
+    ``focus_type`` with ``focus_id`` is a selection. ``EvidenceMapQuerySerializer`` checks their
+    shape and nothing else (D-65).
+
+    **The role is re-read on this request** by ``permission_scope``. Everything after that is
+    ``apps/api/evidence_map.py``: it reads the citation rows that role may see, and only then
+    walks and caps them (invariant 1). A claim is shown only where the role reads the cited
+    passage, its source, and every passage the answer was generated from.
+
+    **Always 200 for a well-formed request,** the empty graph included, and one empty body for
+    every focus that is not in the caller's own graph. **Read only**, as the first view is.
+    """
+
+    permission_classes = [IsAuthenticated, CanViewKnowledgeMap]
+
+    def get(self, request):
+        query = EvidenceMapQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)  # 400 in DRF's shape (D-65, a convention)
+        role_name = permission_scope(request.user)
+        return Response(evidence_map(role_name=role_name, focus=query.focus))
 
 
 # --- FR-19 knowledge-gap log (docs/decisions.md D-107 to D-109) -----------------------------

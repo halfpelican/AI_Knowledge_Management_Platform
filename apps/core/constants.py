@@ -707,6 +707,15 @@ KNOWLEDGE_MAP_RELATIONSHIPS = ("tagged", "uploaded", "attended")
 KNOWLEDGE_MAP_TRUNCATION_REASONS = ("node_count", "depth")
 (KNOWLEDGE_MAP_TRUNCATED_BY_NODE_COUNT,
  KNOWLEDGE_MAP_TRUNCATED_BY_DEPTH) = KNOWLEDGE_MAP_TRUNCATION_REASONS
+# The knowledge map's second view (D-138), after the proposal's Evidence mock-up (Figure 8.7):
+# what GET /api/knowledge-map/evidence calls its two kinds of node. A claim is a verified
+# statement of an answered question (AnswerCitations.statement_text), and a passage is the
+# chunk it cites. Its one relationship reads "claim, cites, passage". The two caps, the
+# truncation reasons and the permission code are the first view's.
+EVIDENCE_MAP_NODE_TYPES = ("claim", "passage")
+(EVIDENCE_MAP_CLAIM, EVIDENCE_MAP_PASSAGE) = EVIDENCE_MAP_NODE_TYPES
+EVIDENCE_MAP_RELATIONSHIPS = ("cites",)
+(EVIDENCE_MAP_CITES,) = EVIDENCE_MAP_RELATIONSHIPS
 
 # A new record starts in the first value of its vocabulary.
 DEFAULT_DOCUMENT_STATUS = DOCUMENT_STATUS_VALUES[0]
