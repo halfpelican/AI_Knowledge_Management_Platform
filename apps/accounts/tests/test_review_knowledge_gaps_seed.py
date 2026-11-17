@@ -116,7 +116,8 @@ def test_the_migration_reverses_through_the_executor(employee_role, administrato
 
     0007 was the leaf of ``accounts`` until 0008 (D-119 finding 5) followed it, so the test now
     checks that 0007 is on the leaf's path and migrates forward to the leaf, which reapplies 0008
-    and, since D-130 and D-132, 0009, 0010 and 0011 too, as 0006's test does since 0007."""
+    and, since D-130, D-132 and D-137, 0009, 0010, 0011 and 0012 too, as 0006's test does since
+    0007."""
     graph = MigrationExecutor(connection).loader.graph
     [leaf] = [key for key in graph.leaf_nodes() if key[0] == "accounts"]
     assert THIS_MIGRATION in graph.forwards_plan(leaf)

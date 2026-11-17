@@ -91,8 +91,10 @@ Every time:
 uv pip sync --python .venv\Scripts\python.exe requirements.txt
 ```
 
-That makes this venv match `requirements.txt` exactly, `whitenoise==6.12.0` included. Nothing
-else syncs into it.
+That makes this venv match `requirements.txt` exactly, `whitenoise==6.12.0` included, and since
+D-137 `pillow==13.0.0`, which re-encodes every profile picture uploaded. Nothing else syncs into
+it. The API imports Pillow, so a venv last synced before D-137 fails `manage.py check`, and step 6
+then does not start the server.
 
 ## 4. The environment, then the database
 
@@ -128,6 +130,23 @@ are read only for recording transcription, which is off.
 failed, with what its reply reported; `errors.log` keeps the failures only. A commit from before
 the statement cap ignores it.
 
+**The password reset's email (D-137) needs no line in `.env`.** `.env.example` documents each
+setting, and each default suits the alpha:
+
+- **`PUBLIC_BASE_URL`** is the address people open the alpha at. Every reset link is built from
+  it, never from the request. The default is the alpha's own, `http://127.0.0.1:8000`. A value
+  that is not an absolute `http://` or `https://` address, or that carries a query or a fragment,
+  stops Django loading its settings, so `migrate`, `check` and the server all refuse to start.
+- **`DEFAULT_FROM_EMAIL`** is the sender each email names, `no-reply@localhost` by default.
+- **`EMAIL_HOST` names an SMTP server, or is left out.**
+  - **Left out, as above, nothing is sent.** Each email is written as a file to `EMAIL_FILE_PATH`,
+    by default the worktree's `outbox` folder, `$root\outbox`, which is gitignored. Each reset
+    email there holds a link that lets whoever opens it set that account's password, once, within
+    60 minutes, so keep the folder as private as the database.
+  - **With `EMAIL_HOST` set, the email goes by SMTP,** with the port, encryption and account the
+    other `EMAIL_*` settings give, as `.env.example` lists them. `EMAIL_USE_TLS` and
+    `EMAIL_USE_SSL` both true stops Django starting too.
+
 Then, in the deployment window:
 
 ```powershell
@@ -152,6 +171,14 @@ reprocessing or deleting is not (D-40).
     confirmation, because they matched the typed department below the old 0.72.
   - It would also replace the one unanswered proposal, and re-score the 15 held tags.
   - It costs a model call per document, and it is the user's call.
+
+**The first `migrate` after D-137** applies `accounts` 0012, which adds `picture` and
+`picture_updated_at` to `users` for profile pictures. It needs no data step: every existing
+account starts with no picture.
+- **An uploaded picture is stored under `MEDIA_ROOT`,** in `profile-pictures\`, as a PNG. It leaves
+  only through its own route, to signed-in users. Nothing serves `MEDIA_ROOT`.
+- **A database at `accounts` 0008 gets FR-03's 0009 and 0010 and FR-20's 0011 first,** in the same
+  `migrate` (step 11).
 
 **`check --deploy` on loopback HTTP** should report exactly four warnings, all about HTTPS, which
 D-64 puts out of scope for the alpha (NFR-03's scan moves to round 2):
@@ -413,9 +440,13 @@ both roles hold only once `accounts 0011_seed_view_knowledge_map` has run. Until
 
 - **After step 4's `migrate`,** sign in in the browser and open `http://127.0.0.1:8000/api/roles`.
   Both roles must list `view_knowledge_map`.
-- **`accounts 0011` follows FR-03's `0009` and `0010` in one line.** A database at 0008 gets all
-  three from step 4's `migrate`, in order. There is no merge migration: 0011 was re-pointed onto
-  0010 before it was pushed or applied anywhere (D-132's dated note of 15 November 2026; D-130).
+- **`accounts 0011` follows FR-03's `0009` and `0010` in one line, and D-137's `0012` follows
+  it.** A database at 0008 gets all four from step 4's `migrate`, in order, 0009 to 0012. There is
+  no merge migration:
+  - 0011 was re-pointed onto 0010 before it was pushed or applied anywhere (D-132's dated note of
+    15 November 2026; D-130);
+  - 0012 was re-pointed onto 0011 in the merge of 17 November 2026, before it was pushed (its
+    docstring, `apps/accounts/migrations/0012_user_picture.py`).
 
 The map reads existing tables only, so it needs no data step: a document's uploader, a meeting's
 attendees and the applied tags are what it draws.
@@ -488,6 +519,8 @@ The Employee for a walk registers through FR-01, or has its password set the sam
 - **No TLS.** NFR-03's scan moves to NFR verification round 2 (D-64). Hence the four HTTPS warnings
   in step 4 and the cookie flags left off.
 - **No access from another machine.** That is the registration point at the top.
+- **No real email,** unless `.env` names an SMTP server (D-137). A password reset email is a file
+  in the outbox (step 4).
 - **It is not M8's hosting.** Where the system is hosted for M8 is a later decision (D-64).
 - **It does not switch providers.** A database keeps the provider it was set up with (D-131). To
   bring back the FLM alpha, check out `8598d19` and restore `.env.flm-20261101` as `.env`, with FLM

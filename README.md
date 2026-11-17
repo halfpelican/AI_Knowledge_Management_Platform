@@ -60,6 +60,19 @@ docker compose up -d
   `.env` that disagrees with `AI_PROVIDER` (ai.E004). The width follows the provider, so `.env`
   needs no `EMBEDDING_DIMENSION` (D-131).
 
+**The password reset's email (D-137) needs nothing in `.env` to run.** `.env.example` documents
+its settings:
+
+- **Without `EMAIL_HOST`, nothing is sent.** Each email is written as a file to `outbox/`
+  (`EMAIL_FILE_PATH`), which is gitignored. A reset email there holds a link that lets whoever
+  opens it set that account's password, once, within 60 minutes, so keep the folder as private as
+  the database. `EMAIL_HOST` and the other `EMAIL_*` settings send by SMTP instead, and
+  `DEFAULT_FROM_EMAIL` names the sender.
+- **Every reset link starts with `PUBLIC_BASE_URL`,** never with the request's address. The
+  default, `http://127.0.0.1:8000`, is the alpha's. In development the browser talks to Vite
+  (below), so for a link to open there, put `PUBLIC_BASE_URL=http://localhost:5173` in `.env`. A
+  malformed value stops Django starting.
+
 ## The AI provider
 
 `AI_PROVIDER` in `.env` selects it. Application code never names a provider; it calls
@@ -261,3 +274,6 @@ that CI and every developer install. To change a dependency, edit `requirements.
 uv pip compile requirements.in -o requirements.txt --python-version 3.12
 uv pip sync --python .venv/Scripts/python.exe requirements.txt
 ```
+
+Sync again after any pull that changes `requirements.txt`. D-137's Pillow, which re-encodes
+profile pictures, is one: the API imports it, so a venv synced before it fails `manage.py check`.
