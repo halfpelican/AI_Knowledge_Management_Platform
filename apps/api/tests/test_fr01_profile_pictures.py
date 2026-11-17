@@ -18,6 +18,13 @@ What these tests hold the build to:
   ``Content-Length`` alone: a counting body shows no byte of it was read. A file over 5 MB inside a
   body under that is a 413 once parsed. A small file whose header declares more than 25,000,000
   pixels is a 413 without a pixel decoded: a spy on Pillow's ``load`` shows it never ran.
+- **What a decode may cost** (the review of 17 November 2026, PIC-1). A WebP declaring too many
+  pixels is refused before Pillow opens it, so libwebp never allocates its canvas: a spy on its
+  decoder shows none was created, for each of the three ways a WebP header gives its size. A JPEG is
+  decoded at a reduced scale, and an opaque picture is never copied at full size before it is
+  scaled. At most MAXIMUM_PICTURE_DECODES_IN_FLIGHT pictures are decoded at once: past that an upload
+  is a 429 ``picture_busy`` with ``Retry-After``, and every place is given back, whatever the upload
+  came to.
 - **Only pixels are kept.** A JPEG carrying EXIF (GPS, camera, orientation), an ICC profile and a
   comment, and a PNG carrying text, ICC, a transparency key and a private chunk, each come back as a
   PNG with no chunk but IHDR, IDAT and IEND, at most 512 x 512, turned upright.
@@ -42,6 +49,7 @@ import calendar
 import io
 import re
 import struct
+import threading
 import uuid
 import zlib
 from datetime import date, datetime
@@ -55,11 +63,12 @@ from django.core.files.storage import FileSystemStorage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
-from PIL import Image, ImageCms, ImageFile, PngImagePlugin
+from PIL import Image, ImageCms, ImageFile, PngImagePlugin, WebPImagePlugin
 from rest_framework.test import APIClient
 from rest_framework.throttling import ScopedRateThrottle
 
 from apps.accounts import pictures
+from apps.core import constants
 from apps.api.views import (
     NO_PICTURE_SUBMITTED_MESSAGE,
     PICTURE_TOO_LARGE_MESSAGE,
@@ -452,6 +461,12 @@ CONTRACT_TOO_MANY_PIXELS = {
     "detail": "This picture's dimensions are too large. Choose a picture of at most 25 megapixels."
 }
 CONTRACT_NOT_FOUND = {"detail": "No User matches the given query."}
+# The 429 for an upload that finds every decode place taken (PIC-1), with its code.
+CONTRACT_PICTURE_BUSY = {
+    "detail": "The server is busy with other pictures. This picture was not saved and nothing was "
+    "changed; it can be sent again in a few seconds.",
+    "code": "picture_busy",
+}
 
 
 def test_the_refusals_are_the_contracts_words(session_client, media_root):
@@ -622,12 +637,16 @@ def test_the_throttle_refuses_before_the_body_is_read(session_client, monkeypatc
 
 @pytest.fixture
 def decoded(monkeypatch):
-    """Every image Pillow decodes, by its size: a spy on ``ImageFile.load``."""
+    """Every image Pillow decodes, by its size: a spy on ``ImageFile.load`` that counts a call only
+    when it has tiles to decode. Pillow enters ``load`` again on an image it has decoded, which
+    decodes nothing, and since PIC-1's fix the picture is scaled in place, so such a call would see
+    the scaled size."""
     seen = []
     real_load = ImageFile.ImageFile.load
 
     def spy(self):
-        seen.append(self.size)
+        if self.tile:
+            seen.append(self.size)
         return real_load(self)
 
     monkeypatch.setattr(ImageFile.ImageFile, "load", spy)
@@ -670,9 +689,231 @@ def test_the_pixel_cap_admits_exactly_its_count(session_client, monkeypatch, dec
     client = session_client.client
 
     assert upload(client, encoded(a_photo((12, 10)), "PNG")).status_code == 200
-    assert set(decoded) == {(12, 10)}  # load() may be entered more than once for one image
+    assert decoded == [(12, 10)]
     assert upload(client, encoded(a_photo((13, 10)), "PNG")).status_code == 413
-    assert set(decoded) == {(12, 10)}
+    assert decoded == [(12, 10)]
+
+
+# --- What a decode may cost (the review of 17 November 2026, PIC-1) ----------------------------
+#
+# Ten 140-byte uploads at once made the server touch about 4 GB. libwebp allocated a WebP's canvas,
+# twice over, while Pillow opened the file and before the cap was read; a picture at the cap was
+# copied at full size before it was scaled; and nothing bounded how many were decoded at once.
+
+# The longest a thread test waits for something that must happen, before it fails instead.
+PATIENCE = 30
+# What each kind of WebP's first chunk is called: the three places its header gives its size.
+WEBP_KINDS = {"lossy": b"VP8 ", "lossless": b"VP8L", "animated": b"VP8X"}
+
+
+def a_webp(kind, size=(16, 16)):
+    """A real WebP: "lossy" is one VP8 chunk, "lossless" one VP8L chunk, and "animated" a VP8X
+    canvas around two frames."""
+    if kind == "animated":
+        frames = [Image.new("RGBA", size, colour) for colour in ((255, 0, 0, 255), (0, 255, 0, 255))]
+        return encoded(frames[0], "WEBP", save_all=True, append_images=frames[1:], lossless=True)
+    options = {"lossless": True} if kind == "lossless" else {"quality": 80}
+    return encoded(Image.new("RGB", size, (200, 30, 30)), "WEBP", **options)
+
+
+def declaring_a_canvas(data, width, height):
+    """``data``, a WebP, with its header rewritten to declare a ``width`` x ``height`` canvas, as the
+    review's 140-byte file declared one around a 16 x 16 frame."""
+    data = bytearray(data)
+    chunk = bytes(data[12:16])
+    if chunk == b"VP8X":  # the canvas: 24 bits each, less one
+        data[24:27] = (width - 1).to_bytes(3, "little")
+        data[27:30] = (height - 1).to_bytes(3, "little")
+    elif chunk == b"VP8 ":  # the key frame's 14-bit sizes, after its start code
+        assert data[23:26] == b"\x9d\x01\x2a"
+        data[26:28] = width.to_bytes(2, "little")
+        data[28:30] = height.to_bytes(2, "little")
+    else:  # VP8L: 14 bits each, less one, after its signature byte
+        assert chunk == b"VP8L" and data[20] == 0x2F
+        kept = int.from_bytes(data[21:25], "little") & ~0x0FFFFFFF
+        data[21:25] = (kept | (width - 1) | ((height - 1) << 14)).to_bytes(4, "little")
+    return bytes(data)
+
+
+@pytest.fixture
+def webp_decoders(monkeypatch):
+    """Every libwebp decoder Pillow creates, by the length of what it was given. Creating one
+    allocates the canvas twice over, so a WebP refused by its header must create none."""
+    created = []
+    real_decoder = WebPImagePlugin._webp.WebPAnimDecoder
+
+    def spy(data, *args, **kwargs):
+        created.append(len(data))
+        return real_decoder(data, *args, **kwargs)
+
+    monkeypatch.setattr(WebPImagePlugin._webp, "WebPAnimDecoder", spy)
+    return created
+
+
+@pytest.mark.parametrize("kind", list(WEBP_KINDS))
+def test_a_webp_declaring_too_many_pixels_is_413_before_pillow_opens_it(
+    session_client, media_root, webp_decoders, kind
+):
+    """30 megapixels is over the cap and under Pillow's own refusal, which is at twice its
+    MAX_IMAGE_PIXELS, so only the server's reading of the header stands between this upload and the
+    two canvases libwebp would allocate for it."""
+    data = declaring_a_canvas(a_webp(kind), 6000, 5000)
+    assert data[12:16] == WEBP_KINDS[kind]
+    assert len(data) < 200
+
+    response = upload(session_client.client, data, name="me.webp", content_type="image/webp")
+
+    assert response.status_code == 413, response.content
+    assert response.json() == {"detail": PICTURE_TOO_MANY_PIXELS_MESSAGE}
+    assert webp_decoders == []
+    assert_nothing_stored(session_client.user, media_root)
+
+
+@pytest.mark.parametrize("kind", list(WEBP_KINDS))
+def test_a_webp_at_the_pixel_cap_is_decoded_and_one_pixel_more_is_413_unopened(
+    session_client, monkeypatch, webp_decoders, kind
+):
+    """Each kind of header is read as libwebp reads it, with the cap lowered so that a picture at it
+    is small: 12 x 10 is at a cap of 120. Also the control for the spy above: the picture admitted
+    is opened, and the spy sees its decoder."""
+    monkeypatch.setattr(pictures, "MAX_PICTURE_PIXELS", 120)
+    client = session_client.client
+
+    at_the_cap = upload(client, a_webp(kind, (12, 10)), name="me.webp", content_type="image/webp")
+    assert at_the_cap.status_code == 200, at_the_cap.content
+    assert len(webp_decoders) == 1
+
+    over = upload(client, a_webp(kind, (13, 10)), name="me.webp", content_type="image/webp")
+    assert over.status_code == 413, over.content
+    assert over.json() == {"detail": PICTURE_TOO_MANY_PIXELS_MESSAGE}
+    assert len(webp_decoders) == 1
+
+
+def test_a_large_jpeg_is_decoded_at_a_reduced_scale(session_client, media_root, decoded):
+    """A JPEG is decoded at the smallest scale that still leaves twice the stored size on each side,
+    as Pillow's thumbnail would ask for it: 4096 x 3072 at 2048 x 1536, a quarter of its pixels, and
+    still stored at 512 x 384."""
+    data = encoded(a_photo((4096, 3072)), "JPEG", quality=50)
+    assert len(data) < MAX_PICTURE_BYTES
+
+    response = upload(session_client.client, data, name="big.jpg", content_type="image/jpeg")
+
+    assert response.status_code == 200, response.content
+    assert decoded == [(2048, 1536)]
+    assert Image.open(io.BytesIO(stored_png(media_root, session_client.user))).size == (512, 384)
+
+
+def test_an_opaque_picture_is_never_copied_at_full_size_before_it_is_scaled(
+    session_client, media_root, monkeypatch
+):
+    """The decode is the one full-size image. Turning the picture upright, which here changes
+    nothing, and converting it to the mode it already has each made a full-size copy of it before
+    it was scaled. (A picture with an alpha band has one more, Pillow's own: it premultiplies the
+    alpha to scale it.)"""
+    size = (1500, 1000)
+    data = encoded(a_photo(size), "PNG")
+    full_size = []
+    real_copy, real_convert = Image.Image.copy, Image.Image.convert
+
+    def copy(self):
+        if self.size == size:
+            full_size.append(f"a copy of {self.mode}")
+        return real_copy(self)
+
+    def convert(self, mode=None, *args, **kwargs):
+        if self.size == size:
+            full_size.append(f"{self.mode} converted to {mode}")
+        return real_convert(self, mode, *args, **kwargs)
+
+    monkeypatch.setattr(Image.Image, "copy", copy)
+    monkeypatch.setattr(Image.Image, "convert", convert)
+
+    response = upload(session_client.client, data)
+
+    assert response.status_code == 200, response.content
+    assert full_size == []
+    assert Image.open(io.BytesIO(stored_png(media_root, session_client.user))).size == (512, 341)
+
+
+def test_past_the_decodes_in_flight_another_upload_is_429_and_decodes_nothing(
+    session_client, media_root, monkeypatch
+):
+    """Each decode of a picture at the cap touches hundreds of megabytes, so the server decodes at
+    most MAXIMUM_PICTURE_DECODES_IN_FLIGHT at once, across every user, and answers any other upload
+    at once. Threads stand in for other people's uploads: more of them than the limit, each held
+    inside its decode, the moment at which the review's ten uploads overlapped."""
+    holders = 8
+    release = threading.Event()
+    progress = threading.Condition()
+    decoding, outcomes = [], {}
+    real_pixels_as_png = pictures._pixels_as_png
+
+    def held(source):
+        if threading.current_thread().name.startswith("picture-holder"):
+            with progress:
+                decoding.append(threading.current_thread().name)
+                progress.notify_all()
+            release.wait(PATIENCE)
+        return real_pixels_as_png(source)
+
+    def hold(index):
+        try:
+            outcomes[index] = pictures.reencode_picture(io.BytesIO(encoded(a_photo(), "PNG")))
+        except Exception as error:  # noqa: BLE001 - recorded, and read below
+            outcomes[index] = error
+        finally:
+            with progress:
+                progress.notify_all()
+
+    def settled():
+        refused = sum(isinstance(outcome, Exception) for outcome in outcomes.values())
+        return len(decoding) + refused == holders
+
+    monkeypatch.setattr(pictures, "_pixels_as_png", held)
+    threads = [
+        threading.Thread(target=hold, args=(index,), name=f"picture-holder-{index}")
+        for index in range(holders)
+    ]
+    for thread in threads:
+        thread.start()
+    try:
+        with progress:
+            assert progress.wait_for(settled, PATIENCE), (decoding, outcomes)
+
+        response = upload(session_client.client, encoded(a_photo(), "PNG"))
+
+        assert response.status_code == 429, response.content
+        assert response.json() == CONTRACT_PICTURE_BUSY
+        assert response["Retry-After"] == str(constants.PICTURE_BUSY_RETRY_SECONDS)
+        assert_nothing_stored(session_client.user, media_root)
+    finally:
+        release.set()
+        for thread in threads:
+            thread.join(PATIENCE)
+    assert not any(thread.is_alive() for thread in threads)
+    limit = pictures.MAXIMUM_PICTURE_DECODES_IN_FLIGHT
+    assert len(decoding) == limit
+    assert sum(isinstance(outcome, bytes) for outcome in outcomes.values()) == limit
+    assert sum(isinstance(outcome, pictures.PicturesBusy) for outcome in outcomes.values()) == holders - limit
+    # Every place was given back: the next upload is decoded.
+    assert upload(session_client.client, encoded(a_photo(), "PNG")).status_code == 200
+
+
+def test_a_decode_place_is_given_back_whatever_the_upload_comes_to(session_client, monkeypatch):
+    """With one place, each upload below would find it taken had the one before kept it."""
+    monkeypatch.setattr(pictures, "MAXIMUM_PICTURE_DECODES_IN_FLIGHT", 1)
+    png = encoded(a_detailed_photo(), "PNG")
+    uploads = [
+        ("text, which Pillow cannot identify", b"This is not a picture.\n" * 20, 415),
+        ("a PNG declaring too many pixels", png_declaring(6000, 5000), 413),
+        ("a WebP declaring too many pixels", declaring_a_canvas(a_webp("animated"), 6000, 5000), 413),
+        ("a truncated PNG, which fails as it is decoded", png[: len(png) // 2], 415),
+        ("a picture", encoded(a_photo(), "PNG"), 200),
+        ("another picture", encoded(a_photo(colour=(9, 9, 9)), "PNG"), 200),
+    ]
+
+    for description, data, status in uploads:
+        assert upload(session_client.client, data).status_code == status, description
 
 
 # --- Nothing but the pixels ---------------------------------------------------------------------

@@ -81,6 +81,8 @@ ACCOUNT_SELF_SERVICE_NAMES = [
     "PICTURE_UPLOAD_ALLOWANCE_BYTES",
     "MAX_PICTURE_PIXELS",
     "PICTURE_MAX_DIMENSION",
+    "MAXIMUM_PICTURE_DECODES_IN_FLIGHT",
+    "PICTURE_BUSY_RETRY_SECONDS",
     "PASSWORD_RESET_LINK_MINUTES",
     "PASSWORD_RESET_COOLDOWN_SECONDS",
     "MAXIMUM_PASSWORD_RESET_EMAILS_IN_FLIGHT",
@@ -444,6 +446,16 @@ def test_the_cache_places_are_the_builds():
     D-137, and pinned so that changing it is a decision. A whole number, since it is a count."""
     assert constants.CACHE_MAX_ENTRIES == 100_000
     assert type(constants.CACHE_MAX_ENTRIES) is int
+
+
+def test_the_picture_decode_bound_is_the_builds():
+    """The review of 17 November 2026, PIC-1: how many pictures are decoded at once, and the seconds
+    the 429 past that asks the client to wait. Set by the build, not by D-137, and pinned so that
+    changing either is a decision. Whole numbers, each a count."""
+    assert constants.MAXIMUM_PICTURE_DECODES_IN_FLIGHT == 2
+    assert constants.PICTURE_BUSY_RETRY_SECONDS == 5
+    for name in ("MAXIMUM_PICTURE_DECODES_IN_FLIGHT", "PICTURE_BUSY_RETRY_SECONDS"):
+        assert type(getattr(constants, name)) is int, name
 
 
 def test_effective_roles_are_closed_under_generalisation():

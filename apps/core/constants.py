@@ -914,14 +914,25 @@ MAX_PICTURE_BYTES = 5 * 1024 * 1024  # 5 MB
 # browser keeps to a few hundred bytes for one file. The file's own size is checked against
 # MAX_PICTURE_BYTES once the body is parsed.
 PICTURE_UPLOAD_ALLOWANCE_BYTES = 64 * 1024  # 64 KiB
-# The most pixels a picture's header may declare. Refused with a 413 before a pixel is decoded.
-# Below Pillow's own DecompressionBombWarning threshold (Image.MAX_IMAGE_PIXELS, 89,478,485), so
-# every picture Pillow would warn about is refused here, without a warnings filter, which is not
-# thread-safe under Waitress's threads. It also bounds a decoded copy at 100 MB (4 bytes a pixel).
+# The most pixels a picture's header may declare. Refused with a 413 before a pixel is decoded:
+# for a WebP, before Pillow even opens it, since libwebp allocates the canvas as it is opened (the
+# review of 17 November 2026, PIC-1). Below Pillow's own DecompressionBombWarning threshold
+# (Image.MAX_IMAGE_PIXELS, 89,478,485), so every picture Pillow would warn about is refused here,
+# without a warnings filter, which is not thread-safe under Waitress's threads. It also bounds a
+# decoded picture at 100 MB (4 bytes a pixel).
 MAX_PICTURE_PIXELS = 25_000_000
 # The stored picture's largest side, in pixels. Every upload is scaled down, keeping its shape, to
 # fit a square of this side, never scaled up, and stored as a PNG.
 PICTURE_MAX_DIMENSION = 512
+# The most pictures one server process decodes at once, across every user (PIC-1). A decode of a
+# picture at MAX_PICTURE_PIXELS touched about 400 to 500 MB, and ten at once took a process's peak
+# working set from 53 MB to 4,191 MB. The `picture` throttle bounds how many a user sends in an
+# hour, not how many run at once, and registration is open, so the bound is the server's, as
+# MAXIMUM_TRANSCRIPTIONS_IN_FLIGHT is (D-123). An upload that finds every place taken is answered at
+# once with a 429, `picture_busy`, and a Retry-After of PICTURE_BUSY_RETRY_SECONDS. Set by the build,
+# not by D-137.
+MAXIMUM_PICTURE_DECODES_IN_FLIGHT = 2
+PICTURE_BUSY_RETRY_SECONDS = 5
 
 # --- Self-service password reset (D-137, the lead's decision of 16 November 2026) ------------
 # D-137 takes "Self-service password reset flow" out of the proposal's section 1.9 out-of-scope list.

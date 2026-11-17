@@ -38,6 +38,7 @@ from apps.accounts.password_reset import (
     reset_password,
 )
 from apps.accounts.pictures import (
+    PicturesBusy,
     PictureTooLarge,
     UnreadablePicture,
     reencode_picture,
@@ -69,6 +70,7 @@ from apps.core.constants import (
     MEETING_INDEXED,
     MINIMUM_CONTENT_LENGTH,
     PASSWORD_RESET_LINK_MINUTES,
+    PICTURE_BUSY_RETRY_SECONDS,
     PICTURE_UPLOAD_ALLOWANCE_BYTES,
     RELEASE_ACCOUNT_LOCKS_PERMISSION,
     REMEMBERED_SESSION_DAYS,
@@ -262,6 +264,15 @@ UNSUPPORTED_PICTURE_MESSAGE = (
     "Choose a PNG, JPEG or WebP picture. This file is not one, or it is damaged."
 )
 NO_PICTURE_SUBMITTED_MESSAGE = "No picture was submitted."
+# Every one of MAXIMUM_PICTURE_DECODES_IN_FLIGHT places is held, by anyone's uploads (the review of
+# 17 November 2026, PIC-1). Not the uploader's doing, and nothing was stored, so it says what
+# happened and that sending the picture again is safe. A 429 with Retry-After and its own code, as
+# D-123's transcription_busy is, so a client tells it from the `picture` rate's 429 by `code`.
+PICTURE_BUSY_MESSAGE = (
+    "The server is busy with other pictures. This picture was not saved and nothing was changed; it "
+    "can be sent again in a few seconds."
+)
+PICTURE_BUSY_CODE = "picture_busy"
 # GET /api/users/{id}/picture's one 404 (D-137): get_object_or_404's own wording, restated as
 # DOCUMENT_NOT_FOUND_MESSAGE restates it, for an unknown id, a user with no picture, and a stored
 # file gone from disk alike.
@@ -977,10 +988,15 @@ class OwnPictureView(ThrottlePostOnlyMixin, APIView):
        upload decides it.
     3. 400 ``{"picture": [...]}`` when no file part named ``picture`` came.
     4. 413 for a file over MAX_PICTURE_BYTES, against the bytes that arrived.
-    5. 415 when Pillow cannot open the content as a PNG, JPEG or WebP: a wrong format, under any
+    5. 429 ``picture_busy``, with Retry-After, when MAXIMUM_PICTURE_DECODES_IN_FLIGHT pictures are
+       being decoded already, anyone's (the review of 17 November 2026, PIC-1). Pillow has read
+       nothing of the picture.
+    6. 413 for a WebP whose header declares more than MAX_PICTURE_PIXELS, read from its first bytes
+       before Pillow opens it, since opening a WebP allocates its canvas (PIC-1).
+    7. 415 when Pillow cannot open the content as a PNG, JPEG or WebP: a wrong format, under any
        name or declared type (``apps/accounts/pictures.py``).
-    6. 413 for a header declaring more than MAX_PICTURE_PIXELS, before a pixel is decoded.
-    7. 415, the same message as 5, when the picture cannot be decoded: corrupt or truncated.
+    8. 413 for a header declaring more than MAX_PICTURE_PIXELS, before a pixel is decoded.
+    9. 415, the same message as 7, when the picture cannot be decoded: corrupt or truncated.
 
     Then the picture is re-encoded, stored under a new random name, and ``picture_updated_at`` set,
     in one transaction that locks the user's row, and the previous file is deleted once that
@@ -1018,6 +1034,12 @@ class OwnPictureView(ThrottlePostOnlyMixin, APIView):
             )
         try:
             png = reencode_picture(uploaded)
+        except PicturesBusy:
+            return Response(
+                {"detail": PICTURE_BUSY_MESSAGE, "code": PICTURE_BUSY_CODE},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+                headers={"Retry-After": str(PICTURE_BUSY_RETRY_SECONDS)},
+            )
         except PictureTooLarge:
             return Response(
                 {"detail": PICTURE_TOO_MANY_PIXELS_MESSAGE},
