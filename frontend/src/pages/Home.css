@@ -7,6 +7,10 @@
   justify-content: center;
   background-color: var(--color-background);
   padding: var(--space-6) var(--space-4);
+  /* The illustration's blurred shapes are placed partly outside it. Clipped
+     here, they never widen the page: unclipped, one scrolled the page 40px
+     sideways at 320 CSS px (SC 1.4.10) and another 14px at 1180. */
+  overflow-x: clip;
 }
 
 .home-hero {
