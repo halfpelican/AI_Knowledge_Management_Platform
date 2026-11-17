@@ -40,6 +40,7 @@ recomputes each of its documented pairs from the CSS on disk.
 | `--color-text` #1f2933 | `--color-info-surface` #eff6ff | 13.56:1 | 4.5:1 | Pass | body text everywhere a notice can put it (PR #119’s surfaces) |
 | `--color-text` #1f2933 | `--color-status-indexed-surface` #dcfce7 | 13.43:1 | 4.5:1 | Pass | body text everywhere a notice can put it (PR #119’s surfaces) |
 | `--color-text` #1f2933 | `--color-status-not-indexed-surface` #fef3c7 | 13.25:1 | 4.5:1 | Pass | body text everywhere a notice can put it (PR #119’s surfaces) |
+| `--color-text` #1f2933 | `--color-role-employee-surface` #dbeafe | 12.09:1 | 4.5:1 | Pass | held on every surface the sweep knows; this one is the Profile page’s Employee role badge, which carries only its own text (FEA-7) |
 | `--color-text-muted` #4b5563 | `--color-surface` #ffffff | 7.56:1 | 4.5:1 | Pass | hints, metadata, empty states |
 | `--color-text-muted` #4b5563 | `--color-surface-alt` #f3f4f6 | 6.87:1 | 4.5:1 | Pass | hints, metadata, empty states |
 | `--color-text-muted` #4b5563 | `--color-danger-surface` #fef3f2 | 6.95:1 | 4.5:1 | Pass | hints, metadata, empty states |
@@ -49,6 +50,7 @@ recomputes each of its documented pairs from the CSS on disk.
 | `--color-text-muted` #4b5563 | `--color-info-surface` #eff6ff | 6.94:1 | 4.5:1 | Pass | hints, metadata, empty states (PR #119’s surfaces) |
 | `--color-text-muted` #4b5563 | `--color-status-indexed-surface` #dcfce7 | 6.88:1 | 4.5:1 | Pass | hints, metadata, empty states (PR #119’s surfaces) |
 | `--color-text-muted` #4b5563 | `--color-status-not-indexed-surface` #fef3c7 | 6.79:1 | 4.5:1 | Pass | hints, metadata, empty states (PR #119’s surfaces) |
+| `--color-text-muted` #4b5563 | `--color-role-employee-surface` #dbeafe | 6.19:1 | 4.5:1 | Pass | held on every surface the sweep knows; this one is the Profile page’s Employee role badge (FEA-7) |
 | `--color-primary` #1d4ed8 | `--color-surface` #ffffff | 6.70:1 | 4.5:1 | Pass | links; the in-page 403’s link sits on the error notice |
 | `--color-primary` #1d4ed8 | `--color-surface-alt` #f3f4f6 | 6.09:1 | 4.5:1 | Pass | links; the in-page 403’s link sits on the error notice |
 | `--color-primary` #1d4ed8 | `--color-danger-surface` #fef3f2 | 6.16:1 | 4.5:1 | Pass | links; the in-page 403’s link sits on the error notice |
@@ -71,8 +73,9 @@ recomputes each of its documented pairs from the CSS on disk.
 | `--color-link` #1d4ed8 | `--color-surface` #ffffff | 6.70:1 | 4.5:1 | Pass | the dashboard panels’ links on hover (PR #119) |
 | `--color-primary-hover` #1e40af | `--color-info-surface` #eff6ff | 8.01:1 | 4.5:1 | Pass | every info notice’s text: PR #119’s rule in `Repository.css` comes after `Notice.css`’s in the build, so it reaches every screen |
 | `--color-danger-text` #991b1b | `--color-danger-surface` #fef3f2 | 7.64:1 | 4.5:1 | Pass | every error notice’s text, by the same rule (PR #119); the title keeps `--color-danger` |
-| `--color-status-indexed` #166534 | `--color-status-indexed-surface` #dcfce7 | 6.49:1 | 4.5:1 | Pass | the document table’s “Indexed” badge (FR-15, PR #119) |
+| `--color-status-indexed` #166534 | `--color-status-indexed-surface` #dcfce7 | 6.49:1 | 4.5:1 | Pass | the document table’s “Indexed” badge (FR-15, PR #119), and the Profile page’s Administrator role badge, #119’s own colours (FEA-7) |
 | `--color-status-not-indexed` #92400e | `--color-status-not-indexed-surface` #fef3c7 | 6.37:1 | 4.5:1 | Pass | the badge for every other status (FR-15, PR #119) |
+| `--color-primary-hover` #1e40af | `--color-role-employee-surface` #dbeafe | 7.15:1 | 4.5:1 | Pass | the Profile page’s Employee role badge, #119’s own colours (FEA-7) |
 | `--color-illustration-bubble-text` #e5e7eb | `--color-text-muted` #4b5563 | 6.10:1 | 4.5:1 | Pass | the landing illustration’s left chat bubble (PR #119) |
 
 ### User-interface component boundaries and fills (SC 1.4.11, AA 3:1)
@@ -134,6 +137,13 @@ in both tables: 21 cases in `contrast.test.js`, recomputed for this table from
   notice edges the `--color-primary` and `--color-danger` rows above name are
   not drawn. A notice is not a control and says what it is in words, so no AA
   criterion depends on the edge.
+
+**The Profile page's role badge (FEA-7, 18 November 2026)** is back in #119's
+colours. The Administrator's uses the “Indexed” pair; the Employee's adds one
+token, `--color-role-employee-surface`, and its three rows above (three cases in
+`contrast.test.js`). #119's borders, a shade darker than each fill (#bbf7d0 and
+#bfdbfe, about 1.1:1 against it), have no token, so each border is drawn in its
+own fill. A badge is not a control, and its text names the role.
 
 ### Documented exceptions
 

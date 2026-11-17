@@ -158,6 +158,12 @@
   --color-status-not-indexed: #92400e;         /* on its surface 6.37:1 */
   --color-status-not-indexed-surface: #fef3c7; /* body text on it 13.25:1 | muted 6.79:1 */
 
+  /* The Profile page's role badge (FEA-7, 18 November 2026), in #119's colours. The
+     Administrator's is the "Indexed" pair above, #166534 on #dcfce7, which #119
+     wrote. The Employee's text is --color-primary-hover, #119's #1e40af, on this,
+     #119's light blue. */
+  --color-role-employee-surface: #dbeafe;      /* primary-hover on it 7.15:1 | body text 12.09:1 | muted 6.19:1 */
+
   /* The home screen's illustration: a device with a chat on it, and a figure.
      Decorative. Each colour here has a true pair, so four of #119's could not
      stay: its screen (#0b0c10) is now the device colour, 1.10:1 against it

@@ -184,18 +184,23 @@
   opacity: var(--opacity-disabled);
 }
 
-/* The role badge's colours, which Profile.jsx set inline as literals. Each text
-   colour is one tests/contrast.test.js holds on its surface: success text on the
-   success surface (5.40:1), and the primary hover blue on the alt surface. */
+/* The role badge in #119's colours, from tokens (FEA-7, 18 November 2026). The
+   Administrator's is her #166534 on #dcfce7, the document table's "Indexed" pair,
+   6.49:1. The Employee's is her #1e40af on #dbeafe, --color-primary-hover on
+   --color-role-employee-surface, 7.15:1. tests/contrast.test.js holds both. Her
+   borders, a shade darker than each fill (#bbf7d0, #bfdbfe, about 1.1:1 on it),
+   have no token, and a token for either would need a contrast pair it cannot meet
+   or an exemption, so each border is drawn in its own fill: the badge keeps its
+   size and loses only that faint line. */
 .profile-role--administrator {
-  border-color: var(--color-success);
-  background-color: var(--color-success-surface);
-  color: var(--color-success);
+  border-color: var(--color-status-indexed-surface);
+  background-color: var(--color-status-indexed-surface);
+  color: var(--color-status-indexed);
 }
 
 .profile-role--employee {
-  border-color: var(--color-primary);
-  background-color: var(--color-surface-alt);
+  border-color: var(--color-role-employee-surface);
+  background-color: var(--color-role-employee-surface);
   color: var(--color-primary-hover);
 }
 

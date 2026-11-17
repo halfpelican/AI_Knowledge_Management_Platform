@@ -35,6 +35,8 @@ const SURFACES = [
   '--color-info-surface',
   '--color-status-indexed-surface',
   '--color-status-not-indexed-surface',
+  // The Profile page's Employee role badge, in #119's light blue (FEA-7).
+  '--color-role-employee-surface',
 ]
 
 /**
@@ -72,6 +74,9 @@ const TEXT_PAIRS = [
   { fg: '--color-status-indexed', on: ['--color-status-indexed-surface'] },
   { fg: '--color-status-not-indexed', on: ['--color-status-not-indexed-surface'] },
   { fg: '--color-illustration-bubble-text', on: ['--color-text-muted'] },
+  // The Profile page's role badges in #119's colours (FEA-7): the Employee's here.
+  // The Administrator's is the "Indexed" badge's pair above.
+  { fg: '--color-primary-hover', on: ['--color-role-employee-surface'] },
 ]
 
 /**

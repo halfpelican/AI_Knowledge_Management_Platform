@@ -68,6 +68,8 @@ const COLOR_TOKENS = [
   '--color-illustration-device',
   '--color-illustration-figure',
   '--color-illustration-bubble-text',
+  // The Profile page's Employee role badge, in #119's light blue (FEA-7).
+  '--color-role-employee-surface',
 ]
 
 const SPACING_TOKENS = [
