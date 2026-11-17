@@ -18768,6 +18768,771 @@ No code changed. For a session started without "Remember me", NFR-06 holds as wr
 check is tested from both roles, a 401 after 60 minutes and 1 second idle:
 `test_fr04_remember_me.py::test_an_unremembered_session_ends_after_sixty_minutes_without_use`.
 
+**Note of 17 November 2026: built, reviewed and audited.** Written from git at `49ace08`, the
+commit before this note's own.
+
+**Where it is.** The work is on the local branch `fr04-account-self-service`, created from this
+entry's commit `2f41e00`. It is pushed with the refspec
+`fr04-account-self-service:feat/FR-04-account-self-service`, so the branch on GitHub has D-137's
+name. A local branch called `feat/FR-04-account-self-service` used to exist, holding `2f41e00`
+alone. The session coordinating PR #119 deleted it on 17 November 2026, among local branches
+approved for deletion. Nothing was lost, since `2f41e00` is this branch's first commit. The PR's
+change is `git diff origin/main...HEAD`.
+
+**The commits**, first parent, after `2f41e00`. Each message carries its own evidence: the tests
+that failed first, the deliberate breaks with what each one failed, and the runs. The two
+exceptions are marked.
+
+| Commit | What | Deliberate breaks |
+|---|---|---|
+| `7be3a01` | "Remember me" on `POST /api/auth/login` | 9 |
+| `e1abecc` | `POST /api/auth/change-password` | 26, B01 to B26 |
+| `1a7c0ce` | Profile pictures: `POST` and `DELETE /api/users/me/picture`, `GET /api/users/<uuid>/picture`, `picture` on every user object, migration `accounts 0012_user_picture`, `pillow==13.0.0` | 56, C01 to C59 (C02, C11 and C28 unused) |
+| `d6da7d0` | Merge of main at `19605b4` (#118, #120 and #121). `0012` is re-pointed from `0010` to FR-20's `0011` | 3, M0 to M2 |
+| `6173f2b` | The self-service reset: `POST /api/auth/password-reset` and `/confirm`, the file outbox, optional SMTP | 78, D01 to D78 |
+| `8d14777` | `docs/alpha-deployment.md` and `README.md` | none |
+| `b7a595f`, `701d9c3`, `bd4a905`, `48993b7` | Tests for the 12 breaks that no test caught in an independent audit of 27 (X01 to X07, X10 to X12, X20, X22), and for two gaps hidden in breaks that audit counted as caught (G16, G21) | each of the 12, plus G16, G16a to G16d and G21, run again |
+| `3d8a5ff` | COR-2: a full cache keeps the reset cooldown and the throttle counts | 4, K1 to K4 |
+| `5c2c120` | PIC-1: an oversized WebP refused by its header; at most two decodes at once | 10, P1 to P10 |
+| `5ae01fa` | COR-1: a 16-bit grey picture scaled to 8 bits, not clipped | 4, C1 to C4 |
+| `af3d178` | Merge of main at `2a99a3c` (#122, D-138), applying a resolution tested in a scratch copy first | 2, KM and PWPIC |
+| `9b9aee4` | DOC-1: a reset link's age read in UTC | 3, B1 to B3 |
+| `c2c3d36` | JPG-1 and PIC-1R: a JPEG of more than 100 scans, and a lossless WebP of 25 to 29 bytes declaring too many pixels, refused before Pillow opens either | **Not in the message.** The fix agent reported 10: B1, B2, B3, B4, B5, B6b, B7, B7b, B8 and B11, with a mis-specified B6 discarded. Its failing-first run: 24 new cases failed and 8 controls passed at `af3d178`. The final audit's BRK-C, BRK-D and BRK-E (8, 10 and 4 failed) checked it again |
+| `1d08ad4` | CHG-1: a password change refused once its current password is no longer the account's | **Not in the message.** The fix agent reported 2, B9 and B10. Its failing-first run: the reset test got 200 for 400, and the lock test found no locking query, at `af3d178`. The final audit's BRK-A and BRK-B (2 failed each) checked it again |
+| `7aeb81b` | This entry's note on NFR-06, and wording the audit found no longer exact (DOC-2, DOC-3, DOC-1's contract lines) | none |
+| `49ace08` | What the final review asked of the record (below) | none |
+
+**What is built**, against the decision table above:
+- **"Remember me":**
+  - `"remember": true` on `POST /api/auth/login` gives the session `REMEMBERED_SESSION_DAYS` (7)
+    days without use, for both roles, sliding with use;
+  - `false`, or no `remember`, is FR-04's and NFR-06's 60 minutes.
+- **The password change:**
+  - a wrong current password is a 400 on `current_password`, never a 401;
+  - registration's validators apply;
+  - the session that made the change stays, and every other session of the user ends;
+  - a change whose verified password stopped being the account's while it ran is refused, with
+    nothing changed (CHG-1);
+  - FR-03's lock and count are untouched.
+- **Profile pictures:**
+  - PNG, JPEG or WebP, up to `MAX_PICTURE_BYTES` (5 MB);
+  - refused before decoding by size, by WebP header, by JPEG scan count and by pixel count;
+  - at most two decoded at once;
+  - re-encoded as a PNG of at most `PICTURE_MAX_DIMENSION` (512) pixels a side, so no metadata
+    survives;
+  - stored under a random name in `MEDIA_ROOT`, which nothing serves;
+  - every signed-in user sees them through `GET /api/users/<uuid>/picture`, and every user object
+    carries `picture`, its address, or null.
+- **The reset:**
+  - every well-formed address gets the same 200 (D-25), and a background thread alone looks it up
+    and sends;
+  - the link is built from `PUBLIC_BASE_URL`, never the request;
+  - it works once, for `PASSWORD_RESET_LINK_MINUTES` (60) of real time, measured in UTC;
+  - a completed reset ends every session of the user, and leaves FR-03's lock and count;
+  - the email is a file in `outbox/` unless `EMAIL_HOST` is set.
+
+**The migration and its re-point.** `accounts 0012_user_picture` adds `users.picture` and
+`users.picture_updated_at`, both nullable. It was written to depend on `0010`. The merge `d6da7d0`
+re-pointed it to `0011`, with no merge migration, as D-132's merge re-pointed `0011`.
+
+CLAUDE.md section 7 lets a migration's dependencies be corrected in place only while no other
+environment has applied it. That held:
+- `0012` had never been pushed;
+- a read-only survey of every local database on 17 November 2026 found that none had applied
+  `0012`;
+- the only databases holding `0011` were `kmp_anthropic` and the throwaway
+  `test_kmp_anthropic_fr20e`.
+
+The survey script and its output were kept in the session's scratchpad as `check_0012_applied.py`
+and `check_0012_applied.out`.
+
+**The whole suite.**
+- At `7aeb81b`, in a scratch git checkout: 5,724 passed, 0 failed, in 36 minutes. Dual-role
+  coverage was 54 of 54 protected endpoints. `makemigrations --check --dry-run`: "No changes
+  detected".
+- At `49ace08`, which changes comments, docstrings and documents only: the nine test files that read the changed files (test_constants, test_fr01_password_change, test_fr01_profile_pictures, test_throttles, test_fr03_user_list_lock, test_fr02_password_reset, test_fr04_remember_me, test_configuration and test_rbac), 647 passed and 0 failed.
+- CI runs both suites on the pull request.
+
+**Values and rules the build set, which D-137 does not.** Benjamin confirms or changes each. None
+contradicts the decision table, FR-01 to FR-05, or NFR-06 as amended above. Where a comment in
+`apps/core/constants.py` once credited one of them to D-137, it now says the build set it (REC-1).
+
+Values the PR #119 session gave the builders, which Benjamin was never asked:
+- `PASSWORD_CHANGE_THROTTLE_RATE` and `PICTURE_THROTTLE_RATE`, 10 an hour each, per user. The first
+  is the only bound on guessing a password from a session left open (the security review's
+  CHG-2).
+- `PICTURE_UPLOAD_ALLOWANCE_BYTES`, 64 KiB of multipart framing on the declared length.
+- `MAX_PICTURE_PIXELS`, 25,000,000. It narrows "up to 5 MB": a smaller file declaring more pixels
+  is a 413.
+- `PASSWORD_RESET_COOLDOWN_SECONDS`, 300, per account.
+
+Values the builders and fixers set:
+- `MAX_PICTURE_JPEG_SCANS`, 100, counted as FF DA pairs anywhere in the file. It also narrows the
+  upload row: a JPEG whose metadata holds more than about 100 such pairs is refused, and a test
+  pins 99 accepted and 100 refused.
+- `MAXIMUM_PICTURE_DECODES_IN_FLIGHT`, 2, and `PICTURE_BUSY_RETRY_SECONDS`, 5: a new
+  `429 picture_busy` on the upload.
+- `MAXIMUM_PASSWORD_RESET_EMAILS_IN_FLIGHT`, 4, and `EMAIL_TIMEOUT_SECONDS`, 30.
+- `CACHE_MAX_ENTRIES`, 100,000, in `ExpiredFirstLocMemCache`, which drops expired entries first.
+
+Rules:
+- The change route refuses a new password equal to the current one. The reset route does not.
+- A large JPEG is decoded at a reduced scale, so its stored pixels differ slightly from a full
+  decode's.
+- 16-bit grey is scaled with `round(v / 257)`.
+- CHG-1 compares stored hashes, so a hash upgrade or a deleted account during a change also gets
+  the 400.
+- The reset token keeps Django's salt and format. Only its clock changed.
+
+The reset builder's sixteen judgement calls:
+1. The request path does no database work. A daemon thread does the lookup, the retired check,
+   the cooldown, the token and the send.
+2. A request past the cap of 4 reset threads starts no thread, logs an ERROR with no address, and
+   gets the same 200. So a burst past 4 drops an email silently.
+3. `EMAIL_TIMEOUT` is read only when `EMAIL_HOST` is set.
+4. A retired account (an unusable password, D-89) is sent no link, and confirm refuses its links.
+5. `PUBLIC_BASE_URL` is checked at start-up: absolute http or https, a host, and no query or
+   fragment. A trailing slash is stripped.
+6. `PASSWORD_RESET_EMAIL_RUNNER` is fixed at `"thread"`, not read from `.env`. The suite sets
+   `"inline"` in `conftest.py`.
+7. The SMTP settings, and the refusal of TLS together with SSL, apply only when `EMAIL_HOST` is
+   set. SMTP defaults to port 587 with TLS.
+8. `DEFAULT_FROM_EMAIL` defaults to `no-reply@localhost`.
+9. The cooldown is keyed by the account and starts when a send is attempted, so a failed send waits
+   it out too. It is kept in process memory, so a restart clears it.
+10. Confirm is single-use under concurrency: the token is checked again on the row, read
+    `FOR NO KEY UPDATE`.
+11. Confirm answers in a fixed order: field errors, then the one dead-link message, then the
+    validators. A refused new password does not use up the link. The new password is never
+    trimmed.
+12. The email is plain text, with the link alone on its line.
+13. The address is trimmed, lower-cased and matched exactly, as at sign-in. The email goes to the
+    stored address.
+14. A successful sign-in ends an outstanding link, because Django's token covers `last_login`.
+15. Sessions end through the session hash, each with a 401 on its next request.
+16. A reset writes no audit-log entry.
+
+**How the reviews went.**
+- **First review, at `6173f2b`.** A security review, a requirements audit and a correctness review
+  ran side by side. Four medium findings survived a skeptic each: PIC-1, COR-1, COR-2 and REQ-1.
+  The first three were fixed in `5c2c120`, `5ae01fa` and `3d8a5ff`. REQ-1 went to Benjamin.
+- **An independent break audit.** It ran 27 breaks on the built code, and 12 failed no test. Each
+  of those 12 now fails one.
+- **Two final rounds.** They blocked on REQ-1, on INT-1 (main had moved to #122) and, in the
+  second, on JPG-1, a 5 MB JPEG that held a decode place for about 47 minutes. All are now closed:
+  - REQ-1, by Benjamin's NFR-06 answer, `7aeb81b`;
+  - INT-1, by the merge `af3d178`;
+  - JPG-1 and PIC-1R, by `c2c3d36`;
+  - CHG-1, by `1d08ad4`;
+  - DOC-1, by `9b9aee4`.
+- **A third final round** was cut off by a usage limit and run again as the round below.
+
+The final round, at `7aeb81b`, found nothing medium or worse. No fix was needed, so it ran once.
+
+**The final security review of `7aeb81b` (17 November 2026), verbatim.** The `security-reviewer`
+agent's report, quoted whole and unedited. It was extracted mechanically from the run's journal
+and checked to be identical to the agent's own transcript. What changed because of it follows the
+two quotations.
+
+> # D-137 server change: final adversarial security review, run 3 round 1
+>
+> **Verdict: PASS WITH NOTES.** Nothing is high or medium, and nothing blocks the merge.
+>
+> - **Earlier fixes:** JPG-1, PIC-1R, CHG-1 and DOC-1 are fixed. I checked each against the code, and checked JPG-1 and PIC-1R with probes as well.
+> - **New this round:**
+>   - RST-3, low. It has an effect only once SMTP is turned on.
+>   - CHG-3, info.
+>   - THR-1, info.
+> - **Carried:** the twelve lows from earlier rounds, unchanged. None is worse than low.
+>
+> **What was reviewed**
+> - The local branch `fr04-account-self-service` at HEAD `7aeb81b` (tree `93b76a6`, clean).
+> - The pull request's change, `git diff origin/main...HEAD`: 47 files.
+> - The spec: D-137 in `docs/decisions.md`, including its note of 17 November 2026.
+>
+> **How:** read-only. Every probe and throwaway test ran in an exported copy (`scratchpad/fr04brk_copies/sec3r1`, from `git archive HEAD`). I changed no tracked file in the worktree, and `git status` is still clean at `7aeb81b`.
+>
+> ---
+>
+> ## 1. Earlier findings: is each fix real?
+>
+> ### JPG-1 (high): fixed, confirmed by probe
+>
+> **The fix** (`c2c3d36`): a JPEG may have at most `MAX_PICTURE_JPEG_SCANS` = 100 scans. They are counted as FF DA byte pairs (`jpeg_scan_bound`) before Pillow opens the file.
+>
+> **What the probe did:** built 5000 x 5000 progressive JPEGs in one flat colour, with the last refinement scan repeated.
+>
+> | Image | 100 scans | 101 scans |
+> |---|---|---|
+> | RGB (297,517 B at 100 scans) | decoded in 2.55 s | 415 in 0.00 s |
+> | CMYK (libjpeg's own script has 18 scans) | decoded in 2.75 s | refused |
+>
+> **Why the count is never short:**
+> - It covers every byte of the file.
+> - Pillow's JPEG `_accept` needs `FF D8 FF`, which the `JPEG_START` test catches.
+> - An MPO's frame 0 is the same file.
+> - Lossless SOF3 scans also begin with FF DA.
+>
+> ### PIC-1R (medium): fixed, confirmed by probe
+>
+> **The fix** (`c2c3d36`): a lossless WebP's size is read from 25 bytes.
+>
+> **Code:** `webp_canvas_size` is byte for byte Pillow 13.0.0's `WebPImagePlugin._get_size`, read in the venv.
+>
+> **What the probe did:** one process per case, reading the peak commit with `K32GetProcessMemoryInfo`.
+>
+> | Case | Result | Peak commit |
+> |---|---|---|
+> | VP8L, 25 B, declaring 13000 x 13000 | 413 | 44.9 MB before and after: Pillow never opened it |
+> | VP8X, 30 B, same size | 413 | 45.3 MB before and after |
+> | VP8L 24 B, and VP8X 29 B | libwebp answers "could not create decoder object" | +3 MB |
+> | VP8L at 5000 x 5000, exactly the cap, so allowed | the 415, after +203 MB | |
+>
+> ### CHG-1 (low): fixed, confirmed by code trace
+>
+> **The fix** (`1d08ad4`): before the save, the users row is read again and locked FOR NO KEY UPDATE. The stored hash must still be the one verified.
+>
+> - **When the hash is captured.** `verified_hash` is taken after the serializer's check. If `check_password` upgrades a hash, it saves it and updates `user.password` first, so the two still match.
+> - **A mismatch** raises `ValidationError` inside `atomic()`. The answer is the 400, and nothing is written.
+> - **The reverse race.** The reset's confirm re-checks its token under the same lock, so the race is closed in both directions.
+>
+> ### DOC-1 (low): fixed, confirmed by code trace
+>
+> **The fix** (`9b9aee4`): `ResetTokenGenerator._now()` returns naive UTC.
+>
+> Django 5.2's `PasswordResetTokenGenerator` calls `_now()` in both `make_token` and `check_token`. The hash value and the salt are unchanged.
+>
+> ### PIC-1, COR-1 and COR-2 (first review): still fixed
+>
+> - **PIC-1:** `_decode_place` raises `PicturesBusy` when 2 decodes are in flight, before it reads a byte.
+> - **COR-2:** `CACHES` is `ExpiredFirstLocMemCache` with 100,000 entries.
+> - **COR-1, PIC-1 and COR-2:** their tests passed in the targeted run (section 6).
+>
+> ---
+>
+> ## 2. New findings this round
+>
+> ### RST-3 (low, new): with SMTP set, anyone can make the server email any address
+>
+> **Status:** confirmed by code trace and by a throwaway test in the copy. It was not run against SMTP, because none is configured.
+>
+> **What it exposes:** the organisation's mail account can be made to send the fixed reset email to third parties. Both steps are anonymous:
+> 1. `POST /api/auth/register` with any unregistered address. FR-01 never verifies an address: `RegisterView` creates the account at once.
+> 2. `POST /api/auth/password-reset` with the same address. `send_reset_email` finds the new account and mails `user.email`, which is the address just typed.
+>
+> **The probe:**
+> - Test file: `apps/api/tests/test_probe_sec3r1_any_recipient.py`, suffix `fr04fs3r1c`.
+> - Register `someone.else@example.org`: `201`.
+> - Ask for a reset: `200`.
+> - `mail.outbox` recipients: `[['someone.else@example.org']]`.
+> - The email body does not contain the name chosen at registration.
+>
+> **Rate:**
+> - Each register-and-reset pair spends 2 of the 20 `auth` requests a minute per client address, so up to 10 emails a minute per client address.
+> - Each account gets at most one email per 300 s.
+> - The text is fixed, and the link resets only the account the attacker made.
+>
+> **Relation to RST-2:** RST-2 bounds bombing a user who is already registered. RST-3 is the case it leaves open: any recipient at all.
+>
+> **On the alpha:** no effect. Without `EMAIL_HOST`, each email is a file in the outbox.
+>
+> **Where:**
+> - `apps/api/views.py`: `RegisterView` (line 579) and `PasswordResetRequestView` (line 929).
+> - `apps/accounts/password_reset.py`: `send_reset_email` (line 170).
+>
+> **Smallest fix, if SMTP is turned on:** record it with RST-2, or add a per-process hourly cap on reset emails, counted in the thread. Verifying addresses at registration would also close it, but that is outside D-137.
+>
+> ### CHG-3 (info, new): a double-submitted password change gets a generic 400
+>
+> **Status:** confirmed by probe.
+>
+> **The probe:**
+> - A throwaway transactional test in the copy: `apps/api/tests/test_probe_sec3r1_double_submit.py`, suffix `fr04fs3r1b`.
+> - Two `POST /api/auth/change-password` requests share one remembered session key.
+> - B authenticates and verifies the current password, then waits for A to commit.
+>
+> **What came back:**
+> - **A:** `200` and a new `sessionid`.
+> - **B:** `400 {"detail": "Bad request."}` with no cookie. This is Django's `SessionInterrupted`, raised when `SessionMiddleware` saves the session row that `cycle_key()` deleted.
+> - **A's new key:** `/api/auth/me` answers `200`.
+> - **The old key:** `/api/auth/me` answers `401`.
+>
+> **Security effect:** none. The old key stays dead, and the browser keeps A's key. The fixers flagged this as possible without running it; it is now confirmed.
+>
+> **What is inaccurate:** one sentence in `docs/api-contract.md` (around line 2086): "Two changes at once on one account take turns: the first is made, and the second gets this 400." It means the `current_password` field error. That holds for two different sessions, not for a double submit from one.
+>
+> **A note for #119's front end:** a request sent with the old key after the change commits gets a `401`, because the session row is gone. The client reads a `401` as a sign-out, so the form should disable its submit button while a change is in flight.
+>
+> **Fix:** correct that contract sentence. Nothing changes in the server.
+>
+> ### THR-1 (info, new): on the loopback alpha, one `auth` budget covers the whole machine
+>
+> **Status:** confirmed by probe.
+>
+> **Why:**
+> - The alpha listens on `127.0.0.1:8000`, so every request's `REMOTE_ADDR` is `127.0.0.1`.
+> - `NUM_PROXIES` is 0.
+> - So the per-address `auth` budget, 20 a minute, is shared by every browser on the machine.
+> - D-137 adds the two reset routes to that budget.
+> - DRF counts the throttle in `initial()`, so even a method the route refuses with a 405 counts.
+>
+> **The probe** (`test_probe_sec3r1_any_recipient.py`, suffix `fr04fs3r1c`): 20 `GET /api/auth/password-reset` requests each got a `405`. The next `POST /api/auth/login` got a `429`.
+>
+> **What a user could see:** a marker who presses "Send link" repeatedly locks every sign-in and registration on the alpha out for up to a minute.
+>
+> **Fix:** nothing for the alpha. This is the existing shape from D-26 and D-79, widened to two more routes.
+>
+> ---
+>
+> ## 3. Lows carried unchanged from earlier rounds (not blocking)
+>
+> I re-checked each against the code at HEAD, and none is worse than low.
+>
+> - **PIC-3:** a `picture_busy` 429 spends the sender's hourly `picture` budget. Holding both decode places takes many self-registered accounts, because the worst crafted input I found holds a place for about 3 s.
+> - **CHG-2:** a stolen session can guess the current password 240 times a day (10 an hour), with no lockout and no record.
+> - **AUD-1:** a change and a reset leave no record (the reset builder's judgement call 16).
+> - **RST-1:** past the cap of 4 threads, a reset email is dropped silently. With slow SMTP, that side effect hints whether an address is registered. This is moot while registration's 409 says so outright.
+> - **RST-2:** bombing one inbox is bounded only by the 300 s cooldown.
+> - **CFG-1:** the SMTP settings accept plaintext with a password, and an `EMAIL_TIMEOUT` of 0 or less. They also read a `$`-prefixed `EMAIL_HOST_PASSWORD` as empty.
+> - **COR-5:** the check on `PUBLIC_BASE_URL` passes values that no link can start with.
+> - **PIC-2:** `DELETE /api/users/me/picture` is unthrottled.
+> - **COR-4:** a picture fetched while its owner replaces it gets a 404 with an ERROR traceback. `GET` is unthrottled, so if a row names a missing file, any session can repeat that ERROR. Only an operator's mistake can leave such a row; an attacker cannot.
+> - **COR-7:** Django's `sanitize_address` maps an IDN domain under IDNA2003.
+> - **COR-9:** the picture address's `?v=` carries a microsecond timestamp, which shows every session when each picture changed.
+> - **INF-3:** a remembered session has no absolute lifetime: one request every 7 days keeps it alive. The owner can still end it by changing the password or completing a reset.
+>
+> ---
+>
+> ## 4. The fixers' choices, checked
+>
+> - **The scan cap counts FF DA everywhere, metadata included.** This errs on the safe side, because the count can never be short. The tests pin 100 accepted and 101 refused, both as scans and as a comment of 99 or 100 pairs after one scan.
+> - **CHG-1 compares stored hashes.** So a hash upgrade, or an account deleted mid-change, also gets the 400. That is safe.
+> - **The double submit's `SessionInterrupted`:** confirmed (CHG-3).
+> - **The 25 MP cap is unchanged.** One decode at the cap touches about 400 to 500 MB, and at most 2 run at once (PIC-1).
+> - **The reset token keeps Django's salt and format.** Only its clock changed.
+>
+> **The builders' flags and the reset builder's sixteen judgement calls:** none contradicts D-137 or an FR on security. Two are recorded choices for Benjamin to confirm:
+> - An FR-03 lock does not end a live session. With "Remember me" that now means up to 7 idle days (D-26's residue).
+> - Nothing runs `clearsessions`. Expired rows are refused by `expire_date`, but they stay in the database.
+>
+> ---
+>
+> ## 5. Coverage: what was checked
+>
+> ### Priority 1: permission-scoped retrieval (FR-11)
+> - **Retrieval is untouched.** Nothing under `apps/retrieval` or `apps/ai` changed, and the change makes no AI call.
+> - **The new fields.** `picture` and `attendee_people` appear only where every user is already listed to every session: the directory (D-34) and the user object.
+> - **`attendee_people`** is only in a meeting detail, which is already scoped and answers 404 outside scope.
+>
+> ### Priority 2: RBAC (FR-06)
+> - **Every new route** was checked in `apps/api/urls.py` and in its view:
+>   - `auth-change-password`, `user-own-picture` and `user-picture` fall under the global `IsAuthenticated`, with no override.
+>   - The two reset routes are explicitly `AllowAny`, as login is.
+> - **Tests.** `test_rbac.py` and `test_never_cache.py` list all five routes. Dual-role coverage is 54/54.
+> - **No authorisation decision is made in React.**
+> - **No body field can widen access.** The picture routes act on `request.user` only, and no route takes a role or a user id in its body.
+>
+> ### Priority 3: sessions and credentials (FR-02, FR-04)
+> - **"Remember me":**
+>   - `remember` is read only on the successful path, after `django_login`.
+>   - An unticked sign-in calls `set_expiry(None)` explicitly.
+>   - The expiry is an int, so it slides with use.
+> - **How sessions end:**
+>   - Logout's `flush()` deletes the row, remembered or not.
+>   - A change cycles this session's key, and every other session fails Django's session-hash check on its next request.
+>   - A reset ends every session of the account.
+> - **Passwords:**
+>   - bcrypt is the first hasher.
+>   - No password or hash appears in any response or log: the password fields are `write_only`, and the answers are fixed messages.
+>   - DRF's `CharField` refuses lone surrogates and NUL, so `check_password` never receives a string it cannot encode.
+> - **Secrets:**
+>   - The diff holds only test-fixture passwords.
+>   - No `.env`, dump or outbox file is tracked, and `outbox/` is gitignored.
+>
+> ### Priority 4: the upload path (FR-08 rules, applied to pictures)
+> - **The order of checks:**
+>   1. the throttle, before the body is read;
+>   2. the declared length against 5 MB plus 64 KiB (Waitress de-chunks a body and sets `CONTENT_LENGTH`, D-124);
+>   3. the file's own size;
+>   4. a decode place;
+>   5. the WebP header and the JPEG scan count, before `Image.open`;
+>   6. `Image.open` restricted to PNG, JPEG and WEBP;
+>   7. the 25 MP cap, read from the header;
+>   8. the decode, then a PNG rebuilt from the pixels alone.
+> - **Names.** The stored name is `profile-pictures/<uuid4>.png`; the client's filename is never used.
+> - **Crafted inputs.** I found nothing that holds a decode place for minutes. Times are for an in-memory upload, then a temporary-file one:
+>
+>   | Input (5 MB) | In memory | Temporary file |
+>   |---|---|---|
+>   | JPEG: SOI, then zero bytes | 0.72 s | 0.87 s |
+>   | JPEG: SOI, then FF fill | 1.91 s | 2.18 s |
+>   | PNG: 436,901 empty private chunks | 1.36 s | 1.98 s |
+>   | PNG: 349,520 tEXt chunks | 1.05 s | 1.57 s |
+>   | PNG: 436,901 empty IDATs | 1.21 s | 1.73 s |
+>
+> - **Decompression.** Pillow's `MAX_TEXT_CHUNK` and `MAX_TEXT_MEMORY` cap PNG text and ICC decompression.
+> - **WebP.** libwebp's demuxer refuses a WebP whose first chunk is not VP8, VP8L or VP8X before any canvas exists.
+>
+> ### Priority 5: serving and download (FR-15 rules)
+> - **The `GET` route:**
+>   - It reads the server's own PNG through `FieldFile.open`, whose `safe_join` refuses a path outside MEDIA_ROOT. That case and a missing file both give the 404.
+>   - It sends `image/png`, `nosniff`, `inline` and the never-cache headers.
+> - **Nothing serves MEDIA_ROOT:**
+>   - `config/urls.py` maps only `api/` and `spa.index`, and `spa.index` reads `index.html` and nothing else.
+>   - `WHITENOISE_ROOT` is `frontend/dist`.
+>   - `git grep` finds no `MEDIA_URL` route, no `.url` link and no `/media/`.
+>
+> ### Priority 6: prompt injection
+> - **Not applicable.** No D-137 content reaches a model.
+>
+> ### The reset flow
+> - **D-25:**
+>   - The 400 depends on the text alone.
+>   - The request path runs no query, and a test pins 0.
+>   - Every well-formed address gets the same status and body; the tests also compare `Content-Type`.
+>   - No header depends on the account (code trace).
+> - **The link:**
+>   - It is built from `PUBLIC_BASE_URL` alone: `git grep` finds no `build_absolute_uri`, `get_host` or `HTTP_HOST`.
+>   - It is mailed to the stored address, which also defeats Unicode case-folding tricks.
+> - **The token:** an HMAC of the account's id, password hash, last sign-in and email. It works once, including against two confirms at once, which the row lock re-checks.
+> - **The confirm:**
+>   - A retired account is refused.
+>   - One 400 covers every link that does not work.
+>   - The password validators run only after the link is judged.
+> - **The thread:**
+>   - The cap of 4 is applied before any lookup.
+>   - Its database connection is closed in `finally`.
+>   - Nothing it raises reaches the response.
+> - **SMTP:** `create_default_context()` verifies certificates.
+> - **Referer:** `SECURE_REFERRER_POLICY` stays Django's `same-origin`, so the token in the link's query string is not sent cross-origin. The front end's `history.replaceState` is still owed on `feat/UI`.
+>
+> ### CSRF
+> - **Every unsafe request from a session** is checked from the `X-CSRFToken` header alone, `DELETE` included.
+> - **The picture upload is multipart,** but a cross-site form still cannot reach it:
+>   - the session cookie is `SameSite=Lax`;
+>   - the request also needs the header.
+> - **The anonymous reset routes are JSON-only,** so a cross-site request needs a preflight, which the server never answers.
+>
+> ### Throttles and the cache
+> - **Scopes:** `password_change` and `picture` are counted per user. The reset routes share `auth`, counted per address.
+> - **`ExpiredFirstLocMemCache._cull`:**
+>   - It runs under LocMemCache's lock.
+>   - Each full scan frees at least a third of the entries, so its cost is amortised.
+>   - Pushing out a live entry takes more than 66,667 live entries.
+>
+> ### Paths that end in a 500
+> None among the routes' inputs. Each of these ends as a 400, 413 or 415:
+> - malformed JSON, or a body that is a list or null;
+> - numbers in the password fields;
+> - an oversized `uid` or `token`;
+> - NUL or surrogate characters;
+> - a multipart body with no `picture` part;
+> - an empty file.
+>
+> What remains is environmental failures (disk or database) and account-deletion races.
+>
+> ### The deployed alpha's configuration (Stage 5 item 11)
+> - `DEBUG` is False, by default and in the runbook.
+> - `ALLOWED_HOSTS` and `CSRF_TRUSTED_ORIGINS` are loopback.
+> - The cookies are `HttpOnly` and `SameSite=Lax`. `Secure` is off on loopback HTTP, which D-64 accepts.
+> - The SPA and `/api` share one origin.
+> - Waitress runs 24 threads with `--max-request-body-size=54525952`.
+> - Nothing serves MEDIA_ROOT or `outbox/`.
+>
+> ---
+>
+> ## 6. Tests and artefacts
+>
+> - **Targeted run at HEAD** (suffix `fr04fs3r1`, `--create-db`): 532 passed in 374.38 s; dual-role coverage 54/54.
+>   - Files: `test_fr01_password_change`, `test_fr01_profile_pictures`, `test_fr02_password_reset`, `test_fr04_remember_me`, `apps/core/tests/test_cache`, `test_rbac`, `test_never_cache` and `test_throttles`.
+>   - Log: `scratchpad/review3_sec1_targeted.log`.
+> - **Parent session's full suite** (`scratchpad/fr04full3_suite.log`): run on an export of `7aeb81b`, test database `test_kmp_anthropic_fr04full3`:
+>   - "5724 passed in 2172.84s (0:36:12)"
+>   - "Dual-role coverage: 54/54 protected endpoints exercised from both Employee and Administrator sessions (100.0%)"
+> - **Probes** are in `scratchpad/sec3r1_probes/`: `probe_jpeg_scans.py`, `probe_webp_mem.py` and `probe_decode_cost.py`.
+> - **The two throwaway tests** are only in the copy `scratchpad/fr04brk_copies/sec3r1`: `test_probe_sec3r1_double_submit.py` and `test_probe_sec3r1_any_recipient.py`.
+> - **Working notes:** `scratchpad/review3_final_security_1.md`.
+
+**The final requirements audit of `7aeb81b` (17 November 2026), verbatim.** The
+`requirements-auditor` agent's report, quoted whole and unedited, extracted and checked the same
+way.
+
+> ## Audit: D-137 server change, `fr04-account-self-service` at `7aeb81b` (final requirements audit, round 1) — 17 November 2026
+>
+> **Verdict:** COMPLETE
+>
+> D-137 sets clauses for the server, and its note of 17 November 2026 adds NFR-06. Every one of those clauses is implemented and tested. So is every FR-01 to FR-05 and NFR-06 clause the change touches, unless D-137 declines it. Every protected route is tested from an Employee and an Administrator session. REQ-1 and INT-1 blocked the last two rounds, and both are now closed. No finding here is high or medium. Recorded for Benjamin, none blocking: CHG-3 and REC-1 (low), and EVD-1, BLT-1, DOC-4 and DEP-1 (info). The lows carried from earlier rounds are unchanged.
+>
+> ### What was checked, and how
+> - **The change.** HEAD `7aeb81b` (tree `93b76a6`), clean before and after this audit. `git diff origin/main...HEAD` shows 47 files, 6,430 insertions and 100 deletions.
+>   - `origin/main` is `2a99a3c`, still the remote's `main` by `git ls-remote`.
+>   - No file under `frontend/` changes, and `CLAUDE.md` does not change.
+> - **Against:**
+>   - D-137 (`docs/decisions.md:18656-18769`);
+>   - FR-01 to FR-05 (`proposal.txt:260-450`), NFR-06 (`:1445-1446`) and §1.9 (`:215-243`);
+>   - CLAUDE.md §6, §7 and §8;
+>   - `docs/api-contract.md`: the Stage 2 rows, the throttle table, and "FR-04 — account self-service (D-137)" from `:2016`;
+>   - `docs/alpha-deployment.md`.
+> - **The whole suite**, the parent session's run in a scratch git checkout at `7aeb81b`: **5724 passed in 2172.84s (0:36:12)**, with no failure or error. "Dual-role coverage: 54/54 protected endpoints exercised from both Employee and Administrator sessions (100.0%)".
+> - **A targeted run** in a `git archive` export of HEAD, suffix `fr04fa3r1`, `--create-db`: 792 passed in 454 s. It covered these files:
+>   - `test_fr04_remember_me.py`, `test_fr01_password_change.py`, `test_fr01_profile_pictures.py`, `test_fr02_password_reset.py`;
+>   - `test_user_picture_migration.py`, `apps/core/tests/test_cache.py`, `apps/core/tests/test_constants.py`;
+>   - `test_rbac.py`, `test_throttles.py`, `test_configuration.py`, `test_never_cache.py`, `test_source_rows_fail_closed.py`, `test_login.py`, `test_logout.py`.
+> - **`makemigrations --check --dry-run`:** "No changes detected", exit 0.
+> - **`check --deploy`:**
+>   - security W004, W008, W012 and W016, the runbook's warnings;
+>   - W009, ai.W001 and ai.W004, all from the runner's environment;
+>   - nothing from D-137.
+> - **Probes P1 to P3 and deliberate breaks BRK-A to BRK-F**, in a second export, never in the worktree. Each break was restored, and the restore checked by hash.
+> - **Evidence files**, in `C:/Users/mozza/AppData/Local/Temp/claude/2a3657d8eb430a3a/c5063adc-0529-45cd-a6db-dc2dfafe339c/scratchpad/`:
+>   - `fa3r1_targeted.log`;
+>   - `fa3r1_breaks.sh` and `fa3r1_breaks.log`;
+>   - `fr04brk_copies/fa3r1_probe/apps/api/tests/test_zz_fa3r1_probe.py`;
+>   - `fr04full3_suite.log`;
+>   - `review3_final_requirements_1.md`.
+>
+> ### Closed since the last round, verified here
+> - **INT-1 (the merge with `main`).**
+>   - `af3d178`'s parents are `5ae01fa` and `2a99a3c`.
+>   - Its tree is `5bfbf06`, the tree its message reports as tested: pytest 5690 passed, dual-role 54/54, `npm test` 993 passed. Those runs were not repeated here.
+>   - `origin/main` is an ancestor of HEAD.
+>   - `git grep` finds no conflict marker.
+> - **REQ-1 (NFR-06 not named).**
+>   - D-137's Supersedes line names NFR-06 (`decisions.md:18663-18666`).
+>   - It replaces D-10's 60 minutes for remembered sessions and no others (`:18670-18672`).
+>   - It records the question and Benjamin's answer (`:18739-18769`).
+>   - These restatements now say "FR-04's and NFR-06's": `api-contract.md:2052-2054`, `constants.py:915-916` and `test_fr04_remember_me.py:4-6`.
+>   - `7aeb81b`'s hunks in `views.py`, `constants.py`, `settings.py` and `.env.example` are comments only.
+> - **JPG-1 and PIC-1R** (`c2c3d36`), **CHG-1** (`1d08ad4`) and **DOC-1** (`9b9aee4`) are in the code. Breaking each fails tests from both roles: BRK-A to BRK-E below, and `9b9aee4`'s own B1 to B3.
+>
+> ### Clause coverage
+>
+> **D-137's decision table** (`decisions.md:18688-18701`)
+>
+> | Clause | Status | Evidence |
+> |---|---|---|
+> | Build the change-password and picture routes first, on their own branch | satisfied | `apps/api/urls.py` (`auth/change-password`, `users/me/picture`); `views.py:857`, `:995`. #119's `frontend/src/api/profile.js` (origin/feat/UI `dd452ac`) sends `current_password`, `new_password` and multipart `picture`, which is what the server reads |
+> | Overrule §1.9 and build a reset flow | satisfied (server) | `views.py:929`, `:955`; `apps/accounts/password_reset.py`. The `/reset-password` page is owed by feat/UI (DEP-1) |
+> | Keep and wire "Remember me"; it lengthens the session | satisfied | `serializers.py:216`; `views.py:689`, `:792-794` |
+> | 7 days without use, both roles | satisfied | `constants.py:920`; `test_fr04_remember_me.py:137`, `:162`, `:171`, `:193`, each run from both roles; BRK-F |
+> | A file outbox, SMTP optional | satisfied | `settings.py:238-256`; `test_fr02_password_reset.py:393`, `:1171`, `:1185`, `:1202`, `:1221` |
+> | Every signed-in user sees pictures, wherever users are listed: role management, attendees, the header; Pillow re-encodes | satisfied (server) | See the rows below |
+> | — `picture` in every user object | satisfied | `serializers.py:65`: `/api/auth/me`, login, register, `GET /api/users`, the role change's and the unlock route's 200s |
+> | — the directory and the attendees | satisfied | directory `:161`; a meeting detail's `attendee_people` `:789` |
+> | — any session may fetch any picture | satisfied | `views.py:1090` |
+> | — Pillow | satisfied | `pillow==13.0.0` in `requirements.txt` |
+> | — tests | satisfied | `test_fr01_profile_pictures.py:1376`, `:1429`, `:1449`, `:1484`; `test_roles.py:196` |
+> | One server branch, `feat/FR-04-account-self-service`; one PR merged before #119 | pending, the parent session's next step | The work is on local `fr04-account-self-service`. It is pushed with a refspec to `feat/FR-04-account-self-service`, which is not on the remote yet |
+> | A reset link works for 1 hour | satisfied | `constants.py:977`; `settings.py:271`; `password_reset.py:186-205`, timed in UTC; `test_fr02_password_reset.py:552`, `:560`, `:579`, `:599` |
+> | A completed reset leaves FR-03's lock | satisfied | `password_reset.py:287`, the password column alone; `test_fr02_password_reset.py:867`: the new password meets the 403 `account_locked` |
+> | PNG, JPEG or WebP up to 5 MB, stored as PNG of at most 512 × 512; no GIF, no SVG | satisfied, narrowed by values the build set (REC-1) | `constants.py:929-946`; `pictures.py:240`, `:270`, `:273-275`; `views.py:1045`, `:1057`; `test_fr01_profile_pictures.py:354`, `:366`, `:395`, `:585`, `:1127`, `:1153`, `:1209` |
+>
+> **D-137's rules set without asking** (`decisions.md:18707-18725`)
+>
+> | Clause | Status | Evidence |
+> |---|---|---|
+> | A changed or reset password passes registration's `AUTH_PASSWORD_VALIDATORS` | satisfied | `serializers.py:260`; `password_reset.py:277`; `test_fr01_password_change.py:393`; `test_fr02_password_reset.py:759` |
+> | A wrong current password is a 400 with a field error, never a 401 | satisfied | `serializers.py:253-256`; `views.py:911-915`; `test_fr01_password_change.py:325`, `:500`. An edge case is in CHG-3 |
+> | A change keeps the session that made it and ends the user's others | satisfied | `views.py:922`; `test_fr01_password_change.py:174`, `:192`, `:210` |
+> | A reset ends every session of the user, remembered ones included | satisfied | `test_fr02_password_reset.py:831` |
+> | Both through Django's session hash | satisfied | The same tests: the stale sessions are flushed on their next request with a 401 |
+> | A reset request gets the same 200 and body for every address (D-25) | satisfied | `views.py:951-952`; `password_reset.py:122-147`; `test_fr02_password_reset.py:306`, `:1010` (no query on the request path) |
+> | The link's address comes from configuration, never the request | satisfied | `password_reset.py:208-216`; `settings.py:258-269`; `test_fr02_password_reset.py:377`, `:1250` |
+> | Nothing serves `MEDIA_ROOT` | satisfied | `test_fr01_profile_pictures.py:1415` |
+>
+> **D-137's "Not covered"** (`decisions.md:18730-18737`)
+>
+> | Clause | Status | Evidence |
+> |---|---|---|
+> | The front end | declined (D-137) | No file under `frontend/` changes |
+> | Real email on the alpha | declined (D-137) | `alpha-deployment.md`, step 4, and "What this deployment does not do" |
+> | No change to one's own name or address | satisfied, nothing built | `MeView` defines `get` only |
+> | No Administrator sets another user's password | satisfied, nothing built | `set_password` is called only at `views.py:906` (one's own session), `password_reset.py:280` (a link) and `apps/accounts/models.py:77` (`create_user`) |
+>
+> **D-137's note of 17 November 2026: NFR-06** — satisfied. The record is listed under "Closed" above. The check is `test_fr04_remember_me.py:203`, `test_an_unremembered_session_ends_after_sixty_minutes_without_use`: a 401 after 60 minutes and 1 second idle, for both roles, with `remember` absent or false. Its counterpart is `:162`: a remembered session answers 200 at the same point. BRK-F fails the 60-minute test for both roles, with `remember` absent and false.
+>
+> **FR-01 to FR-05 and NFR-06: the clauses the change touches**
+>
+> | Clause | Status | Evidence |
+> |---|---|---|
+> | FR-01 one-way hash, and NFR-02's bcrypt, for a changed or reset password | satisfied | `test_fr01_password_change.py:169`; `test_fr02_password_reset.py:536` (`bcrypt_sha256$`) |
+> | FR-01 complexity rules | satisfied | As the validators row above |
+> | FR-01 201 with the new user, now carrying `picture: null` | satisfied | `test_fr01_profile_pictures.py:1460`; `test_register.py`'s key set |
+> | FR-02 the body `{email, password}`, with D-137's optional `remember` | satisfied | `serializers.py:216`; the 400 tests in `test_fr04_remember_me.py` |
+> | FR-02 required fields, and the email format checked before the lookup | satisfied | `test_fr04_remember_me.py:286`: a bad `remember` is one 400 for every address and no failed attempt |
+> | FR-02 200 with the role, 401, 403 for a locked account | satisfied, unchanged | `test_fr04_remember_me.py:343`, `:371` |
+> | FR-03 left as written; neither a change nor a reset touches the lock or the count | satisfied | `test_fr01_password_change.py:230`, `:325`; `test_fr02_password_reset.py:867` |
+> | FR-03 "The Administrator does not see, set or reset the user's password" | satisfied | As the "Not covered" row above |
+> | FR-04 logout destroys the server-side session, a remembered one included | satisfied | `test_fr04_remember_me.py:234` |
+> | FR-04 sessions expire after 60 minutes of inactivity | satisfied for unremembered sessions; declined for remembered ones (D-137, Supersedes) | `test_fr04_remember_me.py:203`, `:213` |
+> | FR-05 the role management list shows each user | satisfied, now with `picture` | `test_fr01_profile_pictures.py:1443` |
+> | NFR-06 a 401 after 60 idle minutes | satisfied for unremembered sessions; declined for remembered ones (D-137's note of 17 November 2026) | `test_fr04_remember_me.py:203`; BRK-F |
+> | NFR-05's content rule, applied to pictures | satisfied | The format comes from the content (`pictures.py:240`); 415 and 413 come before storage |
+>
+> **The contract and the runbook.**
+> - `docs/api-contract.md` documents every D-137 route and setting, with codes that match the tests. The exceptions are CHG-3 and DOC-4.
+> - `docs/alpha-deployment.md` covers:
+>   - the Pillow sync and `accounts 0012`;
+>   - `PUBLIC_BASE_URL`, `DEFAULT_FROM_EMAIL`, the `EMAIL_*` block and the outbox;
+>   - the cooldowns a restart clears, and the missing real email.
+>   - Its `check --deploy` warnings (security W004, W008, W012, W016) still hold.
+>
+> ### Missing or partial
+> Nothing blocks merge. Recorded for Benjamin:
+>
+> 1. **CHG-3 (low): the contract's account of two changes at once holds only for two sessions.**
+>    - **The claim.** `docs/api-contract.md:2086-2087` says "Two changes at once on one account take turns: the first is made, and the second gets this `400`". `views.py:891-892` says the same.
+>    - **The probes** ran in an export, suffix `fr04fa3r1b`, both roles; 6 passed.
+>      - P3, two sessions of one account: the second gets `400 {"current_password": ["Your current password is incorrect."]}`, as written.
+>      - P1, one session sending the change twice, where the second loaded its session before the first committed: `400 {"detail": "Bad request."}`, with no cookie. The first request's `update_session_auth_hash` deleted the old session key. `SessionMiddleware` then cannot save the second request's session and raises `SessionInterrupted`, which `config/errors.py`'s handler400 answers.
+>      - P2, the same, where the second reaches the server after the first committed: `401 {"detail":"Authentication credentials were not provided."}` with `Set-Cookie: sessionid=""; expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0`.
+>    - **What P2 means.** If that response lands after the first one's 200, it clears the new key from the browser. `frontend/src/api/client.js` then signs the user out, as it does on any 401. Any other request the page sends with the old key in that window is answered the same way.
+>    - **Where this comes from.** It follows from Django rotating the session key on a password change, not from a D-137 rule. #119's `Profile.jsx:231` already disables the submit button while saving. The fixers' note said a double submit "may now get Django's own SessionInterrupted 400 … not run; worth checking". P1 confirms it, and P2 adds the 401.
+>    - **Fix:**
+>      - say "from two sessions" in the contract and the docstring, and give the one-session outcomes;
+>      - in the Built note, cite P1 and P2 in place of "not run";
+>      - on feat/UI, keep the submit disabled and send no other request until the change answers.
+> 2. **REC-1 (low): values cited to D-137 that no record shows Benjamin chose.**
+>    - **What D-137 sets.** Its table sets 7 days, 1 hour, 5 MB, 512 × 512 and the three formats.
+>    - **What the build was given.** The build was given further values as "VALUES ALREADY CHOSEN (use them; do not re-decide them)": `d137-server-build-continued.js`, lines 55-68, in the scratchpad above. They are:
+>      - `PASSWORD_CHANGE_THROTTLE_RATE = "10/hour"` (`constants.py:578`) and `PICTURE_THROTTLE_RATE = "10/hour"` (`:584`). Their comments open "(D-137, the lead's decision of 16 November 2026)" (`:572`, `:579`);
+>      - `PICTURE_UPLOAD_ALLOWANCE_BYTES`, 64 KiB (`:936`), and `MAX_PICTURE_PIXELS`, 25,000,000 (`:943`);
+>      - `PASSWORD_RESET_COOLDOWN_SECONDS = 300` (`:982`).
+>    - **The missing record.** Nothing names who chose them. D-137 does not. `docs/decisions.md` mentions neither "10/hour" nor the cooldown. The feature commits state the values without a source.
+>    - **Unmarked values.** The other values the build set say "Set by the build, not by D-137" (`:594`, `:956-957`, `:964-965`, `:986-987`, `:992`). The values at `:578`, `:584`, `:936`, `:943` and `:982` do not.
+>    - **Narrowings.** `MAX_PICTURE_PIXELS` and `MAX_PICTURE_JPEG_SCANS` narrow D-137's upload row:
+>      - a PNG, JPEG or WebP of at most 5 MB but over 25 megapixels is a 413;
+>      - a JPEG holding more than 100 FF DA byte pairs is a 415.
+>    - **A rule D-137 does not hold.** The change route also refuses a new password equal to the current one (`serializers.py:227`, `:265-268`). That rule is not in D-137, and a reset does not apply it.
+>    - **Why it matters.** `PASSWORD_CHANGE_THROTTLE_RATE` is the only bound on guessing from a session left open (CHG-2). None of these contradicts D-137 or an FR.
+>    - **Fix:**
+>      - the Built note lists each of these, and the equal-password rule, as the build's choice for Benjamin to confirm or change;
+>      - optionally, those comments gain "Set by the build, not by D-137".
+> 3. **EVD-1 (info): `c2c3d36` and `1d08ad4` record no failing-first run and no deliberate break.** Their messages list tests only. This audit supplies breaks for both:
+>    - BRK-A and BRK-B for `1d08ad4`;
+>    - BRK-C, BRK-D and BRK-E for `c2c3d36`.
+>    **Fix:** the Built note's rows for these two commits cite these breaks, or say that none was recorded when they were committed.
+> 4. **BLT-1 (info): two facts for the Built note.**
+>    - **No local branch named `feat/FR-04-account-self-service` exists at `7aeb81b`.** `git for-each-ref refs/heads` lists only `fr04-account-self-service` among names matching FR-04, and `packed-refs` holds none.
+>    - **The alpha needs no `PUBLIC_BASE_URL` line** unless people open it at an address other than `http://127.0.0.1:8000` (`alpha-deployment.md`, step 4).
+>    - The alpha database's migration state was not checked here.
+> 5. **DOC-4 (info): the picture upload's order of refusals leaves out DRF's 415.**
+>    - The order is given in `docs/api-contract.md:2123-2128` and in `OwnPictureView`'s docstring (`views.py:1004-1026`). Both leave out DRF's own 415 for a body that is not multipart, which the contract's table does list.
+>    - That 415 comes after the declared-length 413 and before the 400, since `request.data` is first read at `views.py:1050`.
+>    - **Fix:** insert it in both lists.
+> 6. **DEP-1 (info, carried): no front end has the page the reset email links to.**
+>    - Neither main nor #119 has a `/reset-password` page. #119's `App.jsx:178` routes `forgot-password` only.
+>    - Until feat/UI adds the page, the emailed link opens the SPA without it, so the reset cannot be shown end to end.
+>    - The front end is out of this branch's scope (D-137).
+> 7. **Carried lows, unchanged and not re-rated:** PIC-3, CHG-2, AUD-1, RST-1, RST-2, CFG-1, COR-5, PIC-2, COR-4, COR-7, COR-9, INF-3.
+>    - For AUD-1, the nearest proposal text is §1.9's "Audit log interface (actions are recorded, but not surfaced in a browsable log screen)" (`proposal.txt:231`).
+>    - No FR asks for a record of a password change or a reset.
+>
+> ### Breaks run by this audit
+> Each break ran in the export `fr04brk_copies/fa3r1_probe` and was restored by hash. The worktree was untouched.
+>
+> | Break | What was broken | Result |
+> |---|---|---|
+> | BRK-A | `views.py`: CHG-1's check that the stored hash is still the verified one, removed | `test_fr01_password_change.py`: 2 failed, 60 passed: `test_a_reset_committed_after_the_check_refuses_the_change_and_its_session_ends` [employee], [administrator] |
+> | BRK-B | `views.py`: the change's `select_for_update`, removed | 2 failed, 60 passed: `test_the_change_checks_and_saves_under_a_no_key_update_lock_on_the_users_row_alone` [employee], [administrator] |
+> | BRK-C | `pictures.py`: the JPEG scan cap never refuses | `test_fr01_profile_pictures.py`: 8 failed, 163 passed, each of these tests from both roles: the refinement-scan file, 100 and 101 scans, FF DA pairs in metadata, and the decode place given back |
+> | BRK-D | `pictures.py`: `WEBP_LOSSLESS_HEADER_BYTES` changed from 25 to 30 | 10 failed, 161 passed: the lossless WebP of 25 to 29 bytes, every size from both roles |
+> | BRK-E | `pictures.py`: the scan cap's `>` changed to `>=` | 4 failed, 167 passed: 100 and 101 scans, and FF DA pairs in metadata, from both roles |
+> | BRK-F | `views.py`: an unticked sign-in gets seven days | `test_fr04_remember_me.py`: 18 failed, 50 passed. `test_an_unremembered_session_ends_after_sixty_minutes_without_use` fails for both roles, with `remember` absent and false |
+>
+> ### Invariant check
+> - **§6 invariant 4, server-side authorisation: pass.**
+>   - `IsAuthenticated` is the global default (`settings.py:286`).
+>   - The `AllowAny` opt-outs are register, login, the lockout policy and the two reset routes. `test_rbac.py` and `test_never_cache.py` pin them in `OPEN_ROUTES`.
+>   - Every new protected route answers 401 without a session (`test_fr01_password_change.py:452`; `test_fr01_profile_pictures.py:1376`). By D-137's choice, none needs a permission code.
+> - **§6 invariant 1, no disclosure: pass for what this change touches.**
+>   - Users are not scoped material.
+>   - `attendee_people` appears only on a meeting detail the caller may already read.
+>   - The picture route answers every absence with one 404 body.
+> - **§6 invariants 2, 3 and 5 to 10:** not touched.
+> - **§7: pass.**
+>   - Every first-parent subject carries an FR ID. The merges name `feat/FR-04-account-self-service`, as `main`'s merges name their branches.
+>   - Each feature commit and each fix carries its tests.
+>   - `accounts 0012` is two `AddField` operations, and `test_user_picture_migration.py` reverses them.
+>   - It was re-pointed before it was ever pushed: `git branch -r --contains 1a7c0ce` is empty.
+>   - `makemigrations --check` is clean.
+> - **§8: conditions 1, 3 and 4 pass.** Condition 1 carries CHG-3's caveat on one contract sentence.
+>   - **Condition 2.** The whole suite passes. Its matrix shows every protected route reached from both roles:
+>
+>     | Route | Employee | Administrator |
+>     |---|---|---|
+>     | change-password | 36 tests | 36 tests |
+>     | picture `POST` | 87 tests | 84 tests |
+>     | picture `DELETE` | 6 tests | 6 tests |
+>     | picture `GET` | 12 tests | 12 tests |
+>
+>     The front-end suite is `main`'s, since no file under `frontend/` changes. `af3d178` reports 993 passed on the merged tree; that run was not repeated here.
+>   - **Condition 5** is this audit.
+> - **Set-level: pass.**
+>   - No changed `.py` file imports an AI SDK.
+>   - No tuned literal is inline. The numbers in `pictures.py`, such as `WEBP_LOSSLESS_HEADER_BYTES = 25`, are named file-format facts.
+>   - Nothing writes a chunk.
+>   - `picture_url` is one helper, used by `UserSerializer`, `DirectoryEntrySerializer` and `MeetingDetailSerializer`.
+>   - Pictures and the reset live in `apps/accounts`, routes in `apps/api`, and values in `apps/core/constants.py`.
+>
+> ### Gate impact
+> None.
+> - M6 passed on 1 November 2026. This is NIT3004 work done on the lead's decision, and it changes no M6 requirement beyond what D-137 supersedes.
+> - No finding blocks merge. The smallest fixes:
+>   - CHG-3 and DOC-4: a sentence each in the contract and the docstring;
+>   - REC-1, EVD-1 and BLT-1: the Built note's text.
+>
+> **COMPLETE.** Every D-137 server clause, and every FR-01 to FR-05 and NFR-06 clause it touches, is implemented and tested from both roles, or declined by D-137. REQ-1 and INT-1 are closed. The whole suite passes: 5724 passed, dual-role 54/54. Recorded for Benjamin, none blocking: CHG-3 and REC-1 (low); EVD-1, BLT-1, DOC-4 and DEP-1 (info).
+
+**What changed because of the two reports,** all in `49ace08`, comments and documents only:
+- **CHG-3.** Two places now say that two changes at once take turns only when they come from two
+  sessions: `docs/api-contract.md`'s change-password section and `PasswordChangeView`'s docstring.
+  Both now give the audit's measured answers for one session sending the change twice:
+  - Django's `400 {"detail": "Bad request."}` with no cookie, if the second request was read before
+    the first committed;
+  - the `401` with the `sessionid` cookie cleared, if it arrives after.
+
+  The contract tells the page to keep its submit disabled, and send nothing else, until the change
+  has answered. #119's Profile page already disables its submit while saving.
+- **REC-1.** The five comments in `apps/core/constants.py` that credited a build value to D-137 now
+  say the build set it. This note lists those values, with the equal-password rule, for Benjamin
+  above.
+- **DOC-4.** The picture upload's order of refusals now has DRF's `415` for a body that is not
+  multipart, after the declared-length `413`, in the contract and in `OwnPictureView`'s
+  docstring.
+- **EVD-1.** The commits table above marks `c2c3d36` and `1d08ad4` as recording no breaks in their
+  messages. It gives what the fix agent reported and the final audit's BRK-A to BRK-E.
+- **BLT-1.** This note says the local `feat/FR-04-account-self-service` is gone, and who deleted
+  it. The alpha step below sets `PUBLIC_BASE_URL` only when needed.
+- **Recorded, with nothing changed:**
+  - RST-3, low. With SMTP set, anyone can register an address and then have a reset email sent to
+    it. On the alpha it has no effect, since the email is a file. Before SMTP is turned on,
+    Benjamin decides whether to cap reset emails per hour or to verify addresses at
+    registration.
+  - THR-1. On the loopback alpha one `auth` budget of 20 a minute covers every browser, now
+    including the two reset routes. Worth knowing before a demonstration.
+  - DEP-1. The page the reset email links to is the front end's job, below.
+
+Neither reviewer read these corrections again.
+
+**Owed, by a person:**
+- **Merging.** Benjamin merges this branch's pull request before #119.
+- **The alpha:**
+  - install Pillow with `pip install -r requirements.txt`, then run `migrate`. The alpha's
+    database, `kmp_alpha_20261113`, was at `accounts 0008` in the survey above, so `migrate`
+    applies `0009` to `0012`;
+  - set `PUBLIC_BASE_URL` in its `.env` only if people open it at an address other than the
+    default, `http://127.0.0.1:8000` (`docs/alpha-deployment.md`, step 4);
+  - restart.
+- **The front end** on `feat/UI`, under its own dated note here:
+  - a `/reset-password` page, which #119 does not have, that posts `uid` and `token` and then
+    removes them from the address bar;
+  - `ForgotPassword` pointed at `POST /api/auth/password-reset`;
+  - `remember` sent from Login;
+  - pictures in the header, role management and the attendee lists;
+  - `picture_busy`'s `Retry-After` honoured;
+  - the change form's submit kept disabled while a change is in flight.
+
 ## D-138 · The knowledge map gains a second view, claims joined to the passages they cite, beside the first
 
 **Status:** Settled by the user (16 November 2026) · **Date:** 2026-11-16 · **Concerns:** FR-20,
