@@ -536,6 +536,9 @@ export default function Dashboard() {
   const meetings = payload?.recent_meetings ?? []
   const questions = payload?.recent_questions ?? []
   const panelState = { loading, failed }
+  // The session's user, for the signed-in line only. Their role is shown and never
+  // consulted: what each panel holds, and whether FR-19's panel exists at all, is
+  // decided by the server's reply (invariant 4, D-107).
   const { user } = useAuth()
   // FR-19's panel: shown when this reply carries `knowledge_gaps`, and while a
   // reply is awaited or has failed, when the last one did. A reply without the
@@ -545,9 +548,11 @@ export default function Dashboard() {
   return (
     <div className="dashboard">
       <h1>{TEXT.dashboardHeading}</h1>
+      {/* PR #119: who the page is for, the session's own name and role. The name is
+          the user's own words, so it is rendered as text, never as HTML. */}
       {user && (
         <p className="dashboard__user">
-          Signed in as <strong>{user.name}</strong> ({user.role})
+          {TEXT.dashboardSignedInAs} <strong>{user.name}</strong> {TEXT.dashboardSignedInRole(user.role)}
         </p>
       )}
       <p className="dashboard__intro">{TEXT.dashboardIntro}</p>
@@ -566,7 +571,7 @@ export default function Dashboard() {
       <div className="dashboard__panels">
         <DashboardPanel
           headingId="dashboard-documents-heading"
-          heading="Recent documents"
+          heading={TEXT.dashboardDocumentsHeading}
           to="/documents"
           loadingText={TEXT.dashboardLoadingDocuments}
           empty={documents.length === 0}
@@ -577,7 +582,7 @@ export default function Dashboard() {
         </DashboardPanel>
         <DashboardPanel
           headingId="dashboard-meetings-heading"
-          heading="Recent meetings"
+          heading={TEXT.dashboardMeetingsHeading}
           to="/meetings"
           loadingText={TEXT.dashboardLoadingMeetings}
           empty={meetings.length === 0}
@@ -588,7 +593,7 @@ export default function Dashboard() {
         </DashboardPanel>
         <DashboardPanel
           headingId="dashboard-totals-heading"
-          heading="Indexed items"
+          heading={TEXT.dashboardTotalsHeading}
           loadingText={TEXT.dashboardLoadingTotals}
           {...panelState}
         >
@@ -596,7 +601,7 @@ export default function Dashboard() {
         </DashboardPanel>
         <DashboardPanel
           headingId="dashboard-questions-heading"
-          heading="Your recent questions"
+          heading={TEXT.dashboardQuestionsHeading}
           to="/ask"
           loadingText={TEXT.dashboardLoadingQuestions}
           empty={questions.length === 0}

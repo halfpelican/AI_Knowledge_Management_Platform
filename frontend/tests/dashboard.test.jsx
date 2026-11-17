@@ -12,6 +12,7 @@ import { useLayoutEffect } from 'react'
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 import App from '../src/App.jsx'
+import { AuthContext } from '../src/auth/context.js'
 import { dashboardPathForRole, ROLES, TEXT } from '../src/constants.js'
 import Dashboard from '../src/pages/Dashboard.jsx'
 import { formatDate } from '../src/utils/dates.js'
@@ -129,14 +130,35 @@ function figures(region) {
   )
 }
 
-/** The dashboard page alone, at a path under /dashboard. */
-function renderDashboard(path = '/dashboard') {
+/**
+ * The session the auth provider would hold for `user`, as the page reads it through
+ * useAuth: PR #119's dashboard names the signed-in user. The same shape as
+ * tests/meetingDelete.test.jsx's.
+ */
+function sessionOf(user) {
+  return {
+    user,
+    loading: false,
+    login: async () => user,
+    register: async () => null,
+    logout: async () => {},
+    refresh: async () => user,
+  }
+}
+
+/**
+ * The dashboard page alone, at a path under /dashboard, for a signed-in `user`. Only
+ * the signed-in line reads the session: the panels are whatever the reply holds.
+ */
+function renderDashboard(path = '/dashboard', user = EMPLOYEE) {
   return render(
-    <MemoryRouter initialEntries={[path]}>
-      <Routes>
-        <Route path="/dashboard" element={<Dashboard />} />
-      </Routes>
-    </MemoryRouter>,
+    <AuthContext.Provider value={sessionOf(user)}>
+      <MemoryRouter initialEntries={[path]}>
+        <Routes>
+          <Route path="/dashboard" element={<Dashboard />} />
+        </Routes>
+      </MemoryRouter>
+    </AuthContext.Provider>,
   )
 }
 
@@ -707,5 +729,69 @@ describe('FR-14 / FR-19: the knowledge-gap panel, for a payload that carries it 
     expect(screen.queryByRole('region', { name: TEXT.gapsHeading })).toBeNull()
     expect(screen.queryByRole('link', { name: TEXT.gapsHeading })).toBeNull()
     expect(document.body.textContent).not.toMatch(/knowledge.gap/i)
+  })
+})
+
+describe('PR #119: the dashboard says who is signed in', () => {
+  /** The paragraph whose whole text is `text`, wherever it sits on the page. */
+  function paragraphReading(text) {
+    return screen.getByText((_, element) => element?.tagName === 'P' && element.textContent === text)
+  }
+
+  it.each([{ user: EMPLOYEE }, { user: ADMINISTRATOR }])(
+    "names the session's user and their role, for an $user.role",
+    async ({ user }) => {
+      serveApi({ 'GET /api/dashboard': { body: dashboardPayload() } })
+      renderDashboard('/dashboard', user)
+      await screen.findByText(DOCUMENT.title)
+
+      // Sagarika's line, "Signed in as <name> (<role>)", with the name emphasised.
+      const line = paragraphReading(`${TEXT.dashboardSignedInAs} ${user.name} ${TEXT.dashboardSignedInRole(user.role)}`)
+      expect(within(line).getByText(user.name).tagName).toBe('STRONG')
+      // It is the page's, under its heading, and not one of the panels'.
+      expect(line.closest('section, [role="region"]')).toBeNull()
+    },
+  )
+
+  it('shows a name as the text it is, never as markup', async () => {
+    // A name is whatever the person typed at registration (FR-01): untrusted input.
+    const name = 'Mallory <b>Admin</b><img src="x" onerror="window.__fr14NameInjected = true">'
+    serveApi({ 'GET /api/dashboard': { body: dashboardPayload() } })
+    renderDashboard('/dashboard', { ...EMPLOYEE, name })
+    await screen.findByText(DOCUMENT.title)
+
+    const line = paragraphReading(`${TEXT.dashboardSignedInAs} ${name} ${TEXT.dashboardSignedInRole(EMPLOYEE.role)}`)
+    expect(line.querySelectorAll('b, img')).toHaveLength(0)
+    expect(window.__fr14NameInjected).toBeUndefined()
+  })
+})
+
+describe('D-107: the role the signed-in line shows decides nothing on the page', () => {
+  // The page has the session's role to hand for that line. Whether FR-19's panel
+  // exists is still the reply's to say: an Employee whose reply carried
+  // `knowledge_gaps` would be shown it, and an Administrator whose reply did not is
+  // shown nothing (invariant 4: the server decides, the screen renders).
+  it('gives an Administrator no knowledge-gap panel, heading or words when the reply carries none', async () => {
+    serveApi({ 'GET /api/dashboard': { body: dashboardPayload() } })
+    renderDashboard('/dashboard', ADMINISTRATOR)
+    await screen.findByText(DOCUMENT.title)
+
+    expect(screen.queryByRole('region', { name: TEXT.gapsHeading })).toBeNull()
+    expect(screen.getAllByRole('region')).toHaveLength(PANELS.length)
+    expect(document.body.textContent).not.toMatch(/knowledge.gap/i)
+  })
+
+  it('gives an Employee the knowledge-gap panel when the reply carries it', async () => {
+    serveApi({
+      'GET /api/dashboard': {
+        body: dashboardPayload({ knowledge_gaps: { open_count: 0, top: [] } }),
+      },
+    })
+    renderDashboard('/dashboard', EMPLOYEE)
+    await screen.findByText(DOCUMENT.title)
+
+    const gaps = panel(TEXT.gapsHeading)
+    expect(figures(gaps)).toEqual({ [TEXT.dashboardGapsOpen]: '0' })
+    expect(within(gaps).getByText(TEXT.dashboardNoGaps)).toBeTruthy()
   })
 })

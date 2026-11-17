@@ -1509,6 +1509,12 @@ export const TEXT = {
   dashboardHeld: 'Held',
   dashboardAsked: 'Asked',
 
+  /* ---- FR-14 dashboard: PR #119's signed-in line ------------------------- */
+  // Sagarika Dey's line under the heading: the session's own name and role, as
+  // GET /api/auth/me gave them. The name is the user's own words, shown as text.
+  dashboardSignedInAs: 'Signed in as',
+  dashboardSignedInRole: (role) => `(${role})`,
+
   /* ---- FR-20 knowledge map, with NFR-17's table view (NIT3004, D-132) ---- */
   // FR-20: "A node-link diagram showing documents, meetings, tags, and contributors,
   // with node type distinguished by colour and shape", and "A tabular equivalent
