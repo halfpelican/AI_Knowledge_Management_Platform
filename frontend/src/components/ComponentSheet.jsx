@@ -630,9 +630,11 @@ export default function ComponentSheet() {
       <section aria-labelledby="sheet-layers">
         <h2 id="sheet-layers">Layers and motion</h2>
         <p>
-          Stacking order and the one animation in the interface. The skip link sits above the page, the modal
-          scrim above both. <code>--duration-spinner</code> is a single turn of the button&apos;s loading
-          indicator; the reduced-motion rule in <code>base.css</code> stops it.
+          Stacking order and motion. The skip link sits above the page, the modal scrim above both.{' '}
+          <code>--duration-spinner</code> is a single turn of the button&apos;s loading indicator; the
+          reduced-motion rule in <code>base.css</code> stops it. The home page&apos;s illustration moves too: its
+          cursor blinks four times and each icon floats once, so all of it has stopped within five seconds of the
+          page opening (WCAG 2.2.2), and none of it plays for a visitor who asks for reduced motion.
         </p>
         <ul className="token-list">
           {LAYER_TOKENS.map((name) => (

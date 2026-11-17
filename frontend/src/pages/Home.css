@@ -269,7 +269,10 @@
   height: 20px;
   background: var(--color-primary);
   border-radius: 2px;
-  animation: blink 1s infinite;
+  /* WCAG 2.2.2 (Pause, Stop, Hide): motion that starts on its own beside the
+     page's content stops within five seconds. The cursor blinks four times, 4 s,
+     and then holds still. */
+  animation: blink 1s 4;
 }
 
 @keyframes blink {
@@ -329,7 +332,9 @@
   align-items: center;
   justify-content: center;
   box-shadow: var(--shadow-sm);
-  animation: float 3s ease-in-out infinite;
+  /* Each icon floats once (WCAG 2.2.2, as the cursor above): the last, delayed
+     1.2 s below, comes to rest 4.2 s after the page opens. */
+  animation: float 3s ease-in-out 1;
 }
 
 .home-visual__icon--globe { animation-delay: 0s; }
@@ -339,6 +344,16 @@
 @keyframes float {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-8px); }
+}
+
+/* A visitor who asks for less motion gets none of the illustration's. base.css's
+   reduced-motion rule shortens every animation but does not cap its count, so the
+   illustration does not rely on it. */
+@media (prefers-reduced-motion: reduce) {
+  .home-visual__cursor,
+  .home-visual__icon {
+    animation: none;
+  }
 }
 
 /* ---- Responsive ---- */
