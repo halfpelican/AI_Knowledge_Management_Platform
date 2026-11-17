@@ -148,6 +148,34 @@ describe('tab order, screen by screen', () => {
     ])
   })
 
+  // PR #119's home page, to a visitor with no session (FR-01, FR-02). "Sign in" names
+  // the navigation's link and the page's own, so both go in as elements.
+  it('home, for a visitor not signed in: skip link, navigation, then the two calls to action, and nothing in the illustration', async () => {
+    serveApi({ 'GET /api/auth/me': NOT_SIGNED_IN })
+    renderApp('/')
+    await screen.findByRole('heading', { level: 1, name: TEXT.homeHeading })
+    const nav = screen.getByRole('navigation', { name: 'Primary' })
+    const main = screen.getByRole('main')
+    const signIn = within(main).getByRole('link', { name: TEXT.homeSignIn })
+    const register = within(main).getByRole('link', { name: TEXT.homeRegister })
+
+    const stops = walk()
+    expectOrder(stops, [
+      'Skip to content',
+      within(nav).getByRole('link', { name: 'Home' }),
+      within(nav).getByRole('link', { name: 'Sign in' }),
+      within(nav).getByRole('link', { name: 'Register' }),
+      signIn,
+      register,
+    ])
+    // The page's own stops are those two and nothing else: the features are words,
+    // and the illustration is decoration with nothing focusable in it.
+    expect(stops.filter((stop) => main.contains(stop))).toEqual([signIn, register])
+    // The navigation comes first: no stop in the page is reached before its last link.
+    const lastInNav = Math.max(...stops.filter((stop) => nav.contains(stop)).map((stop) => stops.indexOf(stop)))
+    expect(stops.indexOf(signIn)).toBeGreaterThan(lastInNav)
+  })
+
   it('dashboard: the search field FR-12 puts on every page comes before the navigation, then the filters, then the panels', async () => {
     signedIn({ 'GET /api/dashboard': { body: DASHBOARD } })
     renderApp('/dashboard')
