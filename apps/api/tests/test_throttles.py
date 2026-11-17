@@ -24,7 +24,9 @@ The per-user scopes, each a DRF ``ScopedRateThrottle`` rate from ``apps/core/con
 Each test sends real requests at the real rates and counts to the limit, so a rate changed in
 ``constants.py`` moves the tests with it and a rate dropped from the wiring fails them. The
 counters live in the cache, which ``conftest.py``'s autouse ``reset_request_throttles`` clears
-before and after every test, so no test inherits another's counts.
+before and after every test, so no test inherits another's counts. A count holds however many
+other entries the cache takes meanwhile (the review of 17 November 2026, COR-2; the cache itself is
+tested in ``apps/core/tests/test_cache.py``).
 
 A throttled request is checked before its body is read, so the cheapest way to spend a budget is
 a request the view would refuse anyway. The ingestion tests spend theirs that way: a rejected
@@ -622,6 +624,37 @@ def test_one_users_password_change_budget_is_not_anothers(employee_client, admin
     assert_rate_throttled(change_password(clients[spender], PASSWORD))
 
     assert change_password(clients[other], PASSWORD).status_code == 200
+
+
+# More than the 300 entries Django's default LocMemCache holds before it culls a third of them.
+OTHER_CACHE_ENTRIES = 320
+
+
+def fill_the_cache_from_other_addresses(count=OTHER_CACHE_ENTRIES):
+    """``count`` password reset requests for an address no account uses, each from a client address
+    of its own, so each adds one live entry to the cache, its address's ``auth`` count."""
+    client = APIClient()
+    for index in range(count):
+        response = client.post(
+            "/api/auth/password-reset", {"email": "nobody@example.com"}, format="json",
+            REMOTE_ADDR=f"198.18.{index // 256}.{index % 256}",
+        )
+        assert response.status_code == 200, index
+
+
+def test_the_password_change_budget_holds_however_many_other_entries_the_cache_holds(session_client):
+    """The review of 17 November 2026, COR-2. The rate is the only bound on guessing the password
+    from a session left open, and its count lived in a cache that drops its least recently used third
+    once it holds 300 entries: 320 requests from other addresses gave the guesser ten more guesses
+    inside the same hour."""
+    client = session_client.client
+    for number in range(1, PASSWORD_CHANGE_LIMIT + 1):
+        assert change_password(client, f"Wrong-Guess-{number}!").status_code == 400, number
+    assert_rate_throttled(change_password(client, "Wrong-Guess-Again!"))
+
+    fill_the_cache_from_other_addresses()
+
+    assert_rate_throttled(change_password(client, "Wrong-Guess-Once-More!"))
 
 
 # --- picture (D-137) ------------------------------------------------------------------------------

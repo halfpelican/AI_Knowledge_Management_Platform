@@ -11,7 +11,8 @@ from D-137, from the values the build was given, or from a rule the project alre
   ``{PUBLIC_BASE_URL}/reset-password?uid=...&token=...``, and saying that the link works once, within
   60 minutes, and that the password is unchanged for someone who did not ask. The link's host is
   PUBLIC_BASE_URL's, whatever the request's Host header says. An account gets at most one email in
-  300 seconds, silently. A locked account may still ask. A retired one (an unusable password, D-89)
+  300 seconds, silently, however many other entries the cache holds meanwhile (the review of 17
+  November 2026, COR-2). A locked account may still ask. A retired one (an unusable password, D-89)
   is sent nothing.
 - **The request does the same work either way.** On a server the email is sent from a daemon thread:
   the request path looks nothing up and answers without waiting for it. A failure to send is logged
@@ -393,6 +394,32 @@ def test_the_cooldown_is_each_accounts_own(employee, administrator, mailoutbox):
     assert ask(administrator.email).status_code == 200
 
     assert sorted(message.to[0] for message in mailoutbox) == sorted([employee.email, administrator.email])
+
+
+# More than the 300 entries Django's default LocMemCache holds before it culls a third of them.
+OTHER_CACHE_ENTRIES = 320
+
+
+def fill_the_cache_from_other_addresses(count=OTHER_CACHE_ENTRIES):
+    """``count`` requests for an address no account uses, each from a client address of its own, so
+    each adds one live entry to the cache, its address's ``auth`` count, and sends nothing."""
+    client = APIClient()
+    for index in range(count):
+        response = ask(UNKNOWN_ADDRESS, client, REMOTE_ADDR=f"198.18.{index // 256}.{index % 256}")
+        assert response.status_code == 200, index
+
+
+def test_the_cooldown_holds_however_many_other_entries_the_cache_holds(account, mailoutbox):
+    """The review of 17 November 2026, COR-2. The cooldown is written once and never read, so in a
+    cache that drops its least recently used third once it holds 300 entries it was among the first
+    to go: 320 requests from other addresses, well inside the 300 seconds, let a second email out."""
+    assert ask(account.email).status_code == 200
+    assert len(mailoutbox) == 1
+
+    fill_the_cache_from_other_addresses()
+
+    assert ask(account.email).status_code == 200
+    assert [message.to for message in mailoutbox] == [[account.email]]
 
 
 def test_a_locked_account_may_still_ask_for_a_link(account, mailoutbox):

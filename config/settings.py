@@ -20,6 +20,7 @@ from apps.core.constants import (
     ACTION_ITEM_THROTTLE_RATE,
     ASK_THROTTLE_RATE,
     AUTHENTICATION_THROTTLE_RATE,
+    CACHE_MAX_ENTRIES,
     CONVERSATION_CREATE_THROTTLE_RATE,
     EMAIL_TIMEOUT_SECONDS,
     EMBEDDING_DIMENSION_BY_PROVIDER,
@@ -306,9 +307,9 @@ REST_FRAMEWORK = {
     #   included (D-137).
     # - "picture": per signed-in user, a profile picture uploaded, refused ones included (D-137).
     #
-    # The counters live in the default cache. No CACHES is set, so that is Django's
-    # per-process LocMemCache: the one Waitress process (D-64) shares them, a restart clears
-    # them, and a multi-process server would need a shared cache.
+    # The counters live in the default cache, CACHES below: a per-process LocMemCache, so the one
+    # Waitress process (D-64) shares them, a restart clears them, and a multi-process server would
+    # need a shared cache.
     "DEFAULT_THROTTLE_RATES": {
         "auth": AUTHENTICATION_THROTTLE_RATE,
         "ask": ASK_THROTTLE_RATE,
@@ -326,6 +327,20 @@ REST_FRAMEWORK = {
     # could be dodged by changing that header on every request (D-79). Nothing sits in front
     # of the server today; if Stage 5 item 9 puts a reverse proxy there, it makes this 1.
     "NUM_PROXIES": 0,
+}
+
+# --- The default cache (the review of 17 November 2026, COR-2) -------------------------------
+# It holds the throttle counts above, the in-flight slots (D-79, D-85, D-123) and D-137's password
+# reset cooldown. Until 17 November no CACHES was set, so it was Django's LocMemCache with 300
+# entries, which then dropped its least recently used third, expired or not: a slot or a cooldown,
+# written once and never read, went first, and any 300 newer entries could push out a count. Still a
+# per-process LocMemCache (apps/core/cache.py), with CACHE_MAX_ENTRIES places, dropping expired
+# entries before live ones. Not read from the environment: it holds no credential or host.
+CACHES = {
+    "default": {
+        "BACKEND": "apps.core.cache.ExpiredFirstLocMemCache",
+        "OPTIONS": {"MAX_ENTRIES": CACHE_MAX_ENTRIES},
+    }
 }
 
 # --- Audit log (FR-05) -------------------------------------------------------------

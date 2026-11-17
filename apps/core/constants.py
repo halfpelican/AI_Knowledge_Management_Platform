@@ -573,6 +573,17 @@ PASSWORD_CHANGE_THROTTLE_RATE = "10/hour"
 # A person choosing a picture sends one request.
 PICTURE_THROTTLE_RATE = "10/hour"
 
+# How many entries the default cache holds (config/settings.py CACHES; apps/core/cache.py). Every
+# count above lives there, with the in-flight slots (D-79, D-85, D-123) and D-137's reset cooldown,
+# and each bounds something only while its entry is there. Django's own default, 300 entries and
+# then its least recently used third dropped, live or not, let about fifty self-registered accounts
+# push out another user's password_change count, and an account's reset cooldown, from one client
+# address (the review of 17 November 2026, COR-2). The cache now drops expired entries first, so a
+# live entry goes only once more than two thirds of these places hold live ones. Ordinary use keeps
+# at most about a dozen live entries per active user. 100,000 entries measured at 35 to 87 MB, by
+# the length of each throttle's history. Set by the build, not by D-137.
+CACHE_MAX_ENTRIES = 100_000
+
 # How much longer than generation's worst case a user's in-flight ask slot is held before it
 # expires on its own, in seconds. The slot's timeout is GENERATION_TIMEOUT_SECONDS times
 # MAXIMUM_GENERATION_ATTEMPTS plus this (apps/api/ask_slot.py builds it; the product cannot be

@@ -85,6 +85,9 @@ ACCOUNT_SELF_SERVICE_NAMES = [
     "PASSWORD_RESET_COOLDOWN_SECONDS",
     "MAXIMUM_PASSWORD_RESET_EMAILS_IN_FLIGHT",
     "EMAIL_TIMEOUT_SECONDS",
+    # The default cache's places, which hold the throttle counts, the slots and the cooldown (the
+    # review of 17 November 2026, COR-2).
+    "CACHE_MAX_ENTRIES",
 ]
 
 
@@ -434,6 +437,13 @@ def test_the_password_reset_values_are_d137s():
     for name in ("PASSWORD_RESET_LINK_MINUTES", "PASSWORD_RESET_COOLDOWN_SECONDS",
                  "MAXIMUM_PASSWORD_RESET_EMAILS_IN_FLIGHT", "EMAIL_TIMEOUT_SECONDS"):
         assert type(getattr(constants, name)) is int, name
+
+
+def test_the_cache_places_are_the_builds():
+    """The review of 17 November 2026, COR-2: the default cache's places. Set by the build, not by
+    D-137, and pinned so that changing it is a decision. A whole number, since it is a count."""
+    assert constants.CACHE_MAX_ENTRIES == 100_000
+    assert type(constants.CACHE_MAX_ENTRIES) is int
 
 
 def test_effective_roles_are_closed_under_generalisation():
