@@ -22,7 +22,11 @@ What these tests hold the build to:
   comment, and a PNG carrying text, ICC, a transparency key and a private chunk, each come back as a
   PNG with no chunk but IHDR, IDAT and IEND, at most 512 x 512, turned upright.
 - **Files.** The old file is deleted after the commit, on replace and on delete, never before; a
-  file the storage cannot delete does not fail the request; a failed save deletes the new file.
+  file the storage cannot delete does not fail the request and is logged in the error file; a
+  failed save deletes the new file.
+- **Multipart only.** A JSON, form or text body is DRF's own 415, and nothing is stored.
+- **The refusals are the contract's words,** which it quotes for the 400, both 413s, the 415 and the
+  404.
 - **The one 404.** An unknown id, a user with no picture and a stored file gone from disk are the
   same 404 with the same body. Anonymous is 401.
 - **Where ``picture`` appears:** the user object (``/auth/me``, login, register, ``GET /api/users``),
@@ -417,6 +421,56 @@ def test_no_picture_part_is_a_400(session_client, media_root):
     assert_nothing_stored(session_client.user, media_root)
 
 
+@pytest.mark.parametrize(
+    "content_type, body",
+    [
+        ("application/json", b'{"picture": "iVBORw0KGgo="}'),
+        ("application/x-www-form-urlencoded", b"picture=iVBORw0KGgo%3D"),
+        ("text/plain", b"a picture, not a multipart body"),
+    ],
+    ids=["json", "form", "text"],
+)
+def test_a_body_that_is_not_multipart_is_drfs_415_and_nothing_is_stored(
+    session_client, media_root, content_type, body
+):
+    """The contract: "``415`` with DRF's own body for a request that is not multipart". A route that
+    also parsed JSON would read a ``picture`` string from it and answer the 400 for a missing file
+    part instead."""
+    response = session_client.client.generic("POST", OWN_PICTURE_URL, body, content_type=content_type)
+
+    assert response.status_code == 415, response.content
+    assert response.json() == {"detail": f'Unsupported media type "{content_type}" in request.'}
+    assert_nothing_stored(session_client.user, media_root)
+
+
+# docs/api-contract.md, "Profile pictures", quotes each of these word for word. The tests above
+# compare with the constants the code defines, which a rewording would change with them.
+CONTRACT_NO_PICTURE = {"picture": ["No picture was submitted."]}
+CONTRACT_UNSUPPORTED = {"detail": "Choose a PNG, JPEG or WebP picture. This file is not one, or it is damaged."}
+CONTRACT_TOO_LARGE = {"detail": "Picture exceeds the maximum permitted size of 5 MB."}
+CONTRACT_TOO_MANY_PIXELS = {
+    "detail": "This picture's dimensions are too large. Choose a picture of at most 25 megapixels."
+}
+CONTRACT_NOT_FOUND = {"detail": "No User matches the given query."}
+
+
+def test_the_refusals_are_the_contracts_words(session_client, media_root):
+    client = session_client.client
+
+    no_part = client.post(OWN_PICTURE_URL, {}, format="multipart")
+    not_a_picture = upload(client, b"This is not a picture.\n" * 20)
+    too_large = upload(client, png_of_exactly(MAX_PICTURE_BYTES + 1))
+    too_many_pixels = upload(client, png_declaring(6000, 5000))
+    not_found = client.get(f"/api/users/{uuid.uuid4()}/picture")
+
+    assert (no_part.status_code, no_part.json()) == (400, CONTRACT_NO_PICTURE)
+    assert (not_a_picture.status_code, not_a_picture.json()) == (415, CONTRACT_UNSUPPORTED)
+    assert (too_large.status_code, too_large.json()) == (413, CONTRACT_TOO_LARGE)
+    assert (too_many_pixels.status_code, too_many_pixels.json()) == (413, CONTRACT_TOO_MANY_PIXELS)
+    assert (not_found.status_code, not_found.json()) == (404, CONTRACT_NOT_FOUND)
+    assert_nothing_stored(session_client.user, media_root)
+
+
 # --- Size: bytes, then pixels -------------------------------------------------------------------
 
 BOUNDARY = "picture-bound-test"
@@ -730,6 +784,41 @@ def test_a_file_the_storage_cannot_delete_does_not_fail_the_request(
 
     assert response.status_code == 200
     assert len(callbacks) == 1
+
+
+@pytest.mark.parametrize("change", ["replace", "remove"])
+def test_a_file_the_storage_cannot_delete_is_logged_and_the_change_stands(
+    session_client, media_root, monkeypatch, error_log_file, django_capture_on_commit_callbacks, change
+):
+    """The contract: "A file the storage cannot delete is logged, and the request still succeeds."
+    The error file (D-75) carries the storage's error, which names the file left behind. The test
+    above checks only that the request succeeds, which swallowing the error would pass.
+
+    The callbacks run as ``captureOnCommitCallbacks(execute=True)`` runs them. It logs a robust
+    callback's failure in the words Django's own commit uses, through ``django.test`` rather than
+    ``django.db.backends.base``, and both reach the error file's root handler."""
+    client, user = session_client.client, session_client.user
+    assert upload(client, encoded(a_photo(), "PNG")).status_code == 200
+    user.refresh_from_db()
+    old_name = user.picture.name
+
+    def refuse(self, name):
+        raise PermissionError(f"{name} is held open by another process")
+
+    monkeypatch.setattr(FileSystemStorage, "delete", refuse)
+    with django_capture_on_commit_callbacks(execute=True) as callbacks:
+        if change == "replace":
+            response = upload(client, encoded(a_photo(colour=(9, 9, 9)), "PNG"))
+        else:
+            response = client.delete(OWN_PICTURE_URL)
+
+    assert response.status_code == 200
+    assert len(callbacks) == 1
+    user.refresh_from_db()
+    assert user.picture.name != old_name  # the change stands
+    assert (media_root / old_name).is_file()  # left behind, and served by nothing
+    logged = error_log_file.read_text(encoding="utf-8") if error_log_file.exists() else ""
+    assert f"{old_name} is held open by another process" in logged
 
 
 def test_a_failed_save_deletes_the_new_file_and_keeps_the_old(session_client, media_root, monkeypatch):
