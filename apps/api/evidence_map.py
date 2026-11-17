@@ -14,16 +14,19 @@ count or a flag to turn on (invariant 1).
 
 **Which rows a role sees.** A citation row is read only when all three hold:
 
-1. **Its chunk still exists and is in the role's scope** (``scoped_chunks``). A row whose chunk
-   was deleted is removed for every reader (``AnswerCitation``'s own rule, D-67).
-2. **Every passage its answer was generated from is in the role's scope too.** A statement cites
-   one passage, but the model wrote it with every supplied passage in front of it, and citation
-   verification checks the identifier and never the content (invariant 5). So a statement from an
-   Administrator's answer can carry what an Administrator-only passage said while citing a passage
-   every role reads. ``QueryLog.retrieved_chunk_ids`` holds the identifiers supplied to the model
-   (``apps/retrieval/query_log.py``), and the row is read only when each of them names a chunk in
-   scope. A supplied chunk that no longer exists is not in scope, so the row is left out: this
-   fails closed.
+1. **Its cited chunk is one of the passages its answer was generated from.**
+   ``QueryLog.retrieved_chunk_ids`` holds the identifiers supplied to the model
+   (``apps/retrieval/query_log.py``), and every row the answer path writes cites one of them. A
+   row whose list is empty or does not hold its own citation was written by something else, and
+   rule 2 could say nothing about it, so it is not read: this fails closed (the security review
+   of the built code, S5). A row whose chunk was deleted cites nothing and is left out with it
+   (``AnswerCitation``'s own rule, D-67).
+2. **Every one of those passages is a chunk in the role's scope** (``scoped_chunks``), and so the
+   cited one is. A statement cites one passage, but the model wrote it with every supplied
+   passage in front of it, and citation verification checks the identifier and never the content
+   (invariant 5). So a statement from an Administrator's answer can carry what an
+   Administrator-only passage said while citing a passage every role reads. A supplied chunk
+   that no longer exists is not in scope, so the row is left out: this fails closed too.
 3. **The cited chunk's own source is in scope** (``scoped_documents`` or ``scoped_meetings``),
    which is where the passage's title is read from. A chunk and a source that disagree show
    nothing.
@@ -32,15 +35,29 @@ count or a flag to turn on (invariant 1).
 identifier, and any passage text. A claim is the statement's text and what is counted from the
 rows above; a passage is its source's title and its place in the source.
 
+**When an answer was given is returned as a calendar day and no finer** (the security review,
+S2). Every statement of one answer shares its moment, so the moment would let a reader put
+another person's answer back together and guess who was asking. The day is the project's own
+(``TIME_ZONE``). Claims are ordered by day, newest first, and within a day by identifier, so the
+order does not give the moment back.
+
+**A claim's identifier is a keyed hash of its text** (the security review, S4): HMAC-SHA-256 under
+the server's ``SECRET_KEY``. It sits in addresses, and an unkeyed hash would let anyone who came
+by one confirm a guessed statement offline.
+
 **Counts are of the role's own rows.** How often a claim was admitted, how many passages support
-it and when it was first and last admitted are computed from the rows above and nothing else, so
-a claim also admitted in answers the role may not see counts only the ones it may.
+it and the days it was first and last admitted are computed from the rows above and nothing
+else, so a claim also admitted in answers the role may not see counts only the ones it may.
 """
 
 import hashlib
-from datetime import datetime
+import hmac
+from datetime import date
 
+from django.conf import settings
 from django.contrib.postgres.expressions import ArraySubquery
+from django.db.models import F, Func, IntegerField
+from django.utils import timezone
 
 from apps.core.constants import (
     EVIDENCE_MAP_CITES,
@@ -53,7 +70,7 @@ from apps.core.constants import (
 from apps.retrieval.models import AnswerCitation
 from apps.retrieval.scoping import scoped_chunks, scoped_documents, scoped_meetings
 
-from .knowledge_map import Edge, Node, _EPOCH, _MICROSECOND, node_id, walk
+from .knowledge_map import Edge, Node, node_id, walk
 
 _DOCUMENT_SOURCE, _MEETING_SOURCE = SOURCE_TYPES
 
@@ -68,20 +85,23 @@ def claim_text(statement_text: str) -> str:
 
 
 def claim_id(text: str) -> str:
-    """A claim's identifier: the SHA-256 of its text, in hexadecimal.
+    """A claim's identifier: the HMAC-SHA-256 of its text under ``SECRET_KEY``, in hexadecimal.
 
-    A claim has no row of its own, so this is what a selection names. It is computed from text
-    the caller is already shown and says nothing more than that text does. A selection that
-    names a claim outside the caller's rows is not in the assembled graph, and gets the one empty
-    answer every absent focus gets.
+    A claim has no row of its own, so this is what a selection names. A selection that names a
+    claim outside the caller's rows is not in the assembled graph, and gets the one empty answer
+    every absent focus gets. Keyed, so that an identifier seen in an address confirms nothing to
+    somebody guessing at the statement behind it. A changed key changes every identifier, and an
+    address saved before the change then selects nothing.
     """
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+    key = settings.SECRET_KEY.encode("utf-8")
+    return hmac.new(key, text.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
-def claim_node(text: str, last_admitted_at: datetime) -> Node:
-    """A claim node. Claims are ordered newest first by when each was last admitted."""
+def claim_node(text: str, last_admitted_on: date) -> Node:
+    """A claim node. Claims are ordered by the day each was last admitted, newest first, and
+    within a day by identifier."""
     identifier = claim_id(text)
-    newest_first = -((last_admitted_at - _EPOCH) // _MICROSECOND)
+    newest_first = -last_admitted_on.toordinal()
     return Node(EVIDENCE_MAP_CLAIM, identifier, text, None, (newest_first, identifier))
 
 
@@ -125,8 +145,15 @@ def assemble(*, role_name: str) -> tuple[list[Node], list[Edge], dict, dict]:
     documents' titles and the scoped meetings' titles. None takes the focus as a parameter.
     """
     chunks = scoped_chunks(role_name=role_name)
-    rows = AnswerCitation.objects.filter(
-        chunk__in=chunks,
+    rows = AnswerCitation.objects.annotate(
+        # Where the cited chunk sits among the passages supplied to the model: NULL when it is
+        # not one of them, and when the chunk is gone.
+        supplied_place=Func(
+            F("query__retrieved_chunk_ids"), F("chunk_id"),
+            function="array_position", output_field=IntegerField(),
+        ),
+    ).filter(
+        supplied_place__isnull=False,  # rule 1
         query__answered=True,
         # Rule 2: every identifier supplied to the model names a chunk in scope.
         query__retrieved_chunk_ids__contained_by=ArraySubquery(chunks.values("id")),
@@ -161,22 +188,23 @@ def assemble(*, role_name: str) -> tuple[list[Node], list[Edge], dict, dict]:
                 # NFR-15: a passage of a meeting's AI-written summary says that it is one.
                 "ai_generated": ai_generated,
             }
-        claim = claims.setdefault(text, {"queries": set(), "passages": set(), "moments": []})
+        claim = claims.setdefault(text, {"queries": set(), "passages": set(), "days": []})
         claim["queries"].add(query_id)
         claim["passages"].add(passage.id)
-        claim["moments"].append(answered_at)
+        # The day and no finer: the moment would tie an answer's statements back together.
+        claim["days"].append(timezone.localtime(answered_at).date())
         pair = (node_id(EVIDENCE_MAP_CLAIM, claim_id(text)), passage.id)
         weight[pair] = weight.get(pair, 0) + 1
 
     nodes: list[Node] = []
     for text, claim in claims.items():
-        node = claim_node(text, max(claim["moments"]))
+        node = claim_node(text, max(claim["days"]))
         nodes.append(node)
         detail[node.id] = {
             "answer_count": len(claim["queries"]),
             "passage_count": len(claim["passages"]),
-            "first_admitted_at": min(claim["moments"]),
-            "last_admitted_at": max(claim["moments"]),
+            "first_admitted_at": min(claim["days"]),
+            "last_admitted_at": max(claim["days"]),
         }
     nodes.extend(passages.values())
     edges = [Edge(source, target, EVIDENCE_MAP_CITES) for source, target in weight]

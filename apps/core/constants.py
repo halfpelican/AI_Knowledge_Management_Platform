@@ -538,6 +538,12 @@ CONVERSATION_CREATE_THROTTLE_RATE = ASK_THROTTLE_RATE
 # spends no NPU time; the rate bounds how fast one user can fill SearchLog, which FR-19's cycle
 # reads (the security review's L1 and L2). The page sends one request per submitted term.
 SEARCH_THROTTLE_RATE = "30/min"
+# GET /api/knowledge-map and GET /api/knowledge-map/evidence, scope "knowledge_map" (the user's
+# decision of 17 November 2026, D-138, answering the security review's S3). The second view
+# reads every answer the caller may see on each request, so its cost grows with use, and the
+# rate bounds how often one user can ask for either view. One budget for the two views. The
+# figure is search's; a person clicking through the map does not reach it.
+KNOWLEDGE_MAP_THROTTLE_RATE = "30/min"
 # POST /api/documents/{id}/tags, scope "tagging" (the user's decision of 10 November 2026, night;
 # D-79's note on tagging, answering D-105's security review, finding 4). Each new Topic name a
 # person types there becomes a permanent Tag, which joins the scheme that later classification

@@ -1040,6 +1040,7 @@ not grant it, and it does not grant `manage_documents`.
 | `ingestion` | `POST /api/documents`, `POST /api/meetings`, `POST /api/documents/{id}/reprocess`, since FR-10 `POST /api/documents/{id}/classify` (D-105), and since FR-16 `POST /api/meetings/{id}/summary` (D-125), one shared budget | 60/hour |
 | `conversation_create` | `POST /api/conversations` | 10/min, its own budget |
 | `search` | `GET /api/search`, since D-79's note of 10 November 2026 | 30/min |
+| `knowledge_map` | `GET /api/knowledge-map` and `GET /api/knowledge-map/evidence`, one budget for the map's two views, since 17 November 2026 (D-138) | 30/min |
 | `tagging` | `POST /api/documents/{id}/tags`, since D-79's note on tagging of the same night; checked before the document is looked up, so past the rate the `429` comes before the `404` and the `403`. Since D-128 also `POST /api/tags`, the Administrator's add, checked after its `401` and `403`; one budget per user across both routes. Since D-129 also `POST /api/departments`, on the same budget | 30/min |
 | `transcription` | `POST /api/transcriptions`, one recording segment per request, and `GET /api/transcriptions/status`, which asks FLM each time (D-123; see "Recording transcription" at the end of this file) | 60/min |
 | `action_items` | FR-16's `POST /api/meetings/{id}/action-items` and `PATCH` and `DELETE /api/meetings/{id}/action-items/{item_id}`, one budget (the security review of 12 November 2026, D-125's third note); checked before the meeting is looked up, so past the rate the `429` comes before the `404` and the `403` | 30/min |
@@ -1782,8 +1783,9 @@ Documents.uploaded_by for authorship, MeetingAttendees for participation) rather
 a separate relationship store." Decision: D-132. The route needs a session **and**
 `view_knowledge_map`, which accounts 0011 gives **both** roles: `401` without a session, `403` for a
 role that lacks the code (invariant 4), checked before anything else on the request. Nothing on
-the route is a single scoped object, so the `403` has no `404` to precede. It is not throttled,
-as the dashboard, the repository and the meetings list are not.
+the route is a single scoped object, so the `403` has no `404` to precede. Since 17 November 2026
+it is rate limited in the `knowledge_map` scope, one budget for each user across the map's two
+views (D-138): `429` past it, as every rate limit answers. Until then it was not throttled.
 
 | Method | Path | Auth | Success | Errors |
 |---|---|---|---|---|
@@ -1915,7 +1917,7 @@ takes effect on the next one.
 The same screen's second view, after the proposal's Evidence mock-up (Figure 8.7). A **claim** is
 a verified statement of an answered question; the same statement admitted in several answers is
 one claim. A **passage** is the chunk a statement cites. Behind the first view's permission, and
-not throttled, as the first view is not.
+in its rate limit: the `knowledge_map` scope, one budget for the two views, `429` past it.
 
 | Method | Path | Auth | Success | Errors |
 |---|---|---|---|---|
@@ -1923,8 +1925,9 @@ not throttled, as the first view is not.
 | GET | `/api/knowledge-map/evidence?focus_type=<type>&focus_id=<id>` | session + `view_knowledge_map` | `200` the map object: the walk from that node. A focus that is not in the caller's own map gets the empty map object, whatever the reason | `401`; `403`; `400 {"<parameter>": [...]}` |
 
 `focus_type` is `claim` or `passage`, matched exactly. A passage's `focus_id` is its chunk's UUID,
-in any spelling a UUID has. A claim has no row of its own: its `focus_id` is the SHA-256 of its
-text, 64 hexadecimal digits in either case. **Both or neither**, and an empty value is an absent
+in any spelling a UUID has. A claim has no row of its own: its `focus_id` is a keyed hash of its
+text (HMAC-SHA-256 under the server's secret), 64 hexadecimal digits in either case. The page
+never computes one; it sends back a node's `item_id`. **Both or neither**, and an empty value is an absent
 one, as in the first view. Both are validated for shape only, so an identifier that names nothing
 and one that names something the caller cannot read get the same answer.
 
@@ -1933,7 +1936,7 @@ and one that names something the caller cannot read get the same answer.
   "focus": {"type": "claim", "id": "5f2c..."},
   "nodes": [
     {"id": "claim:5f2c...", "type": "claim", "item_id": "5f2c...", "label": "Annual leave is twenty days.", "dimension": null, "connection_count": 1,
-     "detail": {"answer_count": 3, "passage_count": 1, "first_admitted_at": "2026-10-01T09:10:00Z", "last_admitted_at": "2026-10-01T09:30:00Z"}},
+     "detail": {"answer_count": 3, "passage_count": 1, "first_admitted_at": "2026-10-01", "last_admitted_at": "2026-10-14"}},
     {"id": "passage:0b7c...", "type": "passage", "item_id": "0b7c...", "label": "Staff Handbook · passage 2", "dimension": null, "connection_count": 1,
      "detail": {"source_type": "document", "source_id": "91d0...", "source_title": "Staff Handbook", "position": 2, "ai_generated": false}}
   ],
@@ -1954,8 +1957,9 @@ what they mean in the first view, and the empty map object is the same one. What
   - `answer_count`: how many answers admitted this claim;
   - `passage_count`: how many passages it cites. It is of every row the caller may see, so on a
     capped view it can be more than the passages returned;
-  - `first_admitted_at` and `last_admitted_at`: when the first and the last of those answers
-    were given.
+  - `first_admitted_at` and `last_admitted_at`: the calendar day the first and the last of
+    those answers were given, as `YYYY-MM-DD` in the project's time zone. Never a time: every
+    statement of one answer shares its moment, and the moment would tie them back together.
 - **A passage node.** `label` is its source's title and its place in the source, counted from 1.
   `detail`: `source_type` (`document` or `meeting`), `source_id`, `source_title`, `position`, and
   `ai_generated`, true for a passage of a meeting's AI-written summary (NFR-15).
@@ -1966,21 +1970,24 @@ what they mean in the first view, and the empty map object is the same one. What
 **Which rows a caller sees.** A citation row is read only when all three hold, and a claim, a
 passage, an edge, a count and a date are made from those rows and nothing else:
 
-1. its cited chunk exists and is in the caller's scope;
-2. every passage its answer was generated from is in the caller's scope. A statement cites one
-   passage, but the model wrote it with every supplied passage in front of it, so a statement
-   from an answer that drew on a restricted passage is not shown to a role that cannot read that
-   passage, whatever it cites. A supplied passage that no longer exists is not in scope;
+1. its cited chunk is one of the passages its answer was generated from. A row whose list of
+   supplied passages is empty, or does not hold its own citation, is not read;
+2. every one of those passages is a chunk in the caller's scope, and so the cited one is. A
+   statement cites one passage, but the model wrote it with every supplied passage in front of
+   it, so a statement from an answer that drew on a restricted passage is not shown to a role
+   that cannot read that passage, whatever it cites. A supplied passage that no longer exists
+   is not in scope;
 3. the cited chunk's own source is in the caller's scope.
 
 **The walk** is the first view's, with a claim in a source's place and a passage in a tag's.
-Without a focus: each claim, newest first by when it was last admitted, with its passages. With a
+Without a focus: each claim, newest first by the day it was last admitted and then by
+identifier, with its passages. With a
 focus on a claim: its passages, then the other claims that cite one of them. On a passage: the
 claims that cite it, then their other passages. Passages are ordered by source title and then
 position.
 
 **What is never returned.** The question, who asked it, the whole answer, a query's identifier,
-and a passage's text. A statement that failed citation verification is never stored, so it is
+the time of day an answer was given, and a passage's text. A statement that failed citation verification is never stored, so it is
 never a claim (invariant 6). The caller's bytes are the same whether or not rows outside those
 three rules exist.
 

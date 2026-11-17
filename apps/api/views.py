@@ -2927,8 +2927,9 @@ class KnowledgeMapView(APIView):
     a truncation indicator. docs/api-contract.md (FR-20) is its shape.
 
     ``IsAuthenticated`` and ``view_knowledge_map`` (D-132): 401 without a session, 403 for a
-    role that lacks the code (invariant 4). Not throttled, as the dashboard, the repository and
-    the meetings list are not.
+    role that lacks the code (invariant 4). Throttled in the ``knowledge_map`` scope since 17
+    November 2026 (D-138): one budget for each user across the map's two views. Until then it
+    was not throttled.
 
     **The request.** No parameters is the overview. ``focus_type`` and ``focus_id`` together are
     a selection: the walk starts from that node. ``KnowledgeMapQuerySerializer`` checks their
@@ -2949,6 +2950,8 @@ class KnowledgeMapView(APIView):
     """
 
     permission_classes = [IsAuthenticated, CanViewKnowledgeMap]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "knowledge_map"
 
     def get(self, request):
         query = KnowledgeMapQuerySerializer(data=request.query_params)
@@ -2963,7 +2966,8 @@ class EvidenceMapView(APIView):
     shape.
 
     Behind the first view's two classes: 401 without a session, 403 for a role that lacks
-    ``view_knowledge_map`` (invariant 4). Not throttled, as the first view is not.
+    ``view_knowledge_map`` (invariant 4). In the first view's throttle scope, ``knowledge_map``:
+    this view reads every answer the caller may see on each request (the security review, S3).
 
     **The request** is the first view's, for two other types: no parameters is the overview, and
     ``focus_type`` with ``focus_id`` is a selection. ``EvidenceMapQuerySerializer`` checks their
@@ -2979,6 +2983,8 @@ class EvidenceMapView(APIView):
     """
 
     permission_classes = [IsAuthenticated, CanViewKnowledgeMap]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "knowledge_map"
 
     def get(self, request):
         query = EvidenceMapQuerySerializer(data=request.query_params)

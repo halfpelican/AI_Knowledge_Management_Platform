@@ -15733,6 +15733,9 @@ on the route is a single scoped object, so the 403 has no 404 to precede, the ar
 routes use. It is not throttled, as the dashboard, the repository and the meetings list are not.
 `docs/api-contract.md` holds the shape.
 
+> **Superseded on 17 November 2026.** Both of the map's views are rate limited since D-138: 30
+> requests a minute for each user, in the `knowledge_map` scope, at the user's choice.
+
 **Two parts, and only the first touches the database.**
 
 - **Assembly** runs a fixed set of queries for the role `permission_scope` re-reads on the request,
@@ -18605,6 +18608,16 @@ pseudocode describes it, and the word "claim" is used in that sense nowhere else
 | Whose claims a viewer sees | **Everyone's, scoped:** claims from all users' answers, shown only where the viewer's role can read the cited passage. The question and who asked it are never shown. Not chosen: only the viewer's own |
 | Contributors in the second view | **None.** His words: "Option 3. But add the Claim review, it doesn't mention contributors either, it is a summary of things such as the amount of times a claim is admitted in an answer". The right-hand pane for a selected claim is that summary. No review action, record or permission is built |
 
+### Two further choices, after the security review of the built code (17 November 2026)
+
+Each was put to the user as a tabbed question with a recommendation. The review itself is in the
+dated note below.
+
+| Question | Choice |
+|---|---|
+| A user can word a question, or upload a document, so that the model writes a sentence of their choosing. It is then shown to everyone as a claim joined to a real passage, with no asker (the review's S1) | **Recorded, and no control is built.** An Administrator removes such a claim by reprocessing or deleting a source it rests on, which removes every claim on that source. Not chosen: an Administrator's hide control; Employees seeing only their own claims; everyone seeing only their own |
+| Neither view had a rate limit, and the second view reads every answer the caller may see on each request (S3) | **Both views, 30 requests a minute for each user,** in a scope of their own, `knowledge_map`, one budget for the two. Not chosen: the second view only; no limit |
+
 ### What is built
 
 - **A claim** is a verified statement of an answered question: `AnswerCitations.statement_text`,
@@ -18618,7 +18631,8 @@ pseudocode describes it, and the word "claim" is used in that sense nowhere else
   many answers admitted it; what it is supported by; when it was first and last admitted.
 - **The route** is `GET /api/knowledge-map/evidence`, behind the first view's permission. The
   walk, the two caps and the truncation rule are the first view's, with a claim in a source's
-  place and a passage in a tag's. `docs/api-contract.md` holds the shape.
+  place and a passage in a tag's. `docs/api-contract.md` holds the shape. Both views share one rate limit
+  (the second table of choices above).
 - **The screen** is `/knowledge-map?view=evidence`. A link styled as a button, straight after
   "Skip to the table view", switches views. The table equivalent has the same two tables, with a
   "Times admitted" column for the line's weight.
@@ -18627,9 +18641,12 @@ pseudocode describes it, and the word "claim" is used in that sense nowhere else
 
 A citation row is read only when all three hold (`apps/api/evidence_map.py`):
 
-1. its cited chunk exists and is in the role's scope;
-2. **every passage its answer was generated from is in the role's scope;**
+1. its cited chunk is one of the passages its answer was generated from;
+2. **every one of those passages is a chunk in the role's scope,** and so the cited one is;
 3. the cited chunk's own source is in the role's scope.
+
+Rule 1 took this form after the security review of the built code (S5, in the dated note
+below). As first built it read "its cited chunk exists and is in the role's scope".
 
 **Rule 2 narrows "everyone's claims", and invariant 1 requires it.** A statement cites one
 passage, but the model wrote it with every supplied passage in front of it. Citation verification
@@ -18650,6 +18667,8 @@ supplied chunk that was deleted is not in scope, so that answer's claims are lef
   refills as questions are asked again.
 - Counts and dates are of the role's own rows. A claim also admitted in answers the role may not
   see counts only the ones it may.
+- A date is a calendar day in the project's time zone and never a time, and a claim's
+  identifier is a keyed hash of its text. Both follow from the security review (S2 and S4).
 
 ### In the mock-up and not built, each for a stated reason
 
@@ -18678,7 +18697,9 @@ supplied chunk that was deleted is not in scope, so that answer's claims are lef
 3. **Other users' answer statements are shown,** the user's choice. A statement is model text
    written in reply to somebody's question. It is shown without the question or the asker, to
    roles that may read everything it was generated from. What a question's own wording led the
-   model to put in a statement is still in the statement.
+   model to put in a statement is still in the statement, and so is what the asker's earlier
+   questions in the same conversation led it to put there: those are given to the model with
+   the new question (`apps/retrieval/conversation.py`). An earlier answer never is.
 4. **Tables read beyond FR-20's Database line:** `AnswerCitations`, `QueryLog` and
    `ContentChunks`, with `Documents` and `Meetings` for titles.
 5. **One claim per distinct text.** Two statements that say the same thing in different words are

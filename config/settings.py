@@ -25,6 +25,7 @@ from apps.core.constants import (
     LOCKOUT_DURATION as DEFAULT_LOCKOUT_DURATION,
     LOCKOUT_DURATION_MAXIMUM,
     LOCKOUT_THRESHOLD as DEFAULT_LOCKOUT_THRESHOLD,
+    KNOWLEDGE_MAP_THROTTLE_RATE,
     SEARCH_THROTTLE_RATE,
     TAGGING_THROTTLE_RATE,
     TRANSCRIPTION_THROTTLE_RATE,
@@ -234,6 +235,8 @@ REST_FRAMEWORK = {
     #   tag (D-79's two notes of 10 November 2026).
     # - "transcription": per signed-in user, one recording segment sent for transcription
     #   (D-123).
+    # - "knowledge_map": per signed-in user, the knowledge map's two views in one budget
+    #   (D-138).
     #
     # The counters live in the default cache. No CACHES is set, so that is Django's
     # per-process LocMemCache: the one Waitress process (D-64) shares them, a restart clears
@@ -244,6 +247,7 @@ REST_FRAMEWORK = {
         "ingestion": INGESTION_THROTTLE_RATE,
         "conversation_create": CONVERSATION_CREATE_THROTTLE_RATE,
         "search": SEARCH_THROTTLE_RATE,
+        "knowledge_map": KNOWLEDGE_MAP_THROTTLE_RATE,
         "tagging": TAGGING_THROTTLE_RATE,
         "transcription": TRANSCRIPTION_THROTTLE_RATE,
         "action_items": ACTION_ITEM_THROTTLE_RATE,

@@ -192,6 +192,9 @@ THROTTLED_ROUTES = {
     ("document-classify", "POST"): "ingestion",
     ("conversation-list", "POST"): "conversation_create",
     ("search", "GET"): "search",
+    # D-138: the knowledge map's two views, one budget (the security review's S3).
+    ("knowledge-map", "GET"): "knowledge_map",
+    ("knowledge-map-evidence", "GET"): "knowledge_map",
     ("document-tags", "POST"): "tagging",
     ("tag-list", "POST"): "tagging",  # D-128: an Administrator adds a value
     ("department-list", "POST"): "tagging",  # D-129: an Administrator adds a department

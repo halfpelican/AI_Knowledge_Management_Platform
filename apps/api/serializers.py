@@ -1747,8 +1747,9 @@ class KnowledgeMapQuerySerializer(serializers.Serializer):
         return focus_type, self.validated_data["focus_id"]
 
 
-# A selection in the second view names a passage by its chunk's UUID and a claim by the SHA-256
-# of its text (``apps/api/evidence_map.py``). Keyed in the 400 body on ``focus_id``.
+# A selection in the second view names a passage by its chunk's UUID and a claim by a keyed hash
+# of its text, 64 hexadecimal digits (``apps/api/evidence_map.py``). The 400 body names
+# ``focus_id``.
 EVIDENCE_FOCUS_MALFORMED_MESSAGE = "focus_id is not an identifier of that focus_type."
 _CLAIM_IDENTIFIER_LENGTH = 64
 _HEXADECIMAL = frozenset("0123456789abcdef")
@@ -1762,7 +1763,7 @@ class EvidenceMapQuerySerializer(serializers.Serializer):
     the other is a 400 keyed on the missing parameter. An empty value is an absent one.
 
     **Shape only: the focus is never looked up here.** A passage is named by a UUID. A claim has
-    no row of its own and is named by the SHA-256 of its text, 64 hexadecimal digits. Anything
+    no row of its own and is named by a keyed hash of its text, 64 hexadecimal digits. Anything
     else is a 400 keyed on ``focus_id``. A NUL byte is refused twice over: by ``CharField``, and
     because it is no hexadecimal digit and no UUID holds one. Every
     well-formed pair reaches the walk, where a focus that is not in the caller's own graph gets

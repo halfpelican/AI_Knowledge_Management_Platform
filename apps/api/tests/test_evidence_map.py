@@ -7,13 +7,14 @@ an Administrator is a row stamped for nobody (D-66).
 
 What the module docstring of ``apps/api/evidence_map.py`` calls its three rules:
 
-1. a claim's cited chunk exists and is in the viewer's scope;
-2. every passage the answer was generated from is in the viewer's scope;
+1. a claim's cited chunk is one of the passages its answer was generated from;
+2. every one of those passages is a chunk in the viewer's scope, and so the cited one is;
 3. the cited chunk's own source is in the viewer's scope.
 """
 
 import ast
 import hashlib
+import hmac
 import inspect
 import uuid
 from datetime import datetime, timedelta, timezone as dt_timezone
@@ -23,6 +24,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.accounts.models import RolePermission
@@ -35,6 +37,7 @@ from apps.core.constants import (
     EMPLOYEE_ROLE_NAME,
     EVIDENCE_MAP_NODE_TYPES,
     EVIDENCE_MAP_RELATIONSHIPS,
+    KNOWLEDGE_MAP_THROTTLE_RATE,
     KNOWLEDGE_MAP_TRUNCATION_REASONS,
     MAXIMUM_NODE_COUNT,
     MAXIMUM_TRAVERSAL_DEPTH,
@@ -91,8 +94,9 @@ PARKING = "Parking permits renew in July."
 SECRET = "The restructure removes four roles."
 
 
-def at(minutes):
-    return EARLIEST + timedelta(minutes=minutes)
+def at(days):
+    """A moment ``days`` days after the earliest row: 09:00 UTC, the same day in the project's zone."""
+    return EARLIEST + timedelta(days=days)
 
 
 # --- Row builders ----------------------------------------------------------------------------
@@ -139,11 +143,12 @@ def add_chunk(source, index=0, *, roles=None, ai_generated=False):
     )
 
 
-def answer(asker, *statements, supplied=None, minutes=0):
+def answer(asker, *statements, supplied=None, days=0, when=None):
     """One answered question: its log row and one citation row for each ``(text, chunk)``.
 
     ``supplied`` is every chunk, or chunk identifier, the model was given. It defaults to the
-    chunks the statements cite.
+    chunks the statements cite. It was answered ``days`` days after the earliest row, or at
+    the moment ``when``.
     """
     given = [chunk for _, chunk in statements] if supplied is None else supplied
     query = QueryLog.objects.create(
@@ -153,7 +158,7 @@ def answer(asker, *statements, supplied=None, minutes=0):
         retrieved_chunk_ids=[getattr(item, "id", item) for item in given],
         answered=True,
     )
-    QueryLog.objects.filter(pk=query.pk).update(answered_at=at(minutes))
+    QueryLog.objects.filter(pk=query.pk).update(answered_at=at(days) if when is None else when)
     for position, (text, chunk) in enumerate(statements):
         AnswerCitation.objects.create(
             query=query, chunk=chunk, chunk_uuid=chunk.id, statement_text=text, position=position
@@ -165,7 +170,8 @@ def answer(asker, *statements, supplied=None, minutes=0):
 
 
 def claim_key(text):
-    return f"{CLAIM}:{hashlib.sha256(text.encode('utf-8')).hexdigest()}"
+    key = settings.SECRET_KEY.encode("utf-8")
+    return f"{CLAIM}:{hmac.new(key, text.encode('utf-8'), hashlib.sha256).hexdigest()}"
 
 
 def passage_key(chunk):
@@ -231,8 +237,8 @@ def edges_of(body):
 
 
 def stamp(value):
-    """A moment as the response writes it."""
-    return value.isoformat().replace("+00:00", "Z")
+    """The day of a moment as the response writes it: the project's own day, and no time."""
+    return timezone.localtime(value).date().isoformat()
 
 
 @pytest.fixture
@@ -292,7 +298,7 @@ def test_an_empty_log_is_the_empty_body(session_client, handbook):
 
 def test_a_claim_is_joined_to_the_passage_it_cites(session_client, handbook, employee):
     document, (first, second, _third) = handbook
-    answer(employee, (LEAVE, first), (NOTICE, second), minutes=5)
+    answer(employee, (LEAVE, first), (NOTICE, second), days=5)
 
     body = the_map(session_client.client).json()
 
@@ -333,9 +339,9 @@ def test_one_statement_in_several_answers_is_one_claim_and_its_line_carries_the_
     """The same statement admitted three times, once with other spacing, is one claim. The line's
     weight is how often the pairing was admitted, and the dates are the first and the last."""
     _, (first, second, _third) = handbook
-    answer(employee, (LEAVE, first), minutes=10)
-    answer(administrator, (f"  Annual leave   is twenty days.\n", first), minutes=30)
-    answer(employee, (LEAVE, second), minutes=20)
+    answer(employee, (LEAVE, first), days=10)
+    answer(administrator, (f"  Annual leave   is twenty days.\n", first), days=30)
+    answer(employee, (LEAVE, second), days=20)
 
     body = the_map(session_client.client).json()
 
@@ -356,9 +362,9 @@ def test_one_statement_in_several_answers_is_one_claim_and_its_line_carries_the_
 
 def test_claims_come_newest_first_each_followed_by_its_passages(session_client, handbook, employee):
     _, (first, second, third) = handbook
-    answer(employee, (PARKING, third), minutes=1)
-    answer(employee, (LEAVE, second), minutes=9)
-    answer(employee, (NOTICE, first), (NOTICE, second), minutes=5)
+    answer(employee, (PARKING, third), days=1)
+    answer(employee, (LEAVE, second), days=9)
+    answer(employee, (NOTICE, first), (NOTICE, second), days=5)
 
     body = the_map(session_client.client).json()
 
@@ -405,6 +411,57 @@ def test_nothing_of_the_question_the_asker_or_the_passage_text_is_in_the_bytes(
             assert absent not in content, absent
 
 
+def test_an_answers_moment_is_returned_as_the_projects_own_day_and_no_finer(session_client, handbook, employee):
+    """The security review's S2, from both roles. Every statement of one answer shares its
+    moment, so the moment would tie another person's answer back together. 15:00 UTC on 1 October
+    is 01:00 on 2 October in the project's time zone."""
+    _, (first, *_rest) = handbook
+    answer(employee, (LEAVE, first), when=EARLIEST + timedelta(hours=6))
+
+    response = the_map(session_client.client)
+
+    detail = node_of(response.json(), claim_key(LEAVE))["detail"]
+    assert detail["first_admitted_at"] == detail["last_admitted_at"] == "2026-10-02"
+    assert "T15:00" not in response.content.decode()
+
+
+def test_claims_of_one_day_are_ordered_by_identifier_and_not_by_the_moment(session_client, handbook, employee):
+    """The order does not give the moment back: six claims minutes apart on one day."""
+    _, (first, *_rest) = handbook
+    texts = [f"Claim of one day, number {n}." for n in range(6)]
+    for n, text in enumerate(texts):
+        answer(employee, (text, first), when=EARLIEST + timedelta(minutes=n))
+
+    body = the_map(session_client.client).json()
+
+    claims = [node["id"] for node in body["nodes"] if node["type"] == CLAIM]
+    assert claims == sorted(claim_key(text) for text in texts)
+    # The premise: that is not the order the moments would give, newest first or oldest.
+    by_moment = [claim_key(text) for text in texts]
+    assert claims not in (by_moment, by_moment[::-1])
+
+
+def test_a_claims_identifier_is_keyed_with_the_servers_secret(session_client, handbook, employee, settings):
+    """The security review's S4, from both roles. The identifier sits in addresses. Unkeyed, it
+    would let anyone who came by one confirm a guessed statement offline."""
+    _, (first, *_rest) = handbook
+    answer(employee, (LEAVE, first))
+    plain = hashlib.sha256(LEAVE.encode("utf-8")).hexdigest()
+    client = session_client.client
+
+    [claim] = [node for node in the_map(client).json()["nodes"] if node["type"] == CLAIM]
+
+    assert claim["item_id"] == claim_key(LEAVE).split(":")[1]
+    assert claim["item_id"] != plain
+    # The unkeyed hash of the text selects nothing.
+    assert the_map(client, {"focus_type": CLAIM, "focus_id": plain}).json() == EMPTY_BODY
+    # Another key, another identifier, read from the function: a request under a changed key
+    # would no longer hold its session.
+    before = evidence_map.claim_id(LEAVE)
+    settings.SECRET_KEY = "another-key-entirely"
+    assert evidence_map.claim_id(LEAVE) != before
+
+
 # --- Scope: the three rules, each from both roles -----------------------------------------------
 
 
@@ -425,27 +482,46 @@ def test_a_claim_citing_a_passage_the_viewer_cannot_read_is_absent(session_clien
                                    roles=unreadable_scope(session_client.role_name))
     hidden = add_chunk(hidden_document)
     # A claim of its own, and the visible claim admitted again from the hidden passage.
-    answer(employee, (SECRET, hidden), (LEAVE, hidden), minutes=50)
+    answer(employee, (SECRET, hidden), (LEAVE, hidden), days=50)
 
     assert _baseline(client, claim_key(LEAVE), passage_key(first)) == before
     for focus in (claim_key(SECRET), passage_key(hidden)):
         assert the_map(client, focus).json() == EMPTY_BODY
 
 
-def test_a_claim_citing_a_chunk_stamped_out_of_the_viewers_scope_is_absent_on_that_alone(
+def test_a_claim_whose_cited_passage_is_not_among_those_supplied_is_not_read(
     session_client, handbook, employee
 ):
-    """Rule 1 on its own, from both roles. The chunk is stamped out of the viewer's scope, its
-    source is not, and the log row does not list it among the supplied passages (a row no
-    answer path writes, since a cited passage is always a supplied one). Rules 2 and 3 pass, so
-    only the cited chunk's own stamp keeps the claim out."""
+    """Rule 1 on its own, from both roles. Every passage here is one the viewer reads. One row's
+    list of supplied passages does not hold the passage it cites, and another's holds nothing:
+    rows no answer path writes. Rule 2 has nothing to refuse in either, so only rule 1 keeps
+    them out (the security review's S5)."""
+    _, (first, second, third) = handbook
+    answer(employee, (LEAVE, first))
+    client = session_client.client
+    before = _baseline(client, claim_key(LEAVE), passage_key(first))
+
+    answer(employee, (NOTICE, second), supplied=[third], days=50)
+    answer(employee, (PARKING, third), supplied=[], days=51)
+
+    assert _baseline(client, claim_key(LEAVE), passage_key(first)) == before
+    for focus in (claim_key(NOTICE), claim_key(PARKING), passage_key(second), passage_key(third)):
+        assert the_map(client, focus).json() == EMPTY_BODY
+
+
+def test_a_claim_citing_a_chunk_out_of_scope_is_absent_though_its_row_does_not_list_it(
+    session_client, handbook, employee
+):
+    """Rule 1 again, from both roles, where it matters most. The cited chunk is stamped out of the
+    viewer's scope, its source is not, and the row lists only a passage the viewer reads. Rules 2
+    and 3 pass. The claim is kept out because its citation is not one of the supplied passages."""
     document, (first, *_rest) = handbook
     answer(employee, (LEAVE, first))
     client = session_client.client
     before = _baseline(client, claim_key(LEAVE), passage_key(first))
 
     narrowed = add_chunk(document, 7, roles=unreadable_scope(session_client.role_name))
-    answer(employee, (SECRET, narrowed), supplied=[first], minutes=50)
+    answer(employee, (SECRET, narrowed), supplied=[first], days=50)
 
     assert _baseline(client, claim_key(LEAVE), passage_key(first)) == before
     for focus in (claim_key(SECRET), passage_key(narrowed)):
@@ -467,7 +543,7 @@ def test_a_claim_from_an_answer_generated_from_a_passage_the_viewer_cannot_read_
                                    roles=unreadable_scope(session_client.role_name))
     hidden = add_chunk(hidden_document)
     # Cites readable passages only. Supplied: those and the hidden one.
-    answer(employee, (SECRET, second), (LEAVE, first), supplied=[first, second, hidden], minutes=50)
+    answer(employee, (SECRET, second), (LEAVE, first), supplied=[first, second, hidden], days=50)
 
     assert _baseline(client, claim_key(LEAVE), passage_key(first)) == before
     for focus in (claim_key(SECRET), passage_key(second)):
@@ -483,7 +559,7 @@ def test_a_supplied_passage_that_no_longer_exists_removes_the_answers_claims(
     client = session_client.client
     before = _baseline(client, claim_key(LEAVE))
 
-    answer(employee, (NOTICE, second), supplied=[second, uuid.uuid4()], minutes=50)
+    answer(employee, (NOTICE, second), supplied=[second, uuid.uuid4()], days=50)
 
     assert _baseline(client, claim_key(LEAVE)) == before
     assert the_map(client, claim_key(NOTICE)).json() == EMPTY_BODY
@@ -494,7 +570,7 @@ def test_a_claim_whose_cited_chunk_was_deleted_is_absent(session_client, handboo
     reader. The answer's other statement goes with it, because the deleted chunk was supplied."""
     _, (first, second, third) = handbook
     answer(employee, (LEAVE, first))
-    answer(employee, (NOTICE, second), (PARKING, third), minutes=50)
+    answer(employee, (NOTICE, second), (PARKING, third), days=50)
     client = session_client.client
     assert claim_key(NOTICE) in ids_of(the_map(client).json())
 
@@ -516,7 +592,7 @@ def test_a_passage_whose_source_the_viewer_cannot_read_shows_nothing(session_cli
     hidden_document = add_document("Restructure Plan", uploader=una,
                                    roles=unreadable_scope(session_client.role_name))
     mismatched = add_chunk(hidden_document, roles=BOTH_ROLES)
-    answer(employee, (SECRET, mismatched), minutes=50)
+    answer(employee, (SECRET, mismatched), days=50)
 
     assert _baseline(client, claim_key(LEAVE)) == before
     assert b"Restructure Plan" not in the_map(client).content
@@ -565,9 +641,9 @@ def test_selecting_a_claim_walks_to_its_passages_and_the_claims_that_share_them(
     """Two hops: the claim's passages, then every other claim resting on one of them. A third hop
     is not taken, and the reply says the view stops there."""
     _, (first, second, third) = handbook
-    answer(employee, (LEAVE, first), minutes=1)
-    answer(employee, (NOTICE, first), (NOTICE, second), minutes=2)
-    answer(employee, (PARKING, second), (PARKING, third), minutes=3)
+    answer(employee, (LEAVE, first), days=1)
+    answer(employee, (NOTICE, first), (NOTICE, second), days=2)
+    answer(employee, (PARKING, second), (PARKING, third), days=3)
 
     body = the_map(session_client.client, claim_key(LEAVE)).json()
 
@@ -589,8 +665,8 @@ def test_selecting_a_claim_walks_to_its_passages_and_the_claims_that_share_them(
 
 def test_selecting_a_passage_walks_to_the_claims_that_cite_it(session_client, handbook, employee):
     _, (first, second, _third) = handbook
-    answer(employee, (LEAVE, first), minutes=1)
-    answer(employee, (NOTICE, first), (NOTICE, second), minutes=2)
+    answer(employee, (LEAVE, first), days=1)
+    answer(employee, (NOTICE, first), (NOTICE, second), days=2)
 
     body = the_map(session_client.client, passage_key(first)).json()
 
@@ -693,9 +769,9 @@ def test_two_empty_parameters_are_the_overview(session_client, handbook, employe
 def test_the_overview_is_cut_at_the_node_cap_and_says_so(session_client, handbook, employee, monkeypatch):
     """The first view's cap and its reason, read where this module reads them."""
     _, (first, second, third) = handbook
-    answer(employee, (LEAVE, first), minutes=3)
-    answer(employee, (NOTICE, second), minutes=2)
-    answer(employee, (PARKING, third), minutes=1)
+    answer(employee, (LEAVE, first), days=3)
+    answer(employee, (NOTICE, second), days=2)
+    answer(employee, (PARKING, third), days=1)
     monkeypatch.setattr(evidence_map, "MAXIMUM_NODE_COUNT", 4)
 
     body = the_map(session_client.client).json()
@@ -712,8 +788,8 @@ def test_a_view_exactly_at_the_cap_is_not_cut_by_rows_the_viewer_cannot_read(
     place under the cap and raises no flag. The newer claims cite passages the viewer reads and
     were generated from one the viewer does not, so rule 2 alone keeps them out."""
     _, (first, second, _third) = handbook
-    answer(employee, (LEAVE, first), minutes=3)
-    answer(employee, (NOTICE, second), minutes=2)
+    answer(employee, (LEAVE, first), days=3)
+    answer(employee, (NOTICE, second), days=2)
     monkeypatch.setattr(evidence_map, "MAXIMUM_NODE_COUNT", 4)
     client = session_client.client
     before = the_map(client).content
@@ -723,21 +799,47 @@ def test_a_view_exactly_at_the_cap_is_not_cut_by_rows_the_viewer_cannot_read(
                                    roles=unreadable_scope(session_client.role_name))
     hidden = add_chunk(hidden_document)
     for minute, chunk in enumerate([first, second, first]):
-        answer(employee, (f"{SECRET} {minute}", chunk), supplied=[chunk, hidden], minutes=60 + minute)
+        answer(employee, (f"{SECRET} {minute}", chunk), supplied=[chunk, hidden], days=60 + minute)
 
     assert the_map(client).content == before
 
 
 def test_the_depth_cap_is_read_where_the_module_reads_it(session_client, handbook, employee, monkeypatch):
     _, (first, _second, _third) = handbook
-    answer(employee, (LEAVE, first), minutes=1)
-    answer(employee, (NOTICE, first), minutes=2)
+    answer(employee, (LEAVE, first), days=1)
+    answer(employee, (NOTICE, first), days=2)
     monkeypatch.setattr(evidence_map, "MAXIMUM_TRAVERSAL_DEPTH", 1)
 
     body = the_map(session_client.client, claim_key(LEAVE)).json()
 
     assert ids_of(body) == [claim_key(LEAVE), passage_key(first)]
     assert (body["truncated"], body["truncated_by"], body["maximum_traversal_depth"]) == (True, DEPTH, 1)
+
+
+# --- The rate limit (D-138, the user's decision of 17 November 2026) ----------------------------
+
+FIRST_VIEW_URL = "/api/knowledge-map"
+MAP_LIMIT = int(KNOWLEDGE_MAP_THROTTLE_RATE.split("/")[0])
+
+
+@pytest.mark.parametrize("url", [EVIDENCE_URL, FIRST_VIEW_URL], ids=["second-view", "first-view"])
+def test_each_view_is_limited_for_each_user_in_one_budget_for_the_two(
+    session_client, employee, administrator, url
+):
+    """From both roles, at the real rate. Past it the reply is DRF's 429 with ``Retry-After``. The
+    two views share the budget, and it is each user's own."""
+    client = session_client.client
+    for _ in range(MAP_LIMIT):
+        assert client.get(url).status_code == 200
+
+    refused = client.get(url)
+
+    assert refused.status_code == 429
+    assert int(refused["Retry-After"]) > 0
+    other_view = FIRST_VIEW_URL if url == EVIDENCE_URL else EVIDENCE_URL
+    assert client.get(other_view).status_code == 429
+    other = administrator if session_client.role_name == EMPLOYEE_ROLE_NAME else employee
+    assert logged_in(other).get(url).status_code == 200
 
 
 # --- Cost, writes, and what the module may read -------------------------------------------------
@@ -760,7 +862,7 @@ def test_the_route_writes_nothing_and_its_statements_do_not_grow_with_the_log(
     session row (FR-04's sliding expiry). Three answers cost what thirty do."""
     _, chunks = handbook
     for n in range(3):
-        answer(employee, (f"Claim number {n}.", chunks[n % 3]), minutes=n)
+        answer(employee, (f"Claim number {n}.", chunks[n % 3]), days=n)
     params = {} if selected == "overview" else focus_on(claim_key("Claim number 0."))
     client = session_client.client
     the_map(client, params)  # the first request of a session, set aside
@@ -775,7 +877,7 @@ def test_the_route_writes_nothing_and_its_statements_do_not_grow_with_the_log(
         assert table in joined, table
 
     for n in range(3, 30):
-        answer(employee, (f"Claim number {n}.", chunks[n % 3]), minutes=n)
+        answer(employee, (f"Claim number {n}.", chunks[n % 3]), days=n)
 
     response, many = statements_of(client, params)
     assert len(response.json()["nodes"]) > 3
@@ -785,10 +887,10 @@ def test_the_route_writes_nothing_and_its_statements_do_not_grow_with_the_log(
 def test_the_same_request_gives_the_same_bytes(session_client, handbook, employee):
     _, (first, second, _third) = handbook
     answer(employee, (LEAVE, first), (NOTICE, second))
-    answer(employee, (PARKING, second), minutes=4)
+    answer(employee, (PARKING, second), days=4)
     # Eight claims of one moment on one passage: an order that was not fixed would have to
     # fall the same way twice among them.
-    answer(employee, *[(f"Claim of one moment, number {n}.", first) for n in range(8)], minutes=9)
+    answer(employee, *[(f"Claim of one moment, number {n}.", first) for n in range(8)], days=9)
     client = session_client.client
 
     for focus in (None, claim_key(LEAVE), passage_key(second)):
