@@ -24,7 +24,8 @@ export const PICTURE_BUSY_CODE = 'picture_busy'
  * One change at a time (the contract's CHG-3): a request this browser sends while a
  * change is in flight carries the session key the change replaces, and if it is
  * answered after the change, its 401 clears the new key's cookie. The page sends
- * nothing else until the change has answered.
+ * nothing else until the change has answered. A logout waits for it too: the page
+ * hands this promise to the auth provider's `trackAccountChange` (LOG-1).
  */
 export function changePassword({ currentPassword, newPassword }) {
   return post('/auth/change-password', {

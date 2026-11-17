@@ -9,6 +9,10 @@
  * docs/stage-5-front-end-clauses.md, defect 1), and it was fixed under D-97. This file
  * asserts the control for both roles, the landing, and a failed logout.
  *
+ * **A Log out pressed while a password change is in flight** waits for the change's
+ * answer before anything is sent (LOG-1). It is asserted in tests/profilePassword.test.jsx,
+ * which has the Profile page's form to start a change from.
+ *
  * The whole application is rendered with the real auth provider. That the session is
  * destroyed server-side and refused afterwards is pytest's.
  */

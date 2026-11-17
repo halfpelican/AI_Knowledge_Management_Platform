@@ -18,16 +18,24 @@
  *   the user signed in and says so under the field.
  * - **The 429 and the 200**, in the page's words: the contract's 200 message, and a
  *   rate limit that left the password as it was.
+ * - **A logout waits for a change in flight (LOG-1, the security review of PR #119).**
+ *   The change gives the session a new key once its password hashes are done, whether
+ *   or not the old key was logged out meanwhile, and its 200 sets the new key's cookie.
+ *   So Log out, pressed in the header while the change is in flight, sends nothing
+ *   until the change has answered, whatever the answer, and then one logout, which
+ *   carries the new cookie and destroys that session. Sent at once, it would end only
+ *   the old key: "You've been logged out" would show over a browser left signed in.
  *
  * What is not: the server's rules (the validators, the equal-password check, which
  * sessions end), which are pytest's; and whether anything can be seen, which
- * tests/tabOrder.test.jsx reads from the stylesheets.
+ * tests/tabOrder.test.jsx reads from the stylesheets. Nor a Log out pressed in another
+ * tab, which shares the cookie but not this page's state.
  */
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { PROFILE_TEXT, VALIDATION } from '../src/constants.js'
+import { PROFILE_TEXT, TEXT, VALIDATION } from '../src/constants.js'
 import { heldResponse } from './fakeApi.js'
-import { EMPLOYEE, renderApp, requested, serveSignedIn } from './routeWalk.jsx'
+import { BOTH_ROLES, EMPLOYEE, renderApp, requested, serveSignedIn } from './routeWalk.jsx'
 
 const CURRENT = 'Old-password-1'
 const NEW = 'New-password-2!'
@@ -63,6 +71,63 @@ async function openProfile(user = EMPLOYEE, routes = {}) {
 
 function changes(answered) {
   return answered.filter((request) => request.method === 'POST' && request.path === '/api/auth/change-password')
+}
+
+function logouts(answered) {
+  return answered.filter((request) => request.method === 'POST' && request.path === '/api/auth/logout')
+}
+
+function primaryNav() {
+  return screen.getByRole('navigation', { name: 'Primary' })
+}
+
+/** Long enough for a logout sent at once, or a few tasks later, to have been recorded. */
+function aWhile() {
+  return new Promise((resolve) => setTimeout(resolve, 50))
+}
+
+/**
+ * Starts a change that the server holds, then presses the header's Log out, and checks
+ * that the press is taken and that no logout is sent while the change is in flight.
+ * Returns what the test needs to release the change and look at the outcome.
+ */
+async function logOutDuringHeldChange(user, extraRoutes = {}) {
+  const held = heldResponse()
+  const { answered, probe } = await openProfile(user, {
+    'POST /api/auth/change-password': held.route,
+    'POST /api/auth/logout': { status: 200 },
+    ...extraRoutes,
+  })
+  fillValid()
+  fireEvent.click(screen.getByRole('button', { name: PROFILE_TEXT.changePassword }))
+  expect(changes(answered)).toHaveLength(1)
+
+  const logOut = within(primaryNav()).getByRole('button', { name: 'Log out' })
+  fireEvent.click(logOut)
+  // No logout is sent while the change is in flight...
+  expect(logouts(answered)).toHaveLength(0)
+  // ...but the press is taken, and the header says so...
+  await waitFor(() => expect(logOut.textContent).toBe('Signing out…'))
+  expect(logOut.disabled).toBe(true)
+  // ...and it goes on waiting, however long the change takes.
+  await aWhile()
+  expect(logouts(answered)).toHaveLength(0)
+  expect(logOut.textContent).toBe('Signing out…')
+  expect(probe.location.pathname).toBe('/profile')
+  return { held, answered, probe }
+}
+
+/** Signed out, on the sign-in page with FR-04's confirmation, having sent one logout. */
+async function expectLoggedOut({ answered, probe }, user) {
+  expect(await screen.findByRole('heading', { level: 1, name: 'Sign in' })).toBeTruthy()
+  await waitFor(() => expect(probe.location.pathname).toBe('/login'))
+  await waitFor(() =>
+    expect(screen.getByText('Logged out').closest('[role="status"]').textContent).toContain(TEXT.loggedOut),
+  )
+  expect(within(primaryNav()).queryByRole('button', { name: 'Log out' })).toBeNull()
+  expect(document.body.textContent).not.toContain(user.name)
+  expect(logouts(answered)).toHaveLength(1)
+  expect(changes(answered)).toHaveLength(1)
 }
 
 describe('FR-01: a new password is held to registration’s rules', () => {
@@ -230,5 +295,38 @@ describe('D-137: the change, one at a time, and what the page says of its answer
     expect(banner.textContent).not.toMatch(/throttled/i)
     // What was typed is still there, to send again later.
     expect(field(PROFILE_TEXT.currentPasswordLabel).value).toBe(CURRENT)
+  })
+})
+
+describe('LOG-1: Log out pressed while a change is in flight waits for the change’s answer', () => {
+  it.each(BOTH_ROLES)(
+    'as an $role, sends no logout until the change has answered, then exactly one, and lands on sign-in signed out',
+    async (user) => {
+      const pressed = await logOutDuringHeldChange(user)
+
+      // The change answers, and its 200 sets the new key's cookie. Only now is the logout
+      // sent, so it carries that cookie and destroys the session the change kept.
+      pressed.held.release({ body: { detail: 'Your password has been changed.' } })
+      await expectLoggedOut(pressed, user)
+    },
+  )
+
+  it.each([
+    {
+      answer: 'a 400 refusing it',
+      reply: { status: 400, body: { current_password: ['Your current password is incorrect.'] } },
+    },
+    {
+      answer: 'a 429',
+      reply: { status: 429, body: { detail: 'Request was throttled.' }, headers: { 'Retry-After': '120' } },
+    },
+  ])('sends the logout once the change has answered, whatever it answered: $answer', async ({ reply }) => {
+    const pressed = await logOutDuringHeldChange(EMPLOYEE)
+
+    // Refused, the change kept the old key, and the logout destroys that one. A refusal
+    // does not stop the logout, nor does it say the user could not be signed out.
+    pressed.held.release(reply)
+    await expectLoggedOut(pressed, EMPLOYEE)
+    expect(screen.queryByText('Could not sign out')).toBeNull()
   })
 })

@@ -48,6 +48,8 @@ function PrimaryNav({ onLogoutError }) {
     onLogoutError(null)
     try {
       // On success the auth provider sends the user to /login with the confirmation.
+      // While a password change is in flight, it first waits for the change's answer
+      // (LOG-1, src/auth/AuthProvider.jsx), and "Signing out…" shows meanwhile.
       await logout()
     } catch (error) {
       onLogoutError(error.message)

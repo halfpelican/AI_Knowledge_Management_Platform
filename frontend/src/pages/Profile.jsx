@@ -135,10 +135,17 @@ function uploadFailure(error, file) {
  * answered after the change gets a 401 that clears the new key's cookie: the user
  * would be signed out by their own change. So while any of this page's requests is
  * in flight, the page sends nothing else, and its buttons say so by being disabled.
+ *
+ * **A logout waits for the change too** (LOG-1). The header's Log out is not this
+ * page's, so the change is handed to the auth provider (`trackAccountChange`), and a
+ * logout pressed while it is in flight is sent once it has answered, with the cookie
+ * that answer left: the new key's after a 200. Sent at once, it would end the old key,
+ * and the change's 200 would leave the browser signed in under the new one after
+ * "You've been logged out".
  */
 export default function Profile() {
   useDocumentTitle(PROFILE_TEXT.heading)
-  const { user, loading, refresh } = useAuth()
+  const { user, loading, refresh, trackAccountChange } = useAuth()
   const requirementsId = useId()
 
   /* ---- Password state ---- */
@@ -238,7 +245,10 @@ export default function Profile() {
     inFlight.current = 'password'
     setSavingPassword(true)
     try {
-      await changePassword({ currentPassword: values.currentPassword, newPassword: values.newPassword })
+      // LOG-1: handed to the auth provider, so a logout waits for its answer.
+      await trackAccountChange(
+        changePassword({ currentPassword: values.currentPassword, newPassword: values.newPassword }),
+      )
       setValues(EMPTY_PASSWORDS)
       setTouched({})
       setServerErrors({})

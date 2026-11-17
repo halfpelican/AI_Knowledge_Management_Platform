@@ -16,6 +16,17 @@ import { AuthContext } from './context.js'
  * Session expiry (FR-04): if any request answers 401 while the app believes a
  * user is signed in, the user is cleared and sent to /login with a notice. Logout
  * does the same with its own notice.
+ *
+ * A logout waits for a password change in flight (LOG-1, the security review of PR
+ * #119). The change gives this session a new key once its password hashes are done,
+ * and the server makes it even if a logout has ended the old key meanwhile; the
+ * change's 200 then sets the new key's cookie. A logout sent during the change would
+ * end only the old key, leaving the browser signed in after "You've been logged out".
+ * So the Profile page hands its change to `trackAccountChange`, and `logout` waits for
+ * the change to answer, whatever the answer, before it sends anything. The logout then
+ * carries the cookie that answer left, the new key's after a 200, and destroys that
+ * session. A Log out pressed in another tab is not covered: tabs share the cookie, not
+ * this state.
  */
 export default function AuthProvider({ children }) {
   const navigate = useNavigate()
@@ -26,6 +37,9 @@ export default function AuthProvider({ children }) {
   useEffect(() => {
     userRef.current = user
   }, [user])
+  // LOG-1: a promise that settles once the password change in flight has answered,
+  // whatever the answer, and never rejects; null when no change is in flight.
+  const accountChange = useRef(null)
 
   const refresh = useCallback(async () => {
     try {
@@ -94,9 +108,28 @@ export default function AuthProvider({ children }) {
 
   const register = useCallback((details) => authApi.register(details), [])
 
+  // LOG-1: holds `change`, the promise of a password change this browser has sent,
+  // until it has answered, so that `logout` waits for it. Returns `change` itself, for
+  // the caller to await as before.
+  const trackAccountChange = useCallback((change) => {
+    const answered = Promise.resolve(change).then(
+      () => undefined,
+      () => undefined,
+    )
+    accountChange.current = answered
+    answered.then(() => {
+      if (accountChange.current === answered) accountChange.current = null
+    })
+    return change
+  }, [])
+
   // FR-04: on success, /login with "You've been logged out". Any other failure still
   // clears the user, and is thrown for the navigation to report.
   const logout = useCallback(async () => {
+    // LOG-1: nothing is sent until a password change in flight has answered. Sent now,
+    // the logout would end the key the change is replacing, and leave the new one live.
+    const change = accountChange.current
+    if (change) await change
     try {
       await authApi.logout()
     } catch (error) {
@@ -110,8 +143,8 @@ export default function AuthProvider({ children }) {
   }, [signOut])
 
   const value = useMemo(
-    () => ({ user, loading, login, register, logout, refresh }),
-    [user, loading, login, register, logout, refresh],
+    () => ({ user, loading, login, register, logout, refresh, trackAccountChange }),
+    [user, loading, login, register, logout, refresh, trackAccountChange],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
