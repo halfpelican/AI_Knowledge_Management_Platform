@@ -39,6 +39,10 @@ once. So:
   upright in place and converted only if its mode must change. (Pillow's own scaling premultiplies
   an alpha band at full size, which this does not avoid.)
 
+**A 16-bit greyscale PNG** (the review's COR-1) opens as mode I;16, and Pillow's conversion of that
+to RGB clips every sample above 255 to white instead of scaling it. ``_eight_bit`` scales it first,
+and turns its 16-bit transparency key into an alpha band, which Pillow matched by its low byte.
+
 **One refusal for anything Pillow cannot read.** Pillow's decoders raise many kinds of error on a
 damaged file: ``OSError`` for a truncated or broken stream, ``SyntaxError``, ``ValueError``,
 ``struct.error`` and others for a malformed header or EXIF block. Each means the same thing here,
@@ -83,6 +87,12 @@ WEBP_HEADER_BYTES = 30
 # A JPEG is decoded at the most reduced of libjpeg's scales that still leaves at least this much on
 # each side: twice the stored size, as Pillow's thumbnail asks for with its default reducing_gap of 2.
 _JPEG_DRAFT_SIZE = (2 * PICTURE_MAX_DIMENSION, 2 * PICTURE_MAX_DIMENSION)
+# The modes Pillow opens a 16-bit greyscale picture in. Only I;16 comes from a PNG today; the rest
+# are its byte orders, and I its 32-bit form, which converts the same way.
+_SIXTEEN_BIT_GREY_MODES = ("I;16", "I;16B", "I;16L", "I;16N", "I")
+# Each 16-bit sample in 8 bits, rounded: 65535 is 255 x 257, so v / 257 takes 0 to 0 and 65535 to
+# 255 exactly, and no sample falls halfway between two values.
+_SIXTEEN_TO_EIGHT_BITS = [round(value / 257) for value in range(65536)]
 
 # How many pictures this process is decoding now. Read and changed only under its lock.
 _decodes_in_flight = 0
@@ -190,7 +200,7 @@ def _pixels_as_png(source) -> bytes:
     source.seek(0)  # the first frame of an animated WebP or a multi-picture JPEG
     source.draft(None, _JPEG_DRAFT_SIZE)  # a JPEG's reduced scale; nothing for PNG or WebP
     source.load()  # decodes it: a corrupt or truncated file fails here
-    image = source
+    image = _eight_bit(source)
     ImageOps.exif_transpose(image, in_place=True)  # turned as its EXIF says, without a copy
     mode = "RGBA" if image.has_transparency_data else "RGB"
     # Converted only if its mode must change: a transparency key or a palette's alpha becomes an
@@ -203,6 +213,30 @@ def _pixels_as_png(source) -> bytes:
     buffer = io.BytesIO()
     fresh.save(buffer, format="PNG")
     return buffer.getvalue()
+
+
+def _eight_bit(image):
+    """``image`` itself, unless it is 16-bit greyscale: then its samples scaled to 8 bits (COR-1).
+
+    Pillow's own conversion of I;16 clips every sample above 255 to 255, so nearly every 16-bit grey
+    picture came out white. Each sample is mapped through ``_SIXTEEN_TO_EIGHT_BITS`` instead, which
+    Pillow applies to a 32-bit (mode I) image as a 65,536-entry table. A transparency key is a 16-bit
+    value: it becomes an alpha band, matched against the 16-bit samples before they are scaled, since
+    after scaling many samples share its 8-bit value. The rest of ``info`` is kept, so the EXIF
+    orientation still applies.
+    """
+    if image.mode not in _SIXTEEN_BIT_GREY_MODES:
+        return image
+    wide = image if image.mode == "I" else image.convert("I")
+    grey = wide.point(_SIXTEEN_TO_EIGHT_BITS, "L")
+    key = image.info.get("transparency")
+    if isinstance(key, int):
+        alpha = wide.point([0 if value == key else 255 for value in range(65536)], "L")
+        eight = Image.merge("LA", (grey, alpha))
+    else:
+        eight = grey
+    eight.info = {name: value for name, value in image.info.items() if name != "transparency"}
+    return eight
 
 
 def picture_version(updated_at) -> int:

@@ -25,6 +25,8 @@ What these tests hold the build to:
   scaled. At most MAXIMUM_PICTURE_DECODES_IN_FLIGHT pictures are decoded at once: past that an upload
   is a 429 ``picture_busy`` with ``Retry-After``, and every place is given back, whatever the upload
   came to.
+- **A 16-bit greyscale PNG** (the review's COR-1) is scaled to 8 bits rather than clipped to white,
+  its 16-bit transparency key becomes its alpha band, and its EXIF orientation still applies.
 - **Only pixels are kept.** A JPEG carrying EXIF (GPS, camera, orientation), an ICC profile and a
   comment, and a PNG carrying text, ICC, a transparency key and a private chunk, each come back as a
   PNG with no chunk but IHDR, IDAT and IEND, at most 512 x 512, turned upright.
@@ -1005,6 +1007,66 @@ def test_a_picture_is_fitted_to_512_keeping_its_shape(session_client, media_root
     assert upload(session_client.client, encoded(a_photo(size), "PNG")).status_code == 200
 
     assert Image.open(io.BytesIO(stored_png(media_root, session_client.user))).size == stored_size
+
+
+# --- A 16-bit greyscale picture (the review of 17 November 2026, COR-1) -------------------------
+
+
+def a_16_bit_grey_png(values, **options):
+    """One row of ``values``, 0 to 65535, as a 16-bit greyscale PNG (colour type 0, bit depth 16),
+    as a scanner or a 16-bit export writes one. Pillow opens it as mode I;16."""
+    image = Image.new("I;16", (len(values), 1))
+    for x, value in enumerate(values):
+        image.putpixel((x, 0), value)
+    data = encoded(image, "PNG", **options)
+    assert (data[24], data[25]) == (16, 0)  # IHDR's bit depth and colour type
+    return data
+
+
+GREY_16_BIT = [0, 48, 2000, 30000, 65535]
+# The same samples in 8 bits, rounded: v / 257, since 65535 is 255 x 257.
+GREY_8_BIT = [0, 0, 8, 117, 255]
+
+
+def stored_row(media_root, user):
+    stored = Image.open(io.BytesIO(stored_png(media_root, user)))
+    return stored.mode, [stored.getpixel((x, 0)) for x in range(stored.size[0])]
+
+
+def test_a_16_bit_grey_picture_is_scaled_to_8_bits_not_clipped_to_white(session_client, media_root):
+    """Pillow's conversion of I;16 to RGB clips every sample above 255 to 255, so a 16-bit grey
+    picture came back almost all white, and every signed-in user saw it so."""
+    response = upload(session_client.client, a_16_bit_grey_png(GREY_16_BIT))
+
+    assert response.status_code == 200, response.content
+    assert stored_row(media_root, session_client.user) == ("RGB", [(v, v, v) for v in GREY_8_BIT])
+
+
+def test_a_16_bit_grey_pictures_transparency_key_becomes_its_alpha(session_client, media_root):
+    """The key is a 16-bit value, and is matched against the 16-bit samples. Pillow matched it by its
+    low byte against the clipped samples, so a key of 30000 (low byte 48) made the pixel of value 48
+    transparent and left the key's own pixel opaque white."""
+    response = upload(session_client.client, a_16_bit_grey_png(GREY_16_BIT, transparency=30000))
+
+    assert response.status_code == 200, response.content
+    mode, row = stored_row(media_root, session_client.user)
+    assert mode == "RGBA"
+    assert [pixel[3] for pixel in row] == [255, 255, 255, 0, 255]
+    assert [pixel[:3] for pixel in row if pixel[3]] == [(v, v, v) for v in (0, 0, 8, 255)]
+
+
+def test_a_16_bit_grey_picture_is_still_turned_upright(session_client, media_root):
+    """The EXIF orientation outlives the scaling: orientation 6 turns a row of two into a column."""
+    exif = Image.Exif()
+    exif[0x0112] = 6
+    data = a_16_bit_grey_png([2000, 30000], exif=exif.tobytes())
+
+    response = upload(session_client.client, data)
+
+    assert response.status_code == 200, response.content
+    stored = Image.open(io.BytesIO(stored_png(media_root, session_client.user)))
+    assert stored.size == (1, 2)
+    assert [stored.getpixel((0, y)) for y in range(2)] == [(8, 8, 8), (117, 117, 117)]
 
 
 # --- The stored file, when things go wrong ------------------------------------------------------

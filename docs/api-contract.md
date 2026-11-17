@@ -2044,6 +2044,9 @@ rate's `429` by `code`, and waits out its `Retry-After` before sending the pictu
 - **Only the pixels are kept.** The first frame is decoded and turned upright by its EXIF
   orientation. It is converted to RGB, or to RGBA when it has transparency, and scaled down to fit
   512 × 512, keeping its shape and never scaled up. Then it is rebuilt from its pixels alone.
+- **A 16-bit greyscale PNG is scaled to 8 bits,** each sample divided by 257 and rounded, and a
+  16-bit transparency key becomes its alpha (the review's COR-1). Until 17 November 2026 every sample
+  above 255 was stored as white.
 - **It is stored as a PNG under a new random name,** with no text, ICC profile, EXIF or
   transparency key, so a photo's location is not kept.
 
