@@ -17,6 +17,9 @@ file holds, each from D-137 or from a rule the project already has:
   included. Every other session of the user ends, and other users' sessions do not.
 - **The change touches the password alone.** FR-03's lock and count stay as they were, and a role
   change committed while the request ran is not written back over.
+- **Passwords are taken as typed,** as registration and sign-in take them: neither field is trimmed.
+- **The answers are the contract's words,** and the ``csrftoken`` cookie is not rotated, so the token
+  the page held before the change still works after it.
 
 The ``password_change`` throttle, 10 an hour per user, is tested with the other scopes in
 ``apps/api/tests/test_throttles.py``. Every test here that holds a session runs once for an Employee
@@ -65,6 +68,12 @@ UNREMEMBERED_SECONDS = SESSION_INACTIVITY_MINUTES * 60
 REQUIRED = ["This field is required."]
 BLANK = ["This field may not be blank."]
 NULL = ["This field may not be null."]
+
+# docs/api-contract.md, "Changing one's own password", quotes these bodies word for word. The tests
+# that compare with the constants the code defines would pass a rewording, which changes both.
+CHANGED_BODY = {"detail": "Your password has been changed."}
+WRONG_CURRENT_BODY = {"current_password": ["Your current password is incorrect."]}
+UNCHANGED_BODY = {"new_password": ["Your new password must be different from your current password."]}
 
 
 @pytest.fixture(params=ROLE_NAMES, ids=[name.lower() for name in ROLE_NAMES])
@@ -413,3 +422,81 @@ def test_the_change_needs_the_csrf_header_as_every_unsafe_request_does(account):
     assert change(client, **csrf_header(client)).status_code == 200
     # The CSRF token is not rotated, so the page's next unsafe request still carries a good one.
     assert client.post(LOGOUT, **csrf_header(client)).status_code == 200
+
+
+def test_a_change_leaves_the_csrf_token_as_it_was(account):
+    """The contract: "The ``csrftoken`` cookie is not rotated, so the page's next unsafe request
+    carries the same ``X-CSRFToken``." The header is read once, before the change, and sent again
+    after it. The test above reads the cookie afresh after the change, which a rotated token would
+    pass, since the client stores the new cookie."""
+    client = signed_in(account, enforce_csrf=True)
+    token = client.cookies[settings.CSRF_COOKIE_NAME].value
+    held = {"HTTP_X_CSRFTOKEN": token}
+
+    response = change(client, **held)
+
+    assert response.status_code == 200
+    assert client.cookies[settings.CSRF_COOKIE_NAME].value == token
+    assert client.post(LOGOUT, **held).status_code == 200
+
+
+# --- In the contract's words ---------------------------------------------------------------------------
+
+
+def test_the_answers_are_the_contracts_words(session_client):
+    client = session_client.client
+
+    wrong = change(client, current_password="Wrong-Guess-1!")
+    unchanged = change(client, new_password=PASSWORD)
+    changed = change(client)
+
+    assert (wrong.status_code, wrong.json()) == (400, WRONG_CURRENT_BODY)
+    assert (unchanged.status_code, unchanged.json()) == (400, UNCHANGED_BODY)
+    assert (changed.status_code, changed.json()) == (200, CHANGED_BODY)
+
+
+# --- Passwords as typed ----------------------------------------------------------------------------------
+
+
+def test_the_new_password_is_taken_as_typed_spaces_and_all(session_client):
+    """Registration and sign-in take a password as typed, never trimmed (FR-01, FR-02:
+    ``trim_whitespace=False`` on both), and FR-01's rules allow spaces. A changed password trimmed
+    before it was stored would leave the person unable to sign in with the password they chose. The
+    reset's test of the same name holds its route to this."""
+    user = session_client.user
+    spaced = f"  {NEW_PASSWORD}  "
+
+    response = change(session_client.client, new_password=spaced)
+
+    assert response.status_code == 200
+    assert login_with(user, spaced).status_code == 200
+    assert login_with(user, NEW_PASSWORD).status_code == 401
+
+
+def test_the_current_password_with_spaces_added_is_a_wrong_one(account):
+    """D-137: a wrong current password is a 400. The password with spaces round it is not the
+    password: sign-in refuses it, and so does the change, which compares the current password as
+    typed, as sign-in does."""
+    client = signed_in(account)
+    spaced = f"  {PASSWORD}  "
+    assert login_with(account, spaced).status_code == 401
+
+    response = change(client, current_password=spaced)
+
+    assert (response.status_code, response.json()) == (400, WRONG_CURRENT_BODY)
+    assert User.objects.get(pk=account.pk).check_password(PASSWORD)
+
+
+def test_a_password_with_spaces_is_changed_by_typing_it_as_it_is(account):
+    """A password with spaces round it, which registration accepts as typed, is the current password
+    exactly as typed. Its holder signs in with it, and changes it by typing it the same way."""
+    spaced = f"  {PASSWORD}  "
+    account.set_password(spaced)
+    account.save(update_fields=["password"])
+    client = APIClient()
+    assert client.post(LOGIN, {"email": account.email, "password": spaced}, format="json").status_code == 200
+
+    response = change(client, current_password=spaced)
+
+    assert response.status_code == 200
+    assert User.objects.get(pk=account.pk).check_password(NEW_PASSWORD)
