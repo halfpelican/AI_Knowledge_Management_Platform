@@ -342,7 +342,7 @@ describe('LOG-1: Log out pressed while a change is in flight waits for the chang
 })
 
 describe('FEA-11: the logout waits for a change in flight for 15 seconds at most', () => {
-  it('waits for Benjamin’s 15 seconds', () => {
+  it('waits for the build’s 15 seconds, which D-137’s front-end note lists for Benjamin to confirm', () => {
     expect(LOGOUT_WAIT_LIMIT_MS).toBe(15_000)
   })
 
