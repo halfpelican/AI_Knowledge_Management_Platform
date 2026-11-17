@@ -569,18 +569,20 @@ TRANSCRIPTION_THROTTLE_RATE = "60/min"
 # rate bounds how fast one account can fill or rewrite a meeting's Action Items panel, which every
 # reader of the meeting loads. The page sends one request per save, addition or deletion.
 ACTION_ITEM_THROTTLE_RATE = "30/min"
-# POST /api/auth/change-password, scope "password_change" (D-137, the lead's decision of 16 November
-# 2026). Counted per user, so every session of one account shares it, and counted before the body
-# is read, so a wrong current password counts. That is what bounds guessing from a session left
-# open: ten guesses an hour at the account's password. A wrong guess there never touches FR-02's
-# failed_attempts or locked_until, so the rate is the only bound on it. A person changing their
-# password sends one request.
+# POST /api/auth/change-password, scope "password_change", a route D-137 (the lead's decision of 16
+# November 2026) asked for. Counted per user, so every session of one account shares it, and
+# counted before the body is read, so a wrong current password counts. That is what bounds guessing
+# from a session left open: ten guesses an hour at the account's password. A wrong guess there never
+# touches FR-02's failed_attempts or locked_until, so the rate is the only bound on it. A person
+# changing their password sends one request. The rate was set by the build, not by D-137; D-137's
+# Built note lists it for Benjamin to confirm.
 PASSWORD_CHANGE_THROTTLE_RATE = "10/hour"
-# POST /api/users/me/picture, scope "picture" (D-137, the lead's decision of 16 November 2026).
-# Each upload is decoded and re-encoded by Pillow, the heaviest work a signed-in user can ask of
-# the server without a provider call, so the rate bounds it. Counted per user, and before the body
-# is read, so a refused upload counts. DELETE and GET /api/users/{id}/picture are not throttled.
-# A person choosing a picture sends one request.
+# POST /api/users/me/picture, scope "picture", a route D-137 (the lead's decision of 16 November
+# 2026) asked for. Each upload is decoded and re-encoded by Pillow, the heaviest work a signed-in
+# user can ask of the server without a provider call, so the rate bounds it. Counted per user, and
+# before the body is read, so a refused upload counts. DELETE and GET /api/users/{id}/picture are
+# not throttled. A person choosing a picture sends one request. The rate was set by the build, not
+# by D-137; D-137's Built note lists it for Benjamin to confirm.
 PICTURE_THROTTLE_RATE = "10/hour"
 
 # How many entries the default cache holds (config/settings.py CACHES; apps/core/cache.py). Every
@@ -932,14 +934,15 @@ MAX_PICTURE_BYTES = 5 * 1024 * 1024  # 5 MB
 # How much more than MAX_PICTURE_BYTES a request body may declare before it is refused unread, by
 # its declared length (D-124): room for the multipart boundary and the part's headers, which a
 # browser keeps to a few hundred bytes for one file. The file's own size is checked against
-# MAX_PICTURE_BYTES once the body is parsed.
+# MAX_PICTURE_BYTES once the body is parsed. Set by the build, not by D-137.
 PICTURE_UPLOAD_ALLOWANCE_BYTES = 64 * 1024  # 64 KiB
 # The most pixels a picture's header may declare. Refused with a 413 before a pixel is decoded:
 # for a WebP, before Pillow even opens it, since libwebp allocates the canvas as it is opened (the
 # review of 17 November 2026, PIC-1). Below Pillow's own DecompressionBombWarning threshold
 # (Image.MAX_IMAGE_PIXELS, 89,478,485), so every picture Pillow would warn about is refused here,
 # without a warnings filter, which is not thread-safe under Waitress's threads. It also bounds a
-# decoded picture at 100 MB (4 bytes a pixel).
+# decoded picture at 100 MB (4 bytes a pixel). Set by the build, not by D-137: it narrows D-137's
+# "up to 5 MB", since a picture under 5 MB that declares more pixels is refused.
 MAX_PICTURE_PIXELS = 25_000_000
 # The stored picture's largest side, in pixels. Every upload is scaled down, keeping its shape, to
 # fit a square of this side, never scaled up, and stored as a PNG.
@@ -978,7 +981,8 @@ PASSWORD_RESET_LINK_MINUTES = 60
 # After a reset email goes to an account, how long until another can, in seconds. Kept with
 # cache.add, so of two requests at once only one sends. A request inside the window gets the same
 # 200 and body as any other and no email, so the cooldown says nothing about whether an address has
-# an account. It bounds how often anyone can fill an inbox from the reset form.
+# an account. It bounds how often anyone can fill an inbox from the reset form. Set by the build,
+# not by D-137.
 PASSWORD_RESET_COOLDOWN_SECONDS = 300
 # The most reset emails one server process works on at once, each in a daemon thread with its own
 # database connection. A request past it starts no thread and is logged, and gets the same 200 and

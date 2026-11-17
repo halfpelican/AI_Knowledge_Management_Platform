@@ -2083,8 +2083,15 @@ every `401` as an expired session and signs the user out (D-137). Nothing is cha
   against the account as the request found it. Just before the new one is saved, the account's row
   is locked and read again, and its stored password must still be the one checked. If a reset or
   another change was committed in between, the password typed is no longer the account's, and
-  nothing is changed. Two changes at once on one account take turns: the first is made, and the
-  second gets this `400`.
+  nothing is changed. Two changes at once from two sessions of one account take turns: the first is
+  made, and the second gets this `400`. **One session sending the change twice** gets other
+  answers for the second request, because the first change gives that session a new key and
+  deletes the old one (the final requirements audit of 17 November 2026, CHG-3):
+  - if the second request was read before the first committed, Django's `400
+    {"detail": "Bad request."}`, with no cookie;
+  - if it arrives after, the `401` for no session, with the `sessionid` cookie cleared. A browser
+    that receives this after the first change's `200` has lost the new key, so the page keeps its
+    submit disabled, and sends nothing else, until the change has answered.
 
 **The order** is fixed: `401` for no session, then the CSRF `403`, then the `429`, then the body, and
 last the check that the current password is still the account's.
@@ -2121,7 +2128,8 @@ enumerates these codes; each is D-137's, or a rule this contract already has.
 | GET | `/api/users/{id}/picture` | session, both roles, no permission code | `200` the picture as PNG bytes, with `Content-Type: image/png`, `X-Content-Type-Options: nosniff`, `Content-Disposition: inline; filename="picture.png"` and the API's never-cache headers. The `Accept` header is not consulted | `401`; `404 {"detail": "No User matches the given query."}` for an unknown id, a user with no picture, and a stored file gone from disk alike |
 
 **The order on `POST`** is fixed: the `401`, the CSRF `403`, the rate's `429`, the declared-length
-`413` (the body is not read), the `400`, the file's `413`, the `picture_busy` `429` (Pillow reads
+`413` (the body is not read), DRF's `415` for a body that is not multipart, the `400`, the file's
+`413`, the `picture_busy` `429` (Pillow reads
 nothing of the picture). Then, before Pillow opens the file, the pixel `413` for a WebP, read from its
 first 30 bytes, or its first 25 if it is lossless (the final review of 17 November 2026, PIC-1R), and
 the `415` for a JPEG of more than 100 scans. Then the `415` for content that is not a PNG, JPEG or

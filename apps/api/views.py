@@ -888,8 +888,12 @@ class PasswordChangeView(APIView):
     one verified, the change is refused with the 400 a wrong current password gets, since the
     password typed is no longer the account's, and nothing is changed. Until then a reset completed
     in that window was undone by the change's save, and the session that made the change was kept on
-    a password the reset had replaced. Two changes racing on one account take turns on the lock: the
-    first is made, and the second, whose current password is no longer the current one, gets the 400.
+    a password the reset had replaced. Two changes racing from two sessions of one account take turns
+    on the lock: the first is made, and the second, whose current password is no longer the current
+    one, gets the 400. One session sending the change twice gets other answers for the second
+    request, because the first gives that session a new key and deletes the old one: Django's 400
+    "Bad request." if it was read before the first committed, the 401 for no session if after
+    (docs/api-contract.md; the final requirements audit of 17 November 2026, CHG-3).
     The new hash is made before the lock is taken, so the lock is held for a few queries, never for a
     hash, as a reset's is.
     """
@@ -1009,21 +1013,23 @@ class OwnPictureView(ThrottlePostOnlyMixin, APIView):
     2. 413 for a body declaring more than MAX_PICTURE_BYTES plus PICTURE_UPLOAD_ALLOWANCE_BYTES,
        decided from ``CONTENT_LENGTH`` alone, so the body is never parsed (D-124), as the document
        upload decides it.
-    3. 400 ``{"picture": [...]}`` when no file part named ``picture`` came.
-    4. 413 for a file over MAX_PICTURE_BYTES, against the bytes that arrived.
-    5. 429 ``picture_busy``, with Retry-After, when MAXIMUM_PICTURE_DECODES_IN_FLIGHT pictures are
+    3. 415 with DRF's own body for a body that is not multipart, when ``request.data`` is first read
+       (the final requirements audit of 17 November 2026, DOC-4).
+    4. 400 ``{"picture": [...]}`` when no file part named ``picture`` came.
+    5. 413 for a file over MAX_PICTURE_BYTES, against the bytes that arrived.
+    6. 429 ``picture_busy``, with Retry-After, when MAXIMUM_PICTURE_DECODES_IN_FLIGHT pictures are
        being decoded already, anyone's (the review of 17 November 2026, PIC-1). Pillow has read
        nothing of the picture.
-    6. 413 for a WebP whose header declares more than MAX_PICTURE_PIXELS, read from its first bytes
+    7. 413 for a WebP whose header declares more than MAX_PICTURE_PIXELS, read from its first bytes
        wherever Pillow reads a size, before Pillow opens it, since opening a WebP allocates its
        canvas (PIC-1, and the final review's PIC-1R for a lossless WebP of 25 to 29 bytes).
-    7. 415, the same message as 8, for a JPEG of more than MAX_PICTURE_JPEG_SCANS scans, counted
+    8. 415, the same message as 9, for a JPEG of more than MAX_PICTURE_JPEG_SCANS scans, counted
        from its bytes before Pillow opens it, since libjpeg decodes every scan however small (the
        final review of 17 November 2026, JPG-1).
-    8. 415 when Pillow cannot open the content as a PNG, JPEG or WebP: a wrong format, under any
+    9. 415 when Pillow cannot open the content as a PNG, JPEG or WebP: a wrong format, under any
        name or declared type (``apps/accounts/pictures.py``).
-    9. 413 for a header declaring more than MAX_PICTURE_PIXELS, before a pixel is decoded.
-    10. 415, the same message as 8, when the picture cannot be decoded: corrupt or truncated.
+    10. 413 for a header declaring more than MAX_PICTURE_PIXELS, before a pixel is decoded.
+    11. 415, the same message as 9, when the picture cannot be decoded: corrupt or truncated.
 
     Then the picture is re-encoded, stored under a new random name, and ``picture_updated_at`` set,
     in one transaction that locks the user's row, and the previous file is deleted once that
