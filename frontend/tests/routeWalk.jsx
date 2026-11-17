@@ -49,6 +49,8 @@ import { useLayoutEffect } from 'react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import App from '../src/App.jsx'
 import { ROLES, TEXT } from '../src/constants.js'
+// D-137: the Profile page's heading, for its case in the walk.
+import { PROFILE_TEXT } from '../src/constants.js'
 import { serveApi, summaryRoute, summaryState } from './fakeApi.js'
 
 /* ---- Fixtures, in the contract's shapes ---------------------------------- */
@@ -301,6 +303,13 @@ const KNOWLEDGE_MAP = {
   },
 }
 
+// #119's Profile page, wired to D-137's routes: it reads the signed-in user from the
+// session check and asks the API for nothing more on mount.
+const PROFILE = {
+  api: {},
+  settled: () => pageHeading(PROFILE_TEXT.heading),
+}
+
 // It shows a search field too, as one of the components on the sheet.
 const COMPONENT_SHEET = {
   api: {},
@@ -405,6 +414,8 @@ export const WALK = [
   ...asEachRole('/ask', ASK),
   // FR-20 (D-132): inside RequireAuth and behind no role guard, so each role stays.
   ...asEachRole('/knowledge-map', KNOWLEDGE_MAP),
+  // #119's Profile page (D-137): inside RequireAuth and behind no role guard, so each role stays.
+  ...asEachRole('/profile', PROFILE),
   // Outside RequireAuth: both render before the session check has answered.
   ...asEachRole('/components', COMPONENT_SHEET),
   ...asEachRole('/403', ACCESS_DENIED),

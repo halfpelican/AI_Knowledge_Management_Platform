@@ -4,6 +4,9 @@ import AuthProvider from './auth/AuthProvider.jsx'
 import RequireAuth from './auth/RequireAuth.jsx'
 import RequireRole from './auth/RequireRole.jsx'
 import useAuth from './auth/useAuth.js'
+// D-137: the navigation's link to #119's Profile page carries the user's picture.
+import Avatar from './components/Avatar.jsx'
+import { PROFILE_TEXT } from './constants.js'
 import Button from './components/Button.jsx'
 import ComponentSheet from './components/ComponentSheet.jsx'
 import Notice from './components/Notice.jsx'
@@ -80,7 +83,6 @@ function PrimaryNav({ onLogoutError }) {
               checks `view_knowledge_map`, which both roles hold (accounts 0011), on
               every request (invariant 4). */}
           <NavLink to={KNOWLEDGE_MAP_PATH}>{TEXT.mapHeading}</NavLink>
-          <NavLink to="/profile">Profile</NavLink>
         </>
       ) : null}
       {/* FR-05: the role management screen "is entirely hidden and inaccessible
@@ -109,6 +111,15 @@ function PrimaryNav({ onLogoutError }) {
       {loading ? null : user ? (
         <>
           <span className="app-nav__user">{`Signed in as ${user.name}`}</span>
+          {/* #119's Profile page, from the signed-in user's own corner of the
+              navigation, with their picture (D-137: pictures wherever users are
+              listed, the header included). After the Administrator's links, so they
+              stay together after the knowledge map. The picture is decoration, the
+              name being beside it, so the link reads as "Profile". */}
+          <NavLink to="/profile">
+            <Avatar name={user.name} picture={user.picture} className="avatar--inline" />
+            {PROFILE_TEXT.navLabel}
+          </NavLink>
           <Button
             variant="secondary"
             className="app-nav__logout"

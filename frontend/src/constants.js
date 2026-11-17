@@ -188,6 +188,19 @@ export const ACCEPTED_FORMATS_LABEL = 'PDF, DOCX, XLSX, TXT'
 export const MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 export const MAX_UPLOAD_LABEL = '50 MB'
 
+/* ---- D-137: profile pictures, and the Profile page #119 added ---------------- */
+
+/**
+ * The Profile page's text (D-137, on #119's page). Its own block rather than
+ * entries in TEXT, so the four branches building on #119 at once merge without
+ * touching one another's lines.
+ */
+export const PROFILE_TEXT = {
+  heading: 'My Profile',
+  // The navigation's link to the page, beside "Signed in as …" with the user's picture.
+  navLabel: 'Profile',
+}
+
 /**
  * Said by the upload queue against a finished file and by the repository against
  * a "Partially indexed" row, so the one sentence has one copy.
