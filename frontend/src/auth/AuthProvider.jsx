@@ -68,7 +68,14 @@ export default function AuthProvider({ children }) {
   // rejects; `abandoned` is set when a logout stopped waiting for it (FEA-11).
   const accountChange = useRef(null)
 
-  const refresh = useCallback(async () => {
+  // Reads the session again. `quiet` is for a 401 that is expected because the session
+  // was ended on purpose: a completed password reset ends every session of its account,
+  // this browser's included (RST-UI-3). The user is then cleared where they are, without
+  // the "expired" notice or a move to /login, because nothing expired. A quiet read that
+  // finds the session alive keeps the user, as any read does.
+  const refresh = useCallback(async ({ quiet = false } = {}) => {
+    // The 401 listener below acts only while a user is held; quiet, none is held for it.
+    if (quiet) userRef.current = null
     try {
       const me = await authApi.fetchCurrentUser()
       setUser(me)

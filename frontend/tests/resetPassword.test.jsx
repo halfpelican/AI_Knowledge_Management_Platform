@@ -18,6 +18,9 @@
  *   when to try again; anything else in the API client's fixed text.
  * - **FR-02's loading pattern**, focus once an outcome replaces the form, the tab's
  *   title, and the keyboard's way through.
+ * - **A reset of the account signed in here** (RST-UI-3): it ends this browser's session
+ *   too, so the header stops naming the user, while the page keeps its outcome and says
+ *   nothing of an expired session. Another account's reset leaves the session as it was.
  *
  * Whether a link works, what a reset does to sessions and to FR-03's lock, and the
  * order of the server's checks are pytest's (apps/api/tests/test_fr02_password_reset.py).
@@ -30,9 +33,10 @@ import { useLayoutEffect } from 'react'
 import { BrowserRouter, MemoryRouter, useLocation } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from '../src/App.jsx'
-import { APP_TITLE, SIGN_IN_TEXT, VALIDATION } from '../src/constants.js'
+import { APP_TITLE, SIGN_IN_TEXT, TEXT, VALIDATION } from '../src/constants.js'
 import { heldResponse, serveApi } from './fakeApi.js'
 import { stopName, tabThrough } from './keyboard.js'
+import { ADMINISTRATOR, BOTH_ROLES, primaryNavigationFor } from './routeWalk.jsx'
 
 const NOT_SIGNED_IN = { status: 401, body: { detail: 'Authentication credentials were not provided.' } }
 
@@ -393,5 +397,81 @@ describe('D-137: the page around the form', () => {
       'Reset password',
       'Sign in',
     ])
+  })
+})
+
+describe('RST-UI-3: a reset of the account signed in here ends its session here too, without saying it expired', () => {
+  /**
+   * `user` is signed in here. Once the confirm has answered 200, the session check
+   * answers 401 if the reset was of that account, which ends every one of its sessions,
+   * and goes on answering with the user if it was another account's.
+   */
+  function serveSignedInReset(user, { ownAccount = true } = {}) {
+    let reset = false
+    return serveApi({
+      'GET /api/auth/me': () => (reset && ownAccount ? NOT_SIGNED_IN : { body: user }),
+      'POST /api/auth/password-reset/confirm': () => {
+        reset = true
+        return { body: COMPLETE }
+      },
+    })
+  }
+
+  function sessionChecks(answered) {
+    return answered.filter((request) => request.method === 'GET' && request.path === '/api/auth/me')
+  }
+
+  async function resetWhileSignedIn(user) {
+    renderAt(`/reset-password${LINK_QUERY}`)
+    await primaryNavigationFor(user)
+    await screen.findByLabelText('New password')
+    typeNewPassword(NEW_PASSWORD)
+    fireEvent.click(resetButton())
+    return noticeTitled(SIGN_IN_TEXT.resetDoneTitle)
+  }
+
+  it.each(BOTH_ROLES)(
+    'as an $role resetting their own account: the header stops naming them, the page keeps its outcome, and nothing says the session expired',
+    async (user) => {
+      const answered = serveSignedInReset(user)
+      const notice = await resetWhileSignedIn(user)
+
+      const nav = screen.getByRole('navigation', { name: 'Primary' })
+      await waitFor(() => expect(within(nav).queryByText(`Signed in as ${user.name}`)).toBeNull())
+      expect(within(nav).queryByRole('button', { name: 'Log out' })).toBeNull()
+      expect(within(nav).getByRole('link', { name: 'Sign in' })).toBeTruthy()
+      // Still the reset page and its outcome: no move to sign-in, and no expiry notice.
+      expect(probe.location.pathname).toBe('/reset-password')
+      expect(notice.isConnected).toBe(true)
+      expect(within(screen.getByRole('main')).getByRole('link', { name: 'Sign in' }).getAttribute('href')).toBe('/login')
+      expect(screen.queryByText('Session expired')).toBeNull()
+      expect(document.body.textContent).not.toContain(TEXT.sessionExpired)
+      // The session check on arrival, and the one read after the reset.
+      expect(sessionChecks(answered)).toHaveLength(2)
+      expect(confirms(answered)).toEqual([{ uid: LINK.uid, token: LINK.token, new_password: NEW_PASSWORD }])
+    },
+  )
+
+  it('an Administrator who resets another account stays signed in here', async () => {
+    const answered = serveSignedInReset(ADMINISTRATOR, { ownAccount: false })
+    await resetWhileSignedIn(ADMINISTRATOR)
+
+    await waitFor(() => expect(sessionChecks(answered)).toHaveLength(2))
+    const nav = screen.getByRole('navigation', { name: 'Primary' })
+    expect(within(nav).getByText(`Signed in as ${ADMINISTRATOR.name}`)).toBeTruthy()
+    expect(within(nav).getByRole('button', { name: 'Log out' })).toBeTruthy()
+    expect(probe.location.pathname).toBe('/reset-password')
+  })
+
+  it('reads the session no more when nobody is signed in here', async () => {
+    const answered = serveReset({ body: COMPLETE })
+    renderAt(`/reset-password${LINK_QUERY}`)
+    await screen.findByLabelText('New password')
+    typeNewPassword(NEW_PASSWORD)
+    fireEvent.click(resetButton())
+
+    await noticeTitled(SIGN_IN_TEXT.resetDoneTitle)
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(sessionChecks(answered)).toHaveLength(1)
   })
 })

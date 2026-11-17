@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { confirmPasswordReset, replyDetail } from '../api/auth.js'
 import { ApiError, messageForStatus } from '../api/client.js'
+import useAuth from '../auth/useAuth.js'
 import Button from '../components/Button.jsx'
 import Notice from '../components/Notice.jsx'
 import PasswordInput from '../components/PasswordInput.jsx'
@@ -82,9 +83,17 @@ function validateNewPassword(values) {
  *
  * FR-02's pattern in flight ("Resetting…", disabled, one request per press). When the
  * form gives way to an outcome, focus moves to the heading above it.
+ *
+ * **A reset of the account signed in here** ends this browser's session too, as it ends
+ * every session of that account. After the 200, if someone is signed in, the session is
+ * read again (`useAuth().refresh`), quietly: its 401 is this reset's doing, not an expiry,
+ * so the header stops naming the user and the page keeps its outcome, with no "Session
+ * expired" and no move to sign-in (RST-UI-3). A reset of another account leaves this
+ * session as it was, and the read says so.
  */
 export default function ResetPassword() {
   useDocumentTitle('Reset password')
+  const { user, refresh } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
   const requirementsId = useId()
@@ -155,6 +164,8 @@ export default function ResetPassword() {
       setValues(EMPTY_VALUES)
       setDoneMessage(replyDetail(reply) ?? SIGN_IN_TEXT.resetCompleteFallback)
       setOutcome('done')
+      // RST-UI-3: the header stops naming a user whose session this reset ended.
+      if (user) refresh({ quiet: true })
     } catch (error) {
       if (error instanceof ApiError && error.status === 400) {
         const extracted = extractFieldErrors(error, FIELDS)
