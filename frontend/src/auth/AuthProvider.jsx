@@ -2,7 +2,26 @@ import { startTransition, useCallback, useEffect, useMemo, useRef, useState } fr
 import { useNavigate } from 'react-router-dom'
 import * as authApi from '../api/auth.js'
 import { ApiError, onUnauthorized } from '../api/client.js'
+import { LOGOUT_WAIT_LIMIT_MS } from '../constants.js'
 import { AuthContext } from './context.js'
+
+/**
+ * Settles once `change` has answered, or once LOGOUT_WAIT_LIMIT_MS has passed, whichever
+ * comes first, and never rejects (FEA-11). If the limit comes first, the change is marked
+ * abandoned, so that its success, should it come later, ends its session too.
+ */
+function waitForChange(change) {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      change.abandoned = true
+      resolve()
+    }, LOGOUT_WAIT_LIMIT_MS)
+    change.answered.then(() => {
+      clearTimeout(timer)
+      resolve()
+    })
+  })
+}
 
 /**
  * Holds the signed-in user for the whole app.
@@ -27,6 +46,13 @@ import { AuthContext } from './context.js'
  * carries the cookie that answer left, the new key's after a 200, and destroys that
  * session. A Log out pressed in another tab is not covered: tabs share the cookie, not
  * this state.
+ *
+ * The wait has an upper limit, LOGOUT_WAIT_LIMIT_MS, 15 seconds (FEA-11), so a change
+ * that has stalled cannot hold FR-04's redirect. Past it, the logout goes ahead with the
+ * cookie the browser holds. A change that then succeeds has set its new key's cookie
+ * after the logout, which is LOG-1 again, so the provider sends one more logout for it,
+ * and the session that 200 left ends too. A change refused after the limit changed
+ * nothing, and nothing more is sent.
  */
 export default function AuthProvider({ children }) {
   const navigate = useNavigate()
@@ -37,8 +63,9 @@ export default function AuthProvider({ children }) {
   useEffect(() => {
     userRef.current = user
   }, [user])
-  // LOG-1: a promise that settles once the password change in flight has answered,
-  // whatever the answer, and never rejects; null when no change is in flight.
+  // LOG-1: the password change in flight, or null when there is none. `answered` is a
+  // promise that settles once the change has answered, whatever the answer, and never
+  // rejects; `abandoned` is set when a logout stopped waiting for it (FEA-11).
   const accountChange = useRef(null)
 
   const refresh = useCallback(async () => {
@@ -112,13 +139,19 @@ export default function AuthProvider({ children }) {
   // until it has answered, so that `logout` waits for it. Returns `change` itself, for
   // the caller to await as before.
   const trackAccountChange = useCallback((change) => {
-    const answered = Promise.resolve(change).then(
-      () => undefined,
+    const entry = { answered: null, abandoned: false }
+    entry.answered = Promise.resolve(change).then(
+      () => {
+        // FEA-11: a logout stopped waiting for this change, and it has since succeeded,
+        // setting its new key's cookie after the logout. That session is ended too. A
+        // failure here is the session being gone already, which is the aim.
+        if (entry.abandoned) authApi.logout().catch(() => undefined)
+      },
       () => undefined,
     )
-    accountChange.current = answered
-    answered.then(() => {
-      if (accountChange.current === answered) accountChange.current = null
+    accountChange.current = entry
+    entry.answered.then(() => {
+      if (accountChange.current === entry) accountChange.current = null
     })
     return change
   }, [])
@@ -128,8 +161,10 @@ export default function AuthProvider({ children }) {
   const logout = useCallback(async () => {
     // LOG-1: nothing is sent until a password change in flight has answered. Sent now,
     // the logout would end the key the change is replacing, and leave the new one live.
+    // FEA-11: for at most LOGOUT_WAIT_LIMIT_MS; a change that succeeds after that is
+    // logged out when it answers (trackAccountChange above).
     const change = accountChange.current
-    if (change) await change
+    if (change) await waitForChange(change)
     try {
       await authApi.logout()
     } catch (error) {

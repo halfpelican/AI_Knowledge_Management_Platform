@@ -63,6 +63,15 @@ function durationInWords(seconds) {
 export const REMEMBERED_SESSION_DAYS = 7
 
 /**
+ * The longest Log out waits for a password change in flight before it goes ahead, in
+ * milliseconds (FEA-11, Benjamin's answer of 18 November 2026: 15 seconds). The wait is
+ * LOG-1's (src/auth/AuthProvider.jsx); the limit keeps FR-04's "immediately redirected"
+ * from waiting on a change that has stalled. The page's own value, with no counterpart
+ * on the server.
+ */
+export const LOGOUT_WAIT_LIMIT_MS = 15_000
+
+/**
  * Fixed text for D-137's parts of the sign-in pages. Kept in one block of its own, as
  * TEXT keeps the rest, so each sentence has one copy.
  */

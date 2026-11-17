@@ -25,6 +25,11 @@
  *   until the change has answered, whatever the answer, and then one logout, which
  *   carries the new cookie and destroys that session. Sent at once, it would end only
  *   the old key: "You've been logged out" would show over a browser left signed in.
+ * - **The wait has an upper limit (FEA-11, 18 November 2026): 15 seconds.** A change
+ *   that has not answered by then does not hold the logout any longer. If it then
+ *   succeeds, its 200 has set a new key's cookie after the logout, so one more logout
+ *   is sent for it; if it is refused, nothing more is sent. Fake timers, so the test
+ *   takes no 15 seconds.
  *
  * What is not: the server's rules (the validators, the equal-password check, which
  * sessions end), which are pytest's; and whether anything can be seen, which
@@ -32,8 +37,8 @@
  * tab, which shares the cookie but not this page's state.
  */
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
-import { PROFILE_TEXT, TEXT, VALIDATION } from '../src/constants.js'
+import { describe, expect, it, vi } from 'vitest'
+import { LOGOUT_WAIT_LIMIT_MS, PROFILE_TEXT, TEXT, VALIDATION } from '../src/constants.js'
 import { heldResponse } from './fakeApi.js'
 import { BOTH_ROLES, EMPLOYEE, renderApp, requested, serveSignedIn } from './routeWalk.jsx'
 
@@ -109,7 +114,7 @@ async function logOutDuringHeldChange(user, extraRoutes = {}) {
   // ...but the press is taken, and the header says so...
   await waitFor(() => expect(logOut.textContent).toBe('Signing out…'))
   expect(logOut.disabled).toBe(true)
-  // ...and it goes on waiting, however long the change takes.
+  // ...and it goes on waiting while the change takes its time, up to FEA-11's limit.
   await aWhile()
   expect(logouts(answered)).toHaveLength(0)
   expect(logOut.textContent).toBe('Signing out…')
@@ -328,5 +333,105 @@ describe('LOG-1: Log out pressed while a change is in flight waits for the chang
     pressed.held.release(reply)
     await expectLoggedOut(pressed, EMPLOYEE)
     expect(screen.queryByText('Could not sign out')).toBeNull()
+  })
+})
+
+describe('FEA-11: the logout waits for a change in flight for 15 seconds at most', () => {
+  it('waits for Benjamin’s 15 seconds', () => {
+    expect(LOGOUT_WAIT_LIMIT_MS).toBe(15_000)
+  })
+
+  /**
+   * Starts a change the server holds, then, under fake timers, presses the header's Log
+   * out. Returns what the test needs, with the fake timers still on: the caller switches
+   * them off.
+   */
+  async function logOutUnderFakeTimers(user) {
+    const held = heldResponse()
+    const { answered, probe } = await openProfile(user, {
+      'POST /api/auth/change-password': held.route,
+      'POST /api/auth/logout': { status: 200 },
+    })
+    fillValid()
+    fireEvent.click(screen.getByRole('button', { name: PROFILE_TEXT.changePassword }))
+    expect(changes(answered)).toHaveLength(1)
+    // Only the timers the wait uses: React's scheduler and the fake API run as they would.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const logOut = within(primaryNav()).getByRole('button', { name: 'Log out' })
+    fireEvent.click(logOut)
+    expect(logOut.textContent).toBe('Signing out…')
+    return { held, answered, probe, logOut }
+  }
+
+  it.each(BOTH_ROLES)(
+    'as an $role, a change that never answers holds the logout for 15 seconds and no longer; then the user lands signed out',
+    async (user) => {
+      let pressed
+      try {
+        pressed = await logOutUnderFakeTimers(user)
+        await vi.advanceTimersByTimeAsync(LOGOUT_WAIT_LIMIT_MS - 1)
+        expect(logouts(pressed.answered)).toHaveLength(0)
+        expect(pressed.logOut.textContent).toBe('Signing out…')
+        await vi.advanceTimersByTimeAsync(1)
+      } finally {
+        vi.useRealTimers()
+      }
+      await expectLoggedOut(pressed, user)
+    },
+  )
+
+  it.each(BOTH_ROLES)(
+    'as an $role, a change that succeeds after the limit is logged out too, so its new key does not outlive the logout',
+    async (user) => {
+      let pressed
+      try {
+        pressed = await logOutUnderFakeTimers(user)
+        await vi.advanceTimersByTimeAsync(LOGOUT_WAIT_LIMIT_MS)
+      } finally {
+        vi.useRealTimers()
+      }
+      await expectLoggedOut(pressed, user)
+
+      // The change's 200 comes last, carrying a new key's cookie: one more logout ends it.
+      pressed.held.release({ body: { detail: 'Your password has been changed.' } })
+      await waitFor(() => expect(logouts(pressed.answered)).toHaveLength(2))
+      // And nothing else changes: still signed out, on sign-in.
+      expect(pressed.probe.location.pathname).toBe('/login')
+      expect(within(primaryNav()).queryByRole('button', { name: 'Log out' })).toBeNull()
+      expect(screen.queryByText('Could not sign out')).toBeNull()
+    },
+  )
+
+  it('a change refused after the limit changed nothing, and nothing more is sent', async () => {
+    let pressed
+    try {
+      pressed = await logOutUnderFakeTimers(EMPLOYEE)
+      await vi.advanceTimersByTimeAsync(LOGOUT_WAIT_LIMIT_MS)
+    } finally {
+      vi.useRealTimers()
+    }
+    await expectLoggedOut(pressed, EMPLOYEE)
+
+    pressed.held.release({ status: 400, body: { current_password: ['Your current password is incorrect.'] } })
+    await aWhile()
+    expect(logouts(pressed.answered)).toHaveLength(1)
+  })
+
+  it('a change that answers within the limit is waited for, and the limit then sends nothing more', async () => {
+    let pressed
+    try {
+      pressed = await logOutUnderFakeTimers(EMPLOYEE)
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(logouts(pressed.answered)).toHaveLength(0)
+      pressed.held.release({ body: { detail: 'Your password has been changed.' } })
+      // The change answers; its wait is over, and its timer is cleared.
+      await vi.waitFor(() => expect(logouts(pressed.answered)).toHaveLength(1))
+      await vi.advanceTimersByTimeAsync(LOGOUT_WAIT_LIMIT_MS)
+    } finally {
+      vi.useRealTimers()
+    }
+    await expectLoggedOut(pressed, EMPLOYEE)
+    await aWhile()
+    expect(logouts(pressed.answered)).toHaveLength(1)
   })
 })
