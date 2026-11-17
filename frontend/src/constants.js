@@ -50,6 +50,63 @@ function durationInWords(seconds) {
   return minutes === 1 ? '1 minute' : `${minutes} minutes`
 }
 
+/* ---- D-137 on the sign-in pages: "Remember me", a forgotten password, the reset (FR-02, FR-04) ---- */
+
+/**
+ * How long a session started with "Remember me" ticked lasts without use, in days,
+ * mirroring apps/core/constants.py REMEMBERED_SESSION_DAYS (D-137: seven days, both
+ * roles, sliding with use). The sign-in page names it in the checkbox's hint, so the
+ * hint promises what the server gives. apps/api/tests/test_front_end_constants_agreement.py
+ * fails when the two drift. The server decides the session's length regardless
+ * (CLAUDE.md §6, invariant 4).
+ */
+export const REMEMBERED_SESSION_DAYS = 7
+
+/**
+ * The longest Log out waits for a password change in flight before it goes ahead, in
+ * milliseconds (FEA-11). The 15 seconds were set by the build, not by Benjamin: D-137's
+ * front-end note lists the value for him to confirm or change. The wait is
+ * LOG-1's (src/auth/AuthProvider.jsx); the limit keeps FR-04's "immediately redirected"
+ * from waiting on a change that has stalled. The page's own value, with no counterpart
+ * on the server.
+ */
+export const LOGOUT_WAIT_LIMIT_MS = 15_000
+
+/**
+ * Fixed text for D-137's parts of the sign-in pages. Kept in one block of its own, as
+ * TEXT keeps the rest, so each sentence has one copy.
+ */
+export const SIGN_IN_TEXT = {
+  // "Remember me on this device" is #119's label. Its hint says what ticking it does and
+  // when not to: the session this sign-in starts lasts until it goes REMEMBERED_SESSION_DAYS
+  // without a request (D-137), and anyone at this device has it until then.
+  rememberHint: `Ticked, your session on this device lasts until it goes ${REMEMBERED_SESSION_DAYS} days without use. Do not tick it on a shared computer.`,
+  // POST /api/auth/password-reset's 200 is shown as the server sent it, the same for every
+  // address (D-25). This is only for a 200 that carried no text, and it names no number, so
+  // it cannot come to disagree with the server about how long a link works.
+  resetRequestedFallback: 'If an account uses this address, an email with a link to reset its password is on its way.',
+  // The `auth` rate's 429 on either reset route (D-137 put both on the budget login and
+  // registration share). `when` is from the reply's Retry-After (src/utils/retryAfter.js).
+  tooManyAttempts: (when) => `Too many attempts in a short time. You can try again ${when}.`,
+  // The reset page, /reset-password, which the emailed link opens.
+  resetIntro: 'Choose a new password for your account.',
+  // Beside the disabled button, as on FR-01's registration form: a disabled button takes
+  // neither focus nor a description.
+  resetGate: 'Complete both fields and every password requirement to continue.',
+  resetFailedTitle: 'Could not reset your password',
+  // POST /api/auth/password-reset/confirm's 200 is shown as the server sent it. This is only
+  // for a 200 that carried no text.
+  resetDoneTitle: 'Password reset',
+  resetCompleteFallback: 'Your password has been reset. Sign in with your new password.',
+  // Every link that does not work gets one answer (docs/api-contract.md), and so does a link
+  // opened without its uid or token, which the page does not send. The page's own words, true
+  // of each: the server's text is never shown for a refusal.
+  resetLinkDeadTitle: 'This link does not work',
+  resetLinkDead:
+    'This password reset link does not work. It may be incomplete, or it may have expired or been used already.',
+  resetAskAgain: 'Ask for a new link',
+}
+
 /**
  * The two document statuses a 201 can carry (docs/schema-v1.md §3, mirrored in
  * apps/core/constants.py DOCUMENT_STATUS_VALUES). The interface branches on
@@ -140,6 +197,118 @@ export const ACCEPTED_EXTENSIONS = ['.pdf', '.docx', '.xlsx', '.txt']
 export const ACCEPTED_FORMATS_LABEL = 'PDF, DOCX, XLSX, TXT'
 export const MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 export const MAX_UPLOAD_LABEL = '50 MB'
+
+/* ---- D-137: profile pictures, and the Profile page #119 added ---------------- */
+
+/**
+ * D-137's profile picture limits, mirroring apps/core/constants.py
+ * (MAX_PICTURE_BYTES, MAX_PICTURE_PIXELS, PICTURE_FORMATS).
+ *
+ * The size and the formats are a convenience check, as FR-08's are above: the
+ * Profile page refuses a file over 5 MB, or one that is not a PNG, JPEG or WebP,
+ * before sending it. The server decides from the bytes it receives, whatever the
+ * browser allowed (CLAUDE.md §6, invariant 4). The pixel ceiling is not checked
+ * here, since the browser would have to decode the picture to count; it is copied
+ * only so the page can name it when the server's 413 refuses a picture for it.
+ * tests/profilePicture.test.jsx reads apps/core/constants.py and fails when any of
+ * these drifts from the server's value.
+ */
+export const MAX_PICTURE_BYTES = 5 * 1024 * 1024
+export const MAX_PICTURE_LABEL = '5 MB'
+export const MAX_PICTURE_PIXELS = 25_000_000
+/** What the file picker offers and the page accepts: D-137's three formats, as the browser types them. */
+export const PICTURE_TYPES = ['image/png', 'image/jpeg', 'image/webp']
+/** Read only where the browser gives a file no type. */
+export const PICTURE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp']
+export const PICTURE_FORMATS_LABEL = 'PNG, JPEG, WebP'
+
+/**
+ * The Profile page's text (D-137, on #119's page). Its own block rather than
+ * entries in TEXT, so the four branches building on #119 at once merge without
+ * touching one another's lines. The picture's 400, 413s, 415 and `picture_busy`,
+ * and the change's 200, are said in the contract's own words (docs/api-contract.md,
+ * "FR-04 — account self-service"), which tests/profilePicture.test.jsx holds them
+ * to; the reply's `detail` is never shown. The contract gives no words for the two
+ * rate limits, so those are the page's, as D-79's are on the other screens.
+ */
+export const PROFILE_TEXT = {
+  heading: 'My Profile',
+  // The navigation's link to the page, beside "Signed in as …" with the user's picture.
+  navLabel: 'Profile',
+
+  /* The picture. Two buttons open the one file input, which is out of the tab
+     order: "Change picture" under the picture, and "Choose a picture" in the form. */
+  changePicture: 'Change picture',
+  choosePicture: 'Choose a picture',
+  // The form's button shows the chosen file's name, as #119's label did; its
+  // accessible name keeps what it does in front of that name (WCAG 2.1 SC 2.5.3).
+  choosePictureChosen: (name) => `Choose a picture. Chosen: ${name}`,
+  uploadPicture: 'Upload picture',
+  uploadingPicture: 'Uploading…',
+  removePicture: 'Remove',
+  // Remove removes the picture on show: a chosen picture not yet uploaded, as in
+  // #119, or else the saved one (DELETE /api/users/me/picture).
+  removeChosenLabel: 'Remove the chosen picture',
+  removeSavedLabel: 'Remove your profile picture',
+  removingPicture: 'Removing…',
+  // Benjamin's answer 4 (18 November 2026): removing the saved picture asks first, in
+  // the confirmation dialogue the app's other deletions use. A chosen picture not yet
+  // sent is taken away without asking: nothing on the server is deleted.
+  removeConfirmTitle: 'Remove your profile picture?',
+  removeConfirmBody:
+    'Your picture is deleted, and your initials show in its place wherever your picture appeared. This cannot be undone, but you can upload a picture again at any time.',
+  removeConfirmLabel: 'Remove picture',
+  removeCancel: 'Cancel',
+  previewAlt: 'Preview',
+  pictureUpdatedTitle: 'Picture updated',
+  pictureUpdated: 'Your profile picture has been updated.',
+  pictureRemovedTitle: 'Picture removed',
+  pictureRemoved: 'Your profile picture has been removed.',
+  pictureUploadFailed: 'Could not upload picture',
+  pictureRemoveFailed: 'Could not remove picture',
+  // Refused before sending. Named as FR-08's refusal names its formats.
+  pictureTypeUnsupported: `File type not supported. Accepted formats: ${PICTURE_FORMATS_LABEL}.`,
+  // The contract's 413 for the file's size, said before sending as well.
+  pictureTooLarge: `Picture exceeds the maximum permitted size of ${MAX_PICTURE_LABEL}.`,
+  // The contract's 413 for a header declaring too many pixels.
+  pictureTooManyPixels: `This picture's dimensions are too large. Choose a picture of at most ${MAX_PICTURE_PIXELS / 1_000_000} megapixels.`,
+  // The contract's 400 and 415.
+  pictureNotSubmitted: 'No picture was submitted.',
+  pictureUnsupported: 'Choose a PNG, JPEG or WebP picture. This file is not one, or it is damaged.',
+  // The `picture` rate's 429, which carries DRF's body and a Retry-After.
+  pictureRateLimited: (when) =>
+    `You have sent too many pictures in a short time, so this one was not saved. You can try again ${when}.`,
+  // The 429 `picture_busy`: the contract's sentence, with its Retry-After for "a few seconds".
+  pictureBusyTitle: 'The server is busy',
+  pictureBusy: (when) =>
+    `The server is busy with other pictures. This picture was not saved and nothing was changed; it can be sent again ${when}.`,
+
+  /* The password change (POST /api/auth/change-password), under FR-01's rules. */
+  passwordHeading: 'Change password',
+  currentPasswordLabel: 'Current password',
+  newPasswordLabel: 'New password',
+  confirmPasswordLabel: 'Confirm new password',
+  // FR-02's Show toggle on each of the three (FEA-3, NFR-14), named for its field as the
+  // reset page names its two (src/pages/ResetPassword.jsx).
+  showCurrentPassword: 'Show current password',
+  showNewPassword: 'Show new password',
+  showConfirmedPassword: 'Show confirmed password',
+  currentPasswordRequired: 'Enter your current password.',
+  newPasswordRequired: 'Enter a new password.',
+  confirmNewPasswordRequired: 'Re-enter your new password.',
+  // Registration's sentence beside its disabled button, for the same reason.
+  passwordGate: 'Complete every field and password requirement to continue.',
+  changePassword: 'Change password',
+  changingPassword: 'Saving…',
+  passwordChangedTitle: 'Password changed',
+  // The contract's 200, then what the change did to sessions.
+  passwordChanged: 'Your password has been changed.',
+  passwordChangedSessions: 'You are still signed in here. Anywhere else you were signed in has been signed out.',
+  passwordChangeFailed: 'Could not change password',
+  // The `password_change` rate's 429. Wrong current passwords count towards it too.
+  passwordRateLimited: (when) =>
+    `You have tried to change your password too many times in a short time, so it was not changed. You can try again ${when}.`,
+}
 
 /**
  * Said by the upload queue against a finished file and by the repository against
@@ -1444,6 +1613,23 @@ export const TEXT = {
   homeIntro:
     'Search and ask questions of your organisation’s documents and meeting transcripts. Every answer cites the material it came from.',
 
+  /* ---- Home: PR #119's offer, features and illustration (FR-01, FR-02) -- */
+  // Sagarika Dey's words for the page she redesigned. Its heading and lead are
+  // `homeHeading` and `homeIntro` above, and its badge is APP_TITLE.
+  homeSignIn: 'Sign in',
+  homeRegister: 'Create an account',
+  homeFeatureSearchTitle: 'Knowledge search',
+  homeFeatureSearchText: 'Find answers across documents and meeting transcripts.',
+  homeFeatureCitationsTitle: 'Verified citations',
+  homeFeatureCitationsText: 'Every answer links back to its source passage.',
+  homeFeatureAccessTitle: 'Role-based access',
+  homeFeatureAccessText: 'See only what your role permits.',
+  // The chat bubbles inside the illustration. The illustration is decoration and is
+  // aria-hidden, so a screen reader reads none of these; the lead says it in words.
+  homeIllustrationGreeting: 'Hello!',
+  homeIllustrationReply: 'How can I help?',
+  homeIllustrationRequest: 'Search our knowledge base.',
+
   /* ---- FR-14 dashboard --------------------------------------------------- */
   // FR-14: the platform's entry point after login. "It exists to orient the user
   // rather than to hold functionality of its own: each panel is a route into the
@@ -1508,6 +1694,12 @@ export const TEXT = {
   dashboardUploaded: 'Uploaded',
   dashboardHeld: 'Held',
   dashboardAsked: 'Asked',
+
+  /* ---- FR-14 dashboard: PR #119's signed-in line ------------------------- */
+  // Sagarika Dey's line under the heading: the session's own name and role, as
+  // GET /api/auth/me gave them. The name is the user's own words, shown as text.
+  dashboardSignedInAs: 'Signed in as',
+  dashboardSignedInRole: (role) => `(${role})`,
 
   /* ---- FR-20 knowledge map, with NFR-17's table view (NIT3004, D-132) ---- */
   // FR-20: "A node-link diagram showing documents, meetings, tags, and contributors,

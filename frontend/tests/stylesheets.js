@@ -338,6 +338,100 @@ export function hidingCauses(element) {
   return causes
 }
 
+/* ---- Specificity ----------------------------------------------------------- */
+
+/** The index just past the identifier that starts at `start`. */
+function identifierEnd(text, start) {
+  let i = start
+  while (i < text.length && /[\w-]/.test(text[i])) i += 1
+  if (i === start) throw new Error(`specificity: no name at offset ${start} of "${text}"`)
+  return i
+}
+
+/** The index of the bracket that closes the one at `open`. */
+function closingBracket(text, open, opener, closer) {
+  let depth = 0
+  for (let i = open; i < text.length; i += 1) {
+    if (text[i] === opener) depth += 1
+    else if (text[i] === closer) {
+      depth -= 1
+      if (depth === 0) return i
+    }
+  }
+  throw new Error(`specificity: unbalanced "${opener}" in "${text}"`)
+}
+
+/** The higher of two specificities. */
+function higher(first, second) {
+  return compareSpecificity(first, second) >= 0 ? first : second
+}
+
+/**
+ * One complex selector's specificity as [ids, classes, types], as CSS Selectors
+ * Level 4 counts it: a class, an attribute or a pseudo-class is one in the middle
+ * column; `:not()`, `:is()` and `:has()` count as their most specific argument and
+ * `:where()` as nothing; a type or a pseudo-element is one in the last; `*` and the
+ * combinators count nothing. What the stylesheets use and no more: anything else
+ * throws, so a selector this cannot read fails the test rather than being misjudged.
+ *
+ * @param {string} selector one selector, not a comma-separated list
+ * @returns {[number, number, number]}
+ */
+export function specificity(selector) {
+  const text = selector.trim()
+  const total = [0, 0, 0]
+  const add = ([a, b, c]) => {
+    total[0] += a
+    total[1] += b
+    total[2] += c
+  }
+  let i = 0
+  while (i < text.length) {
+    const ch = text[i]
+    if (ch === '#') {
+      i = identifierEnd(text, i + 1)
+      add([1, 0, 0])
+    } else if (ch === '.') {
+      i = identifierEnd(text, i + 1)
+      add([0, 1, 0])
+    } else if (ch === '[') {
+      i = closingBracket(text, i, '[', ']') + 1
+      add([0, 1, 0])
+    } else if (ch === ':') {
+      const element = text[i + 1] === ':'
+      const start = i + (element ? 2 : 1)
+      i = identifierEnd(text, start)
+      const name = text.slice(start, i).toLowerCase()
+      let argument = null
+      if (text[i] === '(') {
+        const close = closingBracket(text, i, '(', ')')
+        argument = text.slice(i + 1, close)
+        i = close + 1
+      }
+      if (element || ['before', 'after', 'first-line', 'first-letter'].includes(name)) add([0, 0, 1])
+      else if (name === 'where') add([0, 0, 0])
+      else if (['not', 'is', 'has'].includes(name)) add(splitTopLevel(argument, ',').map(specificity).reduce(higher))
+      else add([0, 1, 0])
+    } else if (ch === '*' || /[\s>+~]/.test(ch)) {
+      i += 1
+    } else if (/[a-zA-Z]/.test(ch)) {
+      i = identifierEnd(text, i)
+      add([0, 0, 1])
+    } else {
+      throw new Error(`specificity: cannot read "${selector}" at offset ${i}`)
+    }
+  }
+  return total
+}
+
+/** Negative, zero or positive as `first` is less specific than, as specific as, or more specific than `second`. */
+export function compareSpecificity(first, second) {
+  for (let column = 0; column < 3; column += 1) {
+    if (first[column] !== second[column]) return first[column] - second[column]
+  }
+  return 0
+}
+
 /** A short name for an element in a failure message. */
 export function describe(element) {
   const id = element.id ? `#${element.id}` : ''

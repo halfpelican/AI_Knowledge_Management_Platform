@@ -50,6 +50,16 @@ copies a value of ``apps/core/constants.py``:
 - ``EVIDENCE_MAP_NODE_TYPE`` and ``EVIDENCE_MAP_RELATIONSHIP`` (since 16 November 2026, D-138):
   the node types and the relationship ``GET /api/knowledge-map/evidence`` returns, for the same
   reason.
+- ``REMEMBERED_SESSION_DAYS`` (since 17 November 2026, D-137): the days a session started with
+  "Remember me" ticked lasts without use. The sign-in page names it in the checkbox's hint, so a
+  drifted copy would promise a session the server does not give.
+- ``MAX_PICTURE_BYTES``, ``MAX_PICTURE_LABEL``, ``MAX_PICTURE_PIXELS``, ``PICTURE_TYPES`` and
+  ``PICTURE_FORMATS_LABEL`` (since 17 November 2026, D-137): the profile picture's limits. The
+  Profile page refuses a file over the size, or of a type it does not list, before sending it. It
+  does not count pixels, which would mean decoding the picture, and names the pixel ceiling only
+  when the server's 413 refuses a picture for it. ``PICTURE_TYPES`` holds the browser's MIME types
+  and ``PICTURE_FORMATS`` Pillow's names for the same formats, so Pillow's own table translates one
+  into the other.
 
 **What it does not hold.** ``TEXT.noAnswerFallback`` and ``TEXT.provenanceRemovedFallback``
 are held by the front-end suite, which reads ``apps/core/constants.py`` itself
@@ -61,7 +71,11 @@ Neither is tied here. Nor is the literal "50 MB" in ``apps/api/views.py``
 ``FILE_TOO_LARGE_MESSAGE``, which is the server restating its own constant and an open item
 of its own. ``LOCKOUT_WARNING_REMAINING`` is the sign-in page's own rule (Benjamin's decision 2,
 D-130) and has no server value to equal. The minutes in ``TEXT.accountMayBeLocked`` come from
-the fetched policy.
+the fetched policy. ``PICTURE_EXTENSIONS`` has no server value to equal either: the server reads a
+picture's format from its content and never from its name, and the page reads the extension only
+for a file the browser gave no type. The contract's sentences in ``PROFILE_TEXT`` (the picture's
+400, 413s and 415, ``picture_busy``, and the password change's 200) are held to
+``docs/api-contract.md`` by ``frontend/tests/profilePicture.test.jsx``, not here.
 """
 
 from __future__ import annotations
@@ -72,6 +86,7 @@ from pathlib import Path
 
 import pytest
 from django.conf import settings
+from PIL import Image
 
 from apps.core import constants
 from apps.core import models as core_models
@@ -90,6 +105,8 @@ BOUNDS = [
     ("MAX_UPLOAD_BYTES", "MAX_UPLOAD_BYTES"),
     ("MAXIMUM_RECORDING_BYTES", "MAXIMUM_RECORDING_BYTES"),
     ("TRANSCRIPTION_SAMPLE_RATE", "TRANSCRIPTION_SAMPLE_RATE"),
+    # D-137's profile picture: the Profile page refuses a larger file before sending it.
+    ("MAX_PICTURE_BYTES", "MAX_PICTURE_BYTES"),
 ]
 
 # (the client's export, the column width in apps/core/models.py it copies). The new Topic
@@ -143,12 +160,16 @@ def _javascript_string(literal: str) -> str:
 
 
 def _javascript_integer(expression: str) -> int:
-    """An integer written as digits, or as a product of digits (`50 * 1024 * 1024`). Nothing
-    else is evaluated."""
-    assert re.fullmatch(r"\d+(\s*\*\s*\d+)*", expression), f"not an integer or a product of them: {expression}"
+    """An integer written as digits, or as a product of digits (`50 * 1024 * 1024`). A number may
+    hold JavaScript's numeric separator, one underscore between two digits (`25_000_000`), which
+    JavaScript ignores and so is dropped here. Nothing else is evaluated."""
+    number = r"\d+(?:_\d+)*"
+    assert re.fullmatch(rf"{number}(\s*\*\s*{number})*", expression), (
+        f"not an integer or a product of them: {expression}"
+    )
     product = 1
     for factor in expression.split("*"):
-        product *= int(factor)
+        product *= int(factor.replace("_", ""))
     return product
 
 
@@ -187,6 +208,17 @@ def test_the_clients_copy_of_each_column_width_equals_the_model_constant(client_
     assert client == server, (
         f"constants.js has {client_name} = {client}, and apps/core/models.py has "
         f"{server_name} = {server}. The screen would refuse, or allow, what the server does not."
+    )
+
+
+def test_the_clients_remembered_session_days_equal_the_servers(client_source):
+    """D-137's "Remember me": the hint beside the checkbox names how long the session lasts
+    without use, from the client's copy, and the server keeps the session that long."""
+    client = _javascript_integer(_exported(client_source, "REMEMBERED_SESSION_DAYS"))
+    assert client == constants.REMEMBERED_SESSION_DAYS, (
+        f"constants.js has REMEMBERED_SESSION_DAYS = {client}, and apps/core/constants.py has "
+        f"{constants.REMEMBERED_SESSION_DAYS}. The sign-in page's hint would promise a session "
+        "length the server does not give."
     )
 
 
@@ -237,6 +269,63 @@ def test_the_clients_accepted_formats_label_names_the_servers_four(client_source
     assert len(named) == len(set(named)), f"ACCEPTED_FORMATS_LABEL names a format twice: {label!r}"
     assert {part.lower() for part in named} == set(constants.ACCEPTED_FORMATS), (
         f"The refusal message names {label!r}; the server accepts {sorted(constants.ACCEPTED_FORMATS)} (D-15)."
+    )
+
+
+def test_the_clients_picture_pixel_ceiling_equals_the_servers(client_source):
+    """D-137: the Profile page does not count a picture's pixels, which would mean decoding it, so
+    it never refuses a picture for them. It names the ceiling when the server's 413 does."""
+    client = _javascript_integer(_exported(client_source, "MAX_PICTURE_PIXELS"))
+    assert client == constants.MAX_PICTURE_PIXELS, (
+        f"constants.js has MAX_PICTURE_PIXELS = {client}, and apps/core/constants.py has "
+        f"{constants.MAX_PICTURE_PIXELS}. When the server refuses a picture for its pixels, the "
+        "Profile page would name a ceiling the server does not apply."
+    )
+
+
+def test_the_clients_picture_ceiling_label_states_the_servers_ceiling(client_source):
+    assert constants.MAX_PICTURE_BYTES % MEGABYTE == 0, "the picture ceiling is no longer a whole number of MB"
+    label = _javascript_string(_exported(client_source, "MAX_PICTURE_LABEL"))
+    assert label == f"{constants.MAX_PICTURE_BYTES // MEGABYTE} MB", (
+        f"constants.js tells the user the picture ceiling is {label!r}; the server's is "
+        f"{constants.MAX_PICTURE_BYTES} bytes."
+    )
+
+
+def test_the_clients_picture_types_name_the_servers_picture_formats(client_source):
+    """D-137: the Profile page's file picker offers PICTURE_TYPES, and the page sends a file of no
+    other type. The server opens a picture only as one of PICTURE_FORMATS, so a type the client
+    lists and the server does not is a file the page sends and the server always refuses with the
+    415, and a format the client leaves out is a picture the page refuses that the server would
+    take. The client names the formats by MIME type and the server by Pillow's names, and Pillow
+    decides on the server, so Pillow's own table gives each format's type."""
+    literal = _exported(client_source, "PICTURE_TYPES")
+    assert re.fullmatch(r"\[\s*'[^']*'(\s*,\s*'[^']*')*\s*,?\s*\]", literal), f"not a list of strings: {literal}"
+    client = ast.literal_eval(literal)
+    assert len(client) == len(set(client)), f"PICTURE_TYPES lists a type twice: {client}"
+    # Image.MIME is empty until the format plugins are loaded, WebP's among them.
+    Image.init()
+    untyped = [name for name in constants.PICTURE_FORMATS if name not in Image.MIME]
+    assert not untyped, (
+        f"Pillow gives no MIME type for {untyped}, so this test cannot say what a browser calls them"
+    )
+    server = sorted(Image.MIME[name] for name in constants.PICTURE_FORMATS)
+    assert set(client) == set(server), (
+        f"constants.js PICTURE_TYPES is {sorted(client)}; apps/core/constants.py PICTURE_FORMATS is "
+        f"{list(constants.PICTURE_FORMATS)}, which Pillow types as {server}. The Profile page would "
+        "refuse a picture the server takes, or send one the server always refuses (D-137)."
+    )
+
+
+def test_the_clients_picture_formats_label_names_the_servers_formats(client_source):
+    """The Profile page's refusal names the formats it takes, as FR-08's names its four. The label
+    writes WebP as its makers do, and Pillow's name is WEBP, so the two are compared upper-cased."""
+    label = _javascript_string(_exported(client_source, "PICTURE_FORMATS_LABEL"))
+    named = [part.strip().upper() for part in label.split(",")]
+    assert all(named), f"not a list of formats: {label!r}"
+    assert len(named) == len(set(named)), f"PICTURE_FORMATS_LABEL names a format twice: {label!r}"
+    assert set(named) == set(constants.PICTURE_FORMATS), (
+        f"The Profile page's refusal names {label!r}; the server reads {list(constants.PICTURE_FORMATS)} (D-137)."
     )
 
 

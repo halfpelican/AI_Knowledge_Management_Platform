@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { TEXT } from '../constants.js'
+import Avatar from './Avatar.jsx'
 import Button from './Button.jsx'
 import SelectInput from './SelectInput.jsx'
 import './AttendeePicker.css'
@@ -30,7 +31,8 @@ import './AttendeePicker.css'
  * @param {object} props
  * @param {string} props.legend
  * @param {string} [props.hint]
- * @param {{id: string, name: string, email: string}[]} props.options The directory (D-34).
+ * @param {{id: string, name: string, email: string, picture?: string|null}[]} props.options The
+ *   directory (D-34), whose `picture` (D-137) each chosen person is shown with.
  * @param {string[]} props.value Ids already chosen, in the order they were added.
  * @param {(ids: string[]) => void} props.onChange
  * @param {boolean} [props.disabled]
@@ -91,7 +93,12 @@ export default function AttendeePicker({ legend, hint, options, value, onChange,
         <ul className="attendee-picker__list" aria-label={TEXT.attendeeListLabel}>
           {chosen.map((person) => (
             <li key={person.id} className="attendee-picker__person">
-              <span className="attendee-picker__name">{label(person)}</span>
+              {/* D-137: the person's picture, from the directory's `picture`, beside
+                  their name. Decoration, so the entry still reads as the name. */}
+              <span className="attendee-picker__name">
+                <Avatar name={person.name} picture={person.picture} className="avatar--inline" />
+                {label(person)}
+              </span>
               <Button
                 variant="secondary"
                 className="attendee-picker__remove"

@@ -2060,7 +2060,7 @@ each is D-137's, or a rule this contract already has.
 
 | Method | Path | Auth | Success | Failures |
 |---|---|---|---|---|
-| POST | `/api/auth/change-password` | session, both roles, no permission code | `200 {"detail": "Your password has been changed."}`. Body `{"current_password": "...", "new_password": "..."}`. Sets a new `sessionid` cookie: the session continues under a new key | `400` with field errors, below; `401` no valid session; `403 {"detail": "CSRF Failed: ..."}` without `X-CSRFToken`; `429` past `PASSWORD_CHANGE_THROTTLE_RATE`, with DRF's body and `Retry-After`, nothing changed |
+| POST | `/api/auth/change-password` | session, both roles, no permission code | `200 {"detail": "Your password has been changed."}`. Body `{"current_password": "...", "new_password": "..."}`. Sets a new `sessionid` cookie: the session continues under a new key | `400` with field errors, below; `401` no valid session, including a session a logout ended while the change ran, below; `403 {"detail": "CSRF Failed: ..."}` without `X-CSRFToken`; `429` past `PASSWORD_CHANGE_THROTTLE_RATE`, with DRF's body and `Retry-After`, nothing changed |
 
 **The `400`s.** Every refusal is a `400` with field errors, never a `401`, because the front end treats
 every `401` as an expired session and signs the user out (D-137). Nothing is changed by any of them.
@@ -2093,8 +2093,22 @@ every `401` as an expired session and signs the user out (D-137). Nothing is cha
     that receives this after the first change's `200` has lost the new key, so the page keeps its
     submit disabled, and sends nothing else, until the change has answered.
 
-**The order** is fixed: `401` for no session, then the CSRF `403`, then the `429`, then the body, and
-last the check that the current password is still the account's.
+**The `401` for a session that ended while the change ran** (LOG-1, from the security review of PR
+#119, and Benjamin's answer of 18 November 2026): `{"detail": "Authentication credentials were not
+provided."}`, the `401` for no session, with the `sessionid` cookie cleared. Nothing is changed and no
+session is created. Just before the new password is saved, the server checks that the session the
+request came in on still exists, because a logout processed meanwhile, from another tab for example,
+may have deleted it, and a change that went on would then answer `200` with a new key that no logout
+has ended. A logout that lands after this check, in the few queries before the change commits, still
+loses to the new key. Within one tab the page covers that case: it sends Log out only once a change in
+flight has answered, or after 15 seconds at most. If a change still answers `200` after those 15
+seconds, the page sends one more Log out, on a best-effort basis, to end the new key's session too.
+
+**The order** is fixed: `401` for no session, then the CSRF `403`, then the `429`, then the body, then
+the check that the current password is still the account's, and last the check that the session still
+exists. The password is checked before the session so that, when one session sends the change twice,
+the second request still gets Django's `400` with no cookie, above, and the browser keeps the first
+change's new key.
 
 **What a change does to sessions.**
 

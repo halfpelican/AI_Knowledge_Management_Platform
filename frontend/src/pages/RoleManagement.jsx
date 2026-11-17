@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { ApiError, NETWORK_ERROR_STATUS, messageForStatus } from '../api/client.js'
 import { listRoles, listUsers, unlockUser, updateUserRole } from '../api/users.js'
 import useAuth from '../auth/useAuth.js'
+import Avatar from '../components/Avatar.jsx'
 import Button from '../components/Button.jsx'
 import Dialog from '../components/Dialog.jsx'
 import NotPermitted from '../components/NotPermitted.jsx'
@@ -164,7 +165,12 @@ export function RoleTable({
             const saving = savingId === user.id
             return (
               <tr key={user.id}>
-                <th scope="row">{user.name}</th>
+                {/* D-137: each user's picture beside their name, from the list's own
+                    `picture`. Decoration, so the row header reads as the name alone. */}
+                <th scope="row">
+                  <Avatar name={user.name} picture={user.picture} className="avatar--inline" />
+                  {user.name}
+                </th>
                 <td className="roles-table__email">{user.email}</td>
                 <td className="roles-table__account">
                   <AccountState

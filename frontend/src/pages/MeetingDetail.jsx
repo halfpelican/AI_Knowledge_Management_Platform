@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ApiError, NETWORK_ERROR_STATUS, messageForStatus } from '../api/client.js'
 import { deleteMeeting, fetchMeeting } from '../api/meetings.js'
+import Avatar from '../components/Avatar.jsx'
 import Button from '../components/Button.jsx'
 import Dialog from '../components/Dialog.jsx'
 import MeetingSummary from '../components/MeetingSummary.jsx'
@@ -109,6 +110,11 @@ export default function MeetingDetail() {
   }
 
   const attendees = meeting.attendees ?? []
+  // Since D-137 the detail carries `attendee_people`, [{email, name, picture}]; null
+  // where a reply has none, and the addresses above are listed instead.
+  const people = Array.isArray(meeting.attendee_people)
+    ? meeting.attendee_people.filter((person) => person && typeof person === 'object' && typeof person.email === 'string')
+    : null
   const canDelete = meeting.can_delete === true && !deleteRefused
 
   async function confirmDelete() {
@@ -167,7 +173,24 @@ export default function MeetingDetail() {
         {/* Who took part, and nothing more: attendance confers no access, and
             the scope above is what decides who can read this (D-16). */}
         <dt>Attendees</dt>
-        <dd>{attendees.length > 0 ? attendees.join(', ') : 'None recorded'}</dd>
+        <dd>
+          {/* D-137: each attendee with their picture, from `attendee_people`, in the
+              order of `attendees`. A reply without it lists the addresses, as before. */}
+          {people === null ? (
+            attendees.length > 0 ? attendees.join(', ') : 'None recorded'
+          ) : people.length > 0 ? (
+            <ul className="avatar-list">
+              {people.map((person, index) => (
+                <li key={`${person.email}-${index}`} className="avatar-list__person">
+                  <Avatar name={person.name || person.email} picture={person.picture} />
+                  <span>{person.name ? `${person.name} (${person.email})` : person.email}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            'None recorded'
+          )}
+        </dd>
       </dl>
 
       {/* The meeting's one action, where the document detail keeps its actions.

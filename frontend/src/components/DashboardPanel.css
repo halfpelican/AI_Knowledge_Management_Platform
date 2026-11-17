@@ -1,64 +1,112 @@
-/* FR-14 dashboard panel, and the lists and figures inside one. Tokens only. */
+/* FR-14 dashboard panel — modern card design. Tokens only. */
 
 .dashboard-panel {
   display: flex;
   flex-direction: column;
-  min-width: 0; /* lets a long title wrap instead of widening its grid column */
-  padding: var(--space-4);
-  border: var(--border-width) solid var(--color-border-strong);
-  border-radius: var(--radius-md);
+  min-width: 0;
+  padding: var(--space-5);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
   background-color: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
 }
 
+.dashboard-panel:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--color-border-strong);
+}
+
+/* Panel heading — linked to its full view */
 .dashboard-panel__heading {
-  margin: 0 0 var(--space-3);
-  padding-bottom: var(--space-2);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-4);
+  padding-bottom: var(--space-3);
   border-bottom: var(--border-width) solid var(--color-border);
   font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
 }
 
-/* Loading, empty and unavailable: words, muted, and never coloured as an error. */
+.dashboard-panel__heading a {
+  color: inherit;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.dashboard-panel__heading a:hover {
+  color: var(--color-link);
+}
+
+/* Panel icon emoji */
+.dashboard-panel__icon {
+  font-size: var(--text-xl);
+  line-height: 1;
+}
+
+/* Loading, empty and unavailable states */
 .dashboard-panel__state {
   margin: 0;
   color: var(--color-text-muted);
+  font-size: var(--text-base);
+  padding: var(--space-4) 0;
+  text-align: center;
 }
 
+/* Note under panels */
 .dashboard-panel__note {
   margin: var(--space-3) 0 0;
   color: var(--color-text-muted);
   font-size: var(--text-sm);
+  line-height: 1.5;
 }
 
-/* Recent documents, meetings and questions. */
+/* Recent documents, meetings and questions lists */
 .dashboard-list {
   margin: 0;
   padding: 0;
   list-style: none;
+  flex: 1;
 }
 
 .dashboard-list > li {
-  padding: var(--space-2) 0;
+  padding: var(--space-3) 0;
   border-bottom: var(--border-width) solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
 }
 
 .dashboard-list > li:last-child {
   border-bottom: 0;
 }
 
+.dashboard-list > li:first-child {
+  border-top: var(--border-width) solid var(--color-border);
+  padding-top: var(--space-3);
+}
+
+/* List item title link */
 .dashboard-list__title {
   display: block;
-  margin: 0 0 var(--space-1);
+  margin: 0;
   font-weight: var(--weight-medium);
+  font-size: var(--text-base);
+  color: var(--color-text);
   word-break: break-word;
+  text-decoration: none;
 }
 
-/* A recent question: the user's own words, as text. One asked in a thread is a
-   link to it, inside this paragraph, so it wraps and spaces as a one-off does. */
-.dashboard-list__question {
-  margin: 0 0 var(--space-1);
-  word-break: break-word;
+.dashboard-list__title:hover {
+  color: var(--color-link);
+  text-decoration: underline;
 }
 
+/* Meta line under each item */
 .dashboard-list__meta {
   display: flex;
   flex-wrap: wrap;
@@ -70,13 +118,23 @@
 
 .dashboard-list__meta > span {
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
 }
 
-/* Indexed totals: one figure per type and their sum (D-70). The figure is a
-   number in words' place, so its label always sits beside it in text. */
+/* Recent question styling */
+.dashboard-list__question {
+  margin: 0;
+  word-break: break-word;
+  font-size: var(--text-base);
+  color: var(--color-text);
+}
+
+/* Indexed totals grid */
 .dashboard-totals {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(var(--layout-figure-min-width), 1fr));
+  grid-template-columns: repeat(3, 1fr);
   gap: var(--space-3);
   margin: 0;
 }
@@ -85,18 +143,47 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-  padding: var(--space-3);
+  padding: var(--space-4);
   border-radius: var(--radius-md);
   background-color: var(--color-surface-alt);
+  border: var(--border-width) solid var(--color-border);
+  transition: background-color 0.15s ease;
+}
+
+.dashboard-totals__item:hover {
+  background-color: var(--color-surface);
 }
 
 .dashboard-totals__item dt {
+  font-size: var(--text-sm);
   font-weight: var(--weight-medium);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0;
 }
 
 .dashboard-totals__item dd {
   margin: 0;
-  font-size: var(--text-2xl);
-  font-weight: var(--weight-semibold);
+  font-size: var(--text-3xl);
+  font-weight: var(--weight-bold);
   line-height: var(--leading-tight);
+  color: var(--color-text);
+}
+
+/* Responsive: stack totals on small screens */
+@media (max-width: 640px) {
+  .dashboard-totals {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-panel__heading {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-1);
+  }
+
+  .dashboard-panel__icon {
+    font-size: var(--text-lg);
+  }
 }

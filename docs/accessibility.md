@@ -26,6 +26,10 @@ do not account for — so this table cannot rot while the stylesheets move on.
 The component sheet at `/components` renders the core of this table live
 (`src/components/contrastPairs.js`), and `frontend/tests/componentSheet.test.jsx`
 recomputes each of its documented pairs from the CSS on disk.
+`frontend/tests/componentSheetTokens.test.jsx` reads the table the sheet renders:
+it gives jsdom the values a browser computes for `tokens.css`'s custom properties,
+then holds every row to the ratio `tokens.css` gives and to "Pass", never "n/a"
+or "Fail", and every token to a swatch or a row on the sheet.
 
 ### Text (SC 1.4.3, AA 4.5:1)
 
@@ -36,14 +40,25 @@ recomputes each of its documented pairs from the CSS on disk.
 | `--color-text` #1f2933 | `--color-danger-surface` #fef3f2 | 13.57:1 | 4.5:1 | Pass | body text everywhere a notice can put it |
 | `--color-text` #1f2933 | `--color-success-surface` #ecfdf3 | 13.99:1 | 4.5:1 | Pass | body text everywhere a notice can put it |
 | `--color-text` #1f2933 | `--color-warning-surface` #fffaeb | 14.14:1 | 4.5:1 | Pass | body text everywhere a notice can put it |
+| `--color-text` #1f2933 | `--color-background` #ffffff | 14.76:1 | 4.5:1 | Pass | body text everywhere a notice can put it (PR #119’s surfaces) |
+| `--color-text` #1f2933 | `--color-info-surface` #eff6ff | 13.56:1 | 4.5:1 | Pass | body text everywhere a notice can put it (PR #119’s surfaces) |
+| `--color-text` #1f2933 | `--color-status-indexed-surface` #dcfce7 | 13.43:1 | 4.5:1 | Pass | body text everywhere a notice can put it (PR #119’s surfaces) |
+| `--color-text` #1f2933 | `--color-status-not-indexed-surface` #fef3c7 | 13.25:1 | 4.5:1 | Pass | body text everywhere a notice can put it (PR #119’s surfaces) |
+| `--color-text` #1f2933 | `--color-role-employee-surface` #dbeafe | 12.09:1 | 4.5:1 | Pass | held on every surface the sweep knows; this one is the Profile page’s Employee role badge, which carries only its own text (FEA-7) |
 | `--color-text-muted` #4b5563 | `--color-surface` #ffffff | 7.56:1 | 4.5:1 | Pass | hints, metadata, empty states |
 | `--color-text-muted` #4b5563 | `--color-surface-alt` #f3f4f6 | 6.87:1 | 4.5:1 | Pass | hints, metadata, empty states |
 | `--color-text-muted` #4b5563 | `--color-danger-surface` #fef3f2 | 6.95:1 | 4.5:1 | Pass | hints, metadata, empty states |
 | `--color-text-muted` #4b5563 | `--color-success-surface` #ecfdf3 | 7.17:1 | 4.5:1 | Pass | hints, metadata, empty states |
 | `--color-text-muted` #4b5563 | `--color-warning-surface` #fffaeb | 7.24:1 | 4.5:1 | Pass | hints, metadata, empty states |
+| `--color-text-muted` #4b5563 | `--color-background` #ffffff | 7.56:1 | 4.5:1 | Pass | hints, metadata, empty states (PR #119’s surfaces) |
+| `--color-text-muted` #4b5563 | `--color-info-surface` #eff6ff | 6.94:1 | 4.5:1 | Pass | hints, metadata, empty states (PR #119’s surfaces) |
+| `--color-text-muted` #4b5563 | `--color-status-indexed-surface` #dcfce7 | 6.88:1 | 4.5:1 | Pass | hints, metadata, empty states (PR #119’s surfaces) |
+| `--color-text-muted` #4b5563 | `--color-status-not-indexed-surface` #fef3c7 | 6.79:1 | 4.5:1 | Pass | hints, metadata, empty states (PR #119’s surfaces) |
+| `--color-text-muted` #4b5563 | `--color-role-employee-surface` #dbeafe | 6.19:1 | 4.5:1 | Pass | held on every surface the sweep knows; this one is the Profile page’s Employee role badge (FEA-7) |
 | `--color-primary` #1d4ed8 | `--color-surface` #ffffff | 6.70:1 | 4.5:1 | Pass | links; the in-page 403’s link sits on the error notice |
 | `--color-primary` #1d4ed8 | `--color-surface-alt` #f3f4f6 | 6.09:1 | 4.5:1 | Pass | links; the in-page 403’s link sits on the error notice |
 | `--color-primary` #1d4ed8 | `--color-danger-surface` #fef3f2 | 6.16:1 | 4.5:1 | Pass | links; the in-page 403’s link sits on the error notice |
+| `--color-primary` #1d4ed8 | `--color-info-surface` #eff6ff | 6.16:1 | 4.5:1 | Pass | a link in an info notice, which sits on PR #119’s info fill: the knowledge map’s empty selection, in both its views |
 | `--color-primary-hover` #1e40af | `--color-surface` #ffffff | 8.72:1 | 4.5:1 | Pass | link hover |
 | `--color-primary-hover` #1e40af | `--color-surface-alt` #f3f4f6 | 7.93:1 | 4.5:1 | Pass | link hover |
 | `--color-primary-hover` #1e40af | `--color-danger-surface` #fef3f2 | 8.02:1 | 4.5:1 | Pass | link hover |
@@ -57,6 +72,16 @@ recomputes each of its documented pairs from the CSS on disk.
 | `--color-success` #067647 | `--color-success-surface` #ecfdf3 | 5.40:1 | 4.5:1 | Pass | the Indexed chip, the sheet’s pass column |
 | `--color-warning` #93370d | `--color-surface` #ffffff | 7.52:1 | 4.5:1 | Pass | the AI-unavailable notice’s title (NFR-19) |
 | `--color-warning` #93370d | `--color-warning-surface` #fffaeb | 7.21:1 | 4.5:1 | Pass | the AI-unavailable notice’s title (NFR-19) |
+| `--color-heading` #1f2933 | `--color-background` #ffffff | 14.76:1 | 4.5:1 | Pass | the landing page’s heading and feature titles (PR #119) |
+| `--color-heading` #1f2933 | `--color-surface` #ffffff | 14.76:1 | 4.5:1 | Pass | a title in a plain table cell, as in the knowledge map’s target columns (PR #119); a row-header title, as in the document table, takes `.data-table th`’s `--color-text-muted` on `--color-surface-alt` instead, 6.87:1 above |
+| `--color-link` #1d4ed8 | `--color-background` #ffffff | 6.70:1 | 4.5:1 | Pass | the sign-in card’s “Forgot password” link (PR #119) |
+| `--color-link` #1d4ed8 | `--color-surface` #ffffff | 6.70:1 | 4.5:1 | Pass | the dashboard panels’ links on hover (PR #119) |
+| `--color-primary-hover` #1e40af | `--color-info-surface` #eff6ff | 8.01:1 | 4.5:1 | Pass | every info notice’s text: PR #119’s rule in `Repository.css` comes after `Notice.css`’s in the build, so it reaches every screen |
+| `--color-danger-text` #991b1b | `--color-danger-surface` #fef3f2 | 7.64:1 | 4.5:1 | Pass | every error notice’s text, by the same rule (PR #119); the title keeps `--color-danger` |
+| `--color-status-indexed` #166534 | `--color-status-indexed-surface` #dcfce7 | 6.49:1 | 4.5:1 | Pass | the document table’s “Indexed” badge (FR-15, PR #119), and the Profile page’s Administrator role badge, #119’s own colours (FEA-7) |
+| `--color-status-not-indexed` #92400e | `--color-status-not-indexed-surface` #fef3c7 | 6.37:1 | 4.5:1 | Pass | the badge for every other status (FR-15, PR #119) |
+| `--color-primary-hover` #1e40af | `--color-role-employee-surface` #dbeafe | 7.15:1 | 4.5:1 | Pass | the Profile page’s Employee role badge, #119’s own colours (FEA-7) |
+| `--color-illustration-bubble-text` #e5e7eb | `--color-text-muted` #4b5563 | 6.10:1 | 4.5:1 | Pass | the landing illustration’s left chat bubble (PR #119) |
 
 ### User-interface component boundaries and fills (SC 1.4.11, AA 3:1)
 
@@ -79,6 +104,10 @@ recomputes each of its documented pairs from the CSS on disk.
 | `--color-warning` #93370d | `--color-warning-surface` #fffaeb | 7.21:1 | 3:1 | Pass | the unavailable notice’s edge |
 | `--color-text-muted` #4b5563 | `--color-surface` #ffffff | 7.56:1 | 3:1 | Pass | the knowledge map’s contributor shape (FR-20, D-132) |
 | `--color-text` #1f2933 | `--color-surface` #ffffff | 14.76:1 | 3:1 | Pass | the knowledge map’s selected node: its outline and its lines (FR-20, D-132) |
+| `--color-border-strong` #667085 | `--color-background` #ffffff | 4.97:1 | 3:1 | Pass | the landing page’s outline button (PR #119) |
+| `--color-illustration-device` #111827 | `--color-background` #ffffff | 17.74:1 | 3:1 | Pass | the landing illustration’s device and figure, on the page (PR #119) |
+| `--color-illustration-figure` #544ce6 | `--color-illustration-device` #111827 | 3.00:1 | 3:1 | Pass | the figure’s body on the figure’s circle (PR #119) |
+| `--color-accent` #1d4ed8 | `--color-background` #ffffff | 6.70:1 | 3:1 | Pass | the token behind one of the illustration’s shapes, drawn at 12% opacity (PR #119) |
 
 FR-20's knowledge map also uses four pairs already in this table, each against
 `--color-surface`, which is what the diagram, its legend and its Selected panel
@@ -86,6 +115,40 @@ sit on: `--color-primary` (6.70:1) fills the document shape, `--color-success`
 (5.69:1) the meeting shape, `--color-warning` (7.52:1) the tag shape, and
 `--color-border-strong` (4.97:1) draws the lines and each node's outline.
 Section 8 names the tests that hold the four fills to four different tokens.
+
+**PR #119's redesign (17 November 2026).** Its rows are the ones marked PR #119
+in both tables: 21 cases in `contrast.test.js`, recomputed for this table from
+`tokens.css`. Two notes go with them.
+
+- **Four of the home page illustration's colours changed.** The illustration
+  is `aria-hidden` decoration, and SC 1.4.11 asks no contrast of it. But
+  `contrast.test.js` accounts for every colour token a stylesheet uses by a
+  pair or an exemption, and none was exempted:
+  - the screen, #0b0c10, 1.10:1 against the device, is now the device's
+    #111827, so the bezel between them is gone;
+  - the figure's body, #4f46e5, 2.82:1 on the figure, is now #544ce6, 3.00:1;
+  - the keyboard, #1f2937, is now `--color-text`, #1f2933, which looks the
+    same, and still measures 1.20:1 against the device, which no pair checks;
+  - the left chat bubble, #374151, is now the lighter `--color-text-muted`,
+    on which its text measures 6.10:1 (8.33:1 before).
+
+  Only the first two fixed a failing pair; the last two are existing tokens in
+  place of new ones. Exempting the illustration's colours instead would
+  restore all four.
+- **The info and error notices have lost their leading edge.** PR #119's
+  `.notice--info` and `.notice--error` in `Repository.css` come after
+  `Notice.css`'s in the build, so on every screen they draw a 1px
+  `--color-border` all round in place of the 4px edge. While they stand, the
+  notice edges the `--color-primary` and `--color-danger` rows above name are
+  not drawn. A notice is not a control and says what it is in words, so no AA
+  criterion depends on the edge.
+
+**The Profile page's role badge (FEA-7, 18 November 2026)** is back in #119's
+colours. The Administrator's uses the “Indexed” pair; the Employee's adds one
+token, `--color-role-employee-surface`, and its three rows above (three cases in
+`contrast.test.js`). #119's borders, a shade darker than each fill (#bbf7d0 and
+#bfdbfe, about 1.1:1 against it), have no token, so each border is drawn in its
+own fill. A badge is not a control, and its text names the role.
 
 ### Documented exceptions
 
@@ -95,6 +158,7 @@ Section 8 names the tests that hold the four fills to four different tokens.
 | `--color-overlay` (the modal scrim) | Decorative and `aria-hidden`; nothing is read through it. The dialogue restates its own surface and text colour, which the test asserts, because white text on the bare composite would measure about 4.05:1 | `contrast.test.js :: the modal scrim backs no text` |
 | The password strength meter's fills | The bar is `aria-hidden` decoration; its text equivalent is the visible "Password strength: …" sentence (SC 1.1.1) | `tests/textEquivalents.test.jsx` |
 | The button spinner (`currentColor`) | `aria-hidden` decoration; the label changes with it | `tests/textEquivalents.test.jsx` |
+| `--shadow-sm`, `--shadow-md`, `--shadow-lg` (PR #119; `--color-text`’s rgb 31 41 51 at 6–14% alpha, inside the token) | Decorative depth, never a boundary anything depends on. Of their eleven uses, eight are on elements with a border of their own (the dashboard’s panels and filter box, the profile card and form, the repository’s filter and browse boxes, every table’s scroll region), one is the hover of the home page’s “Sign in” link, whose fill is its boundary (since 18 November 2026 #119’s button rules reach only the home page’s two calls to action, so no other primary button has it), and two are on the `aria-hidden` illustration, whose white icon tiles stand out from the page by their shadow alone | No test holds this. `contrast.test.js`’s sweep follows `var(--shadow-sm)` into the token and finds a colour literal, not a `--color-` token, so it never sees the colour; `stylesheets.test.js :: keeps every colour literal in tokens.css` keeps that literal in the one file. The eleven uses were checked by hand on 17 November 2026 |
 
 ## 2. Focus states (SC 2.4.7)
 
@@ -118,7 +182,10 @@ Section 8 names the tests that hold the four fills to four different tokens.
 `frontend/tests/keyboard.js` presses Tab as a browser does (keydown first, so
 the dialogue's trap can claim it; one stop per radio group; disabled controls
 and closed `<details>` skipped). `frontend/tests/tabOrder.test.jsx` walks
-sign-in, dashboard, documents, upload, meetings and ask end to end and asserts,
+sign-in, the home page and the two account-recovery pages to a visitor not
+signed in (the forgotten-password page before and after it is sent, the reset
+page with its link and with a link that does not work), then the dashboard,
+documents, upload, meetings, the Profile page and ask, end to end, and asserts,
 on every screen:
 
 - the skip link is the first stop, hidden until focused and shown the moment it
@@ -127,7 +194,9 @@ on every screen:
   what lets the Ask screen's two-column layout collapse to one column without
   reordering (the aside is after the main column in the DOM);
 - nothing reachable is invisible while it holds focus, checked against the
-  stylesheets through `tests/stylesheets.js`;
+  stylesheets through `tests/stylesheets.js`. The one stop allowed to be hidden
+  is a file input whose label shows its focus ring, as the drop zone's does;
+  until 18 November 2026 any field with a visible label was let through;
 - no trap: the walk fails if focus revisits a stop before leaving the page, and
   the delete confirmation's Tab cycle is tested inside the dialogue both ways;
 - the table region that scrolls at narrow widths is itself a stop
@@ -140,11 +209,20 @@ its order).
 
 ## 4. Text equivalents (SC 1.1.1)
 
-The interface has no raster images and no canvas charts. It has one graphic,
-FR-20's node-link diagram, which is drawn as SVG and has a text equivalent of
-its own (the last three rows below, and section 8). Its other non-text content
-is bars, glyphs and markers. Each carries its information as text
-(`frontend/tests/textEquivalents.test.jsx`):
+The interface has no canvas charts. Its raster images are D-137's profile
+pictures, drawn by `components/Avatar.jsx` wherever people are listed: the
+header, role management, the attendee lists and the Profile page. Each is
+decoration, because the person's name is always beside it: the picture's `alt`
+is empty, and the initials shown in its place are `aria-hidden` and painted by
+the stylesheet, so nothing is read twice (`frontend/tests/avatars.test.jsx`,
+`frontend/tests/profileCard.test.jsx`). The Profile page's preview of a picture
+chosen but not yet sent is named "Preview"; no test holds that name. It has one
+graphic, FR-20's node-link diagram, which is drawn as SVG and has a text
+equivalent of its own (the three knowledge map rows below, and section 8). Its
+other non-text content is bars, glyphs and markers. Each carries its information
+as text
+(`frontend/tests/textEquivalents.test.jsx`, except where a row names another
+file):
 
 | Non-text content | Text equivalent |
 |---|---|
@@ -158,10 +236,29 @@ is bars, glyphs and markers. Each carries its information as text
 | Knowledge map: a node's shape and colour (FR-20) | The node is a link whose name begins with its type in a word ("Document: Leave policy, 3 connections shown"); the shape is an `aria-hidden` SVG. The Items table has a Type column in words, and the legend puts each shape beside its word |
 | Knowledge map: the lines (FR-20) | The Relationships table: one row per line, read "from, relationship, to" in words. The lines' SVG layer is `aria-hidden` and holds nothing focusable and no text |
 | Knowledge map: the selected node's heavier outline and lines | `aria-current`, the visible word "Selected", and what a second selection does, in the node's name; the Selected panel lists its connections as links |
+| A profile picture, or the initials in its place (D-137) | The person's name, always beside it. The picture's `alt` is empty and the initials are `aria-hidden`, painted from `data-initials` by `Avatar.css` (`avatars.test.jsx`) |
+| The home page's illustration and its feature glyphs (PR #119) | Decoration, `aria-hidden` as a whole: each feature's words say what its glyph shows, and the lead says what the illustration does. Nothing in it is focusable (`dashboard.test.jsx :: hides the illustration and every glyph from assistive technology…`) |
 
 The sweep in the same file asserts no `aria-hidden` subtree contains a
 focusable element, and the tab-order walk cannot visit one (an `aria-hidden`
 ancestor is a hiding cause).
+
+**Motion (SC 2.2.2, Pause, Stop, Hide).** The home page's illustration is the
+one thing that moves on its own beside the page's content. Its cursor blinks
+four times, 4 seconds, and holds still; each of its three icons floats once,
+the last coming to rest 4.2 seconds after the page opens. So every animation
+ends within five seconds, and none needs a control to stop it. A visitor whose
+system asks for reduced motion sees none of it: `Home.css` sets
+`animation: none` on both under `prefers-reduced-motion: reduce`, rather than
+relying on `base.css`'s rule, which shortens an animation but does not cap its
+count. `frontend/tests/homeMotion.test.jsx :: SC 2.2.2: the home page’s motion
+stops on its own, and not at all for a visitor who asks for less` holds both
+from the stylesheets, delays counted. The loading indicators, the button's
+spinner and the indeterminate progress bar, are not counted here: they run only
+while work is in flight, which is the case SC 2.2.2's exception for essential
+motion is about. Under reduced motion, `base.css`'s rule shortens their
+animation but does not cap its count, so they are not still; that is a known
+low, not fixed here.
 
 ## 5. Reflow (SC 1.4.10) — usability finding 6's check
 

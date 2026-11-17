@@ -49,6 +49,8 @@ import { useLayoutEffect } from 'react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import App from '../src/App.jsx'
 import { ROLES, TEXT } from '../src/constants.js'
+// D-137: the Profile page's heading, for its case in the walk.
+import { PROFILE_TEXT } from '../src/constants.js'
 import { serveApi, summaryRoute, summaryState } from './fakeApi.js'
 
 /* ---- Fixtures, in the contract's shapes ---------------------------------- */
@@ -301,6 +303,13 @@ const KNOWLEDGE_MAP = {
   },
 }
 
+// #119's Profile page, wired to D-137's routes: it reads the signed-in user from the
+// session check and asks the API for nothing more on mount.
+const PROFILE = {
+  api: {},
+  settled: () => pageHeading(PROFILE_TEXT.heading),
+}
+
 // It shows a search field too, as one of the components on the sheet.
 const COMPONENT_SHEET = {
   api: {},
@@ -310,6 +319,29 @@ const COMPONENT_SHEET = {
 const ACCESS_DENIED = {
   api: {},
   settled: () => pageHeading(TEXT.accessDeniedTitle),
+}
+
+// D-137's forgotten-password page: public, so a signed-in user is not sent on from it,
+// and it asks the API for nothing until its form is sent.
+const FORGOT_PASSWORD = {
+  api: {},
+  async settled() {
+    await pageHeading('Forgot password')
+    await screen.findByLabelText('Email address')
+  },
+}
+
+// D-137's reset page, opened as the emailed link opens it. Public, like the page above;
+// it takes the link's values out of the address at once, so it lands on the bare path,
+// and it asks the API for nothing until its form is sent.
+const RESET_LINK_QUERY = '?uid=MQ&token=cz5ooz-0a1'
+
+const RESET_PASSWORD = {
+  api: {},
+  async settled() {
+    await pageHeading('Reset password')
+    await screen.findByLabelText('New password')
+  },
 }
 
 const ROLE_MANAGEMENT = {
@@ -382,9 +414,15 @@ export const WALK = [
   ...asEachRole('/ask', ASK),
   // FR-20 (D-132): inside RequireAuth and behind no role guard, so each role stays.
   ...asEachRole('/knowledge-map', KNOWLEDGE_MAP),
+  // #119's Profile page (D-137): inside RequireAuth and behind no role guard, so each role stays.
+  ...asEachRole('/profile', PROFILE),
   // Outside RequireAuth: both render before the session check has answered.
   ...asEachRole('/components', COMPONENT_SHEET),
   ...asEachRole('/403', ACCESS_DENIED),
+  // D-137's public account-recovery page, outside RequireAuth: each role stays on it.
+  ...asEachRole('/forgot-password', FORGOT_PASSWORD),
+  // D-137's reset page, the same, at the emailed link's address.
+  ...asEachRole(`/reset-password${RESET_LINK_QUERY}`, RESET_PASSWORD),
   // Behind RequireRole: the Administrator stays, and an Employee is sent to the
   // 403 page, having asked the API for nothing (tests/accessDenied.test.jsx).
   ...[

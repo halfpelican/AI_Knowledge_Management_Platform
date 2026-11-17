@@ -19533,6 +19533,728 @@ Neither reviewer read these corrections again.
   - `picture_busy`'s `Retry-After` honoured;
   - the change form's submit kept disabled while a change is in flight.
 
+**Note of 18 November 2026: the front end, PR #119.** Written from git at `e847ea7`, the commit
+before this note's own. The server half is the Built note above (#123, merged on 17 November
+2026). This note is the front end it promised.
+
+**Where it is.** It is on `feat/UI`, Sagarika Dey's branch for PR #119, which she left at `dd452ac`
+with a failing front-end CI job. Every commit below sits on top of hers. None of hers was changed,
+and nothing was force-pushed. The change is `git diff dd452ac..e847ea7`.
+
+**How it was built.**
+1. **The merge.** `3dba3c3` merges main at `7cb6bc5` (#118, #120 to #123) into `feat/UI`. Its one
+   conflict was in `App.jsx`, where both sides added a navigation link after Ask. Both links are
+   kept.
+2. **Four builders at once.** Each worked in its own scratch clone of `3dba3c3`, and their commits
+   were cherry-picked onto `feat/UI` with no conflict:
+   - styles: `95d5a39` to `e3231d9`;
+   - the dashboard and Home: `afbcb39`, `d6c3298`;
+   - the sign-in pages: `d75b880`, `a6ccc9a`, `669cede`;
+   - the Profile page and avatars: `64c570f`, `3cd5091`.
+3. **Follow-ups, and the first security review.** `20060f2`, `77b462d`, `a53e0d6`, `0ab0356`,
+   `6cf6b3f` and `8548e42` are the follow-ups. The first security review asked for one fix, LOG-1:
+   a Log out pressed while a password change was in flight could leave the browser signed in. A
+   skeptic confirmed it in a real browser, and `664ad04` fixes it.
+4. **Benjamin's answers of 18 November, below, and the review's cheap lows:** ddcda46 (Home's button styles on Home only), 39db100 (Remove asks to confirm), e515e19 (the server guard), then 1905010, b0c25bd, 4340cfb, cbc7d1b, 2ac9c1c, de3158a, 3ea2a4f, 51b1ad1, 125c45b and cc4f8d2 for the lows. After the final review, 21c09a2 and e847ea7 correct the record.
+
+Each commit message carries its tests, the run that failed first, and its deliberate breaks.
+
+**Benjamin's answers, 18 November 2026,** each put to him as a tabbed question with a
+recommendation:
+
+| Question | Recommended to him | Chosen |
+|---|---|---|
+| The Home heading: Sagarika's "Welcome back", or "Welcome", which an existing test reads and the browser tab title shows | "Welcome" | **"Welcome"** |
+| #119's Home.css styles every button in the app: Home's padding, type and hover lift, even on disabled buttons | Limit them to Home | **Limit them to Home** |
+| LOG-1's residuals: a Log out from another tab, and a change whose session was deleted while it ran | Record them as residual | **Add a server guard**: the change answers 401 and changes nothing if its session is gone before the key is cycled |
+| Removing the saved profile picture is one press, with no confirmation | Keep one press | **Ask to confirm** |
+
+**What is built**, against D-137's "Owed, by a person: The front end" list above:
+- **A `/reset-password` page.** It posts `uid` and `token`, which it reads once and removes from
+  the address bar at once. `index.html` now sets `<meta name="referrer" content="same-origin">`.
+- **Forgot password.** It calls `POST /api/auth/password-reset` and shows the server's one
+  message for every address (D-25).
+- **"Remember me".** It is sent from Login. Its hint is honest: 7 days without use, and not on a
+  shared computer.
+- **Pictures** appear in the header, role management, the attendee picker and the meeting page,
+  through one Avatar. It shows initials when there is no picture or the image fails, and it uses
+  only same-origin picture addresses.
+- **`picture_busy`'s `Retry-After`** is honoured.
+- **The change form's submit stays disabled while a change is in flight.** Log out waits for that
+  change (LOG-1), for at most 15 seconds, and the server refuses a change whose session has ended.
+
+**Sagarika's UI.** Her layout, wording, colours and screens are kept, apart from what follows,
+each for the reason given:
+- **Her own styles now take effect.** #119's stylesheets named tokens that did not exist, so the browser fell back. Her headings, rounded corners, shadows, spacing and small text now render as she wrote them.
+- **Colours changed so each meets a contrast pair, with no exemption.**
+  - Four on the decorative Home illustration, each slightly.
+  - The repository notices' borders, now the standard border.
+  - Two control borders, darkened to `#667085`: Home's "Create an account" and Profile's "Choose a picture".
+- **Buttons.** Home's button styles now apply on Home only (Benjamin's answer 2). Every other screen's buttons are `Button.css`'s again, and disabled buttons no longer lift on hover.
+- **Home.**
+  - The heading reads "Welcome", not her "Welcome back" (answer 1).
+  - The illustration and its emoji are hidden from screen readers.
+  - The illustration moves for at most five seconds, and not at all under reduced motion (WCAG 2.2.2).
+  - The page no longer scrolls sideways at 320 px.
+- **Navigation.** Profile moved out of the run between Knowledge map and the Administrator's links, to the user's corner beside "Signed in as", with the user's avatar. A main test requires the Administrator's links straight after Knowledge map.
+- **Avatars.** Role management, the attendee picker and the meeting page show a picture, or initials. The meeting page's attendees are now a list with pictures.
+- **Login.** "Remember me" has an honest hint, and the options row stacks.
+- **Forgot password.**
+  - It shows the server's one message for every address.
+  - Errors appear under the field.
+  - "Sending…" shows while the request runs. Before, success showed at once and nothing was sent.
+- **`/reset-password`.** A new page in her forgot-page layout.
+- **Profile.**
+  - Registration's password rules and requirements panel replace her 8-character hint.
+  - Each of the three password fields has a Show toggle.
+  - The server's messages appear under their fields.
+  - "Change picture" is a real button, and "Choose a picture" is the standard secondary button.
+  - Remove asks to confirm (answer 4).
+  - Her role-badge colours are restored from tokens, without her near-invisible borders.
+  - New notices cover picture errors and a busy server.
+- **Repository screens.** Main's rules are back for what her `Repository.css` rewrite left unstyled. Extracted text keeps its line breaks, and the transcript wraps and scrolls. Links within a line of text keep their underline.
+- **Dashboard.** Her "Signed in as" line is styled at every width, and the stacked filter fields fit their content.
+
+**The suites at `e847ea7`:**
+- The front end at `e847ea7`: 66 files and 1,226 tests passed. `oxlint` gave no warnings, and `vite build` passed.
+- The whole pytest suite at `cc4f8d2`, in a scratch git checkout: 5,738 passed, 0 failed. Dual-role coverage was 54 of 54 protected endpoints, and `makemigrations --check --dry-run` said "No changes detected".
+- The two commits after `cc4f8d2` change comments, one docstring, documents and one test title. The test file whose title changed passed, 20 tests.
+- CI runs both suites on the pull request.
+
+**Choices the build made that no decision settles,** for Benjamin to confirm or change.
+
+Choices about Sagarika's styles:
+- **Panel headings.** Her wording is kept: "Indexed items" and "Your recent questions". FR-14's list was read as what each panel holds, not as heading text.
+- **The signed-in name shows twice on the dashboard:** in her line and in the navigation.
+- **Her `Repository.css` reaches every screen.** Every notice and scroll region in the app takes her look, and table row headers show uppercase.
+- **Values for her undefined tokens.** Each is the next step of the existing scale, for example `--radius-lg` 0.75rem. `--color-link` is the primary colour.
+- **Fills added as surfaces.** Four of her fills are in the contrast suite's `SURFACES`, with body and muted text tested on each. The Employee badge's `#dbeafe` is a new token.
+- **The illustration's colours were changed, not exempted.**
+
+Choices about behaviour:
+- **An unticked "Remember me" sends no `remember` field.** That is the contract's default, and nothing sends `false`.
+- **The reset pages word their 429 differently from sign-in.** They state the seconds from `Retry-After`.
+- **`/forgot-password` and `/reset-password` do not redirect someone who is signed in.**
+- **Avatar initials are drawn by CSS,** as decoration hidden from screen readers.
+- **Remove is still her primary button,** where the app's other delete buttons are secondary.
+- **The Profile page shows every message of a field's 400.** Registration shows only the first.
+- **Log out's wait for a change.** The limit, `LOGOUT_WAIT_LIMIT_MS`, is 15 seconds. If a change succeeds after that, the page sends one more Log out, on a best-effort basis.
+
+Choices about the server guard:
+- **It answers DRF's own 401 body and clears the cookie.** The CHG-1 400 comes first, so a change sent twice from one session keeps its documented answer.
+- **One new server test passes on the old code by design.** It pins that double-submit answer.
+
+**The final security review of `cc4f8d2` (18 November 2026), verbatim.** The
+`security-reviewer` agent's report, quoted whole and unedited. It was extracted mechanically from
+the run's journal and checked to be identical to the agent's own transcript.
+
+> # PR #119 at cc4f8d2: final adversarial security review, round 1
+>
+> **Verdict: PASS WITH NOTES.** Nothing is critical, high or medium, and nothing blocks the merge.
+>
+> - **LOG-1** (medium in the first review) is closed. Two fixes together cover it:
+>   - the front-end wait: 664ad04, capped at 15 s by 2ac9c1c;
+>   - the new server guard: e515e19.
+>
+>   I confirmed this by code trace, by the guard's four new tests from both roles, and by five server probes.
+> - **Two lows remain open:**
+>   - LOG-1R: the guard has narrowed it to the few milliseconds between its check and the commit. I measured about 5 to 6 ms of a 557 ms request.
+>   - CHG-3R: carried, unchanged.
+> - **Two infos are new:**
+>   - FS1-1: the contract and the view's docstring still describe 664ad04's unlimited wait.
+>   - FS1-2: FEA-11's follow-up logout is best effort.
+> - **Carried infos:**
+>   - RST-UI-1 and RST-UI-2 are unchanged.
+>   - REF-1, RST-UI-3 and AVA-1 are closed.
+>
+> Paths below are relative to the worktree root, `C:/Users/mozza/Documents/IT_Captone_Project_KMP/KMP_Prototype/KMP_Prototype/.claude/worktrees/laughing-almeida-512484/`.
+>
+> **What was reviewed**
+> - **The change:** `feat/UI` at `cc4f8d253f3b525612ef39cd61fad09e8ef08f84`, local and not pushed. That is `git log --first-parent dd452ac..HEAD`.
+>   - I read it as the pull request's diff against main, `git diff 7cb6bc5..HEAD`: 59 files. The merge base, 7cb6bc5, is main's head.
+>   - **Server code changed against main:** `apps/api/views.py` only, for the guard. Two test files changed with it: `apps/api/tests/test_fr01_password_change.py` and `apps/api/tests/test_front_end_constants_agreement.py`.
+>   - **Unchanged:** `config/`, `apps/api/urls.py`, the settings, `.env.example` and the deployment documents.
+>   - **The merge's own resolution** (`git show --cc 3dba3c3`): only `frontend/src/App.jsx` conflicted, in its imports and one Profile link. Both sides were kept. No server file was resolved by hand.
+> - **The spec:**
+>   - D-137;
+>   - `docs/api-contract.md`, "FR-04 — account self-service (D-137)";
+>   - the builders' reports;
+>   - `fe_fix2_findings.json`;
+>   - the earlier round's report.
+> - **How:** read-only.
+>   - I changed nothing in the worktree. It was clean at cc4f8d2 when I finished.
+>   - Probes ran in an exported copy, `C:/Users/mozza/AppData/Local/Temp/claude/2a3657d8eb430a3a/c5063adc-0529-45cd-a6db-dc2dfafe339c/scratchpad/fr04brk_copies/fesec1_cc4f8d2`. It was made with `git archive cc4f8d2`, with node_modules junctioned in.
+>   - Server runs used runner suffix fesec1, with `--create-db`.
+> - **Runs in the copy, at HEAD:**
+>   - pytest: `test_fr01_password_change`, `test_logout`, `test_fr02_password_reset` and `test_fr04_remember_me`, 265 passed.
+>   - The whole front-end suite: 66 files, 1,226 tests passed.
+>   - `npx oxlint`: exit 0.
+>   - `npx vite build`: built, with only the chunk-size notice. The built `dist/index.html` has the referrer meta ahead of its script and stylesheet. The build has no source map, and the bundle holds no key or secret string.
+>   - I did not run the whole pytest suite. The coordinating session runs it.
+>
+> ---
+>
+> ## 1. LOG-1: the server guard and the front-end wait
+>
+> ### The server guard (e515e19): correct, confirmed
+>
+> `apps/api/views.py:936-943` sits inside `PasswordChangeView.post`'s transaction:
+> - under the `FOR NO KEY UPDATE` lock on the user's row;
+> - after CHG-1's hash comparison;
+> - before `user.save()`.
+>
+> ```python
+> if not request.session.exists(request.session.session_key):
+>     request.session.flush()
+>     raise NotAuthenticated()
+> ```
+>
+> What I traced:
+> - **The check sees a logout.** `exists()` is a fresh SELECT on `django_session`. The database runs PostgreSQL's default READ COMMITTED, with no `ATOMIC_REQUESTS` (`config/settings.py:119`). So it sees a logout's committed DELETE.
+> - **flush() is needed.** It empties the request's copy of the session, so SessionMiddleware deletes the cookie and saves nothing. Without it, `SESSION_SAVE_EVERY_REQUEST` would save to the deleted row, and Django would answer SessionInterrupted's 400.
+> - **Nothing is written, and the answer stays 401.** `NotAuthenticated` is raised inside `atomic()`, so the transaction rolls back. `apps/api/authentication.py` names the `Session` scheme, so DRF keeps the 401 rather than downgrading it to 403.
+> - **No other route can revive a deleted session.** `update_session_auth_hash` is the only call in `apps/` that cycles a key outside an explicit sign-in. Every other response saves its session with a forced update, which never recreates a row.
+> - **The order creates no oracle.** The password is checked before the session. But reaching the guard needs a session that was valid when the request started, and that session could check the password on the ordinary path anyway.
+>
+> Probes, in the exported copy:
+>
+> | Probe | Result |
+> |---|---|
+> | P2: a logout before the change is read | 401 at authentication, with `WWW-Authenticate: Session` |
+> | P3: the guard's 401 against an ordinary no-session 401 | The same status, body and header names, and the same `Set-Cookie: sessionid=""; Max-Age=0`. No oracle. |
+> | P1b: the old row deleted after the guard, as another tab's logout would delete it | The change answered 200. `/me` answered 200 with the new key and 401 with the old one. The password changed, and the new key had `Max-Age` 3600. This reproduces the documented residual, LOG-1R. |
+> | P4: timing, both roles | The whole request took about 557 ms: about 547 ms from its start to the guard, then about 5 to 6 ms from the guard to the key's cycling, then the commit. |
+> | P1: the logout sent through the test client after the guard | The other tab's logout answered 401 in-process, because the test shares one connection and saw the uncommitted password. The end state is the same as P1b. |
+>
+> The guard's four tests pass in the copy: 8 cases, both roles. The commit's break table shows each one failing under its break.
+>
+> ### The front-end wait (664ad04, 2ac9c1c, de3158a): correct, confirmed by code and tests
+>
+> - `frontend/src/pages/Profile.jsx:258` hands the change to `trackAccountChange` in the same step that sends it.
+> - `frontend/src/auth/AuthProvider.jsx:168-185`: `logout()` waits for the change through `waitForChange` (`:13-24`). It waits at most `LOGOUT_WAIT_LIMIT_MS`, 15,000 (`frontend/src/constants.js:72`).
+> - Past the limit, the change is marked abandoned. If it then succeeds, `:155` sends one more logout, which carries the new key.
+> - A 401 from the guard is handled cleanly:
+>   - `notifyUnauthorized` signs the user out as expired;
+>   - a waiting logout then sends, gets a 401, and signs out;
+>   - de3158a's test holds that nothing is left saying "Saving…" or "Signing out…".
+> - The earlier round's reverse order is now refused in practice by the guard. That is a change sent after Log out was pressed: `Profile.jsx:215` still ignores a logout in flight. But the logout's DELETE lands during the change's ~0.55 s of hashing.
+>
+> What is left: LOG-1R (finding 1), FS1-1 (finding 3) and FS1-2 (finding 4).
+>
+> ---
+>
+> ## 2. Carried findings: status at HEAD
+>
+> | ID | Severity | Status at HEAD |
+> |---|---|---|
+> | LOG-1 | medium (first review) | Closed: section 1 |
+> | LOG-1R | low | Open, narrowed: finding 1 |
+> | CHG-3R | low | Open, unchanged: finding 2 |
+> | REF-1 | info | Closed by 3ea2a4f |
+> | RST-UI-1 | info | Open, unchanged: finding 5 |
+> | RST-UI-2 | info | Open, unchanged, and FEA-10 adds to it: finding 6 |
+> | RST-UI-3 | info | Closed by 125c45b |
+> | AVA-1 | info | Closed by 51b1ad1 |
+>
+> **REF-1, closed.**
+> - `frontend/index.html:9` has `<meta name="referrer" content="same-origin">`, before the icon and the script.
+> - `tests/referrerPolicy.test.js` pins its presence, its value and its place.
+> - `tests/productionBuild.test.js` pins it in the built page.
+> - The copy's built `dist/index.html` has it before the script and the stylesheet.
+> - What is left, as REF-1 itself recorded:
+>   - A same-origin policy still sends the full address, token included, as the Referer of the page's first requests to its own server.
+>   - Nothing records a Referer: the alpha's `waitress-serve` has no access log, and nothing in `apps/` or `config/` logs one.
+>   - A `strict-origin` policy would strip it too, if wanted. It is not needed today.
+>
+> **RST-UI-3, closed.**
+> - After the 200, `frontend/src/pages/ResetPassword.jsx:168` calls `refresh({ quiet: true })` when a user is held.
+> - `AuthProvider.jsx:76-87` clears `userRef` before reading `/me`. So the 401 listener stays out, and the user is cleared where they are.
+> - I checked the server side of that case:
+>   - `reset_password()` (`apps/accounts/password_reset.py:256-288`) deletes no session rows. A session ends lazily, when its stored password hash no longer matches.
+>   - So the confirm's own response still saves its session and answers 200.
+>   - The quiet `/me` then flushes the session, with a 401 that clears the cookie.
+>
+> **AVA-1, closed.**
+> - `frontend/src/components/Avatar.jsx:11`: `PICTURE_ADDRESS = /^\/api\/users\/[A-Za-z0-9_-]+\/picture(?:\?[^#\s]*)?$/`. It allows no scheme, no host, no dot segment and no encoded slash.
+> - `tests/avatars.test.jsx` checks 11 refused shapes and 3 accepted ones.
+> - Another test holds that only `Avatar.jsx` and `ComponentSheet.jsx` use the unchecked `AvatarPicture`.
+>
+> ---
+>
+> ## 3. Fixes since 664ad04
+>
+> | Commit | What it does | Security result |
+> |---|---|---|
+> | e515e19 | The server guard | Correct (section 1). Leaves LOG-1R. |
+> | 2ac9c1c | The 15 s limit and the follow-up logout | Correct. Leaves FS1-1 and FS1-2. |
+> | de3158a | Test only: a 401'd change signs out cleanly | No issue |
+> | 3ea2a4f | REF-1 | Closed |
+> | 51b1ad1 | AVA-1 | Closed |
+> | 125c45b | RST-UI-3 | Closed |
+> | 39db100 | The confirmation dialogue for removing the picture | No issue. Nothing is sent until "Remove picture" is pressed. `confirmRemove` checks `inFlight` and `user.picture` again. The DELETE carries `X-CSRFToken` through `del()`. While busy, Cancel and Escape are ignored. |
+> | 1905010 | Show toggles on the three password fields | No issue. `PasswordInput` keeps `autoComplete` (current-password, new-password). `visible` is the component's own state and starts false on every mount. |
+> | ddcda46, b0c25bd, cc4f8d2 | Styles, tokens and documents | No security effect |
+> | 4340cfb, cbc7d1b | Tests only | No security effect |
+>
+> ---
+>
+> ## 4. Fresh eyes: what I checked, with nothing found
+>
+> - **The reset page's token** (`ResetPassword.jsx`):
+>   - It is read once into state (`:104`) and taken out of the address with `replace`, in the first effect.
+>   - It is sent only in the confirm's body. It is never rendered, and never put in a link or the title.
+>   - The page sends one request at a time.
+>   - Nothing in `frontend/src` loads from another origin: no `url(`, `@import` or `http(s)://` in CSS or JS.
+>   - The page names no account, so a link does not show whose it is.
+>   - `RESET_PAGE_PATH` (`apps/accounts/password_reset.py:93`) matches the route.
+> - **The forgot page and D-25** (`ForgotPassword.jsx`):
+>   - It shows only the 200's `detail` or a fixed fallback, the same for every well-formed address.
+>   - A 400 is decided from the text alone. The 429 is per client address.
+>   - The server's sameness is held by `test_an_account_and_an_unknown_address_get_the_same_200_and_only_the_account_an_email`, which passed.
+> - **Avatars and picture addresses:**
+>   - Every caller goes through `Avatar`: the header, Profile, role management, the attendee picker and the meeting detail.
+>   - The server builds `picture` from the primary key alone.
+>   - The picture route needs a session.
+> - **The Profile page's requests and CSRF:**
+>   - It sends three requests, to `/users/me/picture` (upload and removal) and `/auth/change-password`. None carries an ID or a role.
+>   - Every unsafe request carries `X-CSRFToken`: through `request()` in `client.js` (fetch), and through `upload()` (XHR).
+>   - `inFlight` keeps it to one request at a time.
+>   - The page reads only `useAuth().user`.
+> - **Route guards:**
+>   - `/profile` is inside `RequireAuth`.
+>   - `/forgot-password` and `/reset-password` are public, as their server routes are.
+>   - The PR adds no server route.
+>   - The role on the Profile card and on the dashboard's line is display only.
+> - **Unescaped output:**
+>   - The change has no `dangerouslySetInnerHTML`, `innerHTML`, `eval`, `document.write`, browser storage or `postMessage`.
+>   - Names, addresses and file names render as React text.
+>   - The initials are painted by CSS `attr()`.
+>   - Class names built from a status are attribute values.
+> - **Secrets:**
+>   - None in `git log -p main..HEAD`. The tests hold only fixture passwords.
+>   - The PR's commits touch no `.env`, key or database dump.
+> - **Deployed configuration:** this PR leaves it unchanged. I read the defaults in code, not the live alpha's `.env`.
+>   - `DEBUG` is False by default.
+>   - `ALLOWED_HOSTS` and `CSRF_TRUSTED_ORIGINS` are the loopback values.
+>   - The session cookie is HttpOnly and SameSite=Lax.
+>   - The SPA and the API share one origin.
+>   - Nothing serves `MEDIA_ROOT`: `config/urls.py` maps only `/api/` and the SPA's catch-all.
+>
+> ---
+>
+> ## 5. Findings, most severe first
+>
+> ### Finding 1. LOG-1R (low; open, narrowed): a logout from another tab still loses to the new key if it lands in the guard's last few milliseconds
+>
+> Confirmed by code trace and by probes P1b and P4.
+>
+> - **What the guard now refuses:**
+>   - a logout from another tab during the change's ~0.55 s of hashing;
+>   - the earlier round's reverse order.
+> - **The gap:** a logout whose DELETE commits after `exists()` (`apps/api/views.py:936`) and before the change commits.
+>   - The change still cycles the deleted key to a new one, through `update_session_auth_hash()` and `cycle_key()`.
+>   - Its 200 then sets a live session after the logout.
+> - **Measured:** P4 put the window at about 5 to 6 ms of a 557 ms request. P1b reproduced the outcome.
+> - **Recorded:** the docstring (`views.py:911-914`) and `docs/api-contract.md:2102-2104` both record this residual.
+> - **Locking would not close it.** The fixer considered locking the session row with `SELECT ... FOR UPDATE` and was right to reject it. The logout would wait, then delete nothing, and the new key would stay live.
+>
+> **Failure scenario:**
+> 1. On a shared computer, the user changes their password in tab A.
+> 2. They press Log out in tab B, and its request lands within those milliseconds.
+> 3. Tab B says "You've been logged out", and A's 200 sets a live key.
+> 4. The next person reloads and is signed in as the user, for 60 minutes without use, or 7 days if "Remember me" was ticked.
+>
+> Hitting a millisecond window by hand is not realistic.
+>
+> **Fix:** record it, as the docstring and the contract already do. Closing it fully would need the logout to find the key the change created. Two ways:
+> - the change's transaction writes a small mapping from the old key to the new one, under a FOR UPDATE lock on the old session row, and the logout takes that lock before its DELETE and then follows the mapping;
+> - or tabs coordinate, with Web Locks or a BroadcastChannel.
+>
+> Neither is worth it for the alpha.
+>
+> ### Finding 2. CHG-3R (low; carried, unchanged): the Profile page's one-request guard does not hold back the rest of the app during a password change
+>
+> Confirmed by re-reading the code at cc4f8d2.
+>
+> - **The guard is the page's own.** `inFlight` (`frontend/src/pages/Profile.jsx:245`) covers only the page's own requests.
+> - **Another request can get a 401.** A navigation, a header search or another tab can be authenticated after the change commits. It then gets the 401 for no session, which clears the cookie.
+>   - If that 401 arrives after the change's 200, the user is signed out as expired. That fails closed.
+>   - If it arrives first, a millisecond race on loopback, the browser keeps the change's live new key behind "Your session has expired".
+> - **A request authenticated before the commit is harmless.** It is answered after the commit with SessionInterrupted's 400, without `Set-Cookie`.
+> - **Unaffected by this round.** The server guard does not change any of this.
+>
+> **Failure scenario:**
+> 1. In the change's last millisecond, a request is authenticated whose 401 beats the 200.
+> 2. The page shows sign-in, but the browser holds a live session.
+> 3. Someone who reloads is signed in as the user.
+>
+> **Fix:** use LOG-1's tracker to hold the shell's own requests back while a change is in flight, or record it as accepted.
+>
+> ### Finding 3. FS1-1 (info; new): the contract and the docstring still say Log out waits until the change has answered
+>
+> Confirmed by reading.
+>
+> Two statements describe 664ad04's unlimited wait:
+> - `docs/api-contract.md:2103-2104`: "Within one tab the page covers that case: it sends Log out only once a change in flight has answered."
+> - `apps/api/views.py:912-914`: "Log out sends nothing until a change in flight has answered."
+>
+> 2ac9c1c changed what the code does:
+> - the wait is capped at 15 s;
+> - past it, Log out is sent before the change answers;
+> - a change that then succeeds is ended by one more logout (`frontend/src/auth/AuthProvider.jsx:155`).
+>
+> The behaviour is safe, but the record claims more than the code does. A marker who holds a change past 15 s will see Log out sent before the change answers.
+>
+> **Fix:** in both places, say "for at most 15 seconds (`LOGOUT_WAIT_LIMIT_MS`, 2ac9c1c); a change that succeeds after that is ended by one more logout."
+>
+> ### Finding 4. FS1-2 (info; new): FEA-11's follow-up logout is best effort
+>
+> Suspected: inferred from the code, not reproduced in a browser.
+>
+> - **When it runs:** `AuthProvider.jsx:155`, `if (entry.abandoned) authApi.logout().catch(() => undefined)`, runs only for a change whose success arrives after the 15 s limit.
+> - **Why it needs a slow network:** when the limit's logout lands, the guard refuses a change that is still running. So the change must already have passed the guard, and its response must arrive more than 15 s after it was sent. That takes a slow network, not a slow server. It cannot happen on the loopback alpha.
+> - **Consequences:**
+>   - If the follow-up request fails, or the tab closes between the late 200 and it, the browser keeps a live session after "You've been logged out".
+>   - The late 200's `Set-Cookie` replaces whatever session the browser holds by then. If another person has signed in on the same browser meanwhile, their tab runs as the first user for one round trip, then has no session.
+>
+> **Fix:** none required. Optionally, retry the follow-up once, or record this beside LOG-1R.
+>
+> ### Finding 5. RST-UI-1 (info; carried, unchanged): an opened reset link stays in global history and may stay in caches
+>
+> Suspected: browser behaviour, not tested. Not assigned this round.
+>
+> - The browser records the emailed link in global history before any script runs. `replaceState` fixes only the tab's own history.
+> - `config/spa.py:57` serves `index.html` with `Cache-Control: no-cache`, which still allows storing.
+> - The back-forward cache can restore an unfinished reset page.
+> - D-137 bounds the risk: a link works once, for 60 minutes, and a sign-in ends it.
+>
+> **Fix:** serve the index for `/reset-password` with `no-store`. No page can remove the global history entry.
+>
+> ### Finding 6. RST-UI-2 (info; carried, unchanged; FEA-10 adds to it): after a refresh, the reset page calls a working link dead
+>
+> Confirmed by code.
+>
+> - The token is read once into state (`ResetPassword.jsx:104`) and taken out of the address. A refresh therefore shows the dead-link state, though the link still works.
+> - FEA-10 adds to this: asking for a new link within the 300 s cooldown sends nothing, and nothing says so.
+> - This is a usability cost only, not a leak.
+>
+> **Fix:** make the dead-link text also say to open the emailed link again.
+>
+> ---
+>
+> ## 6. Confirmed and suspected
+>
+> **Confirmed, by code trace and by a probe or test:**
+> - the guard's placement, transaction, rollback, cleared cookie, 401 and missing oracle: P2, P3, and the 265 passing server tests;
+> - LOG-1R's residual and its size: P1b and P4;
+> - the front-end wait and its 15 s limit: code, and the passing tests;
+> - the closures of REF-1, AVA-1 and RST-UI-3: code, tests, and the build's `index.html`;
+> - the reset's server behaviour in the RST-UI-3 case: code;
+> - CHG-3R and RST-UI-2: code;
+> - FS1-1: reading;
+> - no secrets, no unescaped output, and no cross-origin loads: greps of the change and the bundle.
+>
+> **Suspected, inferred and not reproduced:**
+> - FS1-2's network-delay sequence;
+> - RST-UI-1's history, cache and back-forward cache behaviour;
+> - the real two-connection ordering in LOG-1R. P1b models a logout's DELETE on the request's own connection; the earlier round's two-thread probe showed the original race.
+>
+> **Not done:** the whole pytest suite (the coordinating session runs it), and checks that only a real browser can make.
+
+**The final requirements audit of `cc4f8d2` (18 November 2026), verbatim.** The
+`requirements-auditor` agent's report, quoted whole and unedited, extracted and checked the same
+way.
+
+> ## Audit: PR #119 front end, `feat/UI` at `cc4f8d2` (final requirements audit, round 1) — 18 November 2026
+>
+> **Verdict:** COMPLETE
+>
+> Benjamin's four answers of 18 November 2026 are built as he chose them, and each is tested; the server guard is tested from both roles. All six items D-137 owed the front end are built and tested. Every FR-01 to FR-05, FR-09, FR-14, FR-15 and NFR-14 to NFR-17 clause the change touches is satisfied, or declined by D-137 or by Benjamin's answer 2. Nothing is high or medium.
+>
+> One low has to be settled before D-137's front-end note is written. ATT-1: the 15-second limit on Log out's wait is credited to "Benjamin's answer of 18 November 2026" in the code and in a test title, and no record I can find shows he chose it.
+>
+> ### What was checked, and how
+> - **The change.** HEAD `cc4f8d2` (tree `2c996a0`). It was clean before and after this audit.
+>   - `git diff 7cb6bc5 HEAD`: 59 files, 7,818 insertions, 207 deletions.
+>   - `7cb6bc5` is the merge base, and `git ls-remote` shows it is still the remote's `main`.
+>   - The remote `feat/UI` is still `dd452ac`.
+>   - The brief's opening line says HEAD is `664ad04`. The worktree is at `cc4f8d2`, 13 commits later, and those are the commits the brief lists. This audit is of `cc4f8d2`.
+> - **Checked against:**
+>   - D-137 (`docs/decisions.md:18656-19534`), with Benjamin's four answers of 18 November 2026 as the brief gives them;
+>   - `docs/api-contract.md:2016-2289`;
+>   - the proposal: FR-01 to FR-05 (`proposal.txt:260-450`), FR-09 (`:626`), FR-14 (`:941`), FR-15 (`:1025`), NFR-14 to NFR-17 (`:1473-1495`);
+>   - CLAUDE.md §6 to §8, and "keep Sagarika's UI";
+>   - the builders' reports (`fe_builders_reports.md`) and `fe_fix2_findings.json`.
+> - **Runs** in `scratchpad/fr04brk_copies/fefinal1_cc4f8d2`, a `git archive cc4f8d2` export with `node_modules` junctioned:
+>   - `npx vitest run --no-cache`: **Test Files 66 passed (66); Tests 1226 passed (1226)**, exit 0.
+>   - `npx oxlint`: exit 0 and no output. `--format json` gives `"diagnostics": []` over 167 files.
+>   - `npx vite build`: 154 modules, built, exit 0. The only message is the advisory for a chunk over 500 kB (581.87 kB).
+>   - pytest through the runner, suffix `fefa1`, `--create-db`, on `test_fr01_password_change.py`, `test_front_end_constants_agreement.py`, `test_in_flight_codes_agreement.py` and `apps/accounts/tests/test_password_policy_agreement.py`: **108 passed in 54.34s**. The matrix row for `POST /api/auth/change-password` shows Employee 200, 400, 401 (34 tests) and Administrator 200, 400, 401 (34 tests).
+>   - The other server files that reach `change-password` (`test_rbac`, `test_never_cache`, `test_throttles`, `test_configuration`, `test_source_rows_fail_closed`): **189 passed in 104.59s**, and "Dual-role coverage: 54/54 protected endpoints exercised from both Employee and Administrator sessions (100.0%)".
+>   - My first pytest call gave `test_password_policy_agreement.py` the wrong folder; it is under `apps/accounts/tests/`. That call collected nothing and exited 4. The totals above are from the rerun with the right path.
+> - **Deliberate breaks** AB1 to AB9 and SB1 to SB2, in a second export (below). Each restore was checked by SHA-256, and afterwards the files matched the clean export byte for byte. The worktree was never edited.
+>
+> ### Clause coverage
+>
+> **Benjamin's answers of 18 November 2026**
+>
+> | Clause | Status | Evidence |
+> |---|---|---|
+> | 1. The Home heading stays "Welcome" | satisfied, no change | `constants.js:1611` `homeHeading: 'Welcome'`; `Home.jsx:25`, `:42` read it |
+> | 2. #119's `.btn`, `.btn--primary`, `.btn--outline`, their `:hover` rules and `.btn--large` are limited to the home page | satisfied | `Home.css:85`, `:99`, `:104`, `:110`, `:116`, `:122`, each under `.home-actions`. The only other `.btn` rules outside `Button.css` are main's own contextual ones (`Dialog.css:42`, `KnowledgeGaps.css:100`). `sharedButton.test.jsx:203`, `:303`. AB1: 9 failed |
+> | 2. Other screens get main's button look back | satisfied | `components/Button.css` is not in the PR's diff. No #119 stylesheet has an element-level `button` rule. `sharedButton.test.jsx:203`: no rule outside `Button.css` reaches a `.btn` on sign-in, or on the repository, Profile and upload screens as each role |
+> | 2. Disabled buttons stop lifting on hover | satisfied | `Home.css:104`, `:116` add `:not(:disabled)`. `sharedButton.test.jsx:230` (5 screens, plus the enabled control as each role). AB2: 9 failed |
+> | 3. A server guard in `PasswordChangeView`: 401, and nothing changed, if the session is gone before the key is cycled | satisfied | `views.py:936-943`: `request.session.exists()` runs under the `FOR NO KEY UPDATE` lock, after CHG-1's comparison and before the write, then `flush()` and `NotAuthenticated` |
+> | 3. Tests from both roles, on this branch | satisfied | `test_fr01_password_change.py`: 4 new tests on `session_client` (`params=ROLE_NAMES`), 8 cases, `e515e19`. SB1: 6 failed; SB2: 4 failed |
+> | 3. The contract | satisfied | `api-contract.md:2063` (the 401 cell) and `:2096-2110` (the new 401, and the order). One sentence is now inexact, DOC-5 |
+> | 4. Removing the profile picture asks to confirm first | satisfied | `Profile.jsx:323-334`: Remove opens the dialogue and sends nothing. `:344-364`: the DELETE is sent only from Confirm. `profilePicture.test.jsx:202`: 4 tests, each as both roles. AB3: 7 failed; AB4: 2 failed |
+> | 4. Using the app's existing dialogue pattern | satisfied | `components/Dialog.jsx`, which the PR does not change, as document, meeting and tag deletion use it. It is busy until the DELETE answers (`Profile.jsx:545-558`), and focus goes in and comes back |
+>
+> **D-137: what it owed the front end** (`decisions.md:19527-19534`)
+>
+> | Clause | Status | Evidence |
+> |---|---|---|
+> | A `/reset-password` page that posts `uid` and `token`, then removes them from the address bar | satisfied | `ResetPassword.jsx:28-30` reads them once; `:114-118` replaces the address; `:163` posts. `resetPassword.test.jsx:126` |
+> | `ForgotPassword` pointed at `POST /api/auth/password-reset` | satisfied | `ForgotPassword.jsx:69`; `api/auth.js:73`. `forgotPassword.test.jsx` |
+> | `remember` sent from Login | satisfied | `Login.jsx:214-223`, `:385`; `api/auth.js:36-37`. `rememberMe.test.jsx`, both roles. The server agreement test holds `REMEMBERED_SESSION_DAYS` |
+> | Pictures in the header, role management and the attendee lists | satisfied | `App.jsx:123`; `RoleManagement.jsx:171`; `AttendeePicker.jsx:99`; `MeetingDetail.jsx:115-116`, `:185`. `avatars.test.jsx:150`, `:181`, `:218`. AB8: 11 failed |
+> | `picture_busy`'s `Retry-After` honoured | satisfied | `Profile.jsx:184-188`, `:314-316`, `:534`. `profilePicture.test.jsx`, the busy case |
+> | The change form's submit kept disabled while a change is in flight | satisfied | `Profile.jsx:477` (disabled while the checks fail or any request is in flight), and the `inFlight` ref at `:181` and `:245`. `profilePassword.test.jsx:192`. AB6: 1 failed |
+> | "under its own dated note here" | pending: the parent's next step, per the brief | D-137 still ends at `:19534` |
+>
+> **D-137's rules where they reach the screens**
+>
+> | Clause | Status | Evidence |
+> |---|---|---|
+> | A wrong current password is a 400 with a field error, never a 401 | satisfied | `Profile.jsx:47-58` puts every message under its field. `profilePassword.test.jsx:192`: the user stays signed in |
+> | A change keeps this session and ends the others | satisfied | The 200's notice says so (`PROFILE_TEXT.passwordChangedSessions`) |
+> | One reset answer for every address (D-25) | satisfied | `forgotPassword.test.jsx`: a registered and an unknown address get the same sentence, and the address is never echoed |
+> | PNG, JPEG or WebP up to 5 MB, checked by the server | satisfied | `Profile.jsx:72-79` refuses before sending, as a convenience. `test_front_end_constants_agreement.py:193`, `:275-320` hold the copies to `apps/core/constants.py` |
+> | A picture leaves only through `GET /api/users/<id>/picture` | satisfied | `Avatar.jsx:11`, `:94` (`51b1ad1`). `avatars.test.jsx:104`, 15 cases |
+> | A completed reset ends every session of the account, this browser's included | satisfied | `ResetPassword.jsx:168` reads the session again, quietly (`125c45b`). `resetPassword.test.jsx:403`. AB7: 2 failed |
+> | The reset link's token is not sent to another origin | satisfied | `index.html:9` has the `same-origin` referrer meta (`3ea2a4f`). `referrerPolicy.test.js`, `productionBuild.test.js`. AB9: 2 failed |
+>
+> **`docs/api-contract.md`, FR-04 section, as the screens use it**
+>
+> | Clause | Status | Evidence |
+> |---|---|---|
+> | Change-password body, its 200, its 400 fields, 401 and 429 with `Retry-After` | satisfied | `api/profile.js:31`; `profilePassword.test.jsx` |
+> | ":2093-2094 the page keeps its submit disabled, and sends nothing else, until the change has answered" | satisfied for the Profile page. The rest of the app is not held back: CHG-3R, low, carried | `Profile.jsx:215`, `:245`, `:477`, `:518`, `:534` |
+> | The new 401 (`:2096-2101`) | satisfied, and the front end signs out cleanly | `profilePassword.test.jsx:444` (`de3158a`), each case as both roles |
+> | ":2103-2104 Within one tab the page … sends Log out only once a change in flight has answered" | inexact since `2ac9c1c` | DOC-5 |
+> | Pictures: multipart `picture`, the 400, 413s, 415, both 429s, DELETE and GET | satisfied | `api/profile.js:46`, `:54`. `profilePicture.test.jsx:384`, `:475`; the second reads the contract's own sentences |
+> | Reset request and confirm: bodies and answers | satisfied | `api/auth.js:73`, `:86`; `forgotPassword.test.jsx`, `resetPassword.test.jsx:223` |
+> | Login: `remember: true`, and no field when unticked (optional, false when absent) | satisfied | `api/auth.js:37`; `rememberMe.test.jsx`, `login.test.jsx` |
+>
+> **The proposal's FRs and NFRs the change touches**
+>
+> | Clause | Status | Evidence |
+> |---|---|---|
+> | FR-01 Front: a strength meter as the user types, and submit disabled until every client check passes, on the change form under D-137's rule | satisfied | `Profile.jsx:213-214`, `:464`, `:477`, `:481`. `profilePassword.test.jsx:143` |
+> | FR-01 Front: an inline error under the relevant field | satisfied | `profilePassword.test.jsx:192` |
+> | FR-02 Front: the "Show password" toggle | satisfied, now on all three Profile fields too (`1905010`) | `passwordToggles.test.jsx`: sign-in, registration, reset, and Profile as both roles |
+> | FR-02 Front: Login disables with a loading indicator; role-specific redirect; error banner; locked message | satisfied, unchanged | `Login.jsx`'s diff touches only the checkbox, its hint and the Forgot link. `rememberMe.test.jsx`: Employee to `/dashboard`, Administrator to `/admin` |
+> | FR-03 left as written | satisfied | No FR-03 logic changed |
+> | FR-04 Front: Logout visible to all authenticated roles | satisfied | `App.jsx`; `logout.test.jsx`; `avatars.test.jsx:150`, both roles |
+> | FR-04 Front: on activation, immediately redirected to Login with "You've been logged out" | satisfied. While a password change is in flight, the redirect waits for it, for at most 15 seconds (LOG-1, `2ac9c1c`) | `profilePassword.test.jsx:311`, `:344`. AB5: 5 failed |
+> | FR-04 Server: the session destroyed; 60 minutes without use | satisfied (#123). Declined for remembered sessions by D-137, as NFR-06 is | Server, unchanged here |
+> | FR-05 Front: an Administrator-only list of all users and their roles | satisfied, now with pictures | `avatars.test.jsx:181`; the role management tests pass unchanged |
+> | FR-05 Front: the confirmation dialogue, the real-time update, hidden from non-administrators | satisfied, unchanged | Existing tests pass |
+> | FR-09 Front: attendees in the form; the stored transcript viewable in full | satisfied. Pictures added; the transcript rules restored after #119's rewrite | `avatars.test.jsx:218`; `detailText.test.jsx` |
+> | FR-14 Front: the four panels, the links, the loading states, the filters | satisfied | `dashboard.test.jsx`: 20 tests fixed, 7 added |
+> | FR-14: #119's "Signed in as" line, from both roles, where the role decides nothing (D-107) | satisfied | `dashboard.test.jsx` |
+> | FR-15 Front: the list's title, type, uploader, date and status; the detail view; deletion confirmed | satisfied. Status is now a badge carrying the server's own words | `statusBadges.test.jsx`, 7 statuses; `detailText.test.jsx` |
+> | NFR-14: primary buttons the same colour, size, corner radius and placement on every screen | satisfied on every screen but the home page. Its two call-to-action links keep #119's larger look by Benjamin's answer 2. That is a deliberate deviation, and the component sheet does not show it | FEA-4 below |
+> | NFR-14: identical UI elements behave identically | satisfied for the password fields (`1905010`) and for deletions (`39db100`). Three smaller differences remain | FEA-5b, CON-1, CON-2 below |
+> | NFR-14: the style guide lists every screen | satisfied | `componentSheet.test.jsx`, "lists every screen in the route table" (`cc4f8d2`) |
+> | NFR-15: AI-generated content marked consistently | satisfied, untouched | `AiMark.*` are not in the diff; `aiGeneratedMark.test.jsx` passes |
+> | NFR-16: 4.5:1 contrast | satisfied | `contrast.test.js`, `componentSheetTokens.test.jsx` |
+> | NFR-16: full keyboard operability | satisfied | `tabOrder.test.jsx` walks home, both states of each account-recovery page, Profile and every earlier screen. The dialogue traps Tab |
+> | NFR-16: SC 1.1.1, 1.4.10, 1.4.11, 2.2.2, 2.4.7 for #119's additions | satisfied | `avatars`, `dashboard` (Home's aria-hidden decoration), `landingReflow`, `sharedButton:122`, `homeMotion`, `focusStyles` |
+> | NFR-16: the automated audit and the manual walkthrough | owed in a real browser | Recorded under "Owed" |
+> | NFR-17: FR-20's table view | satisfied, untouched in behaviour | The FR-20 walks in `tabOrder.test.jsx` pass |
+>
+> ### Breaks run by this audit
+> Run in `scratchpad/fr04brk_copies/fefinal1_brk_cc4f8d2` by `scratchpad/fefinal1_tools/harness.py`. Results are in `scratchpad/fefinal1_breaks_run.log`.
+>
+> | Break | What was broken | Result |
+> |---|---|---|
+> | C0fe | control, 10 front-end files | 160 passed |
+> | AB1 | `Home.css`'s base rule unscoped again (`.btn`) | `sharedButton`: 9 failed, 8 passed |
+> | AB2 | `Home.css`'s primary hover bare again, without `:not(:disabled)` | `sharedButton`: 9 failed, 8 passed |
+> | AB3 | Remove deletes the saved picture at once, with no dialogue | `profilePicture`: 7 failed, 21 passed |
+> | AB4 | The dialogue's Cancel removes the picture | `profilePicture`: 2 failed (Escape/Cancel, each role) |
+> | AB5 | Log out waits for the change with no limit | `profilePassword` with `logout` and `authNotices`: 5 failed, 27 passed |
+> | AB6 | Change password not disabled while a request is in flight | `profilePassword`: 1 failed (the one-at-a-time case) |
+> | AB7 | The session read after a reset is not quiet | `resetPassword`: 2 failed (own account, each role) |
+> | AB8 | Avatar takes any string as its address | `avatars`: 11 failed |
+> | AB9 | `index.html`'s referrer meta removed | `referrerPolicy` 1 and `productionBuild` 1 failed |
+> | C0py | control, `test_fr01_password_change.py` | 70 passed |
+> | SB1 | The session guard never refuses | 6 failed, 64 passed: the deleted-session, other-tab-logout and SQL-order tests, each [employee] and [administrator] |
+> | SB2 | The guard raises without `flush()` | 4 failed, 66 passed: the deleted-session and other-tab-logout tests, each role |
+>
+> ### The builders' and fixers' choices
+> - **Allowed.** Each follows from a requirement, D-137, the contract or Benjamin's answers:
+>   - the styles builder's token values, the four added `SURFACES`, the shadow tokens' exception, and the restored rules for the detail screens, the dashboard and reflow;
+>   - the dash builder's TEXT wiring, the aria-hidden decoration, and the panel headings kept as hers;
+>   - the auth builder's absent `remember` when unticked, the server's sentences shown as sent, the page's own dead-link words, no redirect on the two account-recovery pages, and the honest hint;
+>   - the profile builder's two 413s told apart by the file's size, Remove's two jobs (now behind the dialogue for a saved picture), CSS-painted initials, Profile moved beside "Signed in as" (FR-20's navigation order and D-137's header picture), registration's FR-01 panel on the change form, "Change picture" and "Choose a picture" as real buttons (SC 2.1.1, SC 1.4.11), and the picker limited to PNG, JPEG and WebP;
+>   - the fixers' choices:
+>     - the guard after CHG-1, which keeps CHG-3's documented 400;
+>     - `flush()`, without which Django answers its 400 instead of the 401;
+>     - no lock on the session row, for the reason given;
+>     - scoping to `.home-actions`;
+>     - discarding an unsent picture without asking;
+>     - focus going to the heading after a removal;
+>     - the badge in her colours on a new token;
+>     - a stricter `walk()`;
+>     - the follow-up logout for a change that succeeds after the limit;
+>     - the `AvatarPicture` split, confined to two modules by a test;
+>     - the quiet `refresh`.
+> - **Gaps:** none in behaviour. ATT-1 is a gap in the record, below.
+> - **Kept as Sagarika made them, recorded for Benjamin:**
+>   - uppercase row headers;
+>   - the date-range fieldset's default groove border on the dashboard;
+>   - panel links styled as plain text;
+>   - the signed-in name shown twice on the dashboard.
+>
+> **"Keep Sagarika's UI."** Her layout, wording, colours and screens are kept, except changes that each have a ground:
+> - Benjamin's answers: answer 2 (other screens' buttons) and answer 4 (the dialogue).
+> - D-137: the reset page, the "Remember me" hint, the server's sentences, FR-01's panel, the pictures, and the Profile link moved.
+> - NFR-16: the button borders, the motion stopping within five seconds, the reflow fixes, the underlined links in running text, and the decoration hidden from assistive technology.
+> - NFR-14: the Show toggles and two-letter initials.
+> - FR-09 and FR-15: the restored detail rules.
+> - The contrast suite's no-exemption rule, which is not WCAG for decorative content: four colours in her decorative illustration and the faint borders of her role badge (UI-1).
+>
+> ### Missing or partial
+> Nothing blocks the merge. Recorded for Benjamin:
+>
+> 1. **ATT-1 (low): the 15-second limit is credited to Benjamin, and no record shows he chose it.**
+>    - **Where the credit is:**
+>      - `frontend/src/constants.js:66-67`: "(FEA-11, Benjamin's answer of 18 November 2026: 15 seconds)";
+>      - the test title at `frontend/tests/profilePassword.test.jsx:345`, "waits for Benjamin's 15 seconds";
+>      - `2ac9c1c`'s message.
+>    - **What the records show:**
+>      - The brief gives Benjamin's answers of 18 November as four: the heading, the Home buttons, the server guard and the confirmation. None of them is a limit.
+>      - FEA-11's own suggested fix was "None needed".
+>      - The parent's draft note (`scratchpad/d137_fe_note_template.md`) has four rows in its answers table.
+>    - **Fix:**
+>      - If Benjamin did choose 15 seconds, the note's answers table gains a fifth row, in his words, with the option recommended to him.
+>      - If he did not, the comment and the test title say "set by the build", as REC-1 did for the server, and the note lists the value under the build's choices.
+> 2. **DOC-5 (info): one sentence in the contract and one in a docstring describe the wait before its limit.**
+>    - **Where:** `docs/api-contract.md:2103-2104` says "it sends Log out only once a change in flight has answered". `PasswordChangeView`'s docstring (`apps/api/views.py:911-914`) says "Log out sends nothing until a change in flight has answered". Both were written in `e515e19`, before `2ac9c1c`.
+>    - **What is now true:** Log out waits at most 15 seconds. A change that succeeds after that gets a second logout.
+>    - **The effect:** the case is still covered, but by that second logout, not by the wait.
+>    - **Fix:** a clause in each.
+> 3. **EVD-2 (info): the whole pytest suite has not been run at `cc4f8d2`.**
+>    - **What changed:** the only server code changed since `main` is `e515e19`'s 26 lines in one view.
+>    - **What has run:** 297 tests in the nine files that reach it, and the dual-role sweep at 54/54.
+>    - **Owed before merge:** CI's two suites on the pushed head (CLAUDE.md §8, condition 2).
+> 4. **FEA-4 (low, carried, now Benjamin's choice): the home page's two call-to-action links are not on the style guide.**
+>    - **The deviation:** "Sign in" is `btn--primary btn--large`, bigger than every other primary control. NFR-14 says "zero deviations permitted for primary controls". Answer 2 keeps that look on the home page.
+>    - **Fix:** the note records NFR-14's same-size clause as declined by answer 2 for those two links, or the component sheet shows the two variants.
+> 5. **FEA-5b (low): Remove is still #119's primary button.**
+>    - The app's other delete triggers are secondary (`DocumentDetail.jsx`, `MeetingDetail.jsx`).
+>    - NFR-14: identical elements behave identically. Since answer 4 they now behave the same, but they do not look the same.
+>    - Benjamin's call.
+> 6. **CON-1 (low): the two forms show a field's 400 differently.**
+>    - The Profile page shows every message for the field, joined (`Profile.jsx:47-58`).
+>    - Registration shows only the first (`extractFieldErrors`).
+>    - The profile builder's decision 7. Never answered.
+> 7. **CON-2 (info): the account-recovery pages word the 429 differently from sign-in and registration.**
+>    - The two account-recovery pages say "try again in N seconds", from `Retry-After`.
+>    - Sign-in and registration keep D-26's fixed text, though all four routes share the `auth` budget.
+>    - The auth builder's decision 2.
+> 8. **UI-1 (info): colours of hers changed for the contrast suite, not for WCAG.**
+>    - In her decorative illustration: the screen (the inner bezel is gone), the left bubbles, the keyboard and the figure (the styles builder's decision 2).
+>    - Her role badge's faint borders (`b0c25bd`).
+>    - Exempting the illustration's tokens would keep her colours.
+> 9. **Carried, unchanged and not re-rated:**
+>    - CHG-3R and the LOG-1 residual window, including LOG-1R from another tab (low). The guard narrows the residual window but cannot close it, as answer 3 accepted.
+>    - RST-UI-1, RST-UI-2, FEA-10 and FEA-12 (info).
+>    - `base.css`'s reduced-motion iteration count (low, pre-existing, recorded in `docs/accessibility.md:259-261`).
+>    - The "Preview" alt that no test holds (info).
+>    - CLAUDE.md §7 (info):
+>      - the branch is named `feat/UI`;
+>      - three pushed commits have no FR ID in their subject (`1c5753b`, `334c10a`, `95f1062`), and fixing them would mean rewriting pushed history.
+> 10. **Pending, the parent's next step:** D-137's front-end dated note.
+>
+> **Owed in a real browser** (jsdom paints, loads and animates nothing):
+> - the dialogue and the restored badge colours;
+> - the Show toggles at narrow widths;
+> - the home page's calls to action after scoping;
+> - the heading's focus ring after a removal;
+> - `/favicon.svg` as the component sheet's sample picture;
+> - the file picker opening;
+> - pictures loading with the session cookie;
+> - the reset email's link on the alpha.
+>
+> ### Invariant check
+> - **§6 invariant 4, server-side authorisation: pass.**
+>   - Benjamin's guard is server code.
+>   - `/profile` sits behind `RequireAuth` for both roles.
+>   - The dashboard's knowledge-gap panel is decided by the reply, not the role (D-107, tested both ways).
+>   - No authorisation decision is made in React.
+> - **§6 invariant 1, no disclosure: pass.** Nothing new is disclosed. `attendee_people` comes only from an already-scoped meeting detail. Avatar refuses any address but the contract's own.
+> - **§6 invariants 2, 3 and 5 to 10:** not touched. No retrieval, AI, ingestion or chunk code changed.
+> - **§7: pass, except the carried notes.**
+>   - Every first-parent commit after the merge has an FR ID in its subject, except `8548e42`, which has NFR-16 alone, as 17 commits on main do.
+>   - Tests land with their code.
+>   - There is no migration.
+>   - No `.env`, dump, outbox file or key is in the diff.
+>   - The only server imports added are Pillow, in a test, and DRF's `NotAuthenticated`.
+> - **§8:**
+>   - Conditions 1, 3 and 4 pass. Condition 1 carries DOC-5's caveat.
+>   - Condition 2:
+>     - the front-end suite passes whole: 66 files, 1,226 tests;
+>     - the clauses only the interface can satisfy (answer 4's dialogue, answer 2's look, the reset page, the toggles, the badges) are tested in it;
+>     - the server's change is tested from both roles;
+>     - the whole pytest suite is owed by CI (EVD-2).
+>   - Condition 5 is this audit.
+> - **Set-level: pass.**
+>   - No inline threshold. The picture and session values are copies held to `apps/core/constants.py` by `test_front_end_constants_agreement.py`.
+>   - `LOGOUT_WAIT_LIMIT_MS` is the page's own value, in `src/constants.js`.
+>   - One Avatar serves every list.
+>   - No SDK import, and no chunk write.
+>
+> ### Gate impact
+> None.
+> - M6 passed on 1 November 2026, and this is NIT3004 work done on the lead's decisions.
+> - The whole front-end suite passes, so the existing evidence for FR-01, FR-02, FR-04, FR-05, FR-09, FR-14 and FR-15 holds.
+> - The smallest fixes, none blocking:
+>   - ATT-1 and DOC-5: three comments, one test title and a contract clause;
+>   - FEA-4: a line in the note, or two samples on the component sheet;
+>   - EVD-2: CI on push.
+>
+> **COMPLETE.** At `cc4f8d2`, Benjamin's four answers and D-137's six owed front-end items are built and tested, the guard from both roles, and every touched FR and NFR clause is satisfied or declined. The suites: vitest 66 files and 1,226 tests passed; oxlint clean; the build is OK; pytest passed 108 plus 189, with dual-role coverage at 54/54. Settle ATT-1 before writing D-137's front-end note. Then record the lows and infos for Benjamin: ATT-1, FEA-4, FEA-5b, CON-1 and the carried lows; DOC-5, EVD-2, CON-2 and UI-1.
+>
+
+**What changed because of the two reports,** in `21c09a2` and `e847ea7`, comments, a docstring, documents and one test title:
+- **ATT-1.** A constants comment and a test title credited the 15-second limit to Benjamin. Both now say the build set it, and this note lists it for him above.
+- **DOC-5 and FS1-1.** The contract's change-password section and `PasswordChangeView`'s docstring now describe the wait's 15-second limit, and the extra Log out sent on a best-effort basis.
+- **Recorded, with nothing changed:**
+  - **LOG-1R, low.** The server guard has narrowed it to about 5 to 6 ms, the gap between its check and the commit in a 557 ms request. It needs another tab.
+  - **CHG-3R, low.** The Profile page's one-request guard does not hold back the rest of the app.
+  - **FS1-2.** The late extra Log out is sent on a best-effort basis.
+  - **RST-UI-1 and RST-UI-2.** An opened reset link stays in the browser's global history, and after a refresh the page calls a working link dead.
+  - **FEA-4.** Home's calls to action keep her larger look, by answer 2.
+  - **The rest of the audit's notes:** FEA-5b, CON-1, CON-2, UI-1 and FEA-10, each covered in the choices above or in the audit.
+  - **BASE-RM.** Pre-existing on main: `base.css`'s reduced-motion rule does not cap the loading animations.
+  - **SEC7-NOTES.** `feat/UI` is Sagarika's branch name, and three of her pushed commits have no FR ID in their subjects. None was rewritten.
+
+Neither reviewer read these corrections again.
+
+**Owed, by a person:**
+- **Review and merge.** Sagarika reviews the changes to her UI, and Benjamin merges #119.
+- **In a real browser,** since jsdom paints, loads and animates nothing:
+  - the file picker opening from "Change picture";
+  - pictures loading through `GET /api/users/<id>/picture` with the session cookie;
+  - the avatars, badges and buttons at 320 px;
+  - Home's motion stopping within five seconds, and not running at all under reduced motion;
+  - the reset email's link opening `/reset-password` on the alpha.
+- **The alpha.** Rebuild the front end and redeploy, after the server steps in the Built note
+  above.
+
 ## D-138 · The knowledge map gains a second view, claims joined to the passages they cite, beside the first
 
 **Status:** Settled by the user (16 November 2026) · **Date:** 2026-11-16 · **Concerns:** FR-20,

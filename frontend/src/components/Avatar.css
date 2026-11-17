@@ -1,0 +1,66 @@
+/* D-137's profile pictures: a person's picture, or their initials, in a circle.
+   Decorative wherever it is used, since the name is always beside it
+   (components/Avatar.jsx). The circle's edge is the decorative separator, never a
+   control's boundary; the initials are muted text on the alt surface, 6.87:1, a
+   pair tests/contrast.test.js holds. */
+
+.avatar {
+  flex: none;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-full);
+  background-color: var(--color-surface-alt);
+  vertical-align: middle;
+}
+
+/* The size beside a name in a line: the header, a table row, a list of people. */
+.avatar--small {
+  width: var(--space-6);
+  height: var(--space-6);
+}
+
+.avatar--image {
+  object-fit: cover;
+}
+
+.avatar--initials {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-tight);
+}
+
+.avatar--small.avatar--initials {
+  font-size: var(--text-sm);
+}
+
+/* The initials are painted here rather than written into the page, so the text of
+   whatever holds the avatar stays the person's name (components/Avatar.jsx). */
+.avatar--initials::before {
+  content: attr(data-initials);
+}
+
+/* Before a name on the same line: the gap between the two. */
+.avatar--inline {
+  margin-inline-end: var(--space-2);
+}
+
+/* A list of people, each with their picture beside their name: a meeting's attendees. */
+.avatar-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.avatar-list__person {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  word-break: break-word;
+}
+
+.avatar-list__person + .avatar-list__person {
+  margin-top: var(--space-1);
+}

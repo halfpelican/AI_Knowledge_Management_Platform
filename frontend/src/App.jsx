@@ -4,6 +4,9 @@ import AuthProvider from './auth/AuthProvider.jsx'
 import RequireAuth from './auth/RequireAuth.jsx'
 import RequireRole from './auth/RequireRole.jsx'
 import useAuth from './auth/useAuth.js'
+// D-137: the navigation's link to #119's Profile page carries the user's picture.
+import Avatar from './components/Avatar.jsx'
+import { PROFILE_TEXT } from './constants.js'
 import Button from './components/Button.jsx'
 import ComponentSheet from './components/ComponentSheet.jsx'
 import Notice from './components/Notice.jsx'
@@ -18,10 +21,13 @@ import Home from './pages/Home.jsx'
 import KnowledgeGaps from './pages/KnowledgeGaps.jsx'
 import KnowledgeMap from './pages/KnowledgeMap.jsx'
 import Login from './pages/Login.jsx'
+import ForgotPassword from './pages/ForgotPassword.jsx'
+import ResetPassword from './pages/ResetPassword.jsx'
 import MeetingDetail from './pages/MeetingDetail.jsx'
 import Meetings from './pages/Meetings.jsx'
 import Register from './pages/Register.jsx'
 import RoleManagement from './pages/RoleManagement.jsx'
+import Profile from './pages/Profile.jsx'
 import Search from './pages/Search.jsx'
 import Tags from './pages/Tags.jsx'
 import Upload from './pages/Upload.jsx'
@@ -42,6 +48,9 @@ function PrimaryNav({ onLogoutError }) {
     onLogoutError(null)
     try {
       // On success the auth provider sends the user to /login with the confirmation.
+      // While a password change is in flight, it first waits for the change's answer,
+      // for at most 15 seconds (LOG-1, FEA-11, src/auth/AuthProvider.jsx), and
+      // "Signing out…" shows meanwhile.
       await logout()
     } catch (error) {
       onLogoutError(error.message)
@@ -105,6 +114,15 @@ function PrimaryNav({ onLogoutError }) {
       {loading ? null : user ? (
         <>
           <span className="app-nav__user">{`Signed in as ${user.name}`}</span>
+          {/* #119's Profile page, from the signed-in user's own corner of the
+              navigation, with their picture (D-137: pictures wherever users are
+              listed, the header included). After the Administrator's links, so they
+              stay together after the knowledge map. The picture is decoration, the
+              name being beside it, so the link reads as "Profile". */}
+          <NavLink to="/profile">
+            <Avatar name={user.name} picture={user.picture} className="avatar--inline" />
+            {PROFILE_TEXT.navLabel}
+          </NavLink>
           <Button
             variant="secondary"
             className="app-nav__logout"
@@ -179,12 +197,16 @@ export default function App() {
           <Route index element={<Home />} />
           <Route path="login" element={<Login />} />
           <Route path="register" element={<Register />} />
+          <Route path="forgot-password" element={<ForgotPassword />} />
+          {/* D-137: the page the reset email links to. Public, as both reset routes are. */}
+          <Route path="reset-password" element={<ResetPassword />} />
           <Route path="components" element={<ComponentSheet />} />
           {/* FR-02 redirects to a role-specific dashboard, and both destinations
               render FR-14's (D-70): whichever role signs in first lands on it. */}
           <Route element={<RequireAuth />}>
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="admin" element={<Dashboard />} />
+            <Route path="profile" element={<Profile />} />
             {/* FR-08 upload; FR-15's repository, with its filters and sort in
                 the query string; FR-09 transcript ingestion and the full stored
                 transcript. */}

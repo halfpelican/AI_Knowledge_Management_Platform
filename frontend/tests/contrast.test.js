@@ -28,6 +28,15 @@ const SURFACES = [
   '--color-danger-surface',
   '--color-success-surface',
   '--color-warning-surface',
+  // PR #119's surfaces: the page behind its home screen and sign-in card, its
+  // repository's info notice, and its status badges' two fills. Listed here so
+  // body and muted text are held to 4.5:1 on each, as on the five above.
+  '--color-background',
+  '--color-info-surface',
+  '--color-status-indexed-surface',
+  '--color-status-not-indexed-surface',
+  // The Profile page's Employee role badge, in #119's light blue (FEA-7).
+  '--color-role-employee-surface',
 ]
 
 /**
@@ -40,9 +49,11 @@ const SURFACES = [
 const TEXT_PAIRS = [
   { fg: '--color-text', on: SURFACES },
   { fg: '--color-text-muted', on: SURFACES },
-  // Links and link-styled controls: page, panels, and the in-page 403's link on
-  // the error notice (components/NotPermitted.jsx).
-  { fg: '--color-primary', on: ['--color-surface', '--color-surface-alt', '--color-danger-surface'] },
+  // Links and link-styled controls: page, panels, the in-page 403's link on the
+  // error notice (components/NotPermitted.jsx), and the link in an info notice,
+  // which since #119 sits on --color-info-surface (the knowledge map's empty
+  // selection, in both its views).
+  { fg: '--color-primary', on: ['--color-surface', '--color-surface-alt', '--color-danger-surface', '--color-info-surface'] },
   { fg: '--color-primary-hover', on: ['--color-surface', '--color-surface-alt', '--color-danger-surface'] },
   // Button and skip-link text on the primary fills.
   { fg: '--color-primary-text', on: ['--color-primary', '--color-primary-hover'] },
@@ -53,6 +64,21 @@ const TEXT_PAIRS = [
   { fg: '--color-success', on: ['--color-surface', '--color-surface-alt', '--color-success-surface'] },
   // The AI-unavailable notice's title (NFR-19).
   { fg: '--color-warning', on: ['--color-surface', '--color-warning-surface'] },
+  // PR #119's screens. Headings on the home page and the document table's
+  // titles; links on the sign-in card and, on hover, in the dashboard's panels;
+  // the repository's info and error notices; the status badge for "Indexed" and
+  // the one for every other status (FR-15); and the home illustration's one line
+  // of text that sits on a fill of its own, the left chat bubble.
+  { fg: '--color-heading', on: ['--color-background', '--color-surface'] },
+  { fg: '--color-link', on: ['--color-background', '--color-surface'] },
+  { fg: '--color-primary-hover', on: ['--color-info-surface'] },
+  { fg: '--color-danger-text', on: ['--color-danger-surface'] },
+  { fg: '--color-status-indexed', on: ['--color-status-indexed-surface'] },
+  { fg: '--color-status-not-indexed', on: ['--color-status-not-indexed-surface'] },
+  { fg: '--color-illustration-bubble-text', on: ['--color-text-muted'] },
+  // The Profile page's role badges in #119's colours (FEA-7): the Employee's here.
+  // The Administrator's is the "Indexed" badge's pair above.
+  { fg: '--color-primary-hover', on: ['--color-role-employee-surface'] },
 ]
 
 /**
@@ -86,6 +112,13 @@ const BOUNDARY_PAIRS = [
   // filled with --color-text and its passage with --color-primary.
   { fg: '--color-text-muted', on: ['--color-surface'] },
   { fg: '--color-text', on: ['--color-surface'] },
+  // PR #119's screens: the home screen's outline button on the page, and its
+  // illustration, the device on the page and the figure on the device. The
+  // accent is the token behind one of the shapes under the illustration.
+  { fg: '--color-border-strong', on: ['--color-background'] },
+  { fg: '--color-illustration-device', on: ['--color-background'] },
+  { fg: '--color-illustration-figure', on: ['--color-illustration-device'] },
+  { fg: '--color-accent', on: ['--color-background'] },
 ]
 
 describe('SC 1.4.3: text pairs meet 4.5:1, computed from the live token values', () => {
@@ -221,9 +254,11 @@ const EXEMPT = new Set([
 ])
 
 /** Selectors whose rules may use --color-border on a border: separators and panels, not controls.
-    The last entry is FR-20's node and its reference in a table or the panel, with their
-    modifiers, and not the classes that merely begin the same way (`__node-text`, `__nodes`). */
-const CONTROL_SELECTOR = /^(button|input|select|textarea|a\b|\.btn|\.facet|\.citation(?!-)|\.ask-threads__item|\.password-toggle|\.sort-header__button|\.skip-link|\.knowledge-map__(node|ref)(?![a-z_]|-[a-z]))/
+    `.profile-avatar__upload` is the Profile page's "Change picture", a button styled by its
+    class (D-137). The last entry is FR-20's node and its reference in a table or the panel,
+    with their modifiers, and not the classes that merely begin the same way (`__node-text`,
+    `__nodes`). */
+const CONTROL_SELECTOR = /^(button|input|select|textarea|a\b|\.btn|\.facet|\.citation(?!-)|\.ask-threads__item|\.password-toggle|\.sort-header__button|\.skip-link|\.profile-avatar__upload|\.knowledge-map__(node|ref)(?![a-z_]|-[a-z]))/
 
 const PROPERTIES_THAT_TAKE_COLOUR =
   /^(color|background|background-color|border|border-color|border-(top|right|bottom|left)(-color)?|outline|outline-color|box-shadow|caret-color|fill|stroke|text-decoration-color)$/

@@ -19,6 +19,8 @@ import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 import App from '../src/App.jsx'
 import { ROLES, TEXT } from '../src/constants.js'
+// D-137: the Profile page's names, for its case, and the reset page's.
+import { PROFILE_TEXT, SIGN_IN_TEXT } from '../src/constants.js'
 import { actionItem, readySummary, serveApi, summaryRoute, summaryState } from './fakeApi.js'
 import { pressTab, stopName, tabThrough } from './keyboard.js'
 import { hidingCauses } from './stylesheets.js'
@@ -82,11 +84,13 @@ function renderApp(path) {
 /**
  * A stop is allowed to hold focus only while something shows it: the stop
  * itself, or — for the visually hidden file input, whose ring
- * FileDropZone.css draws on its label — the label that names it.
+ * FileDropZone.css draws on its label — the label that names it. Only a file
+ * input: a hidden text field whose label still shows is a field nobody can see
+ * (FEA-2's walk found the fallback reached every input).
  */
 function visibleWhileFocused(stop) {
   if (hidingCauses(stop).length === 0) return true
-  if (!stop.id) return false
+  if (stop.type !== 'file' || !stop.id) return false
   const label = document.querySelector(`label[for="${stop.id}"]`)
   return label !== null && hidingCauses(label).length === 0
 }
@@ -138,8 +142,114 @@ describe('tab order, screen by screen', () => {
       'Email',
       'Password',
       'Show password',
+      // PR #119's "Remember me" checkbox, wired by D-137, and its "Forgot password?"
+      // link, which leads to D-137's reset.
+      'Remember me on this device',
       screen.getByRole('button', { name: 'Sign in' }),
+      'Forgot password?',
     ])
+  })
+
+  // PR #119's home page, to a visitor with no session (FR-01, FR-02). "Sign in" names
+  // the navigation's link and the page's own, so both go in as elements.
+  it('home, for a visitor not signed in: skip link, navigation, then the two calls to action, and nothing in the illustration', async () => {
+    serveApi({ 'GET /api/auth/me': NOT_SIGNED_IN })
+    renderApp('/')
+    await screen.findByRole('heading', { level: 1, name: TEXT.homeHeading })
+    const nav = screen.getByRole('navigation', { name: 'Primary' })
+    const main = screen.getByRole('main')
+    const signIn = within(main).getByRole('link', { name: TEXT.homeSignIn })
+    const register = within(main).getByRole('link', { name: TEXT.homeRegister })
+
+    const stops = walk()
+    expectOrder(stops, [
+      'Skip to content',
+      within(nav).getByRole('link', { name: 'Home' }),
+      within(nav).getByRole('link', { name: 'Sign in' }),
+      within(nav).getByRole('link', { name: 'Register' }),
+      signIn,
+      register,
+    ])
+    // The page's own stops are those two and nothing else: the features are words,
+    // and the illustration is decoration with nothing focusable in it.
+    expect(stops.filter((stop) => main.contains(stop))).toEqual([signIn, register])
+    // The navigation comes first: no stop in the page is reached before its last link.
+    const lastInNav = Math.max(...stops.filter((stop) => nav.contains(stop)).map((stop) => stops.indexOf(stop)))
+    expect(stops.indexOf(signIn)).toBeGreaterThan(lastInNav)
+  })
+
+  // D-137's account-recovery pages, to a visitor not signed in (FEA-2). Their own
+  // classes, .auth-card and .auth-card__intro, are read by no other walk. "Sign in"
+  // names the navigation's link and each page's own, so those go in as elements, and
+  // each case also lists the page's own stops exactly, in order.
+  describe('the account-recovery pages (D-137)', () => {
+    /** The navigation's stops for a visitor, then the page's: `inMain` exactly, in order. */
+    function expectRecoveryOrder(stops, inMain) {
+      const nav = screen.getByRole('navigation', { name: 'Primary' })
+      const main = screen.getByRole('main')
+      expectOrder(stops, [
+        'Skip to content',
+        within(nav).getByRole('link', { name: 'Home' }),
+        within(nav).getByRole('link', { name: 'Sign in' }),
+        within(nav).getByRole('link', { name: 'Register' }),
+        ...stops.filter((stop) => main.contains(stop)),
+      ])
+      expect(stops.filter((stop) => main.contains(stop)).map(stopName)).toEqual(inMain)
+    }
+
+    it('forgot password: skip link, navigation, the address, the button, then the way back to sign in', async () => {
+      serveApi({ 'GET /api/auth/me': NOT_SIGNED_IN })
+      renderApp('/forgot-password')
+      await screen.findByRole('heading', { level: 1, name: 'Forgot password' })
+
+      expectRecoveryOrder(walk(), ['Email address', 'Send reset instructions', 'Sign in'])
+    })
+
+    it('forgot password, once sent: the way back to sign in is the page’s one stop', async () => {
+      serveApi({
+        'GET /api/auth/me': NOT_SIGNED_IN,
+        'POST /api/auth/password-reset': {
+          body: {
+            detail:
+              'If an account uses this address, an email with a link to reset its password is on its way. The link works once, within 60 minutes.',
+          },
+        },
+      })
+      renderApp('/forgot-password')
+      fireEvent.change(await screen.findByLabelText('Email address'), { target: { value: EMPLOYEE.email } })
+      fireEvent.click(screen.getByRole('button', { name: 'Send reset instructions' }))
+      await screen.findByText('Check your email')
+
+      expectRecoveryOrder(walk(), ['Sign in'])
+    })
+
+    it('reset password, from its link: both fields and their toggles, the button, then the way back to sign in', async () => {
+      serveApi({ 'GET /api/auth/me': NOT_SIGNED_IN })
+      renderApp('/reset-password?uid=MQ&token=cz5ooz-0a1')
+      await screen.findByRole('heading', { level: 1, name: 'Reset password' })
+      // Reset password is disabled, and so not a stop, until both fields pass.
+      fireEvent.change(screen.getByLabelText('New password'), { target: { value: 'New-Horse-1!' } })
+      fireEvent.change(screen.getByLabelText('Confirm new password'), { target: { value: 'New-Horse-1!' } })
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Reset password' }).disabled).toBe(false))
+
+      expectRecoveryOrder(walk(), [
+        'New password',
+        'Show new password',
+        'Confirm new password',
+        'Show confirmed password',
+        'Reset password',
+        'Sign in',
+      ])
+    })
+
+    it('reset password, with a link that does not work: the way to ask for a new one is the page’s one stop', async () => {
+      serveApi({ 'GET /api/auth/me': NOT_SIGNED_IN })
+      renderApp('/reset-password')
+      await screen.findByRole('heading', { level: 1, name: 'Reset password' })
+      await screen.findByRole('link', { name: SIGN_IN_TEXT.resetAskAgain })
+
+      expectRecoveryOrder(walk(), [SIGN_IN_TEXT.resetAskAgain])
+    })
   })
 
   it('dashboard: the search field FR-12 puts on every page comes before the navigation, then the filters, then the panels', async () => {
@@ -220,6 +330,33 @@ describe('tab order, screen by screen', () => {
     // The radio group takes exactly one press of Tab (arrow keys move within it).
     const radios = stops.filter((stop) => stop.type === 'radio')
     expect(radios).toHaveLength(1)
+  })
+
+  // #119's Profile page, wired to D-137's routes. Its two file inputs were hidden by
+  // the stylesheet inside labels, so no key reached them: now two buttons open one
+  // input, which is never a stop, and each button is seen while it has focus.
+  it('profile: the Profile link with the picture, then "Change picture", the password form, and "Choose a picture"', async () => {
+    signedIn({})
+    renderApp('/profile')
+    await screen.findByRole('heading', { level: 1, name: PROFILE_TEXT.heading })
+
+    const stops = walk()
+    expectOrder(stops, [
+      'Skip to content',
+      TEXT.searchFieldLabel,
+      PROFILE_TEXT.navLabel,
+      'Log out',
+      PROFILE_TEXT.changePicture,
+      // Each password field, then its Show toggle (FEA-3), as on the reset page.
+      PROFILE_TEXT.currentPasswordLabel,
+      PROFILE_TEXT.showCurrentPassword,
+      PROFILE_TEXT.newPasswordLabel,
+      PROFILE_TEXT.showNewPassword,
+      PROFILE_TEXT.confirmPasswordLabel,
+      PROFILE_TEXT.showConfirmedPassword,
+      PROFILE_TEXT.choosePicture,
+    ])
+    expect(stops.filter((stop) => stop.type === 'file')).toEqual([])
   })
 
   it('ask: the question and its actions come before the list of previous conversations, at every width', async () => {

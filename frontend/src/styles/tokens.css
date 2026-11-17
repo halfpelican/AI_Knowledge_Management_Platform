@@ -127,4 +127,68 @@
   --focus-ring-width: 3px;
   --focus-ring-offset: 2px;
   --focus-ring: var(--focus-ring-width) solid var(--color-focus);
+
+  /* ---- PR #119's redesign ------------------------------------------------ */
+  /* The tokens the restyled screens' stylesheets use: home, dashboard, document
+     repository, sign-in and profile. A colour #119 wrote as a literal is here at
+     the value it wrote, except the four the home illustration changed (below);
+     a name #119 used that this file lacked is defined as the token it meant.
+     tests/contrast.test.js holds each colour to a pair, and
+     components/contrastPairs.js shows each on the component sheet. */
+
+  /* Names #119 used for roles this file already filled. */
+  --color-background: var(--color-surface); /* the page behind the home screen and the sign-in card */
+  --color-heading: var(--color-text);       /* headings and table titles: on the page 14.76:1 */
+  --color-link: var(--color-primary);       /* links: on the page 6.70:1 */
+  --color-accent: var(--color-primary);     /* the home illustration's second shape, drawn
+                                               at 12% opacity: decorative */
+
+  /* The repository's notices (pages/Repository.css). The info notice's text is
+     --color-primary-hover, 8.01:1 on its surface. The error notice sits on
+     --color-danger-surface: #119 wrote #fef2f2, one step from it in green. */
+  --color-info-surface: #eff6ff;  /* body text on it 13.56:1 | muted 6.94:1 */
+  --color-danger-text: #991b1b;   /* on danger-surface 7.64:1 | on surface 8.31:1 */
+
+  /* The document table's status badges (FR-15). "Indexed" has one pair, and
+     every other status the server sends has the other: Processing, Extraction
+     failed, Insufficient content, Too large to index, Indexing failed and
+     Partially indexed. The status is always in words on the badge (SC 1.4.1). */
+  --color-status-indexed: #166534;             /* on its surface 6.49:1 */
+  --color-status-indexed-surface: #dcfce7;     /* body text on it 13.43:1 | muted 6.88:1 */
+  --color-status-not-indexed: #92400e;         /* on its surface 6.37:1 */
+  --color-status-not-indexed-surface: #fef3c7; /* body text on it 13.25:1 | muted 6.79:1 */
+
+  /* The Profile page's role badge (FEA-7, 18 November 2026), in #119's colours. The
+     Administrator's is the "Indexed" pair above, #166534 on #dcfce7, which #119
+     wrote. The Employee's text is --color-primary-hover, #119's #1e40af, on this,
+     #119's light blue. */
+  --color-role-employee-surface: #dbeafe;      /* primary-hover on it 7.15:1 | body text 12.09:1 | muted 6.19:1 */
+
+  /* The home screen's illustration: a device with a chat on it, and a figure.
+     Decorative. Each colour here has a true pair, so four of #119's could not
+     stay: its screen (#0b0c10) is now the device colour, 1.10:1 against it
+     before; its keyboard (#1f2937) is --color-text, #1f2933; its left bubble
+     (#374151) is --color-text-muted; and its figure's body (#4f46e5, 2.82:1 on
+     the figure) is lightened 3% to 3:1. */
+  --color-illustration-device: #111827;      /* on the page 17.74:1 */
+  --color-illustration-figure: #544ce6;      /* on the device 3.00:1 */
+  --color-illustration-bubble-text: #e5e7eb; /* on the left bubble, --color-text-muted, 6.10:1 */
+
+  /* Type, weight, spacing, radii and sizes, each the next step of its scale. */
+  --text-xs: 0.75rem;   /* 12px  badges, captions, table detail */
+  --text-3xl: 2rem;     /* 32px  page headings on the restyled screens */
+  --text-4xl: 2.5rem;   /* 40px  the home screen's heading */
+  --weight-bold: 700;
+  --space-8: 4rem;      /* 64px */
+  --space-10: 5rem;     /* 80px */
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --size-5: 1.25rem;    /* 20px: the "Remember me" checkbox */
+
+  /* Elevation: decorative depth under the restyled cards and panels, never the
+     boundary of anything (each card keeps its border), so no contrast pair. The
+     colour is --color-text's at low alpha, as --color-overlay's is. */
+  --shadow-sm: 0 1px 2px rgb(31 41 51 / 8%);
+  --shadow-md: 0 4px 8px -2px rgb(31 41 51 / 10%), 0 2px 4px -2px rgb(31 41 51 / 6%);
+  --shadow-lg: 0 12px 24px -4px rgb(31 41 51 / 14%), 0 4px 8px -4px rgb(31 41 51 / 8%);
 }

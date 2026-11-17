@@ -26,9 +26,15 @@ export function register({ name, email, password }) {
  * FR-03 (D-130): the 403 carries `code` ACCOUNT_LOCKED_CODE and `retry_after`, the
  * whole seconds until the lock ends, and only a request whose password matched gets
  * it. The 401 never carries either, so it is the same for every address.
+ *
+ * D-137's "Remember me": `remember: true` gives the session REMEMBERED_SESSION_DAYS
+ * without use instead of 60 minutes. The contract makes the field optional and `false`
+ * when absent, and calls an unticked sign-in "a sign-in without `remember`", so an
+ * unticked box sends the body as it always was, `{email, password}`; the server then
+ * gives FR-04's 60 minutes, and ends a remembered session this browser already holds.
  */
-export function login({ email, password }) {
-  return post('/auth/login', { email, password })
+export function login({ email, password, remember = false }) {
+  return post('/auth/login', remember === true ? { email, password, remember: true } : { email, password })
 }
 
 /**
@@ -53,4 +59,40 @@ export function getLockoutPolicy() {
 /** The signed-in user, or 401. Also refreshes the csrftoken cookie. */
 export function fetchCurrentUser(options = {}) {
   return get('/auth/me', options)
+}
+
+/**
+ * D-137's self-service reset, step one, anonymous. 200 `{"detail": "If an account uses
+ * this address, ..."}`, the same status and body for every well-formed address, whether
+ * or not an account uses it (D-25), and only an account is emailed a link; 400
+ * `{"email": [...]}` for an address missing, blank or not a valid format, decided from
+ * the text alone; 429 past the `auth` rate, with `Retry-After` (docs/api-contract.md,
+ * "Resetting a forgotten password").
+ */
+export function requestPasswordReset({ email }) {
+  return post('/auth/password-reset', { email })
+}
+
+/**
+ * D-137's self-service reset, step two, anonymous: the emailed link's `uid` and `token`
+ * with the new password. 200 `{"detail": "Your password has been reset. ..."}`: every
+ * session of the account ends, and nobody is signed in. 400 `{"detail": ...}`, one body
+ * for every link that does not work; 400 `{"new_password": [...]}` for a password
+ * registration would refuse, which leaves the link working; 400 with DRF's messages for
+ * a field missing, blank or null; 429 past the `auth` rate (docs/api-contract.md,
+ * "Resetting a forgotten password").
+ */
+export function confirmPasswordReset({ uid, token, newPassword }) {
+  return post('/auth/password-reset/confirm', { uid, token, new_password: newPassword })
+}
+
+/**
+ * The `detail` of a 200 from one of D-137's two reset routes, where it is text, else
+ * null. Each route answers success with one fixed sentence written for the person, and
+ * the page shows it as sent, so what it says (the link's life, for one) is the server's
+ * own. Only a success's `detail` is read here: a refusal's is never shown (src/api/client.js).
+ */
+export function replyDetail(reply) {
+  const detail = reply && typeof reply === 'object' ? reply.detail : undefined
+  return typeof detail === 'string' && detail.trim() !== '' ? detail : null
 }

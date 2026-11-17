@@ -12,7 +12,9 @@ import useDocumentTitle from '../hooks/useDocumentTitle.js'
 import { formatDate } from '../utils/dates.js'
 import { extractFieldErrors } from '../utils/fieldErrors.js'
 import { addressForThread } from '../utils/threadAddress.js'
+import useAuth from '../auth/useAuth.js'
 import './Dashboard.css'
+
 
 /* ---- Filters and the URL ------------------------------------------------- */
 
@@ -534,6 +536,10 @@ export default function Dashboard() {
   const meetings = payload?.recent_meetings ?? []
   const questions = payload?.recent_questions ?? []
   const panelState = { loading, failed }
+  // The session's user, for the signed-in line only. Their role is shown and never
+  // consulted: what each panel holds, and whether FR-19's panel exists at all, is
+  // decided by the server's reply (invariant 4, D-107).
+  const { user } = useAuth()
   // FR-19's panel: shown when this reply carries `knowledge_gaps`, and while a
   // reply is awaited or has failed, when the last one did. A reply without the
   // key means no panel, no heading and no placeholder (D-107).
@@ -542,6 +548,13 @@ export default function Dashboard() {
   return (
     <div className="dashboard">
       <h1>{TEXT.dashboardHeading}</h1>
+      {/* PR #119: who the page is for, the session's own name and role. The name is
+          the user's own words, so it is rendered as text, never as HTML. */}
+      {user && (
+        <p className="dashboard__user">
+          {TEXT.dashboardSignedInAs} <strong>{user.name}</strong> {TEXT.dashboardSignedInRole(user.role)}
+        </p>
+      )}
       <p className="dashboard__intro">{TEXT.dashboardIntro}</p>
       <DashboardFilters
         key={query}
