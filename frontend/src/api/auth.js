@@ -60,3 +60,26 @@ export function getLockoutPolicy() {
 export function fetchCurrentUser(options = {}) {
   return get('/auth/me', options)
 }
+
+/**
+ * D-137's self-service reset, step one, anonymous. 200 `{"detail": "If an account uses
+ * this address, ..."}`, the same status and body for every well-formed address, whether
+ * or not an account uses it (D-25), and only an account is emailed a link; 400
+ * `{"email": [...]}` for an address missing, blank or not a valid format, decided from
+ * the text alone; 429 past the `auth` rate, with `Retry-After` (docs/api-contract.md,
+ * "Resetting a forgotten password").
+ */
+export function requestPasswordReset({ email }) {
+  return post('/auth/password-reset', { email })
+}
+
+/**
+ * The `detail` of a 200 from one of D-137's two reset routes, where it is text, else
+ * null. Each route answers success with one fixed sentence written for the person, and
+ * the page shows it as sent, so what it says (the link's life, for one) is the server's
+ * own. Only a success's `detail` is read here: a refusal's is never shown (src/api/client.js).
+ */
+export function replyDetail(reply) {
+  const detail = reply && typeof reply === 'object' ? reply.detail : undefined
+  return typeof detail === 'string' && detail.trim() !== '' ? detail : null
+}

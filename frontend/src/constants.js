@@ -71,6 +71,13 @@ export const SIGN_IN_TEXT = {
   // when not to: the session this sign-in starts lasts until it goes REMEMBERED_SESSION_DAYS
   // without a request (D-137), and anyone at this device has it until then.
   rememberHint: `Ticked, your session on this device lasts until it goes ${REMEMBERED_SESSION_DAYS} days without use. Do not tick it on a shared computer.`,
+  // POST /api/auth/password-reset's 200 is shown as the server sent it, the same for every
+  // address (D-25). This is only for a 200 that carried no text, and it names no number, so
+  // it cannot come to disagree with the server about how long a link works.
+  resetRequestedFallback: 'If an account uses this address, an email with a link to reset its password is on its way.',
+  // The `auth` rate's 429 on either reset route (D-137 put both on the budget login and
+  // registration share). `when` is from the reply's Retry-After (src/utils/retryAfter.js).
+  tooManyAttempts: (when) => `Too many attempts in a short time. You can try again ${when}.`,
 }
 
 /**

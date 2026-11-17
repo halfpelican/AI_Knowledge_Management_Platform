@@ -312,6 +312,16 @@ const ACCESS_DENIED = {
   settled: () => pageHeading(TEXT.accessDeniedTitle),
 }
 
+// D-137's forgotten-password page: public, so a signed-in user is not sent on from it,
+// and it asks the API for nothing until its form is sent.
+const FORGOT_PASSWORD = {
+  api: {},
+  async settled() {
+    await pageHeading('Forgot password')
+    await screen.findByLabelText('Email address')
+  },
+}
+
 const ROLE_MANAGEMENT = {
   api: {
     'GET /api/users': { body: [ADMINISTRATOR, EMPLOYEE] },
@@ -385,6 +395,8 @@ export const WALK = [
   // Outside RequireAuth: both render before the session check has answered.
   ...asEachRole('/components', COMPONENT_SHEET),
   ...asEachRole('/403', ACCESS_DENIED),
+  // D-137's public account-recovery page, outside RequireAuth: each role stays on it.
+  ...asEachRole('/forgot-password', FORGOT_PASSWORD),
   // Behind RequireRole: the Administrator stays, and an Employee is sent to the
   // 403 page, having asked the API for nothing (tests/accessDenied.test.jsx).
   ...[
