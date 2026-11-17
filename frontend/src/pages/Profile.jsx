@@ -1,40 +1,189 @@
-import { useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { Navigate } from 'react-router-dom'
-import { ApiError } from '../api/client.js'
-import { changePassword, uploadProfilePicture } from '../api/profile.js'
+import { ApiError, messageForStatus } from '../api/client.js'
+import { changePassword, PICTURE_BUSY_CODE, removeProfilePicture, uploadProfilePicture } from '../api/profile.js'
 import useAuth from '../auth/useAuth.js'
+import Avatar from '../components/Avatar.jsx'
 import Button from '../components/Button.jsx'
 import Notice from '../components/Notice.jsx'
+import PasswordRequirements from '../components/PasswordRequirements.jsx'
 import TextInput from '../components/TextInput.jsx'
+import { MAX_PICTURE_BYTES, PICTURE_EXTENSIONS, PICTURE_TYPES, PROFILE_TEXT, ROLES, VALIDATION } from '../constants.js'
 import useDocumentTitle from '../hooks/useDocumentTitle.js'
-import { extractFieldErrors } from '../utils/fieldErrors.js'
+import { passwordMeetsPolicy } from '../utils/password.js'
+import { whenToRetry } from '../utils/retryAfter.js'
 import './Profile.css'
 
+const EMPTY_PASSWORDS = { currentPassword: '', newPassword: '', confirmPassword: '' }
+
+/** The fields the change's 400 names, and the form's field each one's messages go under. */
+const SERVER_FIELDS = { current_password: 'currentPassword', new_password: 'newPassword' }
+
+/**
+ * FR-01's client-side checks, as registration applies them (src/utils/validation.js,
+ * `validateRegistration`): every field required, the new password meeting the one
+ * policy the server enforces too (src/utils/password.js), and the confirmation
+ * matching it. An empty object means every check passed. The server decides
+ * regardless (CLAUDE.md §6, invariant 4), and refuses more: a new password like the
+ * user's own name, say, or equal to the current one.
+ */
+function validatePasswordChange({ currentPassword, newPassword, confirmPassword }) {
+  const errors = {}
+  if (!currentPassword) errors.currentPassword = PROFILE_TEXT.currentPasswordRequired
+  if (!newPassword) errors.newPassword = PROFILE_TEXT.newPasswordRequired
+  else if (!passwordMeetsPolicy(newPassword)) errors.newPassword = VALIDATION.passwordRequirements
+  if (!confirmPassword) errors.confirmPassword = PROFILE_TEXT.confirmNewPasswordRequired
+  else if (confirmPassword !== newPassword) errors.confirmPassword = VALIDATION.passwordMismatch
+  return errors
+}
+
+/**
+ * Every message of each field a 400 names, under the form's own field names. The
+ * validators' messages are written for the person typing, and are the one backend
+ * text a form shows (src/utils/fieldErrors.js); every one is shown, since a new
+ * password can fail several at once.
+ */
+function passwordFieldErrors(error) {
+  const fieldErrors = {}
+  const details = error instanceof ApiError && error.status === 400 ? error.details : null
+  if (!details || typeof details !== 'object' || Array.isArray(details)) return fieldErrors
+  for (const [serverField, field] of Object.entries(SERVER_FIELDS)) {
+    const messages = details[serverField]
+    if (Array.isArray(messages) && messages.length > 0 && messages.every((message) => typeof message === 'string')) {
+      fieldErrors[field] = messages.join(' ')
+    }
+  }
+  return fieldErrors
+}
+
+/** The form's banner for a change refused without naming a field. */
+function passwordFailure(error) {
+  if (!(error instanceof ApiError)) return messageForStatus()
+  if (error.status === 429) return PROFILE_TEXT.passwordRateLimited(whenToRetry(error.retryAfter))
+  return error.message
+}
+
+/**
+ * Why the page will not send `file`, or null. A convenience, as FR-08's check is:
+ * by the type the browser gives the file, or its extension where it gives none, and
+ * its size. The server reads the format from the content and decides.
+ */
+function pictureRefusal(file) {
+  const type = (file.type ?? '').toLowerCase()
+  const name = (file.name ?? '').toLowerCase()
+  const accepted = type ? PICTURE_TYPES.includes(type) : PICTURE_EXTENSIONS.some((extension) => name.endsWith(extension))
+  if (!accepted) return PROFILE_TEXT.pictureTypeUnsupported
+  if (file.size > MAX_PICTURE_BYTES) return PROFILE_TEXT.pictureTooLarge
+  return null
+}
+
+/**
+ * The notice for an upload the server refused, and never the reply's `detail`: the
+ * contract's message for the 400, the 413s, the 415 and `picture_busy`, and the
+ * page's own for the rate's 429, for which the contract gives DRF's body. The 413
+ * has two messages and no `code`, so which one is told from the file that was sent:
+ * one within 5 MB was refused for its pixels.
+ */
+function uploadFailure(error, file) {
+  if (!(error instanceof ApiError)) {
+    return { variant: 'error', title: PROFILE_TEXT.pictureUploadFailed, text: messageForStatus() }
+  }
+  if (error.status === 429 && error.code === PICTURE_BUSY_CODE) {
+    // Not the uploader's doing, and nothing was stored: said as information.
+    return { variant: 'info', title: PROFILE_TEXT.pictureBusyTitle, text: PROFILE_TEXT.pictureBusy(whenToRetry(error.retryAfter)) }
+  }
+  let text
+  switch (error.status) {
+    case 400:
+      text = PROFILE_TEXT.pictureNotSubmitted
+      break
+    case 413:
+      text = file.size > MAX_PICTURE_BYTES ? PROFILE_TEXT.pictureTooLarge : PROFILE_TEXT.pictureTooManyPixels
+      break
+    case 415:
+      text = PROFILE_TEXT.pictureUnsupported
+      break
+    case 429:
+      text = PROFILE_TEXT.pictureRateLimited(whenToRetry(error.retryAfter))
+      break
+    default:
+      text = error.message
+  }
+  return { variant: 'error', title: PROFILE_TEXT.pictureUploadFailed, text }
+}
+
+/**
+ * The signed-in user's own account (#119), on the routes D-137 built for it.
+ *
+ * **The password change** posts `current_password` and `new_password` to
+ * `POST /api/auth/change-password`, under FR-01's rules: registration's checks and
+ * its requirements panel, and Change password disabled until every check passes. A
+ * 400 puts each field's messages under that field, a wrong current password
+ * included, which the server never answers with a 401. The session that made the
+ * change stays signed in; every other one ends.
+ *
+ * **The picture** goes to `POST /api/users/me/picture` as one multipart part,
+ * `picture`, and Remove takes it away with `DELETE /api/users/me/picture`. After
+ * either, the session's user is read again (`useAuth().refresh()`), so the header
+ * and every list show the change. A file over 5 MB, or not a PNG, JPEG or WebP, is
+ * refused before it is sent. The one file input is hidden and out of the tab order:
+ * "Change picture" and "Choose a picture" are buttons that open it, which the
+ * keyboard reaches and the focus ring shows.
+ *
+ * **One request at a time** (the contract's CHG-3). A password change gives this
+ * session a new key and deletes the old one, so a request sent with the old key and
+ * answered after the change gets a 401 that clears the new key's cookie: the user
+ * would be signed out by their own change. So while any of this page's requests is
+ * in flight, the page sends nothing else, and its buttons say so by being disabled.
+ */
 export default function Profile() {
-  /* ---- State ---- */
-  const [passwordErrors, setPasswordErrors] = useState({})
+  useDocumentTitle(PROFILE_TEXT.heading)
+  const { user, loading, refresh } = useAuth()
+  const requirementsId = useId()
+
+  /* ---- Password state ---- */
+  const [values, setValues] = useState(EMPTY_PASSWORDS)
+  const [touched, setTouched] = useState({})
+  const [serverErrors, setServerErrors] = useState({})
   const [passwordFormError, setPasswordFormError] = useState(null)
   const [passwordSuccess, setPasswordSuccess] = useState(false)
   const [savingPassword, setSavingPassword] = useState(false)
 
-  const [uploadError, setUploadError] = useState(null)
-  const [uploadSuccess, setUploadSuccess] = useState(false)
-  const [uploadingPicture, setUploadingPicture] = useState(false)
+  /* ---- Picture state ---- */
   const [pictureFile, setPictureFile] = useState(null)
   const [picturePreview, setPicturePreview] = useState(null)
+  // {variant, title, text}: a refusal before sending, the server's answer, or a success.
+  const [pictureNotice, setPictureNotice] = useState(null)
+  // 'upload' or 'remove' while that request is in flight.
+  const [pictureWork, setPictureWork] = useState(null)
+  // {seconds}: a `picture_busy` 429's Retry-After, while it runs.
+  const [busyHold, setBusyHold] = useState(null)
+  const fileInputRef = useRef(null)
 
-  const [currentPassword, setCurrentPassword] = useState('')
-  const [newPassword, setNewPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
+  // The request in flight, set before the state that disables the buttons renders,
+  // so a second press or an Enter that lands first is refused here.
+  const inFlight = useRef(null)
 
-  useDocumentTitle('My Profile')
-  const { user, loading } = useAuth()
+  // `picture_busy`: Upload is held back until the server's Retry-After has passed.
+  useEffect(() => {
+    if (!busyHold) return undefined
+    const timer = setTimeout(() => setBusyHold(null), busyHold.seconds * 1000)
+    return () => clearTimeout(timer)
+  }, [busyHold])
+
+  // The preview's object URL is let go once it is replaced or the page is left.
+  useEffect(() => {
+    if (!picturePreview) return undefined
+    return () => {
+      if (typeof URL.revokeObjectURL === 'function') URL.revokeObjectURL(picturePreview)
+    }
+  }, [picturePreview])
 
   /* ---- Loading / not signed in ---- */
   if (loading) {
     return (
       <div className="profile-page">
-        <h1>My Profile</h1>
+        <h1>{PROFILE_TEXT.heading}</h1>
         <p>Loading your profile…</p>
       </div>
     )
@@ -45,98 +194,153 @@ export default function Profile() {
   }
 
   /* ---- Change password ---- */
-  function validatePasswordForm() {
-    const errors = {}
-    if (!currentPassword) errors.currentPassword = 'Enter your current password.'
-    if (!newPassword) errors.newPassword = 'Enter a new password.'
-    else if (newPassword.length < 8) errors.newPassword = 'Password must be at least 8 characters.'
-    if (!confirmPassword) errors.confirmPassword = 'Re-enter your new password.'
-    else if (confirmPassword !== newPassword) errors.confirmPassword = 'The two passwords do not match.'
-    return errors
+  const clientErrors = validatePasswordChange(values)
+  const canSubmit = Object.keys(clientErrors).length === 0
+  const working = savingPassword || pictureWork !== null
+
+  // What shows under each field, as registration decides it: a client message once
+  // the field has been left, except the new password's, whose feedback is the
+  // requirements panel beside it; and the server's messages until the field changes.
+  const fieldErrors = { ...serverErrors }
+  for (const [field, message] of Object.entries(clientErrors)) {
+    if (field !== 'newPassword' && touched[field]) fieldErrors[field] = message
+  }
+
+  function handleChange(event) {
+    const { name, value } = event.target
+    setValues((current) => ({ ...current, [name]: value }))
+    // A server message is about the value that was sent; editing it clears it.
+    setServerErrors((current) => {
+      if (!(name in current)) return current
+      const next = { ...current }
+      delete next[name]
+      return next
+    })
+  }
+
+  function handleBlur(event) {
+    const { name } = event.target
+    setTouched((current) => (current[name] ? current : { ...current, [name]: true }))
   }
 
   async function handlePasswordSubmit(event) {
     event.preventDefault()
-    const errors = validatePasswordForm()
-    setPasswordErrors(errors)
+    // CHG-3: nothing else is sent until the request in flight has answered.
+    if (inFlight.current) return
     setPasswordFormError(null)
     setPasswordSuccess(false)
-    if (Object.keys(errors).length > 0) return
+    if (!canSubmit) {
+      // Unreachable from the button, which is disabled, but Enter submits too.
+      setTouched({ currentPassword: true, newPassword: true, confirmPassword: true })
+      return
+    }
 
+    inFlight.current = 'password'
     setSavingPassword(true)
     try {
-      await changePassword({ currentPassword, newPassword })
+      await changePassword({ currentPassword: values.currentPassword, newPassword: values.newPassword })
+      setValues(EMPTY_PASSWORDS)
+      setTouched({})
+      setServerErrors({})
       setPasswordSuccess(true)
-      setCurrentPassword('')
-      setNewPassword('')
-      setConfirmPassword('')
-    } catch (caught) {
-      if (caught instanceof ApiError) {
-        if (caught.status === 400 && caught.details) {
-          const extracted = extractFieldErrors(caught, [
-            'currentPassword',
-            'newPassword',
-            'confirmPassword',
-          ])
-          setPasswordErrors(extracted.fieldErrors)
-          setPasswordFormError(extracted.formError)
-        } else if (caught.status === 401) {
-          setPasswordFormError('Your current password is incorrect.')
-        } else {
-          setPasswordFormError(caught.message)
-        }
-      } else {
-        setPasswordFormError('Could not change your password. Please try again.')
-      }
+    } catch (error) {
+      const fields = passwordFieldErrors(error)
+      setServerErrors(fields)
+      setPasswordFormError(Object.keys(fields).length > 0 ? null : passwordFailure(error))
     } finally {
+      inFlight.current = null
       setSavingPassword(false)
     }
   }
 
   /* ---- Profile picture ---- */
-  function handlePictureChange(event) {
-    const file = event.target.files?.[0] ?? null
-    setPictureFile(file)
-    setUploadError(null)
-    setUploadSuccess(false)
-    if (file) {
-      setPicturePreview(URL.createObjectURL(file))
-    } else {
+  function openPicker() {
+    fileInputRef.current?.click()
+  }
+
+  function handlePictureChosen(event) {
+    const input = event.target
+    const file = input.files?.[0] ?? null
+    // Cleared, so choosing the same file again, after a refusal say, is a change too.
+    input.value = ''
+    if (!file) return
+    setPictureNotice(null)
+    const refusal = pictureRefusal(file)
+    if (refusal) {
+      setPictureFile(null)
       setPicturePreview(null)
+      setPictureNotice({ variant: 'error', title: PROFILE_TEXT.pictureUploadFailed, text: refusal })
+      return
     }
+    setPictureFile(file)
+    setPicturePreview(typeof URL.createObjectURL === 'function' ? URL.createObjectURL(file) : null)
   }
 
   async function handlePictureSubmit(event) {
     event.preventDefault()
-    if (!pictureFile) return
-    setUploadingPicture(true)
-    setUploadError(null)
-    setUploadSuccess(false)
+    if (!pictureFile || busyHold || inFlight.current) return
+    const sent = pictureFile
+    inFlight.current = 'upload'
+    setPictureWork('upload')
+    setPictureNotice(null)
     try {
-      await uploadProfilePicture(pictureFile)
-      setUploadSuccess(true)
+      await uploadProfilePicture(sent)
       setPictureFile(null)
       setPicturePreview(null)
-      event.target.reset()
-    } catch (caught) {
-      if (caught instanceof ApiError) {
-        setUploadError(caught.message)
-      } else {
-        setUploadError('Could not upload your picture. Please try again.')
+      setPictureNotice({ variant: 'info', title: PROFILE_TEXT.pictureUpdatedTitle, text: PROFILE_TEXT.pictureUpdated })
+      // Read again before anything else is sent, so the header shows the new picture.
+      await refresh()
+    } catch (error) {
+      setPictureNotice(uploadFailure(error, sent))
+      if (error instanceof ApiError && error.status === 429 && error.code === PICTURE_BUSY_CODE && error.retryAfter > 0) {
+        setBusyHold({ seconds: error.retryAfter })
       }
     } finally {
-      setUploadingPicture(false)
+      inFlight.current = null
+      setPictureWork(null)
+    }
+  }
+
+  async function handleRemove() {
+    if (pictureFile) {
+      // #119's Remove: the chosen picture goes, and nothing is sent.
+      setPictureFile(null)
+      setPicturePreview(null)
+      setPictureNotice(null)
+      return
+    }
+    if (!user.picture || inFlight.current) return
+    inFlight.current = 'remove'
+    setPictureWork('remove')
+    setPictureNotice(null)
+    try {
+      await removeProfilePicture()
+      setPictureNotice({ variant: 'info', title: PROFILE_TEXT.pictureRemovedTitle, text: PROFILE_TEXT.pictureRemoved })
+      await refresh()
+    } catch (error) {
+      setPictureNotice({
+        variant: 'error',
+        title: PROFILE_TEXT.pictureRemoveFailed,
+        text: error instanceof ApiError ? error.message : messageForStatus(),
+      })
+    } finally {
+      inFlight.current = null
+      setPictureWork(null)
     }
   }
 
   /* ---- Render ---- */
-  const roleLabel = user.role === 'Administrator' ? 'Administrator' : 'Employee'
-  const initial = user.name ? user.name[0].toUpperCase() : 'U'
+  const administrator = user.role === ROLES.administrator
+  const roleLabel = administrator ? ROLES.administrator : ROLES.employee
+  let removeLabel = PROFILE_TEXT.removeSavedLabel
+  if (pictureFile) removeLabel = PROFILE_TEXT.removeChosenLabel
+  // While removing, the button's name is what it shows, "Removing…".
+  if (pictureWork === 'remove') removeLabel = undefined
 
   return (
     <div className="profile-page">
       <div className="profile-header">
-        <h1>My Profile</h1>
+        <h1>{PROFILE_TEXT.heading}</h1>
         <p className="profile-intro">
           Manage your account details, password and profile picture.
         </p>
@@ -145,29 +349,31 @@ export default function Profile() {
       {/* ---- Profile info card ---- */}
       <section className="profile-card">
         <div className="profile-avatar">
+          {/* Decorative: the name is beside it, in the heading below. */}
           {picturePreview ? (
-            <img src={picturePreview} alt="Profile picture" className="profile-avatar__image" />
+            <img src={picturePreview} alt="" className="profile-avatar__image" />
           ) : (
-            <div className="profile-avatar__placeholder">{initial}</div>
+            <Avatar
+              name={user.name}
+              picture={user.picture}
+              size={null}
+              imageClassName="profile-avatar__image"
+              initialsClassName="profile-avatar__placeholder"
+            />
           )}
-          <label className="profile-avatar__upload">
-            <input type="file" accept="image/*" onChange={handlePictureChange} />
-            Change picture
-          </label>
+          <button
+            type="button"
+            className="profile-avatar__upload"
+            disabled={pictureWork !== null}
+            onClick={openPicker}
+          >
+            {PROFILE_TEXT.changePicture}
+          </button>
         </div>
         <div className="profile-details">
           <h2>{user.name}</h2>
           <p className="profile-email">{user.email}</p>
-          <span
-            className={`profile-role ${user.role.toLowerCase()}`}
-            style={{
-              backgroundColor:
-                user.role === 'Administrator' ? '#dcfce7' : '#dbeafe',
-              color: user.role === 'Administrator' ? '#166534' : '#1e40af',
-              borderColor:
-                user.role === 'Administrator' ? '#bbf7d0' : '#bfdbfe',
-            }}
-          >
+          <span className={`profile-role ${administrator ? 'profile-role--administrator' : 'profile-role--employee'}`}>
             {roleLabel}
           </span>
           <p className="profile-member">
@@ -182,55 +388,62 @@ export default function Profile() {
 
       {/* ---- Change password ---- */}
       <section className="profile-section">
-        <h2>Change password</h2>
+        <h2>{PROFILE_TEXT.passwordHeading}</h2>
         {passwordFormError ? (
-          <Notice variant="error" title="Could not change password">
+          <Notice variant="error" title={PROFILE_TEXT.passwordChangeFailed}>
             {passwordFormError}
           </Notice>
         ) : null}
         {passwordSuccess ? (
-          <Notice variant="info" title="Password changed">
-            Your password has been changed successfully.
+          <Notice variant="info" title={PROFILE_TEXT.passwordChangedTitle}>
+            {`${PROFILE_TEXT.passwordChanged} ${PROFILE_TEXT.passwordChangedSessions}`}
           </Notice>
         ) : null}
         <form className="profile-form" onSubmit={handlePasswordSubmit} noValidate>
           <div className="profile-form__row">
             <TextInput
-              label="Current password"
+              label={PROFILE_TEXT.currentPasswordLabel}
               name="currentPassword"
               type="password"
               autoComplete="current-password"
               required
-              value={currentPassword}
-              error={passwordErrors.currentPassword}
-              onChange={(event) => setCurrentPassword(event.target.value)}
+              value={values.currentPassword}
+              error={fieldErrors.currentPassword}
+              onChange={handleChange}
+              onBlur={handleBlur}
             />
+            {/* The requirements panel describes the field, as on registration. */}
             <TextInput
-              label="New password"
+              label={PROFILE_TEXT.newPasswordLabel}
               name="newPassword"
               type="password"
               autoComplete="new-password"
               required
-              value={newPassword}
-              error={passwordErrors.newPassword}
-              onChange={(event) => setNewPassword(event.target.value)}
-              hint="At least 8 characters."
+              value={values.newPassword}
+              error={fieldErrors.newPassword}
+              describedBy={requirementsId}
+              onChange={handleChange}
+              onBlur={handleBlur}
             />
           </div>
+          <PasswordRequirements id={requirementsId} password={values.newPassword} />
           <TextInput
-            label="Confirm new password"
+            label={PROFILE_TEXT.confirmPasswordLabel}
             name="confirmPassword"
             type="password"
             autoComplete="new-password"
             required
-            value={confirmPassword}
-            error={passwordErrors.confirmPassword}
-            onChange={(event) => setConfirmPassword(event.target.value)}
+            value={values.confirmPassword}
+            error={fieldErrors.confirmPassword}
+            onChange={handleChange}
+            onBlur={handleBlur}
           />
           <div className="profile-form__actions">
-            <Button type="submit" loading={savingPassword} disabled={savingPassword}>
-              {savingPassword ? 'Saving…' : 'Change password'}
+            <Button type="submit" loading={savingPassword} disabled={!canSubmit || working}>
+              {savingPassword ? PROFILE_TEXT.changingPassword : PROFILE_TEXT.changePassword}
             </Button>
+            {/* A disabled button cannot be focused, so the reason sits beside it. */}
+            {!canSubmit && !savingPassword ? <p className="profile-form__gate">{PROFILE_TEXT.passwordGate}</p> : null}
           </div>
         </form>
       </section>
@@ -238,46 +451,52 @@ export default function Profile() {
       {/* ---- Profile picture upload ---- */}
       <section className="profile-section">
         <h2>Profile picture</h2>
-        {uploadError ? (
-          <Notice variant="error" title="Could not upload picture">
-            {uploadError}
-          </Notice>
-        ) : null}
-        {uploadSuccess ? (
-          <Notice variant="info" title="Picture updated">
-            Your profile picture has been updated.
+        {pictureNotice ? (
+          <Notice variant={pictureNotice.variant} title={pictureNotice.title}>
+            {pictureNotice.text}
           </Notice>
         ) : null}
         <form className="profile-form" onSubmit={handlePictureSubmit} noValidate>
+          {/* The one file input, hidden and out of the tab order. The two buttons
+              that open it are what the keyboard reaches. */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={PICTURE_TYPES.join(',')}
+            hidden
+            tabIndex={-1}
+            onChange={handlePictureChosen}
+          />
           <div className="profile-form__row">
-            <label className="profile-picture__label">
-              <input type="file" accept="image/*" onChange={handlePictureChange} hidden />
-              {pictureFile ? pictureFile.name : 'Choose a picture'}
-            </label>
             <Button
-              type="button"
-              onClick={() => {
-                setPictureFile(null)
-                setPicturePreview(null)
-                setUploadError(null)
-                setUploadSuccess(false)
-              }}
+              variant="secondary"
+              disabled={pictureWork !== null}
+              aria-label={pictureFile ? PROFILE_TEXT.choosePictureChosen(pictureFile.name) : undefined}
+              onClick={openPicker}
             >
-              Remove
+              {pictureFile ? pictureFile.name : PROFILE_TEXT.choosePicture}
+            </Button>
+            <Button
+              loading={pictureWork === 'remove'}
+              disabled={working || (!pictureFile && !user.picture)}
+              aria-label={removeLabel}
+              onClick={handleRemove}
+            >
+              {pictureWork === 'remove' ? PROFILE_TEXT.removingPicture : PROFILE_TEXT.removePicture}
             </Button>
           </div>
           {picturePreview && (
             <div className="profile-picture__preview">
-              <img src={picturePreview} alt="Preview" />
+              <img src={picturePreview} alt={PROFILE_TEXT.previewAlt} />
             </div>
           )}
           <div className="profile-form__actions">
             <Button
               type="submit"
-              loading={uploadingPicture}
-              disabled={uploadingPicture || !pictureFile}
+              loading={pictureWork === 'upload'}
+              disabled={working || !pictureFile || busyHold !== null}
             >
-              {uploadingPicture ? 'Uploading…' : 'Upload picture'}
+              {pictureWork === 'upload' ? PROFILE_TEXT.uploadingPicture : PROFILE_TEXT.uploadPicture}
             </Button>
           </div>
         </form>

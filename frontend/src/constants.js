@@ -191,14 +191,100 @@ export const MAX_UPLOAD_LABEL = '50 MB'
 /* ---- D-137: profile pictures, and the Profile page #119 added ---------------- */
 
 /**
+ * D-137's profile picture limits, mirroring apps/core/constants.py
+ * (MAX_PICTURE_BYTES, MAX_PICTURE_PIXELS, PICTURE_FORMATS).
+ *
+ * The size and the formats are a convenience check, as FR-08's are above: the
+ * Profile page refuses a file over 5 MB, or one that is not a PNG, JPEG or WebP,
+ * before sending it. The server decides from the bytes it receives, whatever the
+ * browser allowed (CLAUDE.md §6, invariant 4). The pixel ceiling is not checked
+ * here, since the browser would have to decode the picture to count; it is copied
+ * only so the page can name it when the server's 413 refuses a picture for it.
+ * tests/profilePicture.test.jsx reads apps/core/constants.py and fails when any of
+ * these drifts from the server's value.
+ */
+export const MAX_PICTURE_BYTES = 5 * 1024 * 1024
+export const MAX_PICTURE_LABEL = '5 MB'
+export const MAX_PICTURE_PIXELS = 25_000_000
+/** What the file picker offers and the page accepts: D-137's three formats, as the browser types them. */
+export const PICTURE_TYPES = ['image/png', 'image/jpeg', 'image/webp']
+/** Read only where the browser gives a file no type. */
+export const PICTURE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp']
+export const PICTURE_FORMATS_LABEL = 'PNG, JPEG, WebP'
+
+/**
  * The Profile page's text (D-137, on #119's page). Its own block rather than
  * entries in TEXT, so the four branches building on #119 at once merge without
- * touching one another's lines.
+ * touching one another's lines. The picture's 400, 413s, 415 and `picture_busy`,
+ * and the change's 200, are said in the contract's own words (docs/api-contract.md,
+ * "FR-04 — account self-service"), which tests/profilePicture.test.jsx holds them
+ * to; the reply's `detail` is never shown. The contract gives no words for the two
+ * rate limits, so those are the page's, as D-79's are on the other screens.
  */
 export const PROFILE_TEXT = {
   heading: 'My Profile',
   // The navigation's link to the page, beside "Signed in as …" with the user's picture.
   navLabel: 'Profile',
+
+  /* The picture. Two buttons open the one file input, which is out of the tab
+     order: "Change picture" under the picture, and "Choose a picture" in the form. */
+  changePicture: 'Change picture',
+  choosePicture: 'Choose a picture',
+  // The form's button shows the chosen file's name, as #119's label did; its
+  // accessible name keeps what it does in front of that name (WCAG 2.1 SC 2.5.3).
+  choosePictureChosen: (name) => `Choose a picture. Chosen: ${name}`,
+  uploadPicture: 'Upload picture',
+  uploadingPicture: 'Uploading…',
+  removePicture: 'Remove',
+  // Remove removes the picture on show: a chosen picture not yet uploaded, as in
+  // #119, or else the saved one (DELETE /api/users/me/picture).
+  removeChosenLabel: 'Remove the chosen picture',
+  removeSavedLabel: 'Remove your profile picture',
+  removingPicture: 'Removing…',
+  previewAlt: 'Preview',
+  pictureUpdatedTitle: 'Picture updated',
+  pictureUpdated: 'Your profile picture has been updated.',
+  pictureRemovedTitle: 'Picture removed',
+  pictureRemoved: 'Your profile picture has been removed.',
+  pictureUploadFailed: 'Could not upload picture',
+  pictureRemoveFailed: 'Could not remove picture',
+  // Refused before sending. Named as FR-08's refusal names its formats.
+  pictureTypeUnsupported: `File type not supported. Accepted formats: ${PICTURE_FORMATS_LABEL}.`,
+  // The contract's 413 for the file's size, said before sending as well.
+  pictureTooLarge: `Picture exceeds the maximum permitted size of ${MAX_PICTURE_LABEL}.`,
+  // The contract's 413 for a header declaring too many pixels.
+  pictureTooManyPixels: `This picture's dimensions are too large. Choose a picture of at most ${MAX_PICTURE_PIXELS / 1_000_000} megapixels.`,
+  // The contract's 400 and 415.
+  pictureNotSubmitted: 'No picture was submitted.',
+  pictureUnsupported: 'Choose a PNG, JPEG or WebP picture. This file is not one, or it is damaged.',
+  // The `picture` rate's 429, which carries DRF's body and a Retry-After.
+  pictureRateLimited: (when) =>
+    `You have sent too many pictures in a short time, so this one was not saved. You can try again ${when}.`,
+  // The 429 `picture_busy`: the contract's sentence, with its Retry-After for "a few seconds".
+  pictureBusyTitle: 'The server is busy',
+  pictureBusy: (when) =>
+    `The server is busy with other pictures. This picture was not saved and nothing was changed; it can be sent again ${when}.`,
+
+  /* The password change (POST /api/auth/change-password), under FR-01's rules. */
+  passwordHeading: 'Change password',
+  currentPasswordLabel: 'Current password',
+  newPasswordLabel: 'New password',
+  confirmPasswordLabel: 'Confirm new password',
+  currentPasswordRequired: 'Enter your current password.',
+  newPasswordRequired: 'Enter a new password.',
+  confirmNewPasswordRequired: 'Re-enter your new password.',
+  // Registration's sentence beside its disabled button, for the same reason.
+  passwordGate: 'Complete every field and password requirement to continue.',
+  changePassword: 'Change password',
+  changingPassword: 'Saving…',
+  passwordChangedTitle: 'Password changed',
+  // The contract's 200, then what the change did to sessions.
+  passwordChanged: 'Your password has been changed.',
+  passwordChangedSessions: 'You are still signed in here. Anywhere else you were signed in has been signed out.',
+  passwordChangeFailed: 'Could not change password',
+  // The `password_change` rate's 429. Wrong current passwords count towards it too.
+  passwordRateLimited: (when) =>
+    `You have tried to change your password too many times in a short time, so it was not changed. You can try again ${when}.`,
 }
 
 /**

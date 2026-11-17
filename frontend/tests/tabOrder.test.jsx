@@ -19,6 +19,8 @@ import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 import App from '../src/App.jsx'
 import { ROLES, TEXT } from '../src/constants.js'
+// D-137: the Profile page's names, for its case.
+import { PROFILE_TEXT } from '../src/constants.js'
 import { actionItem, readySummary, serveApi, summaryRoute, summaryState } from './fakeApi.js'
 import { pressTab, stopName, tabThrough } from './keyboard.js'
 import { hidingCauses } from './stylesheets.js'
@@ -224,6 +226,29 @@ describe('tab order, screen by screen', () => {
     // The radio group takes exactly one press of Tab (arrow keys move within it).
     const radios = stops.filter((stop) => stop.type === 'radio')
     expect(radios).toHaveLength(1)
+  })
+
+  // #119's Profile page, wired to D-137's routes. Its two file inputs were hidden by
+  // the stylesheet inside labels, so no key reached them: now two buttons open one
+  // input, which is never a stop, and each button is seen while it has focus.
+  it('profile: the Profile link with the picture, then "Change picture", the password form, and "Choose a picture"', async () => {
+    signedIn({})
+    renderApp('/profile')
+    await screen.findByRole('heading', { level: 1, name: PROFILE_TEXT.heading })
+
+    const stops = walk()
+    expectOrder(stops, [
+      'Skip to content',
+      TEXT.searchFieldLabel,
+      PROFILE_TEXT.navLabel,
+      'Log out',
+      PROFILE_TEXT.changePicture,
+      PROFILE_TEXT.currentPasswordLabel,
+      PROFILE_TEXT.newPasswordLabel,
+      PROFILE_TEXT.confirmPasswordLabel,
+      PROFILE_TEXT.choosePicture,
+    ])
+    expect(stops.filter((stop) => stop.type === 'file')).toEqual([])
   })
 
   it('ask: the question and its actions come before the list of previous conversations, at every width', async () => {
