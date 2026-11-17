@@ -391,3 +391,90 @@
   background-color: var(--color-status-not-indexed-surface);
   color: var(--color-status-not-indexed);
 }
+
+/* ---- The detail screens, and the actions rows ---------------------------- */
+/* Restored as main has them. This file is shared by the document and meeting
+   detail screens and the Ask, Meetings and Search screens, and #119 rewrote it
+   for the repository list; these rules styled elements its rewrite does not
+   style at all, so they went with it, and a document's extracted text lost its
+   line breaks. Nothing below restyles anything #119 styled above. */
+
+/* The retry or "show all" action under a notice, and each screen's row of
+   actions: one set, spaced, wrapping at a narrow width. */
+.repository-page__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+/* An uploader is an email address: allowed to break rather than widen the table. */
+.data-table__uploader {
+  word-break: break-word;
+}
+
+/* FR-09: the stored transcript, viewable in full. Speaker labels and timestamps
+   are stored verbatim and are not parsed (out of scope for this version), so the
+   block preserves the line breaks it was given and imposes no structure of its
+   own. It scrolls rather than stretching the page. */
+.transcript {
+  max-height: 60vh;
+  margin: 0;
+  padding: var(--space-4);
+  overflow: auto;
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface-alt);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  /* Keeps the line breaks, wraps the long lines. */
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* FR-15: a document's extracted text, which is plain text. Untrusted input,
+   rendered as a text child; the line breaks it carries are kept here by CSS and
+   never by turning them into markup. It scrolls rather than stretching the page,
+   because a document's whole text can be long (D-63). */
+.extracted-text {
+  max-height: 60vh;
+  max-width: var(--measure-text);
+  padding: var(--space-4);
+  overflow: auto;
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface-alt);
+  line-height: var(--leading-normal);
+  /* Keeps the line breaks, wraps the long lines. */
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* What the extracted text is and is not: muted, and wrapping like prose. */
+.document-detail__note {
+  max-width: var(--measure-text);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.document-detail__actions,
+.meeting-detail__actions {
+  margin: 0 0 var(--space-5);
+}
+
+/* Key/value list for a record's metadata. */
+.record-meta {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-2) var(--space-4);
+  margin: 0 0 var(--space-5);
+}
+
+.record-meta dt {
+  font-weight: var(--weight-medium);
+}
+
+.record-meta dd {
+  margin: 0;
+}
