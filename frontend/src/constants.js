@@ -241,6 +241,14 @@ export const PROFILE_TEXT = {
   removeChosenLabel: 'Remove the chosen picture',
   removeSavedLabel: 'Remove your profile picture',
   removingPicture: 'Removing…',
+  // Benjamin's answer 4 (18 November 2026): removing the saved picture asks first, in
+  // the confirmation dialogue the app's other deletions use. A chosen picture not yet
+  // sent is taken away without asking: nothing on the server is deleted.
+  removeConfirmTitle: 'Remove your profile picture?',
+  removeConfirmBody:
+    'Your picture is deleted, and your initials show in its place wherever your picture appeared. This cannot be undone, but you can upload a picture again at any time.',
+  removeConfirmLabel: 'Remove picture',
+  removeCancel: 'Cancel',
   previewAlt: 'Preview',
   pictureUpdatedTitle: 'Picture updated',
   pictureUpdated: 'Your profile picture has been updated.',

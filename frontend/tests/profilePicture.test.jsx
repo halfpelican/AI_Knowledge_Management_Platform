@@ -7,8 +7,11 @@
  * - **The upload is the contract's**: one multipart part, `picture`. After it, and
  *   after a removal, the session's user is read again, so the header shows what the
  *   server now holds (D-137: pictures wherever users are listed, the header included).
- * - **Remove** is `DELETE /api/users/me/picture` for a saved picture. For a chosen
- *   picture not yet sent, it takes the choice away and sends nothing, as #119's did.
+ * - **Remove** is `DELETE /api/users/me/picture` for a saved picture, once the app's
+ *   confirmation dialogue has been confirmed (Benjamin's answer 4, 18 November 2026):
+ *   Cancel and Escape send nothing, and focus goes into the dialogue and back to
+ *   Remove. For a chosen picture not yet sent, it takes the choice away, asks nothing
+ *   and sends nothing, as #119's did. Each from both roles.
  * - **The client-side check** refuses a file over 5 MB, or one that is not a PNG, JPEG
  *   or WebP, before a byte is sent, naming what would do.
  * - **The server's refusals** are told in the contract's words for the 400, the 413
@@ -37,10 +40,11 @@ import {
   PICTURE_TYPES,
   PROFILE_TEXT,
 } from '../src/constants.js'
+import { messageForStatus } from '../src/api/client.js'
 import { PICTURE_BUSY_CODE } from '../src/api/profile.js'
-import { serveApi } from './fakeApi.js'
-import { tabThrough } from './keyboard.js'
-import { EMPLOYEE, primaryNavigationFor, renderApp, requested, serveSignedIn } from './routeWalk.jsx'
+import { heldResponse, serveApi } from './fakeApi.js'
+import { pressTab, tabThrough, tabTo } from './keyboard.js'
+import { BOTH_ROLES, EMPLOYEE, primaryNavigationFor, renderApp, requested, serveSignedIn } from './routeWalk.jsx'
 
 const SAVED = '/api/users/user-employee/picture?v=1794823200123456'
 const REPLACED = '/api/users/user-employee/picture?v=1794823299000001'
@@ -149,6 +153,8 @@ describe('D-137: the picture goes to the server, and the header shows what it no
     expect(headerPicture()).toBe(SAVED)
 
     fireEvent.click(screen.getByRole('button', { name: PROFILE_TEXT.removeSavedLabel }))
+    // Answer 4 (18 November 2026): confirmed in the app's dialogue before anything is sent.
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: PROFILE_TEXT.removeConfirmLabel }))
 
     await waitFor(() => expect(headerPicture()).toBeNull())
     expect(profileLink().querySelector('.avatar--initials').getAttribute('data-initials')).toBe('EE')
@@ -175,6 +181,162 @@ describe('D-137: the picture goes to the server, and the header shows what it no
     expect(headerPicture()).toBe(SAVED)
     expect(requested(answered)).toEqual(['GET /api/auth/me'])
   })
+})
+
+/* ---- Answer 4: the saved picture's removal asks first ---------------------- */
+
+/** A user's saved picture, in the contract's form. */
+const pictureOf = (user) => `/api/users/${user.id}/picture?v=1794823200123456`
+
+/** The dialogue that asks before the saved picture is removed. */
+function removeDialog() {
+  return screen.getByRole('dialog', { name: PROFILE_TEXT.removeConfirmTitle })
+}
+
+/** A press as a browser makes one: the control takes focus, then is clicked. */
+function press(element) {
+  element.focus()
+  fireEvent.click(element)
+}
+
+describe('Benjamin’s answer 4 (18 November 2026): removing the saved picture asks first, in the app’s confirmation dialogue', () => {
+  it.each(BOTH_ROLES)(
+    'as an $role, opens the dialogue with focus in it and sends nothing; Escape and Cancel close it, send nothing and give focus back to Remove',
+    async (user) => {
+      const answered = serveSignedIn({ ...user, picture: pictureOf(user) }, {})
+      await openProfile(user)
+      const remove = screen.getByRole('button', { name: PROFILE_TEXT.removeSavedLabel })
+
+      // The keyboard reaches Remove, and pressing it opens the dialogue, which takes focus.
+      tabTo(remove)
+      fireEvent.click(remove)
+      const dialog = removeDialog()
+      expect(dialog.getAttribute('aria-modal')).toBe('true')
+      expect(dialog.textContent).toContain(PROFILE_TEXT.removeConfirmBody)
+      await waitFor(() => expect(document.activeElement).toBe(dialog))
+      expect(pictureRequests(answered)).toEqual([])
+
+      // Tab stays inside it: the confirm, the cancel, and round to the confirm again.
+      const confirm = within(dialog).getByRole('button', { name: PROFILE_TEXT.removeConfirmLabel })
+      const cancel = within(dialog).getByRole('button', { name: PROFILE_TEXT.removeCancel })
+      expect(pressTab()).toBe(confirm)
+      expect(pressTab()).toBe(cancel)
+      expect(pressTab()).toBe(confirm)
+
+      // Escape closes it, and focus is back on Remove.
+      fireEvent.keyDown(document.activeElement, { key: 'Escape' })
+      expect(screen.queryByRole('dialog')).toBeNull()
+      await waitFor(() => expect(document.activeElement).toBe(remove))
+
+      // So does Cancel.
+      fireEvent.click(remove)
+      press(within(removeDialog()).getByRole('button', { name: PROFILE_TEXT.removeCancel }))
+      expect(screen.queryByRole('dialog')).toBeNull()
+      await waitFor(() => expect(document.activeElement).toBe(remove))
+
+      // Nothing was sent, and the picture is still the header's.
+      expect(pictureRequests(answered)).toEqual([])
+      expect(requested(answered)).toEqual(['GET /api/auth/me'])
+      expect(headerPicture()).toBe(pictureOf(user))
+      expect(remove.disabled).toBe(false)
+    },
+  )
+
+  it.each(BOTH_ROLES)(
+    'as an $role, confirming sends the one DELETE, busy until it answers; then initials, and focus on the section’s heading, Remove having nothing left to remove',
+    async (user) => {
+      const held = heldResponse()
+      const answered = serveChangingUser(
+        { ...user, picture: pictureOf(user) },
+        {
+          'DELETE /api/users/me/picture': async (state) => {
+            const reply = await held.route()
+            state.user = { ...user, picture: null }
+            return reply
+          },
+        },
+      )
+      await openProfile(user)
+      const remove = screen.getByRole('button', { name: PROFILE_TEXT.removeSavedLabel })
+
+      press(remove)
+      const dialog = removeDialog()
+      const confirm = within(dialog).getByRole('button', { name: PROFILE_TEXT.removeConfirmLabel })
+      press(confirm)
+
+      // In flight: the dialogue stays, says so, and takes no second press, Escape or Cancel.
+      await waitFor(() => expect(confirm.textContent).toBe(PROFILE_TEXT.removingPicture))
+      expect(confirm.getAttribute('aria-busy')).toBe('true')
+      const cancel = within(dialog).getByRole('button', { name: PROFILE_TEXT.removeCancel })
+      expect(cancel.disabled).toBe(true)
+      fireEvent.click(confirm)
+      fireEvent.keyDown(document.activeElement, { key: 'Escape' })
+      expect(removeDialog()).toBe(dialog)
+      expect(pictureRequests(answered).map((request) => [request.method, request.body])).toEqual([['DELETE', undefined]])
+
+      held.release({ body: { ...user, picture: null } })
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+      expect(headerPicture()).toBeNull()
+      expect(profileLink().querySelector('.avatar--initials').getAttribute('data-initials')).toBe(
+        user.name
+          .split(' ')
+          .map((word) => word[0])
+          .join(''),
+      )
+      expect(await screen.findByText(PROFILE_TEXT.pictureRemoved)).toBeTruthy()
+      // Nothing is left to remove, so Remove is disabled and cannot take focus back.
+      expect(remove.disabled).toBe(true)
+      await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { level: 2, name: 'Profile picture' })))
+      expect(pictureRequests(answered)).toHaveLength(1)
+      // The session check on arrival, and the read after the removal.
+      expect(sessionReads(answered)).toBe(2)
+    },
+  )
+
+  it.each(BOTH_ROLES)(
+    'as an $role, a removal that fails closes the dialogue, says so in the client’s words, keeps the picture and gives focus back to Remove',
+    async (user) => {
+      const answered = serveSignedIn(
+        { ...user, picture: pictureOf(user) },
+        { 'DELETE /api/users/me/picture': { status: 500, body: { detail: 'SERVER: Traceback (most recent call last)' } } },
+      )
+      await openProfile(user)
+      const remove = screen.getByRole('button', { name: PROFILE_TEXT.removeSavedLabel })
+
+      press(remove)
+      press(within(removeDialog()).getByRole('button', { name: PROFILE_TEXT.removeConfirmLabel }))
+
+      const alert = await screen.findByRole('alert')
+      expect(alert.textContent).toBe(`${PROFILE_TEXT.pictureRemoveFailed}${messageForStatus(500)}`)
+      expect(alert.textContent).not.toContain('SERVER')
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+      await waitFor(() => expect(document.activeElement).toBe(remove))
+      expect(remove.disabled).toBe(false)
+      expect(headerPicture()).toBe(pictureOf(user))
+      expect(pictureRequests(answered)).toHaveLength(1)
+      expect(sessionReads(answered)).toBe(1)
+    },
+  )
+
+  it.each(BOTH_ROLES)(
+    'as an $role, Remove with a chosen picture not yet sent takes it away without asking, and deletes nothing',
+    async (user) => {
+      const answered = serveSignedIn({ ...user, picture: pictureOf(user) }, {})
+      await openProfile(user)
+      choose(pictureFile('me.png'))
+
+      press(screen.getByRole('button', { name: PROFILE_TEXT.removeChosenLabel }))
+
+      expect(screen.queryByRole('dialog')).toBeNull()
+      expect(screen.getByRole('button', { name: PROFILE_TEXT.choosePicture })).toBeTruthy()
+      expect(uploadButton().disabled).toBe(true)
+      // The saved picture is untouched: still offered for removal, and still the header's.
+      expect(screen.getByRole('button', { name: PROFILE_TEXT.removeSavedLabel }).disabled).toBe(false)
+      expect(headerPicture()).toBe(pictureOf(user))
+      expect(requested(answered)).toEqual(['GET /api/auth/me'])
+    },
+  )
 })
 
 describe('D-137: a file the page will not send', () => {

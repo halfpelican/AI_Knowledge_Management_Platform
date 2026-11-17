@@ -5,6 +5,7 @@ import { changePassword, PICTURE_BUSY_CODE, removeProfilePicture, uploadProfileP
 import useAuth from '../auth/useAuth.js'
 import Avatar from '../components/Avatar.jsx'
 import Button from '../components/Button.jsx'
+import Dialog from '../components/Dialog.jsx'
 import Notice from '../components/Notice.jsx'
 import PasswordRequirements from '../components/PasswordRequirements.jsx'
 import TextInput from '../components/TextInput.jsx'
@@ -123,8 +124,11 @@ function uploadFailure(error, file) {
  * change stays signed in; every other one ends.
  *
  * **The picture** goes to `POST /api/users/me/picture` as one multipart part,
- * `picture`, and Remove takes it away with `DELETE /api/users/me/picture`. After
- * either, the session's user is read again (`useAuth().refresh()`), so the header
+ * `picture`, and Remove takes it away with `DELETE /api/users/me/picture`, once the
+ * app's confirmation dialogue has been confirmed (Benjamin's answer 4, 18 November
+ * 2026). Remove with a chosen picture not yet sent takes the choice away without
+ * asking, since nothing on the server is deleted. After an upload or a removal, the
+ * session's user is read again (`useAuth().refresh()`), so the header
  * and every list show the change. A file over 5 MB, or not a PNG, JPEG or WebP, is
  * refused before it is sent. The one file input is hidden and out of the tab order:
  * "Change picture" and "Choose a picture" are buttons that open it, which the
@@ -165,7 +169,12 @@ export default function Profile() {
   const [pictureWork, setPictureWork] = useState(null)
   // {seconds}: a `picture_busy` 429's Retry-After, while it runs.
   const [busyHold, setBusyHold] = useState(null)
+  // Answer 4: the dialogue that asks before the saved picture is removed is open.
+  const [confirmingRemove, setConfirmingRemove] = useState(false)
   const fileInputRef = useRef(null)
+  // Where focus goes when the dialogue closes and Remove cannot take it back, as after a
+  // removal, which leaves nothing to remove: the section's own heading.
+  const pictureHeadingRef = useRef(null)
 
   // The request in flight, set before the state that disables the buttons renders,
   // so a second press or an Enter that lands first is refused here.
@@ -311,14 +320,28 @@ export default function Profile() {
     }
   }
 
-  async function handleRemove() {
+  function handleRemove() {
     if (pictureFile) {
-      // #119's Remove: the chosen picture goes, and nothing is sent.
+      // #119's Remove: the chosen picture goes, and nothing is sent, so nothing asks.
       setPictureFile(null)
       setPicturePreview(null)
       setPictureNotice(null)
       return
     }
+    if (!user.picture || inFlight.current) return
+    // Answer 4: the saved picture is deleted only once the dialogue is confirmed.
+    setConfirmingRemove(true)
+  }
+
+  function cancelRemove() {
+    // Not while the removal is in flight: the dialogue says "Removing…" until it answers.
+    if (pictureWork !== 'remove') setConfirmingRemove(false)
+  }
+
+  // The dialogue stays open, busy, until the DELETE has answered, as the app's other
+  // deletions do; it closes in `finally`. Focus then goes back to Remove, or to the
+  // section's heading when Remove is disabled because nothing is left to remove.
+  async function confirmRemove() {
     if (!user.picture || inFlight.current) return
     inFlight.current = 'remove'
     setPictureWork('remove')
@@ -336,16 +359,16 @@ export default function Profile() {
     } finally {
       inFlight.current = null
       setPictureWork(null)
+      setConfirmingRemove(false)
     }
   }
 
   /* ---- Render ---- */
   const administrator = user.role === ROLES.administrator
   const roleLabel = administrator ? ROLES.administrator : ROLES.employee
-  let removeLabel = PROFILE_TEXT.removeSavedLabel
-  if (pictureFile) removeLabel = PROFILE_TEXT.removeChosenLabel
-  // While removing, the button's name is what it shows, "Removing…".
-  if (pictureWork === 'remove') removeLabel = undefined
+  // Remove's name says which picture it takes away. While the saved one is being removed,
+  // the dialogue says "Removing…", and Remove waits behind it, disabled.
+  const removeLabel = pictureFile ? PROFILE_TEXT.removeChosenLabel : PROFILE_TEXT.removeSavedLabel
 
   return (
     <div className="profile-page">
@@ -460,7 +483,10 @@ export default function Profile() {
 
       {/* ---- Profile picture upload ---- */}
       <section className="profile-section">
-        <h2>Profile picture</h2>
+        {/* Focusable from script only: where focus goes after a removal (answer 4). */}
+        <h2 ref={pictureHeadingRef} tabIndex={-1}>
+          Profile picture
+        </h2>
         {pictureNotice ? (
           <Notice variant={pictureNotice.variant} title={pictureNotice.title}>
             {pictureNotice.text}
@@ -487,12 +513,11 @@ export default function Profile() {
               {pictureFile ? pictureFile.name : PROFILE_TEXT.choosePicture}
             </Button>
             <Button
-              loading={pictureWork === 'remove'}
               disabled={working || (!pictureFile && !user.picture)}
               aria-label={removeLabel}
               onClick={handleRemove}
             >
-              {pictureWork === 'remove' ? PROFILE_TEXT.removingPicture : PROFILE_TEXT.removePicture}
+              {PROFILE_TEXT.removePicture}
             </Button>
           </div>
           {picturePreview && (
@@ -511,6 +536,24 @@ export default function Profile() {
           </div>
         </form>
       </section>
+
+      {/* Answer 4: the app's confirmation dialogue, as a document's, a meeting's and a
+          tag's deletion use it. It takes focus when it opens and gives it back when it
+          closes (components/Dialog.jsx). */}
+      {confirmingRemove ? (
+        <Dialog
+          title={PROFILE_TEXT.removeConfirmTitle}
+          confirmLabel={PROFILE_TEXT.removeConfirmLabel}
+          busyLabel={PROFILE_TEXT.removingPicture}
+          cancelLabel={PROFILE_TEXT.removeCancel}
+          busy={pictureWork === 'remove'}
+          returnFocusRef={pictureHeadingRef}
+          onConfirm={confirmRemove}
+          onCancel={cancelRemove}
+        >
+          <p>{PROFILE_TEXT.removeConfirmBody}</p>
+        </Dialog>
+      ) : null}
     </div>
   )
 }
