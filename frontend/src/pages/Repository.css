@@ -20,14 +20,18 @@
   line-height: 1.6;
 }
 
-/* Upload link */
-.repository-page p a {
+/* Upload link, and the other links that stand alone in a paragraph of the page
+   itself ("Back to documents", "Back to meetings"). Only those: `.repository-page`
+   frames the Ask and detail screens too, and a link that shares its line with
+   other text, such as an answer's "View the document", keeps its underline,
+   because colour alone does not set it apart from that text (SC 1.4.1). */
+.repository-page > p > a {
   color: var(--color-primary);
   text-decoration: none;
   font-weight: var(--weight-medium);
 }
 
-.repository-page p a:hover {
+.repository-page > p > a:hover {
   text-decoration: underline;
 }
 
