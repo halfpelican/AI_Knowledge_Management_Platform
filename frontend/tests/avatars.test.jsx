@@ -6,6 +6,7 @@
  * list people showing it.
  *
  * - **The Avatar** shows the picture, and the person's initials where there is none
+ *   or where its address is not the contract's own, `/api/users/<id>/picture` (AVA-1),
  *   or where it fails to load. Beside a name it is decoration: `alt=""`, and the
  *   initials `aria-hidden`, painted by the stylesheet so the text of what holds them
  *   stays the name (SC 1.1.1: decoration is hidden, and the name is the text).
@@ -19,6 +20,8 @@
  * which is pytest's.
  */
 import { fireEvent, render, screen, within } from '@testing-library/react'
+import { readdirSync, readFileSync } from 'node:fs'
+import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import Avatar from '../src/components/Avatar.jsx'
 import { PROFILE_TEXT, ROLES, TEXT } from '../src/constants.js'
@@ -95,6 +98,52 @@ describe('the Avatar (D-137)', () => {
     // aria-hidden is the decoration's, for assistive technology; nothing hides either from the eye.
     expect(hidingCauses(initials).filter((cause) => !cause.endsWith('is aria-hidden'))).toEqual([])
     expect(hidingCauses(image)).toEqual([])
+  })
+})
+
+describe('AVA-1: the Avatar uses only the contract’s own picture address', () => {
+  // Each is something the server never sends, and each shows the initials: the browser
+  // fetches nothing, and no other site learns who is looking at the page.
+  it.each([
+    ['a javascript: address', 'javascript:alert(1)'],
+    ['a protocol-relative address elsewhere', '//evil.example/api/users/user-erin/picture?v=1'],
+    ['an absolute https: address', 'https://evil.example/api/users/user-erin/picture?v=1'],
+    ['an absolute address on this origin', 'http://localhost/api/users/user-erin/picture?v=1'],
+    ['a data: address', 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg"/>'],
+    ['another path on this origin', '/api/documents/doc-1/download'],
+    ['a path that climbs out with ..', '/api/users/../documents/doc-1/download'],
+    ['an id that hides a slash', '/api/users/a%2F..%2Fb/picture'],
+    ['the route with more after it', '/api/users/user-erin/picture/../../x'],
+    ['the route with a fragment', '/api/users/user-erin/picture#x'],
+    ['the route after a space', ' /api/users/user-erin/picture'],
+  ])('shows the initials, never the image, for %s', (_, address) => {
+    const { container } = render(<Avatar name="Erin Employee" picture={address} />)
+    expect(container.querySelector('img')).toBeNull()
+    expect(container.querySelector('.avatar--initials').getAttribute('data-initials')).toBe('EE')
+  })
+
+  it.each([
+    ['with its version', '/api/users/user-erin/picture?v=1794823200123456'],
+    ['without a query', '/api/users/user-erin/picture'],
+    ['with an id that is a UUID', '/api/users/0b7c2a54-0000-4000-8000-000000000001/picture?v=1'],
+  ])('shows the picture from the contract’s address %s', (_, address) => {
+    const { container } = render(<Avatar name="Erin Employee" picture={address} />)
+    expect(container.querySelector('img').getAttribute('src')).toBe(address)
+  })
+
+  it('lets no module but the component sheet draw a picture without the check', () => {
+    // AvatarPicture draws an image from any address its caller gives it. Only the
+    // component sheet may, for its sample: a user's picture goes through Avatar.
+    const SRC = join(import.meta.dirname, '..', 'src')
+    const modules = (dir) =>
+      readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
+        entry.isDirectory() ? modules(join(dir, entry.name)) : /\.jsx?$/.test(entry.name) ? [join(dir, entry.name)] : [],
+      )
+    const users = modules(SRC)
+      .filter((file) => /\bAvatarPicture\b/.test(readFileSync(file, 'utf8')))
+      .map((file) => relative(SRC, file).split('\\').join('/'))
+      .sort()
+    expect(users).toEqual(['components/Avatar.jsx', 'components/ComponentSheet.jsx'])
   })
 })
 

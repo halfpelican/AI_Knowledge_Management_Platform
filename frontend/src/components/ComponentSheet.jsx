@@ -10,7 +10,7 @@ import ActionItems from './ActionItems.jsx'
 import AiMark, { PersonMark } from './AiMark.jsx'
 import { AnswerBody, PartialMatches, SourcesPanel } from './Answer.jsx'
 import AttendeePicker from './AttendeePicker.jsx'
-import Avatar from './Avatar.jsx'
+import Avatar, { AvatarPicture } from './Avatar.jsx'
 import { ActiveFilterList, FacetGroup, SortHeader } from './Browse.jsx'
 import Button from './Button.jsx'
 import DashboardPanel from './DashboardPanel.jsx'
@@ -395,7 +395,9 @@ const SAMPLE_AI_SEARCH_GROUP = {
 /* D-137's avatar, for the section below. A real picture is the user object's
    `picture`, an address under GET /api/users/{id}/picture that needs a session,
    and the sheet asks the API for nothing. The site's own icon stands in: an image
-   on this origin that the browser can load for anyone. */
+   on this origin that the browser can load for anyone. Avatar takes only the
+   contract's address (AVA-1), so the sample is drawn by AvatarPicture, the image
+   Avatar itself draws. */
 const SAMPLE_PICTURE = '/favicon.svg'
 
 const ALL_TOKENS = [
@@ -898,11 +900,12 @@ export default function ComponentSheet() {
           meeting&apos;s attendees. The name is always beside it, so it is decoration: the picture has an empty{' '}
           <code>alt</code>, and the initials are <code>aria-hidden</code> and painted by the stylesheet rather
           than written into the page, so a row header or a link still reads as the name alone. A picture that
-          cannot be loaded gives way to the initials. The Profile page shows the same component larger.
+          cannot be loaded gives way to the initials, and so does any address but the contract&apos;s own,{' '}
+          <code>/api/users/&lt;id&gt;/picture</code>. The Profile page shows the same component larger.
         </p>
         <ul className="avatar-list">
           <li className="avatar-list__person">
-            <Avatar name="Jane Doe" picture={SAMPLE_PICTURE} />
+            <AvatarPicture src={SAMPLE_PICTURE} />
             <span>Jane Doe (jane@example.com), with a picture</span>
           </li>
           <li className="avatar-list__person">
