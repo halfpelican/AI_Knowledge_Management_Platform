@@ -198,8 +198,14 @@
   stroke-width: var(--border-width);
 }
 
-/* The selected node's lines: darker and heavier, so the difference is not carried
-   by colour alone (SC 1.4.1). --color-text on the surface is 14.76:1. */
+/* The selected node's lines. --color-text on the surface is 14.76:1.
+   In the first view they are darker and heavier, so the difference is not carried
+   by colour alone (SC 1.4.1).
+   In the second view (D-138) the width set here is replaced by the weight classes
+   further down, so a selected line differs from the others by colour only. There
+   the selection is carried by more than the lines: the selected node has the
+   heavier outline and the word "Selected", and what its lines join is also listed
+   in the pane. */
 .knowledge-map__line--selected {
   stroke: var(--color-text);
   stroke-width: var(--border-width-emphasis);
@@ -335,10 +341,13 @@ a.knowledge-map__node:hover .knowledge-map__node-label {
 
 /* A line's weight is how often its pairing was admitted: once, two to four times,
    five times or more (src/utils/evidenceMap.js). Three widths, each twice the
-   last. Declared after the selected line's rule above, so a selected node's lines
-   keep the weight of their pairing and are marked by the darker stroke; the
-   selected node itself has the heavier outline and the word. The number is in
-   the Relationships table, so the weight is never the only place it is said. */
+   last. Declared after the selected line's rule above, so in this view a selected
+   node's lines keep the weight of their pairing. They then differ from the other
+   lines by colour only, the darker stroke. That is not the only way the selection
+   is shown: the selected node itself has the heavier outline and the word
+   "Selected", and the nodes its lines join are listed in the pane, under
+   "Supported by" or "Cited by". The number behind a weight is in the Relationships
+   table, so the weight is never the only place it is said. */
 .knowledge-map__line--light {
   stroke-width: var(--border-width);
 }

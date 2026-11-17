@@ -327,6 +327,10 @@ MAXIMUM_TRAVERSAL_DEPTH = 2
 # smallest multiple of 50 that holds that corpus's whole map (41 nodes), so a demonstration on
 # it is not cut by the cap. On that corpus the cap therefore never binds; node-count truncation
 # is shown by tests. *tune* on any larger corpus.
+# The map's second view (D-138) is capped by the same two values, and neither was measured for
+# it. Its graph grows with every answer given, not with the corpus: one answer adds up to
+# MAXIMUM_STATEMENTS claims and their passages, so its overview reaches this cap after a
+# handful of answers and is then a partial view, which the reply says. *tune* for that view.
 MAXIMUM_NODE_COUNT = 50
 # FR-20's permission code (D-132), checked by GET /api/knowledge-map before anything else on the
 # request. NOT in the proposal, which names no permission for FR-20: added at the lead's decision

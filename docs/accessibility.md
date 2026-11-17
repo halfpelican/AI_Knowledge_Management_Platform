@@ -377,7 +377,7 @@ heading. `knowledgeMap.test.jsx`, under "the switch between the two views", as e
 | Claim | square (`rect`) | `--color-text` #1f2933 | 14.76:1 | "Claim" in the legend, the node's name and the Type column |
 | Passage | circle | `--color-primary` | 6.70:1 | "Passage", in the same three places |
 
-Both pairs were already in section 3's table. `contrast.test.js :: the second view (D-138): gives
+Both pairs were already in section 1's table. `contrast.test.js :: the second view (D-138): gives
 the claim and the passage one fill token each, two different ones, each a tested 3:1 pair on the
 surface`.
 
@@ -389,6 +389,10 @@ are three widths, each greater than the last, and no colour of their own`.
 
 **The selected item** has a heavier outline, darker lines, `aria-current` and the visible word
 "Selected". Its lines keep their weight, so the legend says "darker lines" for this view.
+A selected item's lines therefore differ from the others by colour alone, and the two strokes
+are 2.97:1 against each other, under 3:1. What those lines say is also in text: the pane lists
+what the selected item is joined to ("Supported by" or "Cited by"), and the Relationships
+table has a row for each line. The first view's selected lines are heavier as well as darker.
 
 **AI-generated content says so in words (NFR-15).** A passage of a meeting's AI-written summary
 carries the app's "Suggested by AI" mark wherever its label is shown: its node, its Items row,

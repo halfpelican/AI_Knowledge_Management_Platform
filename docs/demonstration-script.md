@@ -731,9 +731,15 @@ the alpha**: the alpha needs the build that holds FR-20, `migrate`, and step 11 
    - **The claims are the statements of the answers given so far on this database:** FR-12's and
      FR-13's steps above, and anything asked before the walk. A line is heavier where the same
      statement was admitted from the same passage more than once.
-   - **If it reads "No claims yet …",** no answer on this database can be shown to this role. A
-     reprocess or a re-index since the last answer does that: it replaces the passages the
-     claims cited.
+   - **Whether a notice says the view is partial depends on how many questions have been
+     answered.** An answer adds up to six claims and their passages, and the view holds 50
+     items. After the walk's own questions it may be over: the notice then reads "The map
+     holds at most 50 items at a time. Select an item to see what is connected to it.", which
+     is the cap doing its work, and an older claim is reached by selecting a passage it cites.
+   - **If it says there are no claims yet,** no answer on this database can be shown to this
+     role. That is so on a new database, and after a reprocess or a re-index, which replaces
+     the passages the claims cited. On 17 November 2026 the alpha's database held no answered
+     question, so the view is empty there until FR-12's steps above have been walked.
 9. **Select a claim.**
    - **Expected:** the pane is headed "Claim review". It shows the claim's text, "Admitted in …
      answers.", **Supported by** with its passages, **First admitted** and **Last admitted**. A

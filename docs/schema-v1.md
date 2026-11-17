@@ -580,6 +580,9 @@ LOGIN_ATTEMPT_EVENTS = ("lockout", "release")
 KNOWLEDGE_MAP_NODE_TYPES = (*SOURCE_TYPES, "tag", "contributor")
 KNOWLEDGE_MAP_RELATIONSHIPS = ("tagged", "uploaded", "attended")
 KNOWLEDGE_MAP_TRUNCATION_REASONS = ("node_count", "depth")
+# The knowledge map's second view (D-138), 16 November 2026:
+EVIDENCE_MAP_NODE_TYPES = ("claim", "passage")
+EVIDENCE_MAP_RELATIONSHIPS = ("cites",)
 ```
 
 These live in `apps/core/constants.py`. Status values are fixed rather than free text
@@ -620,6 +623,13 @@ own, a tag and a contributor, which are nodes only through a link to a source th
 (`Documents.uploaded_by`), a contributor **attended** a meeting (`MeetingAttendees`).
 `KNOWLEDGE_MAP_TRUNCATION_REASONS` says which cap cut a view short, `MAXIMUM_NODE_COUNT` or
 `MAXIMUM_TRAVERSAL_DEPTH`; `node_count` is reported when both apply (D-132).
+
+The two `EVIDENCE_MAP_` vocabularies are the map's second view's (D-138), and are values of a
+response too: that view stores nothing either. `EVIDENCE_MAP_NODE_TYPES` is what
+`GET /api/knowledge-map/evidence` calls its two kinds of node: a **claim**, a verified statement
+of an answered question (`AnswerCitations.statement_text`), and a **passage**, the chunk it
+cites. `EVIDENCE_MAP_RELATIONSHIPS` is its one link: a claim **cites** a passage. The caps and
+the truncation reasons are the first view's.
 
 `DOCUMENT_STATUS_VALUES` is the proposal's own §7.0 set. It **supersedes** the five
 values this section carried until 2026-09-21 — `Uploaded`, `Extracting`, `Indexed`,

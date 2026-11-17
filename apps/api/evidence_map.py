@@ -31,6 +31,11 @@ count or a flag to turn on (invariant 1).
    which is where the passage's title is read from. A chunk and a source that disagree show
    nothing.
 
+**Two more conditions, each on a row no answer path writes.** The row's question must be
+recorded as answered: a citation is written only for an answer that was returned. And the
+statement must hold something besides whitespace: a claim with no text would be a node with
+no name. Each has a test of its own.
+
 **What is never selected:** the question, who asked it, the answer's whole text, a query's
 identifier, and any passage text. A claim is the statement's text and what is counted from the
 rows above; a passage is its source's title and its place in the source.

@@ -18761,14 +18761,24 @@ supplied chunk that was deleted is not in scope, so that answer's claims are lef
   out of scope.
 - **"Owner".** No table gives a claim or a passage an owner.
 - **The two filters,** "Subject" and "Filter". D-132's item 4 stands: no filters.
-- **"N documents" in the count line.** The line counts claims and passages.
+- **"N documents" in the count line.** The line counts the nodes shown, and a document is not a
+  node of this view. A passage names its source in its label.
 - **"Last verified".** A claim is verified when its answer is given, so the pane says "Last
   admitted".
+- **"Read the passage".** The pane's links select a passage, and selecting it again opens its
+  source's page. The route never selects a passage's text, so the map never shows it. The
+  source's own page does, under its own scope.
+- **"over 90 days".** The pane gives the first day and the last, and no span.
+- **"If §2.1 is rewritten, all 96 answers change at once and none of them will say so on their
+  own".** A statement of impact. The pane says only that every answer rests on the same passage
+  (departure 7).
 
 ### Departures from the proposal, and readings of it
 
 1. **The second view is not in FR-20's text.** It is built at the user's instruction from Figure
-   8.7. The first view, which is what FR-20's clauses describe, is unchanged.
+   8.7. The first view, which is what FR-20's clauses describe, keeps its nodes, its route's
+   shape and what it shows. It gained the link to the second view and, on 17 November, the rate
+   limit the two share.
 2. **A claim has no underlying item.** Selecting one again opens nothing, and the pane says so. A
    passage's underlying item is read as its source's page.
 3. **Other users' answer statements are shown,** the user's choice. A statement is model text
@@ -18783,6 +18793,36 @@ supplied chunk that was deleted is not in scope, so that answer's claims are lef
    two claims.
 6. **`walk` in `apps/api/knowledge_map.py` gained two entries in its table of kinds,** so that it
    serves both views. Nothing else in the first view's module changed.
+7. **The proposal lists "Dependency and impact analysis overlays on the relationship
+   visualisation" as out of scope,** in the same list as the line quoted above. A view of which
+   claims rest on which passage, with "Single source", is open to that reading. It is built at
+   the user's instruction of 16 November 2026, from the mock-up he supplied. The mock-up's own
+   sentence of impact is not built. **This line was not put to him before the view was
+   built.** The requirements audit of the built code found it (A2, in the dated note below),
+   and it was reported to him with the pull request.
+8. **UC-11 E2 is met less far in this view than in the first.** `RequireAuth` keeps the path
+   and not the query. So `/knowledge-map?view=evidence` opened while signed out returns, after
+   sign-in, to the first view. D-132's item 7 records that the selection is lost; here the view
+   is lost with it. No authentication code changes, as there. A front-end test holds what
+   happens.
+9. **The two caps are the first view's, and were not measured for this view.** Its graph grows
+   with every answer given, not with the corpus.
+   - **The arithmetic.** One answer holds at most `MAXIMUM_STATEMENTS` (6) statements, so it
+     adds at most six claims and six passages. The overview's 50 nodes are reached after
+     between four answers, at that most, and about sixteen, at the rate seen below.
+   - **What was counted, read-only, on 17 November 2026,** by figures alone
+     (the session's `count_claims.py`, which applies the three rules in SQL and prints no text):
+     - the alpha's database, `kmp_alpha_20261113`: 1 question logged and none answered, so the
+       view is empty there for both roles until a question is answered;
+     - the development database, `kmp_anthropic`: 3 answered questions and 10 citation rows.
+       Each role would see 4 claims and 2 passages, from 2 of those answers.
+   - **No database held a demonstration's worth of answers,** so how the view reads at the cap
+     was not seen on real data. Tests show the cut and the reason the reply gives for it.
+   - **What follows past the cap.** The overview holds the newest claims by day. Claims of one
+     day are kept or cut in the order of their identifiers, which means nothing. An older claim
+     is then reached only by selecting a passage it cites. The reply says the view is partial
+     in every such case. `MAXIMUM_NODE_COUNT` is marked *tune* for this view in
+     `apps/core/constants.py`.
 
 **Not covered by this entry, as first written:** the build's tests and deliberate breaks, the
 security review and the requirements audit of the built code. Each gets a dated note below.

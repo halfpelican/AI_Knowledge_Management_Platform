@@ -190,7 +190,8 @@ export function citedWith(selected, citations) {
  * - `answerCount`: `answer_count`, or null where it did not arrive as a number;
  * - `sameSource`: a single-source claim admitted more than once, of which the
  *   review says that every answer rests on the same passage;
- * - `firstAdmittedAt`, `lastAdmittedAt`: the two timestamps, as sent.
+ * - `firstAdmittedAt`, `lastAdmittedAt`: the two days, each a calendar day written
+ *   `YYYY-MM-DD` with no time of day, as sent.
  */
 export function claimReview(claim) {
   const detail = claim?.detail ?? {}

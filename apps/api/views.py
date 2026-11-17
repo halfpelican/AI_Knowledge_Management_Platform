@@ -2941,7 +2941,8 @@ class KnowledgeMapView(APIView):
     documents and meetings, and only then walks and caps it (invariant 1). Meetings are scoped
     by role, and attendance is read only for a meeting already in scope (invariant 3).
 
-    **Always 200 for a well-formed request,** the empty graph included. A focus that is not in
+    **200 for every well-formed request within the rate limit,** the empty graph included, and
+    429 past it. A focus that is not in
     the caller's own graph, whether it names nothing or something the caller may not read, gets
     the body an empty map gets (UC-11 E1: "an empty map or table rather than an error").
 
@@ -2978,7 +2979,8 @@ class EvidenceMapView(APIView):
     walks and caps them (invariant 1). A claim is shown only where the role reads the cited
     passage, its source, and every passage the answer was generated from.
 
-    **Always 200 for a well-formed request,** the empty graph included, and one empty body for
+    **200 for every well-formed request within the rate limit,** the empty graph included, 429
+    past it, and one empty body for
     every focus that is not in the caller's own graph. **Read only**, as the first view is.
     """
 

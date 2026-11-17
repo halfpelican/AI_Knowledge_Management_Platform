@@ -1638,10 +1638,11 @@ export const TEXT = {
     'How the claims made in answers rest on passages. A claim is a statement an answer made, joined to the passage or passages it cites. ' +
     'Select a claim to review it, or a passage to see which claims cite it. ' +
     'The table view under the map holds the same claims, passages and citations as rows.',
-  // The empty state, in D-138's words. The same for a knowledge base nobody has asked
-  // anything of and for a role with no claim in its scope: the reply is the same for both.
-  evidenceEmpty:
-    'No claims yet. A claim appears here once a question has been answered from passages your role can read.',
+  // The empty state. The same for a knowledge base nobody has asked anything of and
+  // for a role with no claim in its scope: the reply is the same for both, so the
+  // sentence names nothing that is kept from the reader, as the first view's empty
+  // sentence does not (UC-11 E1).
+  evidenceEmpty: 'There are no claims on the map yet. Ask a question, and the statements of its answer appear here.',
   // The count line: counted from the nodes on screen, never a total, as the first view's is.
   evidenceCountClaims: (count) => (count === 1 ? '1 claim' : `${count} claims`),
   evidenceCountPassages: (count) => (count === 1 ? '1 passage' : `${count} passages`),

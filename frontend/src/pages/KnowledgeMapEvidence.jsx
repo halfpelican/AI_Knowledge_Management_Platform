@@ -697,13 +697,16 @@ function useEvidenceMap(query) {
  * links to its source's page; a selected claim opens nothing, and the pane, the
  * Claim review, says so.
  *
- * Not built, because nothing stores them (D-138): the mock-up's unsupported
- * claims, its review queue, "Add a source", "Open the N answers", "Owner" and its
- * two filters.
+ * In the mock-up and not built, each for its own reason (D-138). Unsupported
+ * claims: a statement that fails verification is never stored. "Open the N
+ * answers": it would show other people's questions. "Add a source", the review
+ * queue and "Owner": no record lies behind any of them. The two filters: neither
+ * view of the map has filters.
  *
  * States, as the first view has them: loading; a 403 as the not-permitted notice
  * alone; any other failure as an error notice with "Try again"; the empty view, in
- * D-138's words; and the empty selection, for a focus that names nothing in the
+ * a sentence that names nothing that is kept from the reader, as the first view's
+ * does not; and the empty selection, for a focus that names nothing in the
  * reader's view, for an address that is not a well-formed pair (no request is
  * sent) and for the server's 400. Every state that draws no map but the 403 and
  * loading also offers the switch back: this view is reached only by the switch, so

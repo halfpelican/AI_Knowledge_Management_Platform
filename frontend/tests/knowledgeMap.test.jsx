@@ -2072,22 +2072,22 @@ const BUDGET_MEETING = { type: SOURCE_TYPE.meeting, id: uuid(203), title: 'Budge
 const ACCRUAL = claimNode(1, 'Annual leave accrues at four weeks a year.', 1, {
   answers: 12,
   passages: 1,
-  first: '2026-03-14T12:00:00Z',
-  last: '2026-08-02T12:00:00Z',
+  first: '2026-03-14',
+  last: '2026-08-02',
 })
 /** Two passages, four answers. */
 const CARRY_OVER = claimNode(2, 'Unused leave carries over for twelve months.', 2, {
   answers: 4,
   passages: 2,
-  first: '2026-05-06T12:00:00Z',
-  last: '2026-09-21T12:00:00Z',
+  first: '2026-05-06',
+  last: '2026-09-21',
 })
 /** One passage, one answer: a single-source claim admitted once. */
 const FREEZE = claimNode(3, 'Discretionary travel is frozen until 31 January.', 1, {
   answers: 1,
   passages: 1,
-  first: '2026-10-19T12:00:00Z',
-  last: '2026-10-19T12:00:00Z',
+  first: '2026-10-19',
+  last: '2026-10-19',
 })
 
 const P_POLICY = passageNode(101, LEAVE_POLICY, 1, 1)
@@ -2252,7 +2252,7 @@ function paneLinks(container, heading) {
   return within(group).getAllByRole('link')
 }
 
-/** The pane's facts, by term: the text of each value, and its `<time>`'s timestamp where it has one. */
+/** The pane's facts, by term: the text of each value, and its `<time>`'s `dateTime` where it has one. */
 function factsOf(container) {
   return Object.fromEntries(
     [...container.querySelectorAll('dt')].map((term) => {
@@ -2629,8 +2629,8 @@ describe.each(BOTH_ROLES)('the knowledge map’s second view, claims and passage
         claimNode(60 + index, `Claim admitted ${weight} times.`, 1, {
           answers: weight,
           passages: 1,
-          first: '2026-03-14T12:00:00Z',
-          last: '2026-08-02T12:00:00Z',
+          first: '2026-03-14',
+          last: '2026-08-02',
         }),
       )
       serveEvidence(user, {
@@ -3050,7 +3050,7 @@ describe.each(BOTH_ROLES)('the knowledge map’s second view, claims and passage
           passages.map((passage) => `/knowledge-map${evidenceSearch(passage)}`),
         )
 
-        // When it was first and last admitted: each the reply's own timestamp,
+        // When it was first and last admitted: each the reply's own calendar day,
         // written as the app writes dates everywhere else.
         const { first_admitted_at: first, last_admitted_at: last } = claim.detail
         expect(factsOf(review)).toEqual({
@@ -3059,6 +3059,11 @@ describe.each(BOTH_ROLES)('the knowledge map’s second view, claims and passage
         })
         expect(formatDate(first)).not.toBe('')
         expect(formatDate(last)).not.toBe('')
+        // Each `<time>` carries the day as the route sent it: `YYYY-MM-DD`, with no
+        // time of day added to it or made up for it.
+        const times = [...review.querySelectorAll('time')]
+        expect(times.map((time) => time.getAttribute('datetime'))).toEqual([first, last])
+        for (const time of times) expect(time.getAttribute('datetime')).toMatch(/^\d{4}-\d{2}-\d{2}$/)
       },
     )
 
@@ -3068,10 +3073,10 @@ describe.each(BOTH_ROLES)('the knowledge map’s second view, claims and passage
       await findEvidenceDiagram()
 
       const facts = factsOf(claimReview())
-      expect(facts['First admitted'].dateTime).toBe('2026-03-14T12:00:00Z')
-      expect(facts['Last admitted'].dateTime).toBe('2026-08-02T12:00:00Z')
+      expect(facts['First admitted'].dateTime).toBe('2026-03-14')
+      expect(facts['Last admitted'].dateTime).toBe('2026-08-02')
       expect(facts['First admitted'].text).not.toBe(facts['Last admitted'].text)
-      // A day, not a timestamp: nothing of the time of day is shown.
+      // A day and nothing more: no time of day is shown beside it.
       expect(facts['First admitted'].text).not.toMatch(/:|Z$/)
     })
 
@@ -3080,8 +3085,8 @@ describe.each(BOTH_ROLES)('the knowledge map’s second view, claims and passage
       const partly = claimNode(41, 'Leave requests need two weeks of notice.', 1, {
         answers: 5,
         passages: 2,
-        first: '2026-04-01T12:00:00Z',
-        last: '2026-04-09T12:00:00Z',
+        first: '2026-04-01',
+        last: '2026-04-09',
       })
       serveEvidence(user, { [partly.item_id]: mapObject({ focus: partly, nodes: [partly, P_HANDBOOK], edges: [cites(partly, P_HANDBOOK, 9)] }) })
       renderMap(`/knowledge-map${evidenceSearch(partly)}`)
@@ -3365,18 +3370,24 @@ describe.each(BOTH_ROLES)('the knowledge map’s second view, claims and passage
   })
 
   describe('the states: loading, failure, the empty view and the empty selection', () => {
-    it('shows the empty view as D-138’s two sentences, with no map, no table and no error, and the way back to the first view', async () => {
+    it('shows the empty view as two sentences that name nothing kept from the reader, with no map, no table and no error, and the way back to the first view', async () => {
       serveEvidence(user, { '': EMPTY_MAP })
       renderMap(EVIDENCE_PATH)
 
       // The words, written out here.
       const sentence = await screen.findByText(
-        'No claims yet. A claim appears here once a question has been answered from passages your role can read.',
+        'There are no claims on the map yet. Ask a question, and the statements of its answer appear here.',
       )
       expect(TEXT.evidenceEmpty).toBe(sentence.textContent)
       expect(sentence.closest('[role="status"]')).not.toBeNull()
       expect(screen.queryByRole('alert')).toBeNull()
       noEvidenceDrawn()
+      // The same reply for a knowledge base nobody has asked anything of and for a
+      // role with no claim in its scope, so nothing on the page may be worded as
+      // though something were kept from the reader (UC-11 E1): no role, no scope.
+      expect(TEXT.evidenceEmpty).not.toMatch(WITHHOLDING)
+      expect(TEXT.evidenceEmpty).not.toMatch(/\brole\b|\bscope\b|can read|may read/i)
+      expect(screen.getByRole('main').textContent).not.toMatch(WITHHOLDING)
       // Not the first view's empty sentence, and not the empty selection.
       expect(screen.queryByText(TEXT.mapEmpty)).toBeNull()
       expect(screen.queryByText(TEXT.mapEmptySelection)).toBeNull()
@@ -3574,8 +3585,8 @@ describe.each(BOTH_ROLES)('the knowledge map’s second view, claims and passage
       const claim = claimNode(51, hostile('claim'), 1, {
         answers: 2,
         passages: 1,
-        first: '2026-03-14T12:00:00Z',
-        last: '2026-08-02T12:00:00Z',
+        first: '2026-03-14',
+        last: '2026-08-02',
       })
       const passage = passageNode(191, { ...HANDBOOK, title: hostile('title') }, 1, 1)
       serveEvidence(user, { [claim.item_id]: mapObject({ focus: claim, nodes: [claim, passage], edges: [cites(claim, passage, 2)] }) })
@@ -3604,8 +3615,8 @@ describe.each(BOTH_ROLES)('the knowledge map’s second view, claims and passage
       const claim = claimNode(52, hostile('claim'), 1, {
         answers: 1,
         passages: 1,
-        first: '2026-03-14T12:00:00Z',
-        last: '2026-03-14T12:00:00Z',
+        first: '2026-03-14',
+        last: '2026-03-14',
       })
       serveEvidence(user, { [passage.item_id]: mapObject({ focus: passage, nodes: [passage, claim], edges: [cites(claim, passage, 1)] }) })
       renderMap(`/knowledge-map${evidenceSearch(passage)}`)
@@ -3851,6 +3862,79 @@ describe.each(BOTH_ROLES)('the knowledge map’s second view, claims and passage
       expect(rowsOf(evidenceItems())[0][0]).toBe(
         `${flagged.label}, Suggested by AI, ${TEXT.mapSelectedMark}. ${TEXT.mapSelectAgainDocument}`,
       )
+    })
+  })
+
+  describe('the view’s wording, and the way in when signed out', () => {
+    it('words no sentence of the second view so as to suggest that anything is kept from the reader', () => {
+      // The sentences a reader meets in this view's states, as the first view's test lists its own.
+      const sentences = [
+        TEXT.evidenceEmpty,
+        TEXT.evidenceIntro,
+        TEXT.evidenceSelectedNone,
+        TEXT.evidenceLegendLine,
+        TEXT.evidenceLegendSelected,
+        TEXT.evidenceClaimNoPage,
+        TEXT.evidenceAdmittedIn(1),
+        TEXT.evidenceAdmittedIn(12),
+        TEXT.evidenceSameSource,
+        TEXT.evidenceItemsCaption,
+        TEXT.evidenceRelationshipsCaption,
+        // The first view's, used again in this view's states.
+        TEXT.mapEmptySelection,
+        TEXT.mapNoRelationships,
+        TEXT.mapTruncatedOverview(50),
+        TEXT.mapTruncatedSelection(50),
+        TEXT.mapTruncatedDepth(2),
+        TEXT.mapTruncatedOther,
+      ]
+      for (const sentence of sentences) {
+        expect(sentence).not.toMatch(WITHHOLDING)
+      }
+      // And every text this view adds, by its name, so one added later is held to the same rule.
+      const added = Object.entries(TEXT).filter(([name]) => name.startsWith('evidence'))
+      // The sweep reaches them: the empty sentence, the introduction and a switch's label are among them.
+      expect(added.map(([name]) => name)).toEqual(
+        expect.arrayContaining(['evidenceEmpty', 'evidenceIntro', 'evidenceSelectedNone', 'evidenceSwitchToMap']),
+      )
+      for (const [name, value] of added) {
+        // The view's functions each take a count.
+        const said = typeof value === 'function' ? [value(1), value(2)] : [value]
+        for (const text of said) expect(text, name).not.toMatch(WITHHOLDING)
+      }
+    })
+
+    it('lands on the first view after signing in when the second view was opened signed out: the return from sign-in keeps the path only (a recorded limitation)', async () => {
+      let signedIn = false
+      const answered = serveApi({
+        'GET /api/auth/me': () => (signedIn ? { body: user } : NOT_SIGNED_IN),
+        'POST /api/auth/login': () => {
+          signedIn = true
+          return { body: user }
+        },
+        'GET /api/knowledge-map': mapRoute({ '': OVERVIEW }),
+        'GET /api/knowledge-map/evidence': mapRoute({ '': EVIDENCE }),
+      })
+      renderMap(EVIDENCE_PATH)
+
+      // Sent to sign in, having asked neither map route for anything.
+      fireEvent.change(await screen.findByLabelText('Email'), { target: { value: user.email } })
+      expect(probe.location.pathname).toBe('/login')
+      expect(mapRequests(answered)).toEqual([])
+      expect(evidenceRequests(answered)).toEqual([])
+      fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'Correct-Horse-1' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+
+      // Back at the knowledge map's path, without the `view` the address held: the
+      // first view, read from the first view's route. The second view was never asked.
+      await findDiagram()
+      await waitFor(() => expect(address()).toBe('/knowledge-map'))
+      expect(screen.getByRole('heading', { level: 1, name: TEXT.mapHeading })).toBeTruthy()
+      expect(screen.queryByRole('region', { name: TEXT.evidenceDiagramHeading })).toBeNull()
+      expect(mapRequests(answered)).toEqual([''])
+      expect(evidenceRequests(answered)).toEqual([])
+      // The second view is one link away.
+      expect(screen.getByRole('link', { name: TEXT.evidenceSwitchToClaims }).getAttribute('href')).toBe(EVIDENCE_PATH)
     })
   })
 })

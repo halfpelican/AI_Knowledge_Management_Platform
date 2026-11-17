@@ -394,8 +394,8 @@ describe('FR-20 / NFR-17: the knowledge map, its diagram and its table view (D-1
       detail: {
         answer_count: 3,
         passage_count: passageCount,
-        first_admitted_at: '2026-10-01T09:10:00Z',
-        last_admitted_at: '2026-10-01T09:30:00Z',
+        first_admitted_at: '2026-10-01',
+        last_admitted_at: '2026-10-08',
       },
     })
     const passageNode = (itemId, sourceType, sourceTitle, position, connectionCount, aiGenerated) => ({

@@ -27,7 +27,7 @@ from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from apps.accounts.models import RolePermission
+from apps.accounts.models import Permission, Role, RolePermission
 from apps.ai.testing import STUB_EMBEDDING_MODEL
 from apps.api import evidence_map
 from apps.api.serializers import EVIDENCE_FOCUS_MALFORMED_MESSAGE, FOCUS_INCOMPLETE_MESSAGE
@@ -219,6 +219,9 @@ def assert_well_formed(body):
         touching[edge["target"]] += 1
     for node in body["nodes"]:
         assert node["connection_count"] == touching[node["id"]]
+        # Invariant 6: no claim is on a view without a passage it cites.
+        if node["type"] == CLAIM:
+            assert node["connection_count"] >= 1, node["label"]
     assert (body["truncated_by"] is None) == (body["truncated"] is False)
 
 
@@ -471,7 +474,8 @@ def _baseline(client, *focuses):
 
 
 def test_a_claim_citing_a_passage_the_viewer_cannot_read_is_absent(session_client, handbook, employee, una):
-    """Rule 1, from both roles. The bytes are what they were before the row existed: no node, no
+    """Rules 2 and 3 together, from both roles: the cited passage and its source are both out
+    of the viewer's scope. The bytes are what they were before the row existed: no node, no
     edge, no count and no flag turns on it."""
     _, (first, *_rest) = handbook
     answer(employee, (LEAVE, first))
@@ -566,8 +570,9 @@ def test_a_supplied_passage_that_no_longer_exists_removes_the_answers_claims(
 
 
 def test_a_claim_whose_cited_chunk_was_deleted_is_absent(session_client, handbook, employee):
-    """Rule 1, from both roles: the row outlives its chunk (D-67) and is removed for every
-    reader. The answer's other statement goes with it, because the deleted chunk was supplied."""
+    """Rule 2 failing closed, from both roles: the row outlives its chunk (D-67), and a supplied
+    chunk that no longer exists is not in scope. The answer's other statement goes with it,
+    because the deleted chunk was supplied to that answer too."""
     _, (first, second, third) = handbook
     answer(employee, (LEAVE, first))
     answer(employee, (NOTICE, second), (PARKING, third), days=50)
@@ -597,6 +602,72 @@ def test_a_passage_whose_source_the_viewer_cannot_read_shows_nothing(session_cli
     assert _baseline(client, claim_key(LEAVE)) == before
     assert b"Restructure Plan" not in the_map(client).content
     for focus in (claim_key(SECRET), passage_key(mismatched)):
+        assert the_map(client, focus).json() == EMPTY_BODY
+
+
+def test_a_meetings_passage_whose_meeting_the_viewer_cannot_read_shows_nothing(session_client, handbook, employee):
+    """Rule 3 for a meeting, from both roles: the chunk is stamped for the viewer, its meeting is
+    not, and the passage's title would come from the meeting."""
+    _, (first, *_rest) = handbook
+    answer(employee, (LEAVE, first))
+    client = session_client.client
+    before = _baseline(client, claim_key(LEAVE))
+
+    hidden_meeting = add_meeting("Restructure Briefing", roles=unreadable_scope(session_client.role_name))
+    mismatched = add_chunk(hidden_meeting, roles=BOTH_ROLES)
+    answer(employee, (SECRET, mismatched), days=50)
+
+    assert _baseline(client, claim_key(LEAVE)) == before
+    assert b"Restructure Briefing" not in the_map(client).content
+    for focus in (claim_key(SECRET), passage_key(mismatched)):
+        assert the_map(client, focus).json() == EMPTY_BODY
+
+
+def test_a_citation_of_a_question_recorded_as_unanswered_is_not_read(session_client, handbook, employee):
+    """Beyond the three rules, from both roles: a citation is written only for an answer that was
+    returned. A row whose question is recorded as unanswered is one no answer path writes."""
+    _, (first, second, _third) = handbook
+    answer(employee, (LEAVE, first))
+    client = session_client.client
+    before = _baseline(client, claim_key(LEAVE))
+
+    unanswered = answer(employee, (NOTICE, second), days=50)
+    QueryLog.objects.filter(pk=unanswered.pk).update(answered=False)
+
+    assert _baseline(client, claim_key(LEAVE)) == before
+    assert the_map(client, claim_key(NOTICE)).json() == EMPTY_BODY
+
+
+def test_a_statement_of_nothing_but_whitespace_is_no_claim(session_client, handbook, employee):
+    """Beyond the three rules, from both roles: a claim with no text would be a node with no
+    name. Its passage is on the map only through a claim, so it is not there either."""
+    _, (first, second, _third) = handbook
+    answer(employee, (LEAVE, first))
+    client = session_client.client
+    before = _baseline(client, claim_key(LEAVE))
+
+    answer(employee, ("  \n\t ", second), days=50)
+
+    assert _baseline(client, claim_key(LEAVE)) == before
+    assert the_map(client, passage_key(second)).json() == EMPTY_BODY
+
+
+def test_a_role_the_scope_rules_do_not_know_sees_the_empty_map(handbook, employee):
+    """A role that holds the code and that ``EFFECTIVE_ROLES`` does not list reads nothing: the
+    scoped helpers fail closed, and so does this view (the security review's S5, its last line)."""
+    _, (first, *_rest) = handbook
+    answer(employee, (LEAVE, first))
+    contractor = Role.objects.create(role_name="Contractor")
+    RolePermission.objects.create(
+        role=contractor,
+        permission=Permission.objects.get(permission_name=VIEW_KNOWLEDGE_MAP_PERMISSION),
+    )
+    visitor = person("Connie Contractor")
+    visitor.role = contractor
+    visitor.save(update_fields=["role"])
+    client = logged_in(visitor)
+
+    for focus in (None, claim_key(LEAVE), passage_key(first)):
         assert the_map(client, focus).json() == EMPTY_BODY
 
 

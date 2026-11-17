@@ -1789,8 +1789,8 @@ views (D-138): `429` past it, as every rate limit answers. Until then it was not
 
 | Method | Path | Auth | Success | Errors |
 |---|---|---|---|---|
-| GET | `/api/knowledge-map` | session + `view_knowledge_map` | `200` the map object (below): the overview. Always `200` from a permitted session, the empty map included | `401`; `403` |
-| GET | `/api/knowledge-map?focus_type=<type>&focus_id=<uuid>` | session + `view_knowledge_map` | `200` the map object: the walk from that node. A focus that is not in the caller's own map gets the empty map object, whatever the reason | `401`; `403`; `400 {"<parameter>": ["..."]}` a `focus_type` outside the vocabulary, a `focus_id` that is not a UUID, or one given without the other, keyed on the missing one (*convention*: FR-20 lists only `200`; D-65) |
+| GET | `/api/knowledge-map` | session + `view_knowledge_map` | `200` the map object (below): the overview. `200` from a permitted session within the rate limit, the empty map included | `401`; `403`; `429` |
+| GET | `/api/knowledge-map?focus_type=<type>&focus_id=<uuid>` | session + `view_knowledge_map` | `200` the map object: the walk from that node. A focus that is not in the caller's own map gets the empty map object, whatever the reason | `401`; `403`; `429`; `400 {"<parameter>": ["..."]}` a `focus_type` outside the vocabulary, a `focus_id` that is not a UUID, or one given without the other, keyed on the missing one (*convention*: FR-20 lists only `200`; D-65) |
 
 `focus_type` is one of `document`, `meeting`, `tag`, `contributor`, matched exactly. `focus_id` is
 a UUID in any spelling a UUID has. **Both or neither**: with neither the request is the overview,
@@ -1921,8 +1921,8 @@ in its rate limit: the `knowledge_map` scope, one budget for the two views, `429
 
 | Method | Path | Auth | Success | Errors |
 |---|---|---|---|---|
-| GET | `/api/knowledge-map/evidence` | session + `view_knowledge_map` | `200` the map object (below): the overview. Always `200` from a permitted session, the empty map included | `401`; `403` |
-| GET | `/api/knowledge-map/evidence?focus_type=<type>&focus_id=<id>` | session + `view_knowledge_map` | `200` the map object: the walk from that node. A focus that is not in the caller's own map gets the empty map object, whatever the reason | `401`; `403`; `400 {"<parameter>": [...]}` |
+| GET | `/api/knowledge-map/evidence` | session + `view_knowledge_map` | `200` the map object (below): the overview. `200` from a permitted session within the rate limit, the empty map included | `401`; `403`; `429` |
+| GET | `/api/knowledge-map/evidence?focus_type=<type>&focus_id=<id>` | session + `view_knowledge_map` | `200` the map object: the walk from that node. A focus that is not in the caller's own map gets the empty map object, whatever the reason | `401`; `403`; `429`; `400 {"<parameter>": [...]}` |
 
 `focus_type` is `claim` or `passage`, matched exactly. A passage's `focus_id` is its chunk's UUID,
 in any spelling a UUID has. A claim has no row of its own: its `focus_id` is a keyed hash of its
