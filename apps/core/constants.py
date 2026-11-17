@@ -912,6 +912,32 @@ MAX_PICTURE_PIXELS = 25_000_000
 # fit a square of this side, never scaled up, and stored as a PNG.
 PICTURE_MAX_DIMENSION = 512
 
+# --- Self-service password reset (D-137, the lead's decision of 16 November 2026) ------------
+# D-137 takes "Self-service password reset flow" out of the proposal's section 1.9 out-of-scope list.
+# POST /api/auth/password-reset mails a link and POST /api/auth/password-reset/confirm sets the new
+# password from it (apps/accounts/password_reset.py). FR-03 is unchanged: a reset neither sets nor
+# releases a lock.
+#
+# How long a reset link works, in minutes: "1 hour", Benjamin's answer. config/settings.py derives
+# Django's PASSWORD_RESET_TIMEOUT, in seconds, from it, and the email states it.
+PASSWORD_RESET_LINK_MINUTES = 60
+# After a reset email goes to an account, how long until another can, in seconds. Kept with
+# cache.add, so of two requests at once only one sends. A request inside the window gets the same
+# 200 and body as any other and no email, so the cooldown says nothing about whether an address has
+# an account. It bounds how often anyone can fill an inbox from the reset form.
+PASSWORD_RESET_COOLDOWN_SECONDS = 300
+# The most reset emails one server process works on at once, each in a daemon thread with its own
+# database connection. A request past it starts no thread and is logged, and gets the same 200 and
+# body as every other, because the limit is applied before any account is looked up. It bounds the
+# threads and database connections that anonymous requests can hold. Set by the build, not by
+# D-137.
+MAXIMUM_PASSWORD_RESET_EMAILS_IN_FLIGHT = 4
+# How long the SMTP backend waits on the mail server before it gives up, in seconds
+# (config/settings.py, EMAIL_TIMEOUT). Django's own default is no limit, which would let a server
+# that stops answering hold a reset email's thread, and its place under the limit above, for good.
+# Set by the build, not by D-137.
+EMAIL_TIMEOUT_SECONDS = 30
+
 # --- Knowledge gaps (FR-19; docs/decisions.md D-107, D-108, D-109) --------------------------
 # A KnowledgeGap's status (FR-19 Front-End: "the ability to mark an entry as addressed"). Every
 # entry starts Open; PATCH /api/knowledge-gaps/{id} moves it either way. Only an Open entry is a

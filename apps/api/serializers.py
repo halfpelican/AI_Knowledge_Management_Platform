@@ -266,6 +266,38 @@ class PasswordChangeSerializer(serializers.Serializer):
         return attrs
 
 
+# --- The self-service password reset (D-137) ------------------------------------------------------
+
+
+class PasswordResetRequestSerializer(serializers.Serializer):
+    """``POST /api/auth/password-reset`` body (D-137): ``{"email"}``.
+
+    Checked as login checks its address, before anything is looked up: required, a valid format,
+    bounded by the column, and lower-cased (D-02). A 400 here depends on the text alone, so it is the
+    same whether or not an account uses the address. Every well-formed address gets the same 200.
+    """
+
+    email = serializers.EmailField(max_length=User._meta.get_field("email").max_length)
+
+    def validate_email(self, value):
+        return value.strip().lower()  # D-02
+
+
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    """``POST /api/auth/password-reset/confirm`` body (D-137): ``{"uid", "token", "new_password"}``,
+    the first two copied from the emailed link.
+
+    Only the shape is checked here: each field present, a string, not blank and not null, with DRF's
+    own messages. Whether the link works, and whether the new password passes the validators for the
+    account it names, are judged by ``apps.accounts.password_reset.reset_password``, since both need
+    that account.
+    """
+
+    uid = serializers.CharField()
+    token = serializers.CharField()
+    new_password = serializers.CharField(write_only=True, trim_whitespace=False)
+
+
 # --- FR-05 ----------------------------------------------------------------------------
 
 

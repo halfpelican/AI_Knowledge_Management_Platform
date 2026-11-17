@@ -31,9 +31,11 @@ pytestmark = pytest.mark.django_db
 # What add_never_cache_headers sets on a response: Cache-Control with these directives, and Expires.
 NEVER_CACHE_DIRECTIVES = {"max-age=0", "no-cache", "no-store", "must-revalidate", "private"}
 
-# The routes left open, as test_rbac.py has them: the two D-21 leaves open, and FR-03's lockout
-# policy (D-130 decision 7), each with what it answers an anonymous empty request.
-OPEN_ROUTE_STATUS = {"auth-register": 400, "auth-login": 400, "auth-lockout-policy": 200}
+# The routes left open, as test_rbac.py has them: the two D-21 leaves open, FR-03's lockout policy
+# (D-130 decision 7) and the password reset's two routes (D-137), each with what it answers an
+# anonymous empty request.
+OPEN_ROUTE_STATUS = {"auth-register": 400, "auth-login": 400, "auth-lockout-policy": 200,
+                     "auth-password-reset": 400, "auth-password-reset-confirm": 400}
 OPEN_ROUTES = set(OPEN_ROUTE_STATUS)
 
 # Routes guarded by a role permission, checked before anything else on the request: with the

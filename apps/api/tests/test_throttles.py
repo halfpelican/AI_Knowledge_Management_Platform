@@ -31,7 +31,10 @@ a request the view would refuse anyway. The ingestion tests spend theirs that wa
 upload counts as well (D-79).
 
 ``X-Forwarded-For`` is not trusted (``NUM_PROXIES = 0``), so D-26's per-address login limit is
-keyed on the connecting address, whatever the client claims.
+keyed on the connecting address, whatever the client claims. Since D-137 the password reset's two
+routes, ``POST /api/auth/password-reset`` and ``POST /api/auth/password-reset/confirm``, are counted
+in that ``auth`` scope too, on the budget registration and login share.
+``apps/api/tests/test_fr02_password_reset.py`` tests the rest of both routes.
 
 Every per-user test runs from an Employee session and from an Administrator session
 (``session_client``; CLAUDE.md section 8).
@@ -672,3 +675,52 @@ def test_one_users_picture_budget_is_not_anothers(employee_client, administrator
     assert_rate_throttled(upload_a_picture(clients[spender]))
 
     assert upload_a_picture(clients[other]).status_code == 200
+
+
+# --- auth: the password reset (D-137) ---------------------------------------------------------------
+
+PASSWORD_RESET_URL = "/api/auth/password-reset"
+PASSWORD_RESET_CONFIRM_URL = "/api/auth/password-reset/confirm"
+REGISTER_URL = "/api/auth/register"
+AUTH_LIMIT = allowed(AUTHENTICATION_THROTTLE_RATE)
+
+
+def ask_for_a_reset(client, email="nobody@example.com", **extra):
+    """The cheapest reset request: an address no account uses, a 200 that sends nothing."""
+    return client.post(PASSWORD_RESET_URL, {"email": email}, format="json", **extra)
+
+
+def confirm_a_dead_link(client):
+    """A confirm whose uid is base64 of no UUID: the one 400, refused before any lookup or hash."""
+    body = {"uid": "bm90LWEtdXNlcg", "token": "1-nothing", "new_password": NEW_PASSWORD}
+    return client.post(PASSWORD_RESET_CONFIRM_URL, body, format="json")
+
+
+RESET_SPENDERS = {
+    "POST /api/auth/password-reset": (ask_for_a_reset, 200),
+    "POST /api/auth/password-reset/confirm": (confirm_a_dead_link, 400),
+}
+
+
+@pytest.mark.parametrize("spent_on", list(RESET_SPENDERS))
+def test_the_reset_routes_answer_429_past_the_auth_rate_on_the_budget_login_shares(
+    api_client, employee, mailoutbox, spent_on
+):
+    """D-137. Both reset routes are counted in ``auth``, per client address, with registration and
+    login, so the reset form sends emails and tries links no faster than a person can sign in.
+    Spending the budget on either route closes all four. Past the rate an account's own address is
+    refused too, and no email is sent. Another connecting address is not held."""
+    spend, status = RESET_SPENDERS[spent_on]
+    for number in range(AUTH_LIMIT):
+        assert spend(api_client).status_code == status, number
+
+    assert_rate_throttled(ask_for_a_reset(api_client, employee.email))
+    assert_rate_throttled(confirm_a_dead_link(api_client))
+    login = {"email": employee.email, "password": PASSWORD}
+    assert_rate_throttled(api_client.post(LOGIN_URL, login, format="json"))
+    registration = {"name": "Nadia New", "email": "nadia@example.com", "password": NEW_PASSWORD}
+    assert_rate_throttled(api_client.post(REGISTER_URL, registration, format="json"))
+    assert mailoutbox == []
+
+    assert ask_for_a_reset(api_client, employee.email, REMOTE_ADDR="192.0.2.50").status_code == 200
+    assert [message.to for message in mailoutbox] == [[employee.email]]

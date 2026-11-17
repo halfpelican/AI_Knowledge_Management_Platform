@@ -31,6 +31,12 @@ from rest_framework.views import APIView
 import apps.ai
 from apps.accounts.audit import log_role_change
 from apps.accounts.models import LoginAttempt, Permission, Role
+from apps.accounts.password_reset import (
+    ResetLinkRefused,
+    UnacceptablePassword,
+    request_reset_email,
+    reset_password,
+)
 from apps.accounts.pictures import (
     PictureTooLarge,
     UnreadablePicture,
@@ -62,6 +68,7 @@ from apps.core.constants import (
     MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS,
     MEETING_INDEXED,
     MINIMUM_CONTENT_LENGTH,
+    PASSWORD_RESET_LINK_MINUTES,
     PICTURE_UPLOAD_ALLOWANCE_BYTES,
     RELEASE_ACCOUNT_LOCKS_PERMISSION,
     REMEMBERED_SESSION_DAYS,
@@ -178,6 +185,8 @@ from .serializers import (
     ActionItemWriteSerializer,
     MeetingSerializer,
     PasswordChangeSerializer,
+    PasswordResetConfirmSerializer,
+    PasswordResetRequestSerializer,
     ProposedTagRejectSerializer,
     ProposedTagSerializer,
     RecentQuestionSerializer,
@@ -225,6 +234,19 @@ ACCOUNT_LOCKED_CODE = "account_locked"
 LOGGED_OUT_MESSAGE = "You have been logged out."
 # POST /api/auth/change-password's 200 (D-137). The refusals are PasswordChangeSerializer's.
 PASSWORD_CHANGED_MESSAGE = "Your password has been changed."
+# POST /api/auth/password-reset's one 200 (D-137), the same for every well-formed address, whether
+# or not an account uses it, so it neither says nor implies that an email was sent (D-25).
+PASSWORD_RESET_REQUESTED_MESSAGE = (
+    "If an account uses this address, an email with a link to reset its password is on its way. "
+    f"The link works once, within {PASSWORD_RESET_LINK_MINUTES} minutes."
+)
+# POST /api/auth/password-reset/confirm's one 400 for a link that does not work (D-137): a uid or a
+# token that is wrong, expired or used, and an account that does not exist, alike.
+PASSWORD_RESET_LINK_REFUSED_MESSAGE = (
+    "This password reset link does not work. It may have expired or been used already; ask for a "
+    "new one."
+)
+PASSWORD_RESET_COMPLETE_MESSAGE = "Your password has been reset. Sign in with your new password."
 # POST /api/users/me/picture (D-137). Two 413s with different text under the one code, as FR-08's
 # two size refusals have: the file's bytes, and the pixels its header declares.
 PICTURE_TOO_LARGE_MESSAGE = (
@@ -865,6 +887,72 @@ class PasswordChangeView(APIView):
             # new password's hash in it, in the transaction that changes the password.
             update_session_auth_hash(request, user)
         return Response({"detail": PASSWORD_CHANGED_MESSAGE}, status=status.HTTP_200_OK)
+
+
+# --- The self-service password reset (D-137) ---------------------------------------------------
+
+
+class PasswordResetRequestView(APIView):
+    """``POST /api/auth/password-reset`` (D-137): ask for a link to reset a forgotten password.
+
+    **Anonymous,** as login and registration are, with their CSRF handling: none for an anonymous
+    request, and DRF's check from ``X-CSRFToken`` for one from a browser holding a session. Throttled
+    in ``auth``, per client address, on the budget login and registration share.
+
+    **A malformed or missing address is a 400,** decided from the text alone
+    (``PasswordResetRequestSerializer``). **Every well-formed address gets the same 200 and the same
+    body** whether or not an account uses it (D-25). ``request_reset_email`` hands the address to a
+    background thread and returns, so this request does the same work either way: only the thread
+    looks the address up, and it alone sends the email, to an account not retired and not in its
+    cooldown. Nothing about the email, sent, skipped or failed, reaches this response.
+    """
+
+    permission_classes = [AllowAny]  # an opt-out as login and registration are (D-21, D-137)
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "auth"
+
+    def post(self, request):
+        serializer = PasswordResetRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)  # 400 in DRF's shape
+        request_reset_email(serializer.validated_data["email"])
+        return Response({"detail": PASSWORD_RESET_REQUESTED_MESSAGE}, status=status.HTTP_200_OK)
+
+
+class PasswordResetConfirmView(APIView):
+    """``POST /api/auth/password-reset/confirm`` (D-137): set a new password from an emailed link.
+
+    **Anonymous,** with the same CSRF handling and the same ``auth`` throttle as the request route.
+
+    **The order of the answers:**
+
+    1. A field missing, blank or null: a 400 with DRF's field errors.
+    2. A link that does not work, whatever the reason: ``{"detail": PASSWORD_RESET_LINK_REFUSED_MESSAGE}``,
+       the one 400 for a bad uid, a wrong, expired or used token and an unknown account.
+    3. A new password registration would refuse for that account (FR-01): a 400 on ``new_password``.
+       The link still works afterwards.
+    4. The new password is set: a 200 with a short ``detail``.
+
+    A reset signs nobody in. Every session of the account ends, remembered ones included, and FR-03's
+    lock and count are left as they were (``apps.accounts.password_reset.reset_password``).
+    """
+
+    permission_classes = [AllowAny]  # an opt-out as login and registration are (D-21, D-137)
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "auth"
+
+    def post(self, request):
+        serializer = PasswordResetConfirmSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)  # 400 in DRF's shape
+        data = serializer.validated_data
+        try:
+            reset_password(data["uid"], data["token"], data["new_password"])
+        except ResetLinkRefused:
+            return Response(
+                {"detail": PASSWORD_RESET_LINK_REFUSED_MESSAGE}, status=status.HTTP_400_BAD_REQUEST
+            )
+        except UnacceptablePassword as refusal:
+            return Response({"new_password": refusal.messages}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"detail": PASSWORD_RESET_COMPLETE_MESSAGE}, status=status.HTTP_200_OK)
 
 
 # --- Profile pictures (D-137) --------------------------------------------------------------

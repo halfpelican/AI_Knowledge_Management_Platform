@@ -22,6 +22,11 @@ urlpatterns = [
     path("auth/me", views.MeView.as_view(), name="auth-me"),
     # D-137: a signed-in user changes their own password, under FR-01's rules.
     path("auth/change-password", views.PasswordChangeView.as_view(), name="auth-change-password"),
+    # D-137: the self-service password reset, both routes anonymous as login is. Ask for an emailed
+    # link; then set the new password from it.
+    path("auth/password-reset", views.PasswordResetRequestView.as_view(), name="auth-password-reset"),
+    path("auth/password-reset/confirm", views.PasswordResetConfirmView.as_view(),
+         name="auth-password-reset-confirm"),
     # Stage 2: FR-05
     path("roles", views.RoleListView.as_view(), name="role-list"),
     path("users", views.UserListView.as_view(), name="user-list"),

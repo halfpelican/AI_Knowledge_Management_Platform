@@ -46,14 +46,17 @@ User = get_user_model()
 pytestmark = pytest.mark.django_db
 
 # What docs/api-contract.md says: the routes an anonymous client may reach, the two D-21
-# lets through and, since D-130 decision 7, FR-03's lockout policy, and every protected URL
-# name. The tests below check the URL conf's own permission
-# classes against these names; the dual-role matrix (dual_role_matrix.py) then
+# lets through, since D-130 decision 7 FR-03's lockout policy, and since D-137 the password
+# reset's two routes, and every protected URL name. The tests below check the URL conf's own
+# permission classes against these names; the dual-role matrix (dual_role_matrix.py) then
 # reports, per protected endpoint, whether a passing test reached it from each role.
-OPEN_ROUTES = {"auth-register", "auth-login", "auth-lockout-policy"}
-# What each opt-out answers an anonymous empty request with. Registration and login validate the
-# empty body (400). The policy reads no body and answers every caller alike (200).
-OPEN_ROUTE_STATUS = {"auth-register": 400, "auth-login": 400, "auth-lockout-policy": 200}
+OPEN_ROUTES = {"auth-register", "auth-login", "auth-lockout-policy",
+               "auth-password-reset", "auth-password-reset-confirm"}
+# What each opt-out answers an anonymous empty request with. Registration, login and the two reset
+# routes validate the empty body (400). The policy reads no body and answers every caller alike
+# (200).
+OPEN_ROUTE_STATUS = {"auth-register": 400, "auth-login": 400, "auth-lockout-policy": 200,
+                     "auth-password-reset": 400, "auth-password-reset-confirm": 400}
 PROTECTED_ROUTES = {"api-root", "auth-logout", "auth-me", "role-list", "user-list", "user-role",
                     "user-directory",  # FR-09 attendee selection (D-34)
                     "document-list", "document-reprocess",  # Stage 3: FR-08 (D-32)

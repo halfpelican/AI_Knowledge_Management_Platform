@@ -70,8 +70,9 @@ SESSION_NAMES = [
 
 
 # D-137's account self-service (16 November 2026), beyond its session length above: the password
-# change's throttle rate, which apps/api/tests/test_throttles.py pins with the other rates, and the
-# profile picture's limits, pinned below, with its rate pinned there too.
+# change's throttle rate, which apps/api/tests/test_throttles.py pins with the other rates, the
+# profile picture's limits, pinned below, with its rate pinned there too, and the password reset's
+# link lifetime, cooldown, thread limit and SMTP timeout, pinned below.
 ACCOUNT_SELF_SERVICE_NAMES = [
     "PASSWORD_CHANGE_THROTTLE_RATE",
     "PICTURE_THROTTLE_RATE",
@@ -80,6 +81,10 @@ ACCOUNT_SELF_SERVICE_NAMES = [
     "PICTURE_UPLOAD_ALLOWANCE_BYTES",
     "MAX_PICTURE_PIXELS",
     "PICTURE_MAX_DIMENSION",
+    "PASSWORD_RESET_LINK_MINUTES",
+    "PASSWORD_RESET_COOLDOWN_SECONDS",
+    "MAXIMUM_PASSWORD_RESET_EMAILS_IN_FLIGHT",
+    "EMAIL_TIMEOUT_SECONDS",
 ]
 
 
@@ -414,6 +419,20 @@ def test_the_picture_limits_are_d137s():
     assert constants.PICTURE_MAX_DIMENSION == 512
     for name in ("MAX_PICTURE_BYTES", "PICTURE_UPLOAD_ALLOWANCE_BYTES", "MAX_PICTURE_PIXELS",
                  "PICTURE_MAX_DIMENSION"):
+        assert type(getattr(constants, name)) is int, name
+
+
+def test_the_password_reset_values_are_d137s():
+    """D-137, Benjamin's decision of 16 November 2026: a reset link works for "1 hour". The 300 s
+    per-account cooldown is the value the build was given. The thread limit and the SMTP timeout were
+    set by the build, and are pinned here so that changing either is a decision too. Whole numbers,
+    since each is a count of minutes, seconds or threads."""
+    assert constants.PASSWORD_RESET_LINK_MINUTES == 60
+    assert constants.PASSWORD_RESET_COOLDOWN_SECONDS == 300
+    assert constants.MAXIMUM_PASSWORD_RESET_EMAILS_IN_FLIGHT == 4
+    assert constants.EMAIL_TIMEOUT_SECONDS == 30
+    for name in ("PASSWORD_RESET_LINK_MINUTES", "PASSWORD_RESET_COOLDOWN_SECONDS",
+                 "MAXIMUM_PASSWORD_RESET_EMAILS_IN_FLIGHT", "EMAIL_TIMEOUT_SECONDS"):
         assert type(getattr(constants, name)) is int, name
 
 

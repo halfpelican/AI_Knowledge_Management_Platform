@@ -185,6 +185,9 @@ def test_registration_is_rate_limited_per_client(api_client, monkeypatch):
 THROTTLED_ROUTES = {
     ("auth-register", "POST"): "auth",
     ("auth-login", "POST"): "auth",
+    # D-137: the password reset's two routes, on login's and registration's per-address budget.
+    ("auth-password-reset", "POST"): "auth",
+    ("auth-password-reset-confirm", "POST"): "auth",
     ("ask", "POST"): "ask",
     ("document-list", "POST"): "ingestion",
     ("meeting-list", "POST"): "ingestion",

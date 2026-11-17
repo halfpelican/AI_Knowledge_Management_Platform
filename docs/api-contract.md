@@ -53,6 +53,8 @@ Every code below is quoted from the FR's own Responses clause unless marked
 | POST | `/api/auth/logout` | session | `200`; the session record is destroyed server-side | `401` no valid session |
 | GET | `/api/auth/me` | session | `200` user object; refreshes the `csrftoken` cookie | `401` |
 | POST | `/api/auth/change-password` | session | Since D-137: `200 {"detail": "Your password has been changed."}`; this session stays signed in and every other session of the user ends (see "FR-04 — account self-service" at the end of this file) | `400` field errors, a wrong current password included, never `401`; `401` no valid session; `403` CSRF; `429` past the `password_change` rate, all as listed there |
+| POST | `/api/auth/password-reset` | none | Since D-137: `200 {"detail": "If an account uses this address, ..."}` for every well-formed address, the same status and body whether or not an account uses it; only an account is emailed a reset link (see "Resetting a forgotten password" at the end of this file) | `400` the address is missing or not a valid format; `429` past the `auth` rate, all as listed there |
+| POST | `/api/auth/password-reset/confirm` | none | Since D-137: `200 {"detail": "Your password has been reset. Sign in with your new password."}`; every session of the account ends, and nobody is signed in (see "Resetting a forgotten password" at the end of this file) | `400` a field is missing, blank or null; `400 {"detail": "This password reset link does not work. ..."}` for every link that does not work, one body for all; `400 {"new_password": [...]}` a password registration would refuse; `429` past the `auth` rate, all as listed there |
 | GET | `/api/roles` | session | `200 [{"role_id": "uuid", "name": "Employee", "description": "...", "permissions": ["..."]}]` | `401` |
 | GET | `/api/users` | Administrator | `200 [user object, ...]` ordered by `created_at` | `401`; `403` Employee |
 | GET | `/api/users/directory` | session | `200 [{"id", "name", "email", "picture"}, ...]` ordered by name; `picture` since D-137, as in the user object | `401` |
@@ -77,7 +79,8 @@ and keeps submit disabled until they all pass. Both derive from one policy so th
 cannot drift.
 
 **Rate limiting.** `POST /api/auth/register` and `POST /api/auth/login` are limited
-per client address and answer `429` past the rate (D-26). Since Stage 5 item 5, asks, ingestion
+per client address and answer `429` past the rate (D-26), and since D-137 so are the password
+reset's two routes, on the same budget. Since Stage 5 item 5, asks, ingestion
 and thread creation are limited per user as well, and keyword search and a person applying a tag
 since 10 November 2026, a recording segment sent for transcription since D-123, and a password
 change and a profile picture upload since D-137; "Stage 5 item 5" below lists every throttled route
@@ -142,8 +145,9 @@ Response bodies the front end relies on (Stage 2 implementation):
 - Unmatched path under `/api/`: JSON `404 {"detail": "Not found."}`. Since Stage 5 item 9 a path
   outside `/api/` is the SPA's (see "Stage 5 item 9" at the end of this file).
 - CSRF: `POST /api/auth/logout`, `POST /api/auth/change-password`, `POST` and `DELETE
-  /api/users/me/picture` (all three since D-137) and `PATCH` always require `X-CSRFToken`; so does
-  `POST /api/auth/login` when the browser already holds a session.
+  /api/users/me/picture` (all three since D-137) and `PATCH` always require `X-CSRFToken`; so do
+  `POST /api/auth/login` and, since D-137, `POST /api/auth/password-reset` and
+  `POST /api/auth/password-reset/confirm` when the browser already holds a session.
   - **The token is read from that header only, never from a `csrfmiddlewaretoken` form field
     (D-124).** That is so the check never reads the request body. Every client already sends the
     header.
@@ -1046,7 +1050,7 @@ not grant it, and it does not grant `manage_documents`.
 
 | Scope | Routes | Rate |
 |---|---|---|
-| `auth` | `POST /api/auth/register`, `POST /api/auth/login`, per client address (D-26) | 20/min |
+| `auth` | `POST /api/auth/register`, `POST /api/auth/login`, per client address (D-26), and since D-137 `POST /api/auth/password-reset` and `POST /api/auth/password-reset/confirm`, one budget per address across all four | 20/min |
 | `ask` | `POST /api/ask` | 10/min |
 | `ingestion` | `POST /api/documents`, `POST /api/meetings`, `POST /api/documents/{id}/reprocess`, since FR-10 `POST /api/documents/{id}/classify` (D-105), and since FR-16 `POST /api/meetings/{id}/summary` (D-125), one shared budget | 60/hour |
 | `conversation_create` | `POST /api/conversations` | 10/min, its own budget |
@@ -2057,3 +2061,89 @@ JPEG or WebP, the pixel `413`, and the `415` for a picture that cannot be decode
 **Who sees what.** Every signed-in session may fetch every user's picture. The directory already
 lists every user to every session (D-34), and shows which of them have a picture. An unknown id and
 a user with no picture get the same `404`.
+
+### Resetting a forgotten password
+
+D-137 overrules the proposal's §1.9, which listed "Self-service password reset flow" as out of
+scope. FR-03 is unchanged. No FR enumerates these codes; each is D-137's, or a rule this contract
+already has. Both routes are anonymous, as login is.
+
+| Method | Path | Auth | Success | Failures |
+|---|---|---|---|---|
+| POST | `/api/auth/password-reset` | none | `200 {"detail": "If an account uses this address, an email with a link to reset its password is on its way. The link works once, within 60 minutes."}`. Body `{"email": "..."}`. The same status and body for every well-formed address, whether or not an account uses it | `400 {"email": [...]}` with DRF's messages, for an address missing, blank, null, not a valid format or longer than 254 characters, decided from the text alone; `403 {"detail": "CSRF Failed: ..."}` only from a browser holding a session that sends no `X-CSRFToken`, as on login; `429` past the `auth` rate, with DRF's body and `Retry-After` |
+| POST | `/api/auth/password-reset/confirm` | none | `200 {"detail": "Your password has been reset. Sign in with your new password."}`. Body `{"uid": "...", "token": "...", "new_password": "..."}`, the first two copied from the link | `400` for a field missing, blank or null, with DRF's own messages for each such field; `400 {"detail": "This password reset link does not work. It may have expired or been used already; ask for a new one."}` for every link that does not work, below; `400 {"new_password": [...]}` with exactly the messages `AUTH_PASSWORD_VALIDATORS` give for the password and this account, as registration's `400` carries them for `password`; `403` CSRF, as above; `429` past the `auth` rate |
+
+**The order on `confirm`** is fixed: the CSRF `403` (only from a session), the `429`, the field
+errors, the link, then the new password. A link that does not work is refused before the new
+password is judged, because the validators compare the password with the account's own name and
+address.
+
+**Asking for a link.**
+
+- **Nothing in the answer depends on the account (D-25).** Every well-formed address gets the same
+  `200` and the same body, an account's, a retired account's and an unknown one's, inside the
+  cooldown or not, whether the email is sent or fails. The address is trimmed, lower-cased and
+  matched exactly against the stored ones, as login matches it (D-02).
+- **The request does the same work either way.** It looks nothing up. It hands the address to a
+  background thread and answers. The thread finds the account and sends the email, so a registered
+  address takes no longer to answer than an unknown one. A send that fails is logged in the error
+  file and nothing else happens.
+- **Only an account is emailed:** one plain-text email, to its stored address, never to the address
+  as typed:
+
+  ```text
+  Subject: Reset your Organisational Knowledge Platform password
+
+  Someone asked to reset the password of your Organisational Knowledge Platform account.
+
+  To choose a new password, open this link:
+
+  http://127.0.0.1:8000/reset-password?uid=<uid>&token=<token>
+
+  The link works once, within 60 minutes of this email.
+
+  If you did not ask, you can ignore this email: your password is unchanged.
+  ```
+
+  - `uid` is the account's id, URL-safe base64 with no padding; `token` is Django's
+    `default_token_generator` token. The page at `/reset-password` posts both, with the new password,
+    to `confirm`.
+  - **The link's address is `PUBLIC_BASE_URL`, never the request's `Host` header** (D-137). A link
+    built from the `Host` header could be mailed to a victim pointing at someone else's site.
+    `PUBLIC_BASE_URL` defaults to the alpha's address, `http://127.0.0.1:8000`.
+- **Not emailed, silently:** an address no account uses; an account retired with an unusable password
+  (D-89), since a reset would bring it back; and an account already emailed in the last 300 seconds
+  (`PASSWORD_RESET_COOLDOWN_SECONDS`). **A locked account is emailed:** FR-03's lock does not stop a
+  reset.
+- **At most 4 emails are worked on at once** in one server process
+  (`MAXIMUM_PASSWORD_RESET_EMAILS_IN_FLIGHT`). A request past that is answered the same, sends
+  nothing, and is logged.
+- **If the server stops before the email is sent,** it is not sent, and nothing retries it. The person
+  can ask again at once, because the cooldown is kept in the server's memory, which a restart
+  clears. An email the mail server had already accepted is delivered.
+- **Delivery.** By default each email is a file in the `outbox/` folder (`EMAIL_FILE_PATH`), and
+  nothing is sent. With `EMAIL_HOST` set it goes by SMTP, on port 587 with STARTTLS by default
+  (`.env.example` lists the variables). `EMAIL_USE_TLS` and `EMAIL_USE_SSL` both true stop the server
+  starting, and so does a `PUBLIC_BASE_URL` that is not an absolute `http://` or `https://` address.
+
+**Using the link.**
+
+- **One answer for every link that does not work:** a `uid` that is not URL-safe base64 of an account
+  id, an id no account has, a retired account, and a token that is wrong, is another account's, has
+  been used, or is more than 60 minutes old.
+- **A link works for 60 minutes and once.** It still works 3,600 seconds after it was made, and not a
+  second later (`PASSWORD_RESET_LINK_MINUTES`). A completed reset changes the password hash its token
+  was made from, so the link works once, and of two confirms sent with one link at once only the
+  first to commit sets a password. A successful sign-in also ends the link. A failed sign-in and
+  FR-03's lock do not.
+- **A refused new password does not use the link.** It still works.
+- **What a reset does:**
+  - The new password is hashed with bcrypt (FR-01). Only the password column is written, so a role
+    change committed meanwhile is kept.
+  - **Every session of the account ends, remembered ones included.** Each still holds the old
+    password's hash, so its next request is `401`. Other users' sessions are not touched.
+- **What a reset does not do:**
+  - **It signs nobody in.** The `200` sets no session cookie.
+  - **It leaves FR-03's lock and count as they were** (D-137: "No, the lock stays"). A locked account
+    stays locked, and the new password meets the lock's `403` at sign-in until the lock ends or an
+    Administrator releases it.
