@@ -74,6 +74,19 @@ export function requestPasswordReset({ email }) {
 }
 
 /**
+ * D-137's self-service reset, step two, anonymous: the emailed link's `uid` and `token`
+ * with the new password. 200 `{"detail": "Your password has been reset. ..."}`: every
+ * session of the account ends, and nobody is signed in. 400 `{"detail": ...}`, one body
+ * for every link that does not work; 400 `{"new_password": [...]}` for a password
+ * registration would refuse, which leaves the link working; 400 with DRF's messages for
+ * a field missing, blank or null; 429 past the `auth` rate (docs/api-contract.md,
+ * "Resetting a forgotten password").
+ */
+export function confirmPasswordReset({ uid, token, newPassword }) {
+  return post('/auth/password-reset/confirm', { uid, token, new_password: newPassword })
+}
+
+/**
  * The `detail` of a 200 from one of D-137's two reset routes, where it is text, else
  * null. Each route answers success with one fixed sentence written for the person, and
  * the page shows it as sent, so what it says (the link's life, for one) is the server's

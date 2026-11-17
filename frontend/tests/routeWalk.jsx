@@ -322,6 +322,19 @@ const FORGOT_PASSWORD = {
   },
 }
 
+// D-137's reset page, opened as the emailed link opens it. Public, like the page above;
+// it takes the link's values out of the address at once, so it lands on the bare path,
+// and it asks the API for nothing until its form is sent.
+const RESET_LINK_QUERY = '?uid=MQ&token=cz5ooz-0a1'
+
+const RESET_PASSWORD = {
+  api: {},
+  async settled() {
+    await pageHeading('Reset password')
+    await screen.findByLabelText('New password')
+  },
+}
+
 const ROLE_MANAGEMENT = {
   api: {
     'GET /api/users': { body: [ADMINISTRATOR, EMPLOYEE] },
@@ -397,6 +410,8 @@ export const WALK = [
   ...asEachRole('/403', ACCESS_DENIED),
   // D-137's public account-recovery page, outside RequireAuth: each role stays on it.
   ...asEachRole('/forgot-password', FORGOT_PASSWORD),
+  // D-137's reset page, the same, at the emailed link's address.
+  ...asEachRole(`/reset-password${RESET_LINK_QUERY}`, RESET_PASSWORD),
   // Behind RequireRole: the Administrator stays, and an Employee is sent to the
   // 403 page, having asked the API for nothing (tests/accessDenied.test.jsx).
   ...[

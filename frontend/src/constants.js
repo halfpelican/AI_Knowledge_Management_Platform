@@ -78,6 +78,23 @@ export const SIGN_IN_TEXT = {
   // The `auth` rate's 429 on either reset route (D-137 put both on the budget login and
   // registration share). `when` is from the reply's Retry-After (src/utils/retryAfter.js).
   tooManyAttempts: (when) => `Too many attempts in a short time. You can try again ${when}.`,
+  // The reset page, /reset-password, which the emailed link opens.
+  resetIntro: 'Choose a new password for your account.',
+  // Beside the disabled button, as on FR-01's registration form: a disabled button takes
+  // neither focus nor a description.
+  resetGate: 'Complete both fields and every password requirement to continue.',
+  resetFailedTitle: 'Could not reset your password',
+  // POST /api/auth/password-reset/confirm's 200 is shown as the server sent it. This is only
+  // for a 200 that carried no text.
+  resetDoneTitle: 'Password reset',
+  resetCompleteFallback: 'Your password has been reset. Sign in with your new password.',
+  // Every link that does not work gets one answer (docs/api-contract.md), and so does a link
+  // opened without its uid or token, which the page does not send. The page's own words, true
+  // of each: the server's text is never shown for a refusal.
+  resetLinkDeadTitle: 'This link does not work',
+  resetLinkDead:
+    'This password reset link does not work. It may be incomplete, or it may have expired or been used already.',
+  resetAskAgain: 'Ask for a new link',
 }
 
 /**
