@@ -25,10 +25,19 @@ free text. All timestamps are timezone-aware.
 | `failed_attempts` | integer | default 0; incremented on failed login (FR-02) |
 | `locked_until` | timestamp, nullable | five consecutive failures → 15 minutes (FR-02), by default; since D-130 decisions 7 and 8 the running `.env` policy, which can only be tightened |
 | `last_login_at` | timestamp, nullable | |
+| `picture` | text (FileField), blank | **D-137** — the profile picture, the name of a PNG under `MEDIA_ROOT`, `profile-pictures/<random>.png`; blank while the user has none |
+| `picture_updated_at` | timestamp, nullable | **D-137** — when the picture last changed; null while there is none. The user object's `?v=` is this instant in whole microseconds |
 
 `failed_attempts` and `locked_until` are written by FR-02 and read by FR-03. FR-02 is
 MUST, so the columns belong in v1 even though the full lockout interface is FR-03
 (SHOULD, NIT3004).
+
+> **16 November 2026 (D-137).** `accounts 0012_user_picture` adds `picture` and
+> `picture_updated_at`, which no FR names: Benjamin's decision gives every user a profile picture
+> that every signed-in user sees. Both are written together, by `POST` and `DELETE
+> /api/users/me/picture` only. The file is the PNG the server re-encodes from the upload, at most
+> 512 pixels a side, and it leaves only through `GET /api/users/{id}/picture`. Nothing serves
+> `MEDIA_ROOT`.
 
 > **13 November 2026 (D-130).** FR-03 now writes both columns too: an Administrator's release
 > (`POST /api/users/{id}/unlock`) sets `locked_until` to null and `failed_attempts` to 0, the state
@@ -756,6 +765,10 @@ both before `documents 0001` (D-130).
 It was written against `accounts 0008` while FR-03's branch held 0009 and 0010, and was re-pointed
 to 0010 in the merge of 15 November 2026, before it had been pushed or applied to any database
 (D-132's dated note of that day).
+`accounts 0012_user_picture` (Users' `picture` and `picture_updated_at`, D-137) depends on
+`accounts 0011` and is planned immediately after it, before `documents 0001`. It was re-pointed
+from 0010 in the merge of 17 November 2026, as 0011 was in the merge of 15 November, with no
+merge migration.
 
 Enable the `vector` extension in its own migration before any table carrying a vector
 column.

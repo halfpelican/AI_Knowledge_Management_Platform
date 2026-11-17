@@ -55,6 +55,10 @@ LOGIN_ATTEMPT_COLUMNS = {
     "attempt_id", "attempted_email", "source_ip", "success", "attempted_at",
     "event", "user_id", "released_by", "locked_until",
 }
+# accounts 0012 (D-137, 16 November 2026) adds these two columns to users. It follows 0011, which
+# follows 0010, so migrating accounts back to 0008 reverses 0012, 0011 and 0010, and these are the
+# only users columns that go.
+LATER_USERS_COLUMNS = {"picture", "picture_updated_at"}
 
 
 def permission_names(role):
@@ -128,9 +132,12 @@ def migrate_accounts_to(node):
 
 
 def test_the_migrations_apply_and_reverse_through_the_executor(employee_role, administrator_role):
-    """Back to 0008: 0010's seed is undone and 0009's table is dropped, and ``users`` is left as it
-    was. Forward to 0009: the table returns with its nine columns and no seed. Forward to the leaf:
-    the seed returns, Administrator only.
+    """Back to 0008: 0010's seed is undone and 0009's table is dropped, and ``users`` loses only
+    the two columns of accounts 0012 (D-137). 0012 follows 0011, which follows 0010, so going back
+    to 0008 reverses 0012, 0011 and 0010.
+    Forward to 0009: the table returns with its nine columns and no seed, and ``users`` is
+    unchanged. Forward to the leaf: the seed returns, Administrator only, and ``users`` has every
+    column it had.
 
     Both are checked to be on the path to the leaf of ``accounts`` rather than to be the leaf, so
     a later migration does not break this test, as 0009 broke 0008's."""
@@ -139,16 +146,18 @@ def test_the_migrations_apply_and_reverse_through_the_executor(employee_role, ad
     plan = graph.forwards_plan(leaf)
     assert plan.index(PREVIOUS_MIGRATION) < plan.index(TABLE_MIGRATION) < plan.index(THIS_MIGRATION)
     users_columns = columns_of("users")
+    assert LATER_USERS_COLUMNS <= users_columns
     assert LoginAttempt._meta.db_table in table_names()
 
     migrate_accounts_to(PREVIOUS_MIGRATION)
     assert "login_attempts" not in table_names()
-    assert columns_of("users") == users_columns
+    assert columns_of("users") == users_columns - LATER_USERS_COLUMNS
     assert not Permission.objects.filter(permission_name=RELEASE_ACCOUNT_LOCKS_PERMISSION).exists()
     assert permission_names(administrator_role) == EARLIER_ADMINISTRATOR_CODES
 
     migrate_accounts_to(TABLE_MIGRATION)
     assert columns_of("login_attempts") == LOGIN_ATTEMPT_COLUMNS
+    assert columns_of("users") == users_columns - LATER_USERS_COLUMNS
     assert not Permission.objects.filter(permission_name=RELEASE_ACCOUNT_LOCKS_PERMISSION).exists()
 
     migrate_accounts_to(leaf)

@@ -630,9 +630,19 @@ ROUTES_RETURNING_NO_SOURCE_ROWS = {
     ("api/auth/lockout-policy", "GET"): "Two numbers, the same for every caller (D-130).",
     ("api/auth/logout", "POST"): "A confirmation message.",
     ("api/auth/me", "GET"): "The caller's own user row.",
+    # D-137: reads and writes the caller's own users row and sessions, and returns a confirmation.
+    ("api/auth/change-password", "POST"): "A confirmation message.",
+    # D-137: the password reset reads and writes the users row named by the address or the link,
+    # and returns one message for every address, and one for every link that does not work.
+    ("api/auth/password-reset", "POST"): "A confirmation message, the same for every address.",
+    ("api/auth/password-reset/confirm", "POST"): "A confirmation message.",
     ("api/roles", "GET"): "Roles and their permission codes.",
     ("api/users", "GET"): "Users and roles (FR-05).",
-    ("api/users/directory", "GET"): "Names and addresses (D-34).",
+    ("api/users/directory", "GET"): "Names and addresses (D-34), and since D-137 picture addresses.",
+    # D-137: profile pictures. Each reads and writes the users row and the picture file only.
+    ("api/users/me/picture", "POST"): "The caller's own user object.",
+    ("api/users/me/picture", "DELETE"): "The caller's own user object.",
+    ("api/users/<uuid:pk>/picture", "GET"): "A user's profile picture, a PNG the server made.",
     ("api/users/<uuid:pk>/role", "PATCH"): "The updated user.",
     # FR-03's release (D-130): reads and writes the users and login_attempts rows only.
     ("api/users/<uuid:pk>/unlock", "POST"): "The released user, as GET /api/users lists it.",

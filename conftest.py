@@ -130,6 +130,20 @@ def summaries_run_inline(settings):
     settings.SUMMARY_RUNNER = "inline"
 
 
+@pytest.fixture(autouse=True)
+def password_reset_emails_send_inline(settings):
+    """D-137's reset email is sent in the caller's thread, never in a background one.
+
+    A server sends it from a daemon thread, so that a request does the same work whether or not an
+    account uses the address (apps/accounts/password_reset.py). A thread would outlive the test that
+    started it, and it would look the account up through a database connection of its own, which
+    cannot see the test transaction's rows. Inline, the email is in ``mail.outbox`` when the response
+    arrives. The thread path has its own tests, in apps/api/tests/test_fr02_password_reset.py, which
+    override this.
+    """
+    settings.PASSWORD_RESET_EMAIL_RUNNER = "inline"
+
+
 @dataclass
 class LogFiles:
     """The four log files one test's logging writes."""

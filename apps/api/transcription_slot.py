@@ -8,9 +8,9 @@ NPU would queue them anyway. The ``transcription`` throttle scope bounds how man
 this bounds how many run at once, as D-85's ingestion slot does for ingestion.
 
 **The mechanism is the ingestion slot's** (``apps/api/ingestion_slot.py``): ``cache.add`` on the
-default cache, atomic because no ``CACHES`` is set and Waitress runs one process (D-64); a fresh
-token per take; a release in ``finally`` that deletes the key only while the token still
-matches. The key is its own, so a user may have one ask, one ingestion and one transcription in
+default cache, atomic because it is a per-process ``LocMemCache`` (``CACHES``) and Waitress runs one
+process (D-64); a fresh token per take; a release in ``finally`` that deletes the key only while
+the token still matches. The key is its own, so a user may have one ask, one ingestion and one transcription in
 flight at once: the person submitting a confirmed draft while another segment is out is not
 refused for it. What ``ask_slot.py`` says of a multi-process server and of restarts is true here.
 

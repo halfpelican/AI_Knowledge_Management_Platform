@@ -8,8 +8,9 @@ decision does not cover"). This slot bounds that to one thread per user, shared 
 routes, as the ``ingestion`` throttle scope is.
 
 **The mechanism is the ask slot's** (``apps/api/ask_slot.py``): ``cache.add`` on the default
-cache, which is atomic because no ``CACHES`` is set and Waitress runs one process (D-64), a fresh
-token per take, and a release that deletes the key only if the token still matches. The key is
+cache, which is atomic because it is a per-process ``LocMemCache`` (``CACHES``) and Waitress runs
+one process (D-64), a fresh token per take, and a release that deletes the key only if the token
+still matches. The key is
 distinct from the ask slot's, so a user may have one ask and one ingestion in flight at once.
 What ``ask_slot.py`` says of a multi-process server and of restarts is true here too.
 

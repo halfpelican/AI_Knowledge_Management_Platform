@@ -185,6 +185,9 @@ def test_registration_is_rate_limited_per_client(api_client, monkeypatch):
 THROTTLED_ROUTES = {
     ("auth-register", "POST"): "auth",
     ("auth-login", "POST"): "auth",
+    # D-137: the password reset's two routes, on login's and registration's per-address budget.
+    ("auth-password-reset", "POST"): "auth",
+    ("auth-password-reset-confirm", "POST"): "auth",
     ("ask", "POST"): "ask",
     ("document-list", "POST"): "ingestion",
     ("meeting-list", "POST"): "ingestion",
@@ -212,6 +215,12 @@ THROTTLED_ROUTES = {
     ("meeting-action-items", "POST"): "action_items",
     ("meeting-action-item", "PATCH"): "action_items",
     ("meeting-action-item", "DELETE"): "action_items",
+    # D-137: a password change, in a budget of its own, which is the only bound on guessing the
+    # current password from a session left open.
+    ("auth-change-password", "POST"): "password_change",
+    # D-137: a profile picture uploaded, which Pillow decodes and re-encodes. Its POST only: the
+    # DELETE beside it and GET /api/users/{id}/picture are not throttled.
+    ("user-own-picture", "POST"): "picture",
 }
 
 

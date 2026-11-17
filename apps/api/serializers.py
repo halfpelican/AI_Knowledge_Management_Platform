@@ -4,7 +4,9 @@
 ``password_hash``, ``failed_attempts`` or ``locked_until``; a test asserts the exact
 key set so a field cannot leak in later. The one exception is ``UserListEntrySerializer``,
 which adds a ``lock`` object to ``GET /api/users``, and to the unlock route's 200, for a
-holder of ``release_account_locks`` only (FR-03, D-130).
+holder of ``release_account_locks`` only (FR-03, D-130). Since D-137 the user object carries
+``picture``, the address of the user's profile picture or null (``picture_url``), and so do the
+directory's entries and a meeting detail's ``attendee_people``.
 """
 
 import unicodedata
@@ -15,11 +17,13 @@ from uuid import UUID
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.urls import reverse
 from rest_framework import serializers
 
 from django.utils import timezone
 
 from apps.accounts.models import Role
+from apps.accounts.pictures import picture_version
 from apps.core.constants import (
     CLASSIFICATION_DIMENSIONS,
     DEFAULT_DOCUMENT_SORT,
@@ -58,16 +62,36 @@ from .repository import classification_of, extracted_text_of, tag_details_of, ta
 
 User = get_user_model()
 
-USER_FIELDS = ("id", "name", "email", "role", "created_at")
+USER_FIELDS = ("id", "name", "email", "role", "created_at", "picture")
+
+
+def picture_url(user) -> str | None:
+    """``picture`` wherever a user is returned (D-137): ``/api/users/<id>/picture?v=<version>``, or
+    None while the user has no picture.
+
+    The address of ``GET /api/users/{id}/picture``, which any signed-in session may fetch, and never
+    a path under MEDIA_ROOT, which nothing serves. ``v`` is ``picture_updated_at`` in whole
+    microseconds (``picture_version``), so a replaced picture is a new address, and a page holding
+    the old image fetches the new one rather than reusing what it has. Read from the user's row
+    alone, so a list of users costs no query per picture.
+    """
+    if not user.picture or user.picture_updated_at is None:
+        return None
+    path = reverse("user-picture", kwargs={"pk": user.pk})
+    return f"{path}?v={picture_version(user.picture_updated_at)}"
 
 
 class UserSerializer(serializers.ModelSerializer):
     role = serializers.CharField(source="role.role_name", read_only=True)
+    picture = serializers.SerializerMethodField()  # D-137
 
     class Meta:
         model = User
         fields = USER_FIELDS
         read_only_fields = USER_FIELDS
+
+    def get_picture(self, user):
+        return picture_url(user)
 
 
 class UserListEntrySerializer(UserSerializer):
@@ -124,12 +148,21 @@ class DirectoryEntrySerializer(serializers.ModelSerializer):
     Three fields, and none of them is ``role``: who may change roles, and who holds
     which, stays FR-05's business. This is a staff directory, which is what naming
     an attendee needs and no more.
+
+    Since D-137 a fourth, ``picture``, the user object's own (``picture_url``): every signed-in user
+    sees every profile picture, wherever users are listed. Still no role, no timestamps and no
+    account state.
     """
+
+    picture = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ("id", "name", "email")
+        fields = ("id", "name", "email", "picture")
         read_only_fields = fields
+
+    def get_picture(self, user):
+        return picture_url(user)
 
 
 # --- FR-01, FR-02 -------------------------------------------------------------------
@@ -171,13 +204,100 @@ class LoginSerializer(serializers.Serializer):
     returned whether or not the address is registered; the generic 401 is kept for a
     well-formed address that is unknown and for a wrong password, which is where the
     enumeration protection actually lives (D-02). Bounded by the column length, as
-    the registration serializer is, so the two agree."""
+    the registration serializer is, so the two agree.
+
+    ``remember`` is the sign-in page's "Remember me" (D-137): optional, false when absent,
+    and true keeps the session for REMEMBERED_SESSION_DAYS without use instead of 60 minutes.
+    A value DRF cannot read as a boolean, null included, is a 400 with a field error, checked
+    with the other two fields before the account is read, so it discloses nothing either."""
 
     email = serializers.EmailField(max_length=User._meta.get_field("email").max_length)
     password = serializers.CharField(trim_whitespace=False)
+    remember = serializers.BooleanField(default=False)
 
     def validate_email(self, value):
         return value.strip().lower()  # D-02
+
+
+# --- A signed-in user changes their password, under FR-01's rules (D-137) ------------------
+
+# A wrong current password is a 400 on that field, never a 401 (D-137): the front end treats every
+# 401 as an expired session and signs the user out (frontend/src/api/client.js, notifyUnauthorized).
+CURRENT_PASSWORD_INCORRECT_MESSAGE = "Your current password is incorrect."
+NEW_PASSWORD_UNCHANGED_MESSAGE = "Your new password must be different from your current password."
+
+
+class PasswordChangeSerializer(serializers.Serializer):
+    """``POST /api/auth/change-password`` body (D-137). The view passes the signed-in user as
+    ``context["user"]``.
+
+    Each field is checked on its own, and DRF reports every field's errors in one 400, so a wrong
+    current password and a weak new one are named together:
+
+    - ``current_password`` must be the user's password, checked with ``check_password()``, never
+      through login. A wrong one touches neither ``failed_attempts`` nor ``locked_until``. The
+      ``password_change`` throttle bounds guessing instead.
+    - ``new_password`` passes ``validate_password(new, user)``: registration's
+      AUTH_PASSWORD_VALIDATORS (FR-01), run against this user, so the similarity validator
+      compares it with their own name and address.
+
+    Only once both pass is the new password compared with the current one, as typed. The current
+    one has just been verified, so equal strings mean the same password, and no third hash is run.
+    Comparing the new one with the stored hash instead, on every request, would be a second guess
+    at the password in each.
+    """
+
+    current_password = serializers.CharField(write_only=True, trim_whitespace=False)
+    new_password = serializers.CharField(write_only=True, trim_whitespace=False)
+
+    def validate_current_password(self, value):
+        if not self.context["user"].check_password(value):
+            raise serializers.ValidationError(CURRENT_PASSWORD_INCORRECT_MESSAGE)
+        return value
+
+    def validate_new_password(self, value):
+        try:
+            validate_password(value, user=self.context["user"])
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.messages)
+        return value
+
+    def validate(self, attrs):
+        if attrs["new_password"] == attrs["current_password"]:
+            raise serializers.ValidationError({"new_password": [NEW_PASSWORD_UNCHANGED_MESSAGE]})
+        return attrs
+
+
+# --- The self-service password reset (D-137) ------------------------------------------------------
+
+
+class PasswordResetRequestSerializer(serializers.Serializer):
+    """``POST /api/auth/password-reset`` body (D-137): ``{"email"}``.
+
+    Checked as login checks its address, before anything is looked up: required, a valid format,
+    bounded by the column, and lower-cased (D-02). A 400 here depends on the text alone, so it is the
+    same whether or not an account uses the address. Every well-formed address gets the same 200.
+    """
+
+    email = serializers.EmailField(max_length=User._meta.get_field("email").max_length)
+
+    def validate_email(self, value):
+        return value.strip().lower()  # D-02
+
+
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    """``POST /api/auth/password-reset/confirm`` body (D-137): ``{"uid", "token", "new_password"}``,
+    the first two copied from the emailed link.
+
+    Only the shape is checked here: each field present, a string, not blank and not null, with DRF's
+    own messages. Whether the link works, and whether the new password passes the validators for the
+    account it names, are judged by ``apps.accounts.password_reset.reset_password``, since both need
+    that account.
+    """
+
+    uid = serializers.CharField()
+    token = serializers.CharField()
+    new_password = serializers.CharField(write_only=True, trim_whitespace=False)
 
 
 # --- FR-05 ----------------------------------------------------------------------------
@@ -648,16 +768,33 @@ class MeetingDetailSerializer(MeetingSerializer):
     fields. A meeting's text is already ``transcript_text``, and FR-15's browse by tag is about
     documents (D-74). ``POST /api/meetings`` keeps ``MeetingSerializer``, as the upload keeps
     ``DocumentSerializer``.
+
+    **D-137 adds ``attendee_people``**, the attendees as people the page can show with their
+    pictures: ``[{"email", "name", "picture"}]``, ``picture`` as in the user object. It is in the
+    order of ``attendees``, which keeps its shape. Both are read from the one list the view's
+    ``prefetch_related("attendees__user")`` fetched, so neither costs a query per attendee. The list
+    and the dashboard keep ``MeetingListSerializer``, without it.
     """
 
     can_delete = serializers.SerializerMethodField()
+    attendee_people = serializers.SerializerMethodField()
 
     class Meta(MeetingSerializer.Meta):
-        fields = MeetingSerializer.Meta.fields + ("can_delete",)
+        fields = MeetingSerializer.Meta.fields + ("can_delete", "attendee_people")
         read_only_fields = fields
 
     def get_can_delete(self, meeting):
         return self.context["can_delete"]
+
+    def get_attendee_people(self, meeting):
+        return [
+            {
+                "email": attendee.user.email,
+                "name": attendee.user.name,
+                "picture": picture_url(attendee.user),
+            }
+            for attendee in meeting.attendees.all()
+        ]
 
 
 class MeetingIngestSerializer(serializers.Serializer):

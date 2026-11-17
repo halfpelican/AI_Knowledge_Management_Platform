@@ -13,8 +13,10 @@ and through the migration executor, migrating ``accounts`` back to 0010 and forw
 **The number and the dependency.** 0009 and 0010 are FR-03's (D-130). This migration was written
 while they were on FR-03's branch, and depended on 0008 as 0009 did. FR-03 reached ``main`` first,
 so the dependency was re-pointed to 0010 in the merge of 15 November 2026, before this migration
-had been pushed or applied anywhere (D-132's dated note). ``accounts`` has one leaf, 0011, and the
-executor test below says so.
+had been pushed or applied anywhere (D-132's dated note). ``accounts`` has one leaf, and the
+executor test below says so. It was 0011 until the merge of 17 November 2026, which re-pointed
+accounts 0012 (D-137, ``users.picture``) onto 0011, so the test asks that 0011 is on the path to
+the leaf rather than the leaf.
 """
 
 import importlib
@@ -127,19 +129,27 @@ def migrate_accounts_to(node):
 
 def test_the_migration_reverses_through_the_executor(employee_role, administrator_role):
     """Migrating ``accounts`` back to 0010 runs ``unseed_permissions`` as Django would, and forward
-    again restores the seed for both roles. This also proves ``accounts`` has one leaf and that
-    0011 is it: a second leaf stops ``migrate`` and ``makemigrations --check``, which are CI's two
-    steps before the suite."""
-    leaves = [
-        key for key in MigrationExecutor(connection).loader.graph.leaf_nodes() if key[0] == "accounts"
-    ]
-    assert leaves == [THIS_MIGRATION]
+    again, to the leaf, restores the seed for both roles. This also proves ``accounts`` has one
+    leaf: a second leaf stops ``migrate`` and ``makemigrations --check``, which are CI's two steps
+    before the suite.
+
+    0011 was that leaf until accounts 0012 (D-137, ``users.picture``) was re-pointed onto it in the
+    merge of 17 November 2026. The test now checks that 0011 is on the path to the leaf rather than
+    the leaf, so a later migration does not break this test, as the earlier seeds' tests do, and
+    migrates forward to the leaf, which reapplies 0012 too. Going back to 0010 unapplies 0012 as
+    well, since it depends on 0011."""
+    graph = MigrationExecutor(connection).loader.graph
+    leaves = [key for key in graph.leaf_nodes() if key[0] == "accounts"]
+    assert len(leaves) == 1, leaves
+    [leaf] = leaves
+    plan = graph.forwards_plan(leaf)
+    assert plan.index(PREVIOUS_MIGRATION) < plan.index(THIS_MIGRATION) < plan.index(leaf)
 
     migrate_accounts_to(PREVIOUS_MIGRATION)
     assert not Permission.objects.filter(permission_name=VIEW_KNOWLEDGE_MAP_PERMISSION).exists()
     assert permission_names(administrator_role) == EARLIER_ADMINISTRATOR_CODES
     assert permission_names(employee_role) == EARLIER_EMPLOYEE_CODES
 
-    migrate_accounts_to(THIS_MIGRATION)
+    migrate_accounts_to(leaf)
     assert VIEW_KNOWLEDGE_MAP_PERMISSION in permission_names(administrator_role)
     assert VIEW_KNOWLEDGE_MAP_PERMISSION in permission_names(employee_role)

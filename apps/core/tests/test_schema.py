@@ -17,7 +17,10 @@ SCHEMA_V1 = {
     "users": (
         ("user_id",),
         {"user_id", "name", "email", "password_hash", "role_id", "created_at",
-         "failed_attempts", "locked_until", "last_login_at"},
+         "failed_attempts", "locked_until", "last_login_at",
+         # accounts 0012, 16 November 2026 (D-137): the profile picture and when it last changed
+         # (docs/schema-v1.md §1).
+         "picture", "picture_updated_at"},
     ),
     "roles": (("role_id",), {"role_id", "role_name", "description"}),
     "permissions": (("permission_id",), {"permission_id", "permission_name"}),
@@ -276,6 +279,10 @@ SECTION_5_PLAN = [
     # which it depends on. It was written against 0008 while FR-03's branch held 0009 and 0010,
     # and was re-pointed in the merge of 15 November 2026, before any database had applied it.
     ("accounts", "0011_seed_view_knowledge_map"),
+    # D-137, 16 November 2026: users.picture and users.picture_updated_at, immediately after 0011,
+    # which it depends on. It was written against 0010 while FR-20's branch held 0011, and was
+    # re-pointed in the merge of 17 November 2026, before any database had applied it.
+    ("accounts", "0012_user_picture"),
     ("documents", "0001_initial"),
     ("meetings", "0001_initial"),
     # D-16: visible_to_roles on Meetings. Planned here, before documents 0002, since documents 0011

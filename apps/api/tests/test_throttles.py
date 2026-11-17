@@ -17,28 +17,40 @@ The per-user scopes, each a DRF ``ScopedRateThrottle`` rate from ``apps/core/con
   ``GET /api/transcriptions/status``, which asks FLM for its model list (D-123);
 - ``action_items`` on FR-16's ``POST /api/meetings/{id}/action-items`` and on ``PATCH`` and
   ``DELETE /api/meetings/{id}/action-items/{item_id}``, one budget (the security review of 12
-  November 2026, finding 2, D-125's third note).
+  November 2026, finding 2, D-125's third note);
+- ``password_change`` on ``POST /api/auth/change-password`` (D-137), wrong current passwords
+  included. ``apps/api/tests/test_fr01_password_change.py`` tests the rest of the route;
+- ``picture`` on ``POST /api/users/me/picture`` (D-137), refused uploads included, and not on the
+  ``DELETE`` beside it. ``apps/api/tests/test_fr01_profile_pictures.py`` tests the rest of the route.
 
 Each test sends real requests at the real rates and counts to the limit, so a rate changed in
 ``constants.py`` moves the tests with it and a rate dropped from the wiring fails them. The
 counters live in the cache, which ``conftest.py``'s autouse ``reset_request_throttles`` clears
-before and after every test, so no test inherits another's counts.
+before and after every test, so no test inherits another's counts. A count holds however many
+other entries the cache takes meanwhile (the review of 17 November 2026, COR-2; the cache itself is
+tested in ``apps/core/tests/test_cache.py``).
 
 A throttled request is checked before its body is read, so the cheapest way to spend a budget is
 a request the view would refuse anyway. The ingestion tests spend theirs that way: a rejected
 upload counts as well (D-79).
 
 ``X-Forwarded-For`` is not trusted (``NUM_PROXIES = 0``), so D-26's per-address login limit is
-keyed on the connecting address, whatever the client claims.
+keyed on the connecting address, whatever the client claims. Since D-137 the password reset's two
+routes, ``POST /api/auth/password-reset`` and ``POST /api/auth/password-reset/confirm``, are counted
+in that ``auth`` scope too, on the budget registration and login share.
+``apps/api/tests/test_fr02_password_reset.py`` tests the rest of both routes.
 
 Every per-user test runs from an Employee session and from an Administrator session
 (``session_client``; CLAUDE.md section 8).
 """
 
+import io
 import uuid
 
 import pytest
 from django.conf import settings
+from django.core.files.uploadedfile import SimpleUploadedFile
+from PIL import Image
 from rest_framework.settings import api_settings
 from rest_framework.test import APIClient
 from rest_framework.throttling import ScopedRateThrottle
@@ -59,6 +71,8 @@ from apps.core.constants import (
     EMPLOYEE_ROLE_NAME,
     INGESTION_THROTTLE_RATE,
     KNOWLEDGE_MAP_THROTTLE_RATE,
+    PASSWORD_CHANGE_THROTTLE_RATE,
+    PICTURE_THROTTLE_RATE,
     SEARCH_THROTTLE_RATE,
     TAGGING_THROTTLE_RATE,
     TOPIC_DIMENSION,
@@ -66,6 +80,7 @@ from apps.core.constants import (
 )
 from apps.documents.models import ContentTag, Document, Tag
 from apps.retrieval.models import Conversation, QueryLog, SearchLog
+from conftest import PASSWORD
 
 pytestmark = pytest.mark.django_db
 
@@ -147,6 +162,8 @@ def test_the_rates_are_the_ones_d79_settles_and_reach_drf():
     assert TAGGING_THROTTLE_RATE == "30/min"
     assert TRANSCRIPTION_THROTTLE_RATE == "60/min"
     assert ACTION_ITEM_THROTTLE_RATE == "30/min"
+    assert PASSWORD_CHANGE_THROTTLE_RATE == "10/hour"  # D-137
+    assert PICTURE_THROTTLE_RATE == "10/hour"  # D-137
     expected = {
         "auth": AUTHENTICATION_THROTTLE_RATE,
         "ask": ASK_THROTTLE_RATE,
@@ -157,6 +174,8 @@ def test_the_rates_are_the_ones_d79_settles_and_reach_drf():
         "tagging": TAGGING_THROTTLE_RATE,
         "transcription": TRANSCRIPTION_THROTTLE_RATE,
         "action_items": ACTION_ITEM_THROTTLE_RATE,
+        "password_change": PASSWORD_CHANGE_THROTTLE_RATE,
+        "picture": PICTURE_THROTTLE_RATE,
     }
     assert settings.REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] == expected
     # DRF binds the rates to the throttle class when it is imported, so read them from there too.
@@ -561,3 +580,185 @@ def test_one_users_action_item_budget_is_not_anothers(employee_client, administr
     assert_rate_throttled(add_item(clients[spender], meeting.id))
 
     assert add_item(clients[other], meeting.id).status_code == 201
+
+
+# --- password_change (D-137) --------------------------------------------------------------------
+
+PASSWORD_CHANGE_URL = "/api/auth/change-password"
+PASSWORD_CHANGE_LIMIT = allowed(PASSWORD_CHANGE_THROTTLE_RATE)
+NEW_PASSWORD = "Fresh-Lantern-42-Orbit"  # passes AUTH_PASSWORD_VALIDATORS for both fixtures' users
+
+
+def change_password(client, current_password):
+    return client.post(
+        PASSWORD_CHANGE_URL,
+        {"current_password": current_password, "new_password": NEW_PASSWORD},
+        format="json",
+    )
+
+
+def test_the_password_change_scope_answers_429_past_its_rate_and_changes_nothing(session_client):
+    """D-137. Each wrong guess at the current password is one of the ten requests an hour, so a
+    session left open gives ten guesses an hour. Past the rate the right password is refused too,
+    and nothing changes: not the password, not FR-02's counters, which the guesses never touch, and
+    not the session. The budget is the user's, so another session of theirs is held as well."""
+    client = session_client.client
+    user = session_client.user
+    for number in range(1, PASSWORD_CHANGE_LIMIT + 1):
+        assert change_password(client, f"Wrong-Guess-{number}!").status_code == 400, number
+
+    assert_rate_throttled(change_password(client, PASSWORD))
+    second_session = APIClient()
+    second_session.force_login(user)
+    assert_rate_throttled(change_password(second_session, PASSWORD))
+    user.refresh_from_db()
+    assert user.check_password(PASSWORD)
+    assert (user.failed_attempts, user.locked_until) == (0, None)
+    assert client.get("/api/auth/me").status_code == 200
+    assert second_session.get("/api/auth/me").status_code == 200
+
+
+@pytest.mark.parametrize("spender", [EMPLOYEE_ROLE_NAME, ADMINISTRATOR_ROLE_NAME])
+def test_one_users_password_change_budget_is_not_anothers(employee_client, administrator_client, spender):
+    """Spent on empty bodies, each a 400 that runs no hash, because the rate counts a request before
+    its body is read."""
+    clients = {EMPLOYEE_ROLE_NAME: employee_client, ADMINISTRATOR_ROLE_NAME: administrator_client}
+    [other] = set(clients) - {spender}
+    for number in range(PASSWORD_CHANGE_LIMIT):
+        assert clients[spender].post(PASSWORD_CHANGE_URL, {}, format="json").status_code == 400, number
+    assert_rate_throttled(change_password(clients[spender], PASSWORD))
+
+    assert change_password(clients[other], PASSWORD).status_code == 200
+
+
+# More than the 300 entries Django's default LocMemCache holds before it culls a third of them.
+OTHER_CACHE_ENTRIES = 320
+
+
+def fill_the_cache_from_other_addresses(count=OTHER_CACHE_ENTRIES):
+    """``count`` password reset requests for an address no account uses, each from a client address
+    of its own, so each adds one live entry to the cache, its address's ``auth`` count."""
+    client = APIClient()
+    for index in range(count):
+        response = client.post(
+            "/api/auth/password-reset", {"email": "nobody@example.com"}, format="json",
+            REMOTE_ADDR=f"198.18.{index // 256}.{index % 256}",
+        )
+        assert response.status_code == 200, index
+
+
+def test_the_password_change_budget_holds_however_many_other_entries_the_cache_holds(session_client):
+    """The review of 17 November 2026, COR-2. The rate is the only bound on guessing the password
+    from a session left open, and its count lived in a cache that drops its least recently used third
+    once it holds 300 entries: 320 requests from other addresses gave the guesser ten more guesses
+    inside the same hour."""
+    client = session_client.client
+    for number in range(1, PASSWORD_CHANGE_LIMIT + 1):
+        assert change_password(client, f"Wrong-Guess-{number}!").status_code == 400, number
+    assert_rate_throttled(change_password(client, "Wrong-Guess-Again!"))
+
+    fill_the_cache_from_other_addresses()
+
+    assert_rate_throttled(change_password(client, "Wrong-Guess-Once-More!"))
+
+
+# --- picture (D-137) ------------------------------------------------------------------------------
+
+OWN_PICTURE_URL = "/api/users/me/picture"
+PICTURE_LIMIT = allowed(PICTURE_THROTTLE_RATE)
+
+
+def a_picture():
+    buffer = io.BytesIO()
+    Image.new("RGB", (24, 16), (40, 120, 200)).save(buffer, format="PNG")
+    return SimpleUploadedFile("me.png", buffer.getvalue(), content_type="image/png")
+
+
+def upload_a_picture(client):
+    return client.post(OWN_PICTURE_URL, {"picture": a_picture()}, format="multipart")
+
+
+def upload_without_a_picture(client):
+    """The cheapest upload the route refuses: no file part, a 400 that decodes nothing."""
+    return client.post(OWN_PICTURE_URL, {}, format="multipart")
+
+
+def test_the_picture_scope_answers_429_past_its_rate_on_post_only(session_client):
+    """D-137. Every upload counts, a refused one included, because the rate is counted before the
+    body is read. Past the rate a good picture is refused too and the stored one stays. Viewing a
+    picture and removing one are not throttled: each is sent more often than the rate allows."""
+    client = session_client.client
+    user = session_client.user
+    assert upload_a_picture(client).status_code == 200
+    user.refresh_from_db()
+    stored = user.picture.name
+    for number in range(2, PICTURE_LIMIT + 1):
+        assert upload_without_a_picture(client).status_code == 400, number
+
+    assert_rate_throttled(upload_a_picture(client))
+    user.refresh_from_db()
+    assert user.picture.name == stored
+    for number in range(PICTURE_LIMIT + 1):
+        assert client.get(f"/api/users/{user.pk}/picture").status_code == 200, number
+    for number in range(PICTURE_LIMIT + 1):
+        assert client.delete(OWN_PICTURE_URL).status_code == 200, number
+
+
+@pytest.mark.parametrize("spender", [EMPLOYEE_ROLE_NAME, ADMINISTRATOR_ROLE_NAME])
+def test_one_users_picture_budget_is_not_anothers(employee_client, administrator_client, spender):
+    clients = {EMPLOYEE_ROLE_NAME: employee_client, ADMINISTRATOR_ROLE_NAME: administrator_client}
+    [other] = set(clients) - {spender}
+    for number in range(PICTURE_LIMIT):
+        assert upload_without_a_picture(clients[spender]).status_code == 400, number
+    assert_rate_throttled(upload_a_picture(clients[spender]))
+
+    assert upload_a_picture(clients[other]).status_code == 200
+
+
+# --- auth: the password reset (D-137) ---------------------------------------------------------------
+
+PASSWORD_RESET_URL = "/api/auth/password-reset"
+PASSWORD_RESET_CONFIRM_URL = "/api/auth/password-reset/confirm"
+REGISTER_URL = "/api/auth/register"
+AUTH_LIMIT = allowed(AUTHENTICATION_THROTTLE_RATE)
+
+
+def ask_for_a_reset(client, email="nobody@example.com", **extra):
+    """The cheapest reset request: an address no account uses, a 200 that sends nothing."""
+    return client.post(PASSWORD_RESET_URL, {"email": email}, format="json", **extra)
+
+
+def confirm_a_dead_link(client):
+    """A confirm whose uid is base64 of no UUID: the one 400, refused before any lookup or hash."""
+    body = {"uid": "bm90LWEtdXNlcg", "token": "1-nothing", "new_password": NEW_PASSWORD}
+    return client.post(PASSWORD_RESET_CONFIRM_URL, body, format="json")
+
+
+RESET_SPENDERS = {
+    "POST /api/auth/password-reset": (ask_for_a_reset, 200),
+    "POST /api/auth/password-reset/confirm": (confirm_a_dead_link, 400),
+}
+
+
+@pytest.mark.parametrize("spent_on", list(RESET_SPENDERS))
+def test_the_reset_routes_answer_429_past_the_auth_rate_on_the_budget_login_shares(
+    api_client, employee, mailoutbox, spent_on
+):
+    """D-137. Both reset routes are counted in ``auth``, per client address, with registration and
+    login, so the reset form sends emails and tries links no faster than a person can sign in.
+    Spending the budget on either route closes all four. Past the rate an account's own address is
+    refused too, and no email is sent. Another connecting address is not held."""
+    spend, status = RESET_SPENDERS[spent_on]
+    for number in range(AUTH_LIMIT):
+        assert spend(api_client).status_code == status, number
+
+    assert_rate_throttled(ask_for_a_reset(api_client, employee.email))
+    assert_rate_throttled(confirm_a_dead_link(api_client))
+    login = {"email": employee.email, "password": PASSWORD}
+    assert_rate_throttled(api_client.post(LOGIN_URL, login, format="json"))
+    registration = {"name": "Nadia New", "email": "nadia@example.com", "password": NEW_PASSWORD}
+    assert_rate_throttled(api_client.post(REGISTER_URL, registration, format="json"))
+    assert mailoutbox == []
+
+    assert ask_for_a_reset(api_client, employee.email, REMOTE_ADDR="192.0.2.50").status_code == 200
+    assert [message.to for message in mailoutbox] == [[employee.email]]

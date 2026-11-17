@@ -6,11 +6,13 @@ asks can hold at once: one thread.
 
 **How it is held.** A key per user in Django's default cache, written with ``cache.add``, which
 writes only when the key is absent, and carrying a fresh token. ``add`` is atomic here because
-no ``CACHES`` is set, so the default cache is the per-process ``LocMemCache``, which takes a lock
-around it, and Waitress runs one process (D-64). It is the same cache the throttle counters
-live in. **A multi-process server would need a shared cache** (Redis or memcached, where ``add``
-is atomic across processes): with ``LocMemCache`` each process would hold its own slot, and a
-user could have one ask in flight per process. A restart empties it, as it empties the counters.
+the default cache is a per-process ``LocMemCache`` (``CACHES``, ``apps/core/cache.py``), which
+takes a lock around it, and Waitress runs one process (D-64). It is the same cache the throttle
+counters live in. Since 17 November 2026 it drops expired entries before live ones, so a held slot
+is not culled before them (the review's COR-2). **A multi-process server would need a shared
+cache** (Redis or memcached, where ``add`` is atomic across processes): with ``LocMemCache`` each
+process would hold its own slot, and a user could have one ask in flight per process. A restart
+empties it, as it empties the counters.
 
 **Its timeout** is generation's worst case, ``GENERATION_TIMEOUT_SECONDS`` times
 ``MAXIMUM_GENERATION_ATTEMPTS``, plus ``ASK_IN_FLIGHT_MARGIN_SECONDS``, which covers the

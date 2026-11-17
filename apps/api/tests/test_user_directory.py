@@ -40,7 +40,8 @@ def test_any_session_may_read_the_directory(session_client, employee, administra
 
 
 def test_the_directory_carries_only_a_name_and_an_address(session_client, employee):
-    """Three fields, and none of them is the role.
+    """Three fields, and none of them is the role. Since D-137 a fourth, ``picture``, the profile
+    picture's address or null, which every signed-in user may see.
 
     Naming an attendee needs a person, not their standing in the organisation. Who
     holds which role stays FR-05's business, or this endpoint would be FR-05's list
@@ -50,7 +51,7 @@ def test_the_directory_carries_only_a_name_and_an_address(session_client, employ
     response = session_client.client.get(DIRECTORY_URL)
 
     for row in response.data:
-        assert set(row) == {"id", "name", "email"}
+        assert set(row) == {"id", "name", "email", "picture"}
     # Nothing about roles, account state or history leaks through it.
     body = str(response.data)
     for leaked in ("role", "created_at", "password", "failed_attempts", "locked_until"):

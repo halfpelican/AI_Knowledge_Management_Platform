@@ -62,8 +62,41 @@ VOCABULARIES = [
 ]
 
 
+# FR-04's session lengths: D-10's inactivity window, and D-137's "Remember me" (16 November 2026).
+SESSION_NAMES = [
+    "SESSION_INACTIVITY_MINUTES",
+    "REMEMBERED_SESSION_DAYS",
+]
+
+
+# D-137's account self-service (16 November 2026), beyond its session length above: the password
+# change's throttle rate, which apps/api/tests/test_throttles.py pins with the other rates, the
+# profile picture's limits, pinned below, with its rate pinned there too, and the password reset's
+# link lifetime, cooldown, thread limit and SMTP timeout, pinned below.
+ACCOUNT_SELF_SERVICE_NAMES = [
+    "PASSWORD_CHANGE_THROTTLE_RATE",
+    "PICTURE_THROTTLE_RATE",
+    "PICTURE_FORMATS",
+    "MAX_PICTURE_BYTES",
+    "PICTURE_UPLOAD_ALLOWANCE_BYTES",
+    "MAX_PICTURE_PIXELS",
+    "PICTURE_MAX_DIMENSION",
+    "MAXIMUM_PICTURE_DECODES_IN_FLIGHT",
+    "PICTURE_BUSY_RETRY_SECONDS",
+    "MAX_PICTURE_JPEG_SCANS",
+    "PASSWORD_RESET_LINK_MINUTES",
+    "PASSWORD_RESET_COOLDOWN_SECONDS",
+    "MAXIMUM_PASSWORD_RESET_EMAILS_IN_FLIGHT",
+    "EMAIL_TIMEOUT_SECONDS",
+    # The default cache's places, which hold the throttle counts, the slots and the cooldown (the
+    # review of 17 November 2026, COR-2).
+    "CACHE_MAX_ENTRIES",
+]
+
+
 @pytest.mark.parametrize(
-    "name", SECTION_5_NAMES + PASSWORD_NAMES + VOCABULARIES + ["SESSION_INACTIVITY_MINUTES"]
+    "name",
+    SECTION_5_NAMES + PASSWORD_NAMES + VOCABULARIES + SESSION_NAMES + ACCOUNT_SELF_SERVICE_NAMES,
 )
 def test_every_constant_is_defined(name):
     assert hasattr(constants, name), f"{name} missing from apps.core.constants"
@@ -366,6 +399,73 @@ def test_a_threshold_first_model_has_its_own_threshold_at_or_under_its_lowest_re
 def test_session_inactivity_is_sixty_minutes():
     # FR-04, docs/decisions.md D-10.
     assert constants.SESSION_INACTIVITY_MINUTES == 60
+
+
+def test_a_remembered_session_is_seven_days_in_whole_days():
+    """D-137, Benjamin's decision of 16 November 2026: "7 days without use, both roles". A whole
+    number of days, so LoginView's seconds are an int, which Django keeps as an inactivity age that
+    slides with use. A float would still slide, but would no longer be whole seconds."""
+    assert constants.REMEMBERED_SESSION_DAYS == 7
+    assert type(constants.REMEMBERED_SESSION_DAYS) is int
+
+
+def test_the_picture_limits_are_d137s():
+    """D-137, Benjamin's decision of 16 November 2026: PNG, JPEG or WebP up to 5 MB, re-encoded as a
+    PNG of at most 512 x 512, and no GIF or SVG. The 64 KiB multipart allowance and the 25-megapixel
+    cap are the values the build was given. Pinned exactly, so that a change is a decision."""
+    from PIL import Image
+
+    assert constants.PICTURE_FORMATS == ("PNG", "JPEG", "WEBP")
+    assert constants.MAX_PICTURE_BYTES == 5 * 1024 * 1024
+    assert constants.PICTURE_UPLOAD_ALLOWANCE_BYTES == 64 * 1024
+    assert constants.MAX_PICTURE_PIXELS == 25_000_000
+    # Below Pillow's DecompressionBombWarning threshold, so the cap refuses every picture Pillow would
+    # warn about, without a warnings filter, which is not thread-safe under Waitress.
+    assert constants.MAX_PICTURE_PIXELS < Image.MAX_IMAGE_PIXELS
+    assert constants.PICTURE_MAX_DIMENSION == 512
+    for name in ("MAX_PICTURE_BYTES", "PICTURE_UPLOAD_ALLOWANCE_BYTES", "MAX_PICTURE_PIXELS",
+                 "PICTURE_MAX_DIMENSION"):
+        assert type(getattr(constants, name)) is int, name
+
+
+def test_the_password_reset_values_are_d137s():
+    """D-137, Benjamin's decision of 16 November 2026: a reset link works for "1 hour". The 300 s
+    per-account cooldown is the value the build was given. The thread limit and the SMTP timeout were
+    set by the build, and are pinned here so that changing either is a decision too. Whole numbers,
+    since each is a count of minutes, seconds or threads."""
+    assert constants.PASSWORD_RESET_LINK_MINUTES == 60
+    assert constants.PASSWORD_RESET_COOLDOWN_SECONDS == 300
+    assert constants.MAXIMUM_PASSWORD_RESET_EMAILS_IN_FLIGHT == 4
+    assert constants.EMAIL_TIMEOUT_SECONDS == 30
+    for name in ("PASSWORD_RESET_LINK_MINUTES", "PASSWORD_RESET_COOLDOWN_SECONDS",
+                 "MAXIMUM_PASSWORD_RESET_EMAILS_IN_FLIGHT", "EMAIL_TIMEOUT_SECONDS"):
+        assert type(getattr(constants, name)) is int, name
+
+
+def test_the_cache_places_are_the_builds():
+    """The review of 17 November 2026, COR-2: the default cache's places. Set by the build, not by
+    D-137, and pinned so that changing it is a decision. A whole number, since it is a count."""
+    assert constants.CACHE_MAX_ENTRIES == 100_000
+    assert type(constants.CACHE_MAX_ENTRIES) is int
+
+
+def test_the_picture_decode_bound_is_the_builds():
+    """The review of 17 November 2026, PIC-1: how many pictures are decoded at once, and the seconds
+    the 429 past that asks the client to wait. Set by the build, not by D-137, and pinned so that
+    changing either is a decision. Whole numbers, each a count."""
+    assert constants.MAXIMUM_PICTURE_DECODES_IN_FLIGHT == 2
+    assert constants.PICTURE_BUSY_RETRY_SECONDS == 5
+    for name in ("MAXIMUM_PICTURE_DECODES_IN_FLIGHT", "PICTURE_BUSY_RETRY_SECONDS"):
+        assert type(getattr(constants, name)) is int, name
+
+
+def test_the_jpeg_scan_cap_is_the_builds():
+    """The final review of 17 November 2026, JPG-1: the most scans a JPEG picture may have. Set by
+    the build, not by D-137, and pinned so that changing it is a decision. A whole number, since it
+    is a count. apps/api/tests/test_fr01_profile_pictures.py uploads libjpeg's own progressive
+    files, up to its CMYK script's 18 scans, under it."""
+    assert constants.MAX_PICTURE_JPEG_SCANS == 100
+    assert type(constants.MAX_PICTURE_JPEG_SCANS) is int
 
 
 def test_effective_roles_are_closed_under_generalisation():
