@@ -28,6 +28,7 @@ from apps.core.constants import (
     LOCKOUT_DURATION as DEFAULT_LOCKOUT_DURATION,
     LOCKOUT_DURATION_MAXIMUM,
     LOCKOUT_THRESHOLD as DEFAULT_LOCKOUT_THRESHOLD,
+    KNOWLEDGE_MAP_THROTTLE_RATE,
     PASSWORD_CHANGE_THROTTLE_RATE,
     PASSWORD_RESET_LINK_MINUTES,
     PICTURE_THROTTLE_RATE,
@@ -306,6 +307,8 @@ REST_FRAMEWORK = {
     # - "password_change": per signed-in user, a password change, wrong current passwords
     #   included (D-137).
     # - "picture": per signed-in user, a profile picture uploaded, refused ones included (D-137).
+    # - "knowledge_map": per signed-in user, the knowledge map's two views in one budget
+    #   (D-138).
     #
     # The counters live in the default cache, CACHES below: a per-process LocMemCache, so the one
     # Waitress process (D-64) shares them, a restart clears them, and a multi-process server would
@@ -316,6 +319,7 @@ REST_FRAMEWORK = {
         "ingestion": INGESTION_THROTTLE_RATE,
         "conversation_create": CONVERSATION_CREATE_THROTTLE_RATE,
         "search": SEARCH_THROTTLE_RATE,
+        "knowledge_map": KNOWLEDGE_MAP_THROTTLE_RATE,
         "tagging": TAGGING_THROTTLE_RATE,
         "transcription": TRANSCRIPTION_THROTTLE_RATE,
         "action_items": ACTION_ITEM_THROTTLE_RATE,

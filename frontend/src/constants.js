@@ -269,6 +269,23 @@ export const KNOWLEDGE_MAP_TRUNCATION_REASON = {
 }
 
 /**
+ * The knowledge map's second view (D-138), claims and the passages they cite: the
+ * node types and the one relationship, as `GET /api/knowledge-map/evidence` returns
+ * them. Each mirrors a tuple in apps/core/constants.py (EVIDENCE_MAP_NODE_TYPES,
+ * EVIDENCE_MAP_RELATIONSHIPS). Vocabularies, not tuned values. The two caps and the
+ * reasons a view is cut short are the first view's, above.
+ * apps/api/tests/test_front_end_constants_agreement.py fails when either drifts.
+ */
+export const EVIDENCE_MAP_NODE_TYPE = {
+  claim: 'claim',
+  passage: 'passage',
+}
+
+export const EVIDENCE_MAP_RELATIONSHIP = {
+  cites: 'cites',
+}
+
+/**
  * How often the meeting page asks `GET /api/meetings/{id}/summary` again while the
  * latest run is "Processing", in milliseconds (FR-16: "202 Accepted while
  * processing"). The page's own value with no counterpart on the server, which leaves
@@ -1603,6 +1620,69 @@ export const TEXT = {
   mapRelationshipAttended: 'attended',
   mapRelationshipTagged: 'is tagged',
   mapNoRelationships: 'None of these items is joined to another by a line.',
+
+  /* ---- The knowledge map's second view: claims and passages (D-138) ----- */
+  // After the proposal's Figure 8.7, "Evidence": the claims answers have made, each
+  // joined to the passages it cites. The screen is src/pages/KnowledgeMapEvidence.jsx,
+  // at /knowledge-map?view=evidence. It reads `GET /api/knowledge-map/evidence`, whose
+  // claims, passages, counts and dates arrive already scoped to the reader's role
+  // (CLAUDE.md §6, invariant 1), and no payload says what was left out or how much.
+  // Whatever the two views say alike is the first view's entry above, used again: the
+  // heading, the loading and failure words, the truncation sentences, "Selected", the
+  // table view's headings and its three Items columns.
+  // The switch between the two views, a link beside "Skip to the table view": the
+  // first is what the first view offers, the second what this one does.
+  evidenceSwitchToClaims: 'Show claims and passages',
+  evidenceSwitchToMap: 'Show documents, meetings, tags and contributors',
+  evidenceIntro:
+    'How the claims made in answers rest on passages. A claim is a statement an answer made, joined to the passage or passages it cites. ' +
+    'Select a claim to review it, or a passage to see which claims cite it. ' +
+    'The table view under the map holds the same claims, passages and citations as rows.',
+  // The empty state. The same for a knowledge base nobody has asked anything of and
+  // for a role with no claim in its scope: the reply is the same for both, so the
+  // sentence names nothing that is kept from the reader, as the first view's empty
+  // sentence does not (UC-11 E1).
+  evidenceEmpty: 'There are no claims on the map yet. Ask a question, and the statements of its answer appear here.',
+  // The count line: counted from the nodes on screen, never a total, as the first view's is.
+  evidenceCountClaims: (count) => (count === 1 ? '1 claim' : `${count} claims`),
+  evidenceCountPassages: (count) => (count === 1 ? '1 passage' : `${count} passages`),
+  evidenceDiagramHeading: 'Claims and the passages they cite',
+  evidenceColumnClaims: 'Claims',
+  evidenceColumnPassages: 'Passages',
+  evidenceTypeClaim: 'Claim',
+  evidenceTypePassage: 'Passage',
+  // An edge's `weight` is how often that pairing was admitted, and the line is drawn
+  // heavier for it. The same number is the Relationships table's "Times admitted".
+  evidenceLegendLine:
+    'A line joins a claim to a passage it cites. A heavier line means the pairing was admitted more often.',
+  // A line's weight is taken by how often its pairing was admitted, so the selected
+  // item's lines are marked by being darker, not heavier.
+  evidenceLegendSelected: 'The selected item has a heavier outline and darker lines, and is marked “Selected”.',
+  // Read "from, relationship, to": "Claim: …", "cites", "Passage: Staff Handbook · passage 2".
+  evidenceRelationshipCites: 'cites',
+  evidenceSelectedNone: 'Nothing is selected. Select a claim to review it, or a passage to see which claims cite it.',
+  // The right-hand pane for a selected claim (D-138, the user's third decision).
+  evidenceClaimReviewHeading: 'Claim review',
+  // `passage_count` is 1: every answer that made the claim rests on one passage.
+  evidenceSingleSource: 'Single source',
+  // `answer_count`: the answers, of those the reader's role may see, that admitted the claim.
+  evidenceAdmittedIn: (count) => (count === 1 ? 'Admitted in 1 answer.' : `Admitted in ${count} answers.`),
+  // Said after it for a single-source claim admitted more than once.
+  evidenceSameSource: 'Every one of them rests on the same passage.',
+  evidenceSupportedBy: 'Supported by',
+  evidenceCitedBy: 'Cited by',
+  evidenceFirstAdmitted: 'First admitted',
+  evidenceLastAdmitted: 'Last admitted',
+  // A claim is a statement, with no row and no page of its own, and the screen says so,
+  // as the first view does of a contributor.
+  evidenceClaimNoPage: 'A claim has no page of its own, so there is nothing to open.',
+  // A selected passage's source, said as its type and its title: "Document: Staff Handbook".
+  evidenceSource: 'Source',
+  evidenceItemsCaption:
+    'Items on the map, one row for each claim and passage. Every column heading is a button that sorts by that column.',
+  evidenceRelationshipsCaption:
+    'Citations on the map, one row for each line. Every column heading is a button that sorts by that column.',
+  evidenceColumnTimesAdmitted: 'Times admitted',
 
   /* ---- FR-19 knowledge-gap log (NIT3004, Objective 06) ------------------ */
   // FR-19: "A list, visible to Administrators, of questions the system could not

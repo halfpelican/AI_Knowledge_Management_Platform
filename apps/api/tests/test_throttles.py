@@ -9,6 +9,8 @@ The per-user scopes, each a DRF ``ScopedRateThrottle`` rate from ``apps/core/con
   (D-125: Generate or Regenerate is one provider call too);
 - ``conversation_create`` on ``POST /api/conversations``, at the ask rate in its own budget;
 - ``search`` on ``GET /api/search``, since D-79's note of 10 November 2026;
+- ``knowledge_map`` on ``GET /api/knowledge-map`` and ``GET /api/knowledge-map/evidence``, one
+  budget (D-138). Its tests are in ``apps/api/tests/test_evidence_map.py``;
 - ``tagging`` on ``POST /api/documents/{id}/tags``, since D-79's note on tagging of the same night
   (D-105's security review, finding 4);
 - ``transcription`` on ``POST /api/transcriptions``, one recording segment per request, and on
@@ -68,6 +70,7 @@ from apps.core.constants import (
     DOCUMENT_INDEXED,
     EMPLOYEE_ROLE_NAME,
     INGESTION_THROTTLE_RATE,
+    KNOWLEDGE_MAP_THROTTLE_RATE,
     PASSWORD_CHANGE_THROTTLE_RATE,
     PICTURE_THROTTLE_RATE,
     SEARCH_THROTTLE_RATE,
@@ -155,6 +158,7 @@ def test_the_rates_are_the_ones_d79_settles_and_reach_drf():
     assert INGESTION_THROTTLE_RATE == "60/hour"
     assert CONVERSATION_CREATE_THROTTLE_RATE == ASK_THROTTLE_RATE
     assert SEARCH_THROTTLE_RATE == "30/min"
+    assert KNOWLEDGE_MAP_THROTTLE_RATE == "30/min"
     assert TAGGING_THROTTLE_RATE == "30/min"
     assert TRANSCRIPTION_THROTTLE_RATE == "60/min"
     assert ACTION_ITEM_THROTTLE_RATE == "30/min"
@@ -166,6 +170,7 @@ def test_the_rates_are_the_ones_d79_settles_and_reach_drf():
         "ingestion": INGESTION_THROTTLE_RATE,
         "conversation_create": CONVERSATION_CREATE_THROTTLE_RATE,
         "search": SEARCH_THROTTLE_RATE,
+        "knowledge_map": KNOWLEDGE_MAP_THROTTLE_RATE,
         "tagging": TAGGING_THROTTLE_RATE,
         "transcription": TRANSCRIPTION_THROTTLE_RATE,
         "action_items": ACTION_ITEM_THROTTLE_RATE,

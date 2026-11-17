@@ -15,8 +15,8 @@
  *    it is paired, so the table cannot rot while the stylesheets move on.
  */
 import { describe, expect, it } from 'vitest'
-import { KNOWLEDGE_MAP_NODE_TYPE } from '../src/constants.js'
-import { colourTokensIn, contrast, styleRules, tokenColour } from './stylesheets.js'
+import { EVIDENCE_MAP_NODE_TYPE, KNOWLEDGE_MAP_NODE_TYPE } from '../src/constants.js'
+import { colourTokensIn, contrast, resolve, styleRules, tokenColour } from './stylesheets.js'
 
 const TEXT_MINIMUM = 4.5 // SC 1.4.3, normal text
 const BOUNDARY_MINIMUM = 3 // SC 1.4.11, UI component boundaries and states
@@ -82,7 +82,8 @@ const BOUNDARY_PAIRS = [
   // meeting and tag shapes are filled with --color-primary, --color-success and
   // --color-warning, and its lines are --color-border-strong, all paired above.
   // These two are the rest: the contributor's fill, and the selected node's
-  // outline and lines.
+  // outline and lines. The map's second view (D-138) adds no pair: its claim is
+  // filled with --color-text and its passage with --color-primary.
   { fg: '--color-text-muted', on: ['--color-surface'] },
   { fg: '--color-text', on: ['--color-surface'] },
 ]
@@ -152,6 +153,36 @@ describe('FR-20: "node type distinguished by colour and shape", the colour half 
     expect(pairedOnSurface(line[0])).toBe(true)
     expect(pairedOnSurface(selected[0])).toBe(true)
     expect(selected[0]).not.toBe(line[0])
+  })
+
+  // The map's second view, claims and passages (D-138), sits on the same surface.
+  it('the second view (D-138): gives the claim and the passage one fill token each, two different ones, each a tested 3:1 pair on the surface', () => {
+    const evidenceTypes = Object.values(EVIDENCE_MAP_NODE_TYPE)
+    expect(evidenceTypes).toHaveLength(2)
+    const fills = evidenceTypes.map((type) => tokensFor(`.knowledge-map__glyph--${type}`, 'fill'))
+    for (const [index, tokens] of fills.entries()) {
+      expect(tokens, `.knowledge-map__glyph--${evidenceTypes[index]} declares one fill token`).toHaveLength(1)
+      expect(pairedOnSurface(tokens[0]), `${tokens[0]} is in BOUNDARY_PAIRS on --color-surface`).toBe(true)
+    }
+    // Two types, two colours, by name and by value.
+    expect(fills[0][0]).not.toBe(fills[1][0])
+    expect(JSON.stringify(tokenColour(fills[0][0]))).not.toBe(JSON.stringify(tokenColour(fills[1][0])))
+  })
+
+  it('the second view (D-138): a line’s three weights are three widths, each greater than the last, and no colour of their own', () => {
+    const declarationsFor = (selector) =>
+      styleRules()
+        .filter((rule) => rule.selectors.includes(selector))
+        .flatMap((rule) => rule.declarations)
+    const widths = ['light', 'medium', 'heavy'].map((weight) => {
+      const declarations = declarationsFor(`.knowledge-map__line--${weight}`)
+      // The width and nothing else: a weight never changes the line's tested colour.
+      expect(declarations.map((declaration) => declaration.property)).toEqual(['stroke-width'])
+      return parseFloat(resolve(declarations[0].value))
+    })
+    expect(widths[0]).toBeGreaterThan(0)
+    expect(widths[1]).toBeGreaterThan(widths[0])
+    expect(widths[2]).toBeGreaterThan(widths[1])
   })
 })
 

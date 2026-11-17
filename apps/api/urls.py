@@ -111,6 +111,9 @@ urlpatterns = [
     # NIT3004: FR-20's knowledge map (D-132), behind view_knowledge_map, which both roles hold.
     # One GET: the overview, or with focus_type and focus_id the walk from one node.
     path("knowledge-map", views.KnowledgeMapView.as_view(), name="knowledge-map"),
+    # Its second view (D-138): claims and the passages they cite, behind the same code.
+    path("knowledge-map/evidence", views.EvidenceMapView.as_view(),
+         name="knowledge-map-evidence"),
     # NIT3004, Objective 06: FR-19's knowledge-gap log (D-107), every route behind
     # review_knowledge_gaps. The list, sorted Open first by occurrence count.
     path("knowledge-gaps", views.KnowledgeGapListView.as_view(), name="knowledge-gap-list"),

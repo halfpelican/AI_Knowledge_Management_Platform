@@ -327,6 +327,10 @@ MAXIMUM_TRAVERSAL_DEPTH = 2
 # smallest multiple of 50 that holds that corpus's whole map (41 nodes), so a demonstration on
 # it is not cut by the cap. On that corpus the cap therefore never binds; node-count truncation
 # is shown by tests. *tune* on any larger corpus.
+# The map's second view (D-138) is capped by the same two values, and neither was measured for
+# it. Its graph grows with every answer given, not with the corpus: one answer adds up to
+# MAXIMUM_STATEMENTS claims and their passages, so its overview reaches this cap after a
+# handful of answers and is then a partial view, which the reply says. *tune* for that view.
 MAXIMUM_NODE_COUNT = 50
 # FR-20's permission code (D-132), checked by GET /api/knowledge-map before anything else on the
 # request. NOT in the proposal, which names no permission for FR-20: added at the lead's decision
@@ -538,6 +542,12 @@ CONVERSATION_CREATE_THROTTLE_RATE = ASK_THROTTLE_RATE
 # spends no NPU time; the rate bounds how fast one user can fill SearchLog, which FR-19's cycle
 # reads (the security review's L1 and L2). The page sends one request per submitted term.
 SEARCH_THROTTLE_RATE = "30/min"
+# GET /api/knowledge-map and GET /api/knowledge-map/evidence, scope "knowledge_map" (the user's
+# decision of 17 November 2026, D-138, answering the security review's S3). The second view
+# reads every answer the caller may see on each request, so its cost grows with use, and the
+# rate bounds how often one user can ask for either view. One budget for the two views. The
+# figure is search's; a person clicking through the map does not reach it.
+KNOWLEDGE_MAP_THROTTLE_RATE = "30/min"
 # POST /api/documents/{id}/tags, scope "tagging" (the user's decision of 10 November 2026, night;
 # D-79's note on tagging, answering D-105's security review, finding 4). Each new Topic name a
 # person types there becomes a permanent Tag, which joins the scheme that later classification
@@ -731,6 +741,15 @@ KNOWLEDGE_MAP_RELATIONSHIPS = ("tagged", "uploaded", "attended")
 KNOWLEDGE_MAP_TRUNCATION_REASONS = ("node_count", "depth")
 (KNOWLEDGE_MAP_TRUNCATED_BY_NODE_COUNT,
  KNOWLEDGE_MAP_TRUNCATED_BY_DEPTH) = KNOWLEDGE_MAP_TRUNCATION_REASONS
+# The knowledge map's second view (D-138), after the proposal's Evidence mock-up (Figure 8.7):
+# what GET /api/knowledge-map/evidence calls its two kinds of node. A claim is a verified
+# statement of an answered question (AnswerCitations.statement_text), and a passage is the
+# chunk it cites. Its one relationship reads "claim, cites, passage". The two caps, the
+# truncation reasons and the permission code are the first view's.
+EVIDENCE_MAP_NODE_TYPES = ("claim", "passage")
+(EVIDENCE_MAP_CLAIM, EVIDENCE_MAP_PASSAGE) = EVIDENCE_MAP_NODE_TYPES
+EVIDENCE_MAP_RELATIONSHIPS = ("cites",)
+(EVIDENCE_MAP_CITES,) = EVIDENCE_MAP_RELATIONSHIPS
 
 # A new record starts in the first value of its vocabulary.
 DEFAULT_DOCUMENT_STATUS = DOCUMENT_STATUS_VALUES[0]

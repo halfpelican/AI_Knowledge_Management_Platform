@@ -7,7 +7,9 @@ import Button from '../components/Button.jsx'
 import Notice from '../components/Notice.jsx'
 import NotPermitted from '../components/NotPermitted.jsx'
 import { KNOWLEDGE_MAP_NODE_TYPE, KNOWLEDGE_MAP_RELATIONSHIP, TEXT } from '../constants.js'
+import useArrivalFocus from '../hooks/useArrivalFocus.js'
 import useDocumentTitle from '../hooks/useDocumentTitle.js'
+import { MAP_VIEW, viewFromParams } from '../utils/evidenceMap.js'
 import {
   ITEM_SORT_FIELDS,
   KNOWLEDGE_MAP_PATH,
@@ -20,6 +22,7 @@ import {
   displayLabel,
   focusOf,
   gridPlace,
+  isPlainClick,
   itemAddress,
   knowledgeMapQuery,
   layoutColumns,
@@ -37,6 +40,8 @@ import {
   typeWord,
   typedLabel,
 } from '../utils/knowledgeMap.js'
+// The second view, claims and passages, and the link that switches between the two (D-138).
+import KnowledgeMapEvidence, { KnowledgeMapSwitch } from './KnowledgeMapEvidence.jsx'
 // The table style the repository and the meetings list share.
 import './Repository.css'
 import './KnowledgeMap.css'
@@ -126,11 +131,6 @@ const SELECT_AGAIN = {
 /** The count as the server sent it in words, or null for one that did not arrive. */
 function connectionsShown(node) {
   return Number.isFinite(node.connection_count) ? TEXT.mapConnectionsShown(node.connection_count) : null
-}
-
-/** A click that follows the link here, not one that opens it in another tab or window. */
-function isPlainClick(event) {
-  return event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey
 }
 
 /**
@@ -589,8 +589,16 @@ function useKnowledgeMap(query) {
  * The route is inside RequireAuth and the navigation offers the link to every
  * signed-in user. Both are usability: the server checks `view_knowledge_map` on
  * every request (CLAUDE.md §6, invariant 4).
+ *
+ * This is the first of the page's two views (D-138); `KnowledgeMap`, below, chooses
+ * between them by the address. Straight after "Skip to the table view" it offers
+ * the link to the second, claims and passages (src/pages/KnowledgeMapEvidence.jsx).
+ *
+ * @param {object} props
+ * @param {(view: string) => void} props.onSwitch Tells the page a switch to `view` was made here.
+ * @param {(view: string) => boolean} props.takeArrival Whether a switch led to `view`; asking spends it.
  */
-export default function KnowledgeMap() {
+function RelationshipMap({ onSwitch, takeArrival }) {
   useDocumentTitle(TEXT.mapHeading)
   const [params] = useSearchParams()
   const selection = selectionFromParams(params)
@@ -620,6 +628,10 @@ export default function KnowledgeMap() {
     const target = panelHeadingRef.current ?? headingRef.current
     target?.focus()
   }, [loading, query])
+
+  // Arriving here by the switch from the second view: focus goes to the page
+  // heading once this view has settled (D-138).
+  useArrivalFocus(takeArrival, MAP_VIEW.relationships, !loading, headingRef)
 
   /** A selection, or a return to the whole map, made from a link on this page. */
   function handleSelect(focus) {
@@ -707,6 +719,10 @@ export default function KnowledgeMap() {
             {TEXT.mapSkipToTables}
           </a>
         </p>
+        {/* The link to the second view, claims and passages (D-138), beside the skip link. */}
+        <p className="knowledge-map__switch">
+          <KnowledgeMapSwitch to={MAP_VIEW.evidence} onSwitch={onSwitch} />
+        </p>
 
         {/* Legend, diagram, Selected panel: this order in the DOM, so one column
             stacks them without reordering and the tab order is the same at every
@@ -779,4 +795,39 @@ export default function KnowledgeMap() {
       {body}
     </div>
   )
+}
+
+/* ---- The page: one of two views ------------------------------------------ */
+
+/**
+ * The knowledge map's page, at `/knowledge-map`: one of its two views, chosen by
+ * the address (D-138).
+ *
+ * - `/knowledge-map`, with or without a selection: the first view, FR-20's map of
+ *   documents, meetings, tags and contributors (D-132), exactly as it was.
+ * - `/knowledge-map?view=evidence`: the second, claims and the passages they cite
+ *   (src/pages/KnowledgeMapEvidence.jsx).
+ *
+ * Each view reads its own route and nothing of the other's, and each offers the
+ * link to the other beside "Skip to the table view". The two are different
+ * components, so a switch leaves nothing of one view on screen in the other: no
+ * selection, no sort and no reply.
+ *
+ * One thing is kept across a switch: the view the switch led to, which that view
+ * spends to put focus on its heading (src/hooks/useArrivalFocus.js).
+ */
+export default function KnowledgeMap() {
+  const [searchParams] = useSearchParams()
+  // The view a switch made on this page led to, until that view has settled.
+  const arrival = useRef(null)
+  const noteSwitch = useCallback((view) => {
+    arrival.current = view
+  }, [])
+  const takeArrival = useCallback((view) => {
+    if (arrival.current !== view) return false
+    arrival.current = null
+    return true
+  }, [])
+  const View = viewFromParams(searchParams) === MAP_VIEW.evidence ? KnowledgeMapEvidence : RelationshipMap
+  return <View onSwitch={noteSwitch} takeArrival={takeArrival} />
 }

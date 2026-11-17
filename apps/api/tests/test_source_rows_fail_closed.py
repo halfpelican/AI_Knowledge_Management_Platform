@@ -62,6 +62,7 @@ from apps.core.constants import (
 )
 from apps.documents.models import ContentChunk, ContentTag, Document, DocumentAnalysis, Tag
 from apps.meetings.models import ActionItem, Meeting, MeetingAttendee
+from apps.retrieval.models import AnswerCitation, QueryLog
 from apps.retrieval.scoping import scoped_chunks, scoped_documents, scoped_meetings
 
 DOCUMENT_SOURCE_TYPE, MEETING_SOURCE_TYPE = SOURCE_TYPES
@@ -454,6 +455,35 @@ def _maps(client, case, monkeypatch):
     return case.disclosed_in(response) or any(trace in raw for trace in linked)
 
 
+# The map's second view (D-138): a claim and the passage it cites. The fixture has no answer, so
+# the probe records one that cites each disagreeing source's chunk. The chunks are stamped for the
+# Employee and their sources are not, and a passage is named by its source's title.
+EVIDENCE_CLAIM = "The chair has two succession candidates."
+EVIDENCE_ASKER_ADDRESS = "evidence.asker@example.com"
+
+
+def _evidence(client, case, monkeypatch):
+    users = get_user_model().objects
+    asker = users.filter(email=EVIDENCE_ASKER_ADDRESS).first() or users.create_user(
+        EVIDENCE_ASKER_ADDRESS, None, name="Evidence Asker"
+    )
+    chunks = list(ContentChunk.objects.filter(source_id__in=[case.document.id, case.meeting.id]))
+    assert len(chunks) == 2
+    query = QueryLog.objects.create(
+        user=asker, question=QUESTION, answer_text=EVIDENCE_CLAIM,
+        retrieved_chunk_ids=[chunk.id for chunk in chunks], answered=True,
+    )
+    for position, chunk in enumerate(chunks):
+        AnswerCitation.objects.create(
+            query=query, chunk=chunk, chunk_uuid=chunk.id, statement_text=EVIDENCE_CLAIM,
+            position=position,
+        )
+    response = client.get("/api/knowledge-map/evidence")
+    assert response.status_code == 200
+    # Beside the sources' own traces: the claim, which rests on nothing else.
+    return case.disclosed_in(response) or EVIDENCE_CLAIM in response.content.decode()
+
+
 # FR-10's routes (D-105) act on a document by id, so each is a status-code probe like the delete:
 # 404 says nothing, anything else confirms the id is real. Each probe first gives the disagreeing
 # document what its route acts on (an analysis, a proposal, a tag link), so that the
@@ -537,6 +567,8 @@ ROUTES_RETURNING_SOURCE_ROWS = {
     # FR-20 (D-132): the map's document and meeting nodes, and the tag and contributor nodes
     # reached through them.
     ("api/knowledge-map", "GET"): _maps,
+    # Its second view (D-138): a passage is named by its source's title and identifier.
+    ("api/knowledge-map/evidence", "GET"): _evidence,
     # FR-15: the documents, the department facet ("Board office") and a tag facet (D-72).
     ("api/documents/browse", "GET"): _browses,
     # FR-15's delete returns no row, but its status code is one: 404 says nothing, while 403 or

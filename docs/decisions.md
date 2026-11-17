@@ -15810,6 +15810,9 @@ on the route is a single scoped object, so the 403 has no 404 to precede, the ar
 routes use. It is not throttled, as the dashboard, the repository and the meetings list are not.
 `docs/api-contract.md` holds the shape.
 
+> **Superseded on 17 November 2026.** Both of the map's views are rate limited since D-138: 30
+> requests a minute for each user, in the `knowledge_map` scope, at the user's choice.
+
 **Two parts, and only the first touches the database.**
 
 - **Assembly** runs a fixed set of queries for the role `permission_scope` re-reads on the request,
@@ -18727,3 +18730,779 @@ server branch is built, from git rather than from this plan.
 - **A person changing their own name or email address.** Nobody asked for it, and it is not built.
 - **An Administrator setting or resetting someone else's password.** FR-03 says an Administrator
   never does, and that is unchanged.
+
+## D-138 · The knowledge map gains a second view, claims joined to the passages they cite, beside the first
+
+**Status:** Settled by the user (16 November 2026) · **Date:** 2026-11-16 · **Concerns:** FR-20,
+NFR-15, NFR-17, FR-11, FR-12, FR-13, invariants 1, 4, 5 and 6, D-65, D-67, D-132,
+`apps/api/evidence_map.py`, `apps/api/knowledge_map.py`, `apps/api/views.py`,
+`apps/api/serializers.py`, `apps/api/urls.py`, `apps/core/constants.py`,
+`frontend/src/pages/KnowledgeMap.jsx`, `docs/api-contract.md` · **Stage:** NIT3004, after M7's
+freeze, at the user's instruction · **Area:** presentation and retrieval scoping, Benjamin
+Morovan's (CLAUDE.md §1)
+
+**What happened.** D-132's map was merged on 16 November 2026 (#118). The user then said it was
+not what he had asked for: "Why is there a column for Contributors and Documents, these should not
+be in the Knowledge Map.. The UI-mockup has Claims leading to passages." He meant the proposal's
+Evidence mock-up, Figure 8.7, which he had supplied on 14 November.
+
+**How the first build came to differ.** FR-20's clause names "documents, meetings, tags, and
+contributors", and D-132 built that. The session read his screenshot as the layout to follow and
+kept the clause's node types. It did not ask him which of the two the map should be. That question
+was put to him on 16 November, and this entry records his answers.
+
+**What the proposal holds for the mock-up.** Figure 8.7 has one caption: "Claims to passages,
+unsupported claims beneath, selected claim at the right." No requirement, use case, table or
+pseudocode describes it, and the word "claim" is used in that sense nowhere else in the proposal.
+
+### The user's choices (16 November 2026, each put as a tabbed question with a recommendation)
+
+| Question | Choice |
+|---|---|
+| What the knowledge map shows | **Both, as two views.** His words: "Option Two, but make the view interchangeable by clicking a button, next to 'Skip to the Table View'". The first view stays as FR-20's text has it. Recommended and not chosen: replace it with the claims view. Also not chosen: leave it as merged |
+| Whose claims a viewer sees | **Everyone's, scoped:** claims from all users' answers, shown only where the viewer's role can read the cited passage. The question and who asked it are never shown. Not chosen: only the viewer's own |
+| Contributors in the second view | **None.** His words: "Option 3. But add the Claim review, it doesn't mention contributors either, it is a summary of things such as the amount of times a claim is admitted in an answer". The right-hand pane for a selected claim is that summary. No review action, record or permission is built |
+
+### Two further choices, after the security review of the built code (17 November 2026)
+
+Each was put to the user as a tabbed question with a recommendation. The review itself is in the
+dated note below.
+
+| Question | Choice |
+|---|---|
+| A user can word a question, or upload a document, so that the model writes a sentence of their choosing. It is then shown to everyone as a claim joined to a real passage, with no asker (the review's S1) | **Recorded, and no control is built.** An Administrator removes such a claim by reprocessing or deleting a source it rests on, which removes every claim on that source. Not chosen: an Administrator's hide control; Employees seeing only their own claims; everyone seeing only their own |
+| Neither view had a rate limit, and the second view reads every answer the caller may see on each request (S3) | **Both views, 30 requests a minute for each user,** in a scope of their own, `knowledge_map`, one budget for the two. Not chosen: the second view only; no limit |
+
+### What is built
+
+- **A claim** is a verified statement of an answered question: `AnswerCitations.statement_text`,
+  with runs of whitespace made one space. Two rows with the same text are one claim. A reworded
+  statement is another claim; nothing cleverer is attempted.
+- **A passage** is the chunk a statement cites, shown as its source's title and its place in the
+  source. A passage is on the map only through a claim.
+- **A line** joins a claim to a passage it cites. Its weight is how often that pairing was
+  admitted, the mock-up's "Line weight is how often the pairing has been admitted".
+- **The Claim review pane:** the claim's text; "Single source" when one passage supports it; how
+  many answers admitted it; what it is supported by; when it was first and last admitted.
+- **The route** is `GET /api/knowledge-map/evidence`, behind the first view's permission. The
+  walk, the two caps and the truncation rule are the first view's, with a claim in a source's
+  place and a passage in a tag's. `docs/api-contract.md` holds the shape. Both views share one rate limit
+  (the second table of choices above).
+- **The screen** is `/knowledge-map?view=evidence`. A link styled as a button, straight after
+  "Skip to the table view", switches views. The table equivalent has the same two tables, with a
+  "Times admitted" column for the line's weight.
+
+### Which rows a role sees, and why the second rule exists
+
+A citation row is read only when all three hold (`apps/api/evidence_map.py`):
+
+1. its cited chunk is one of the passages its answer was generated from;
+2. **every one of those passages is a chunk in the role's scope,** and so the cited one is;
+3. the cited chunk's own source is in the role's scope.
+
+Rule 1 took this form after the security review of the built code (S5, in the dated note
+below). As first built it read "its cited chunk exists and is in the role's scope".
+
+**Rule 2 narrows "everyone's claims", and invariant 1 requires it.** A statement cites one
+passage, but the model wrote it with every supplied passage in front of it. Citation verification
+checks the identifier and never the content (invariant 5, which says so). So a statement from an
+Administrator's answer can carry what an Administrator-only passage said while citing a passage
+every role reads. Shown to an Employee because its citation is in scope, it would be restricted
+material reaching a role that may not read it. `QueryLog.retrieved_chunk_ids` holds the
+identifiers supplied to the model, and the row is read only when each names a chunk in scope. A
+supplied chunk that was deleted is not in scope, so that answer's claims are left out.
+
+**What follows from the three rules.**
+
+- An Employee sees claims from answers generated wholly from passages an Employee may read,
+  whoever asked. An Administrator's answer that drew on one restricted passage shows an Employee
+  none of its claims.
+- A reprocess or a re-index replaces a source's chunks. Every claim that cited or was generated
+  from the old ones leaves the map for every reader (D-67's rule for a deleted chunk). The map
+  refills as questions are asked again.
+- Counts and dates are of the role's own rows. A claim also admitted in answers the role may not
+  see counts only the ones it may.
+- A date is a calendar day in the project's time zone and never a time, and a claim's
+  identifier is a keyed hash of its text. Both follow from the security review (S2 and S4).
+
+### In the mock-up and not built, each for a stated reason
+
+- **"Claim, unsupported — withheld from answers", the dashed line for "a citation the verifier
+  rejected", and the "Unsupported claims" panel.** A statement that fails verification is removed
+  before the answer is returned and is never stored (invariant 6). `QueryLog.rejected_count` keeps
+  a count and no text.
+- **"Open the 96 answers".** It would show other people's questions, which the user chose not to
+  show.
+- **"Add a source", "Add a source to a claim", and the review queue.** Nothing records a source
+  attached to a claim or a review of one. The proposal lists "Formal knowledge-record lifecycle
+  management (curation workflow, review cycles, promotion of AI outputs to verified records)" as
+  out of scope.
+- **"Owner".** No table gives a claim or a passage an owner.
+- **The two filters,** "Subject" and "Filter". D-132's item 4 stands: no filters.
+- **"N documents" in the count line.** The line counts the nodes shown, and a document is not a
+  node of this view. A passage names its source in its label.
+- **"Last verified".** A claim is verified when its answer is given, so the pane says "Last
+  admitted".
+- **"Read the passage".** The pane's links select a passage, and selecting it again opens its
+  source's page. The route never selects a passage's text, so the map never shows it. The
+  source's own page does, under its own scope.
+- **"over 90 days".** The pane gives the first day and the last, and no span.
+- **"If §2.1 is rewritten, all 96 answers change at once and none of them will say so on their
+  own".** A statement of impact. The pane says only that every answer rests on the same passage
+  (departure 7).
+
+### Departures from the proposal, and readings of it
+
+1. **The second view is not in FR-20's text.** It is built at the user's instruction from Figure
+   8.7. The first view, which is what FR-20's clauses describe, keeps its nodes, its route's
+   shape and what it shows. It gained the link to the second view and, on 17 November, the rate
+   limit the two share.
+2. **A claim has no underlying item.** Selecting one again opens nothing, and the pane says so. A
+   passage's underlying item is read as its source's page.
+3. **Other users' answer statements are shown,** the user's choice. A statement is model text
+   written in reply to somebody's question. It is shown without the question or the asker, to
+   roles that may read everything it was generated from. What a question's own wording led the
+   model to put in a statement is still in the statement, and so is what the asker's earlier
+   questions in the same conversation led it to put there: those are given to the model with
+   the new question (`apps/retrieval/conversation.py`). An earlier answer never is.
+4. **Tables read beyond FR-20's Database line:** `AnswerCitations`, `QueryLog` and
+   `ContentChunks`, with `Documents` and `Meetings` for titles.
+5. **One claim per distinct text.** Two statements that say the same thing in different words are
+   two claims.
+6. **`walk` in `apps/api/knowledge_map.py` gained two entries in its table of kinds,** so that it
+   serves both views. Nothing else in the first view's module changed.
+7. **The proposal lists "Dependency and impact analysis overlays on the relationship
+   visualisation" as out of scope,** in the same list as the line quoted above. A view of which
+   claims rest on which passage, with "Single source", is open to that reading. It is built at
+   the user's instruction of 16 November 2026, from the mock-up he supplied. The mock-up's own
+   sentence of impact is not built. **This line was not put to him before the view was
+   built.** The requirements audit of the built code found it (A2, in the dated note below),
+   and it was reported to him with the pull request.
+8. **UC-11 E2 is met less far in this view than in the first.** `RequireAuth` keeps the path
+   and not the query. So `/knowledge-map?view=evidence` opened while signed out returns, after
+   sign-in, to the first view. D-132's item 7 records that the selection is lost; here the view
+   is lost with it. No authentication code changes, as there. A front-end test holds what
+   happens.
+9. **The two caps are the first view's, and were not measured for this view.** Its graph grows
+   with every answer given, not with the corpus.
+   - **The arithmetic.** One answer holds at most `MAXIMUM_STATEMENTS` (6) statements, so it
+     adds at most six claims and six passages. The overview's 50 nodes are reached after
+     between four answers, at that most, and about sixteen, at the rate seen below.
+   - **What was counted, read-only, on 17 November 2026,** by figures alone
+     (the session's `count_claims.py`, which applies the three rules in SQL and prints no text):
+     - the alpha's database, `kmp_alpha_20261113`: 1 question logged and none answered, so the
+       view is empty there for both roles until a question is answered;
+     - the development database, `kmp_anthropic`: 3 answered questions and 10 citation rows.
+       Each role would see 4 claims and 2 passages, from 2 of those answers.
+   - **No database held a demonstration's worth of answers,** so how the view reads at the cap
+     was not seen on real data. Tests show the cut and the reason the reply gives for it.
+   - **What follows past the cap.** The overview holds the newest claims by day. Claims of one
+     day are kept or cut in the order of their identifiers, which means nothing. An older claim
+     is then reached only by selecting a passage it cites. The reply says the view is partial
+     in every such case. `MAXIMUM_NODE_COUNT` is marked *tune* for this view in
+     `apps/core/constants.py`.
+
+**Not covered by this entry, as first written:** the build's tests and deliberate breaks, the
+security review and the requirements audit of the built code. Each gets a dated note below.
+
+**Dated note, 17 November 2026: the build, its tests and its deliberate breaks.**
+
+**The commits,** on `feat/FR-20-evidence-view`:
+
+- `c4fe935`: this entry and the contract's section.
+- `998d288`: the route. `apps/api/evidence_map.py`, the view, the query serializer, the route, the
+  constants, two entries in `walk`'s table of kinds, and the server tests.
+- `f75b070`: the screen. `frontend/src/pages/KnowledgeMapEvidence.jsx`, its utilities and hook, the
+  switch, the vocabularies and text, the front-end tests, `docs/accessibility.md` section 9 and the
+  demonstration script's steps 8 to 12.
+- `4934900`: what the security review of the built code asked for, and the rate limit (its note is
+  below).
+- `9421e93`: the merge of `main` (#121, a note on FR-16's owner rule). Nothing conflicted, and
+  `main` had changed no code.
+- `6875507`: the corrections the requirements audit asked for (its note is below).
+- The commit that adds these notes.
+
+**Who built what.**
+
+- **The route and its tests** were written by the session.
+- **The screen and its tests** were written by the `react-frontend` agent from a brief that gave
+  the route's shape and the user's three choices.
+- **The front-end break list** was written by the `test-engineer` agent, as data. It applied no
+  break. The session ran every break with its own script.
+- **The account's usage limit cut that agent off once,** before it had written anything. It was
+  resumed. No file was left changed, and no break was left applied at any point.
+- **The machine slept for ten hours in the middle of one server break run.** The run resumed and
+  finished; the one break it had applied was restored by the script as usual. That run's results
+  were then replaced by a later run's.
+
+**What the screen's agent chose that the brief did not say.** Each is kept:
+
+1. The switch is also shown on the second view's empty, empty-selection and failure states, so
+   that "No claims yet" is not a dead end. The first view shows the switch only where its skip
+   link is.
+2. After a switch, focus is on the page's heading.
+3. The diagram's heading is "Claims and the passages they cite", not the mock-up's "Claims →
+   Passages", to keep an arrow out of a region's name.
+4. A selected item's lines are darker, not heavier, because a line's weight already says how
+   often its pairing was admitted. The second view's legend says "darker lines".
+5. An AI-written passage carries the app's "Suggested by AI" mark and a dashed outline. The pane's
+   sentence about a meeting's summary is shown only where the passage's source is a meeting.
+
+**Where the build differs from the entry above, or adds to it.**
+
+1. **A date is a calendar day, and a browser west of UTC shows it a day early.** The route gives
+   `YYYY-MM-DD` in the project's time zone. The page reads a bare date as UTC midnight and writes
+   it in the browser's own zone: right in Melbourne, the day before in New York. Every date-only
+   value in the app is written that way, and `frontend/src/utils/dates.js` was not changed.
+2. **A statement is one claim only when its text is the same, character for character,** after
+   runs of whitespace are made one space. Capital letters and punctuation are not folded.
+3. **A claim's order within a day is by its identifier,** which is a keyed hash, so it is fixed
+   and means nothing.
+4. **`passage_count` and `answer_count` are of every row the viewer may see,** and the diagram may
+   hold fewer passages than `passage_count` on a capped view. "Single source" is read from
+   `passage_count`, not from the lines drawn.
+
+**Behaviour in the screen that no test reaches.** The break list's author read the new code for
+it, and seven tests were then added for the most visible of what was found. These remain:
+
+- `useArrivalFocus`: that focus waits until the view has settled, and that an arrival noted for
+  one view is not spent by the other.
+- A failure that arrives late, for a request the page has left. A late success is tested.
+- Three fallbacks: a line whose weight is not a number, a table cell with nothing to show, and a
+  date that is not a date.
+- The Relationships table's word "cites" is also the vocabulary's value, so a test cannot tell the
+  word from the raw value.
+
+**The suites.**
+
+On `6875507`, the head after the audit's corrections:
+
+- **`pytest`, the whole suite:** 5,269 passed in 18 minutes 58 seconds, on a test database of its
+  own. The dual-role matrix printed "50/50 protected endpoints exercised from both Employee and
+  Administrator sessions (100.0%)". `GET /api/knowledge-map/evidence` is the fiftieth.
+- **`npm test` in `frontend/`:** 49 files, 993 tests passed.
+- **`npm run lint`:** clean.
+- **`npm run build`:** succeeds. The one JavaScript chunk is 550.97 kB; it was 530.53 kB before
+  this view, and over Vite's 500 kB advisory before FR-20 (D-132's note).
+- **`manage.py makemigrations --check --dry-run`:** "No changes detected". This view adds no
+  migration.
+- **At `9421e93`, the head the audit read,** the whole server suite was 5,262 passed and the
+  front-end suite 989. The difference is the tests the audit asked for.
+
+**Tests and breaks.** Every new test failed under at least one deliberate break before it counted.
+Each break is an exact replacement of a text that occurs once, applied alone, checked by SHA-256
+before and after, and restored. Both tables are generated from the runs' own output.
+
+**The server side.**
+
+- **The files run:** `apps/api/tests/test_evidence_map.py`, `apps/api/tests/test_source_rows_fail_closed.py`, `apps/api/tests/test_rbac.py`, `apps/api/tests/test_never_cache.py`, `apps/api/tests/test_configuration.py`, `apps/api/tests/test_throttles.py`.
+- **Unbroken,** at the last full run, they passed: 261 passed in 241.05s (0:04:01). After the five breaks added later, restored and with the audit's tests: 268 passed in 102.15s (0:01:42).
+- **50 breaks,** each failing at least one test and each restored.
+- **93 new test cases** in 40 test functions: every case fails under at least one break. A function with several cases is one row, with the breaks that fail any of its cases.
+- **10 tests older than this view** also fail under a break, and are listed after the breaks.
+- **2 cases fail only under a break that fails more than 40 tests,** so no break is narrow to them:
+  - `test_an_empty_log_is_the_empty_body[administrator]`
+  - `test_an_empty_log_is_the_empty_body[employee]`
+- **The list was run whole three times,** as the tests and the code changed: 37 breaks on the route as first built, 38 after five cases no single break could fail were tightened, and 45 after the security review's corrections and the rate limit. This table is from the third run, with what follows added to it.
+- **Five breaks were added after the requirements audit** (E31 to E34 and V03), for the four tests and the assertion it asked for, and were run on their own. The 45 breaks of the full run were not run against those four tests. The corrections after that run changed tests, comments and docstrings under `apps/`, and no line of code.
+
+| Test | Fails under |
+|---|---|
+| **`apps/api/tests/test_evidence_map.py`** | |
+| `test_an_anonymous_request_is_401` | V02 |
+| `test_a_role_without_view_knowledge_map_is_forbidden` (2 cases) | E08, E27, U01, V01, V02 |
+| `test_an_empty_log_is_the_empty_body` (2 cases) | U01 |
+| `test_a_claim_is_joined_to_the_passage_it_cites` (2 cases) | E08, E17, E18, E20, E27, E28, E30, E34, U01 |
+| `test_one_statement_in_several_answers_is_one_claim_and_its_line_carries_the_count` (2 cases) | E08, E09, E10, E12, E13, E14, E21, E27, E28, E30, E34, U01 |
+| `test_claims_come_newest_first_each_followed_by_its_passages` (2 cases) | E08, E15, E27, E30, E34, U01 |
+| `test_a_meetings_passage_names_the_meeting_and_an_ai_written_one_says_so` (2 cases) | E07, E17, E18, E19, E20, E27, E34, U01 |
+| `test_nothing_of_the_question_the_asker_or_the_passage_text_is_in_the_bytes` (2 cases) | E08, E27, E30, E34, U01 |
+| `test_an_answers_moment_is_returned_as_the_projects_own_day_and_no_finer` (2 cases) | E08, E27, E28, E29, E30, U01 |
+| `test_claims_of_one_day_are_ordered_by_identifier_and_not_by_the_moment` (2 cases) | E08, E16, E27, E30, U01 |
+| `test_a_claims_identifier_is_keyed_with_the_servers_secret` (2 cases) | E08, E23, E27, E30, U01 |
+| `test_a_claim_citing_a_passage_the_viewer_cannot_read_is_absent` (2 cases) | E23, U01, V03 |
+| `test_a_claim_whose_cited_passage_is_not_among_those_supplied_is_not_read` (2 cases) | E01, E22, E23, U01 |
+| `test_a_claim_citing_a_chunk_out_of_scope_is_absent_though_its_row_does_not_list_it` (2 cases) | E01, E23, U01 |
+| `test_a_claim_from_an_answer_generated_from_a_passage_the_viewer_cannot_read_is_absent` (2 cases) | E02, E04, E05, E22, E23, U01, V03 |
+| `test_a_supplied_passage_that_no_longer_exists_removes_the_answers_claims` (2 cases) | E02, E23, U01 |
+| `test_a_claim_whose_cited_chunk_was_deleted_is_absent` (2 cases) | E02, E08, E23, E27, E30, E34, U01 |
+| `test_a_passage_whose_source_the_viewer_cannot_read_shows_nothing` (2 cases) | E03, E23, U01, V03 |
+| `test_a_meetings_passage_whose_meeting_the_viewer_cannot_read_shows_nothing` (2 cases) | E31, V03 |
+| `test_a_citation_of_a_question_recorded_as_unanswered_is_not_read` (2 cases) | E32 |
+| `test_a_statement_of_nothing_but_whitespace_is_no_claim` (2 cases) | E33 |
+| `test_a_role_the_scope_rules_do_not_know_sees_the_empty_map` | V03 |
+| `test_the_administrator_is_shown_the_claim_an_employee_is_not` | E02, E04, E05, E06, E08, E17, E27, E30, E34, U01, V03 |
+| `test_a_role_change_takes_effect_on_the_next_request` | E06, E08, E27, E30, U01, V03 |
+| `test_selecting_a_claim_walks_to_its_passages_and_the_claims_that_share_them` (2 cases) | E08, E11, E12, E23, E27, E30, E34, U01 |
+| `test_selecting_a_passage_walks_to_the_claims_that_cite_it` (2 cases) | E08, E15, E23, E27, E30, E34, U01 |
+| `test_every_absent_focus_gets_the_one_empty_body` (2 cases) | E22, E23, U01, V03 |
+| `test_the_focus_is_answered_in_one_spelling` (2 cases) | E08, E23, E27, E30, Q01, Q04, U01 |
+| `test_a_malformed_query_is_400_keyed_on_its_parameter` (14 cases) | Q02, Q03, Q04, Q05, Q06, Q08, U01 |
+| `test_a_value_outside_the_vocabulary_or_the_length_is_400` (6 cases) | Q02, Q07, U01 |
+| `test_two_empty_parameters_are_the_overview` (2 cases) | Q08 |
+| `test_the_overview_is_cut_at_the_node_cap_and_says_so` (2 cases) | E08, E15, E24, E27, E30, E34, U01 |
+| `test_a_view_exactly_at_the_cap_is_not_cut_by_rows_the_viewer_cannot_read` (2 cases) | E02, E04, E05, V03 |
+| `test_the_depth_cap_is_read_where_the_module_reads_it` (2 cases) | E08, E23, E25, E27, E30, E34, U01 |
+| `test_each_view_is_limited_for_each_user_in_one_budget_for_the_two` (4 cases) | T01, T02, T03, T04 |
+| `test_the_route_writes_nothing_and_its_statements_do_not_grow_with_the_log` (4 cases) | E07, E08, E26, E27, E30, E34, U01 |
+| `test_the_same_request_gives_the_same_bytes` (2 cases) | E16, U01 |
+| `test_the_module_selects_eight_columns_and_reads_sources_through_the_scoped_helpers` | E03, E04, E07, E08, E22, E31 |
+| **`apps/api/tests/test_source_rows_fail_closed.py`** | |
+| `test_a_source_its_chunks_disagree_with_is_withheld_from_an_employee` | E03, E31, V03 |
+| `test_the_same_source_is_returned_to_the_administrator_it_admits` | E27 |
+
+The breaks, each applied alone:
+
+- **E01:** Rule 1 is gone: a row is read whether or not its cited chunk is one of the passages supplied (`apps/api/evidence_map.py`).
+- **E02:** Rule 2 is gone: a row is read whatever passages its answer was generated from (`apps/api/evidence_map.py`).
+- **E03:** Rule 3 is gone for documents: a passage's title is read from every document (`apps/api/evidence_map.py`).
+- **E04:** Chunks are read with no scope at all, so one stamped for no role reaches every caller (`apps/api/evidence_map.py`).
+- **E05:** Chunks are read in the Administrator's scope for every caller (`apps/api/evidence_map.py`).
+- **E06:** Chunks are read in the Employee's scope for every caller (`apps/api/evidence_map.py`).
+- **E07:** No meeting's title is read, so a meeting's passage is never shown (`apps/api/evidence_map.py`).
+- **E08:** The question's text is selected where the statement's should be (`apps/api/evidence_map.py`).
+- **E09:** A statement is a claim as it is stored, spacing and all (`apps/api/evidence_map.py`).
+- **E10:** A line's weight is 1 however often the pairing was admitted (`apps/api/evidence_map.py`).
+- **E11:** A claim's answers are counted by citation rows, not by answers (`apps/api/evidence_map.py`).
+- **E12:** A claim's passages are counted by its answers (`apps/api/evidence_map.py`).
+- **E13:** First admitted is the last moment (`apps/api/evidence_map.py`).
+- **E14:** Last admitted is the first moment (`apps/api/evidence_map.py`).
+- **E15:** Claims are ordered oldest first (`apps/api/evidence_map.py`).
+- **E16:** Claims of one moment are ordered by a random value (`apps/api/evidence_map.py`).
+- **E17:** A passage's label numbers it from zero (`apps/api/evidence_map.py`).
+- **E18:** A passage's position is its chunk index (`apps/api/evidence_map.py`).
+- **E19:** No passage is marked as AI-written (`apps/api/evidence_map.py`).
+- **E20:** A passage gives its chunk's identifier as its source's (`apps/api/evidence_map.py`).
+- **E21:** A source's passages are ordered last first (`apps/api/evidence_map.py`).
+- **E22:** Every chunk in scope is a passage node, cited or not (`apps/api/evidence_map.py`).
+- **E23:** A selection is answered as the overview (`apps/api/evidence_map.py`).
+- **E24:** The node cap is a literal, not the constant read from this module (`apps/api/evidence_map.py`).
+- **E25:** The depth cap is a literal, not the constant read from this module (`apps/api/evidence_map.py`).
+- **E26:** One more statement is run for every citation row (`apps/api/evidence_map.py`).
+- **E27:** No citation row is read, so the route shows nothing to anybody (`apps/api/evidence_map.py`).
+- **E28:** When an answer was given is kept to the moment, not cut to the day (`apps/api/evidence_map.py`).
+- **E29:** The day is taken in UTC, not in the project's time zone (`apps/api/evidence_map.py`).
+- **E30:** A claim's identifier is the plain SHA-256 of its text (`apps/api/evidence_map.py`).
+- **V01:** The view asks for a session and no permission code (`apps/api/views.py`).
+- **V02:** The view has no permission class at all (`apps/api/views.py`).
+- **U01:** The route is wired to the first view (`apps/api/urls.py`).
+- **T01:** The second view has no rate limit (`apps/api/views.py`).
+- **T02:** The first view has no rate limit (`apps/api/views.py`).
+- **T03:** The second view spends the search budget, not the map's (`apps/api/views.py`).
+- **T04:** The map's rate is wired as 1000 a minute, not the constant (`config/settings.py`).
+- **Q01:** A claim's identifier is read as the caller spelt it (`apps/api/serializers.py`).
+- **Q02:** A claim's identifier may be of any length (`apps/api/serializers.py`).
+- **Q03:** A claim's identifier may hold any characters (`apps/api/serializers.py`).
+- **Q04:** A passage's identifier is read as the caller spelt it and is not checked (`apps/api/serializers.py`).
+- **Q05:** A type without an identifier is not refused (`apps/api/serializers.py`).
+- **Q06:** An identifier without a type is read as the overview (`apps/api/serializers.py`).
+- **Q07:** The type is any text (`apps/api/serializers.py`).
+- **Q08:** An empty identifier is a value, not an absent parameter (`apps/api/serializers.py`).
+- **E31:** Rule 3 is gone for meetings: a passage's title is read from every meeting (`apps/api/evidence_map.py`).
+- **E32:** A citation is read whether or not its question is recorded as answered (`apps/api/evidence_map.py`).
+- **E33:** A statement of nothing but whitespace is a claim (`apps/api/evidence_map.py`).
+- **E34:** No edge is made, so every claim is on the map without a passage (`apps/api/evidence_map.py`).
+- **V03:** The view asks for the map in the Administrator's scope, whoever calls (`apps/api/views.py`).
+
+Tests older than this view that a break also fails:
+
+- `apps/api/tests/test_configuration.py` `test_exactly_the_documented_routes_are_throttled`
+- `apps/api/tests/test_never_cache.py` `test_every_api_route_is_never_cached_when_it_answers_401`
+- `apps/api/tests/test_never_cache.py` `test_every_permission_guarded_route_is_never_cached_when_it_answers_403`
+- `apps/api/tests/test_rbac.py` `test_each_permissioned_route_checks_its_own_code`
+- `apps/api/tests/test_rbac.py` `test_every_protected_route_names_401_as_the_scheme`
+- `apps/api/tests/test_rbac.py` `test_every_route_but_the_opt_outs_is_401_anonymously`
+- `apps/api/tests/test_rbac.py` `test_every_route_but_the_opt_outs_is_401_with_a_forged_session`
+- `apps/api/tests/test_rbac.py` `test_the_url_conf_is_exactly_the_contract`
+- `apps/api/tests/test_source_rows_fail_closed.py` `test_request_serving_code_reads_source_rows_only_through_the_scoped_helpers`
+- `apps/api/tests/test_throttles.py` `test_the_rates_are_the_ones_d79_settles_and_reach_drf`
+
+**The front end.**
+
+- **The files run:** `frontend/tests/knowledgeMap.test.jsx`, `frontend/tests/tabOrder.test.jsx`, `frontend/tests/contrast.test.js`, `frontend/tests/stylesheets.test.js`, `frontend/tests/textEquivalents.test.jsx`.
+- **Unbroken,** with every test added since the full run, they pass: 384 passed, 0 failed of 384 tests; 0 failed of 82 suites. After the last break run, restored: 384 passed, 0 failed of 384 tests; 0 failed of 82 suites.
+- **134 breaks,** each failing at least one test and each restored.
+- **149 new test cases,** 76 rows below: every case fails under at least one break. A test that runs once as each role is one row, with the breaks that fail either case.
+- **Breaks that fail only a test older than this view:** none.
+- **4 cases fail only under a break that fails more than 40 tests,** so no break is narrow to them. Any request the first view sent to the other view's route would fail every first-view test, so nothing narrower can fail these:
+  - `knowledgeMap.test.jsx :: the knowledge map’s second view, claims and passages (D-138), as an Administrator the switch between the two views the first view asks its own route once and the other view’s not at all`
+  - `knowledgeMap.test.jsx :: the knowledge map’s second view, claims and passages (D-138), as an Administrator the switch between the two views the first view, with a selection asks its own route once and the other view’s not at all`
+  - `knowledgeMap.test.jsx :: the knowledge map’s second view, claims and passages (D-138), as an Employee the switch between the two views the first view asks its own route once and the other view’s not at all`
+  - `knowledgeMap.test.jsx :: the knowledge map’s second view, claims and passages (D-138), as an Employee the switch between the two views the first view, with a selection asks its own route once and the other view’s not at all`
+- **The list was run whole once, 132 breaks, and tests were added twice after it:**
+  - two tests of the rate limit's 429, one in each view. The baseline was run again with them, and one break was run again in each view: G106 fails the second view's, and F070 of D-132's list fails the first view's. The first view's is not in the table below, which holds the second view's tests;
+  - after the requirements audit, the empty view's sentence was reworded, comments changed in four source files, the fixtures' dates became days, one test changed and two were added. The baseline was run again, G080, G081, G100 and G101 were run again, and G133 and G134 were added for the two new tests;
+  - the other breaks were not run again after either change, nor against the tests added.
+
+| Test | Fails under |
+|---|---|
+| **`frontend/tests/contrast.test.js`** | |
+| FR-20: "node type distinguished by colour and shape", the colour half (D-132) the second view (D-138): a line’s three weights are three widths, each greater than the last, and no colour of their own | G036, G037, G038 |
+| FR-20: "node type distinguished by colour and shape", the colour half (D-132) the second view (D-138): gives the claim and the passage one fill token each, two different ones, each a tested 3:1 pair on the surface | G022, G023 |
+| **`frontend/tests/knowledgeMap.test.jsx`**, each test under "the knowledge map’s second view, claims and passages (D-138), as <role>" and run as each role | |
+| NFR-15: a passage that is AI-generated content says so in words reads the mark from the reply’s flag and from nothing in the label | G048, G051, G052 |
+| NFR-15: a passage that is AI-generated content says so in words says "Suggested by AI" wherever the flagged passage’s label is shown, and on no other node | G020, G030, G032, G047, G048, G049, G050, G053 |
+| NFR-15: a passage that is AI-generated content says so in words says it in the Claim review’s "Supported by" list, beside the passage it marks | G020, G048, G073, G079 |
+| NFR-17: the table view holds the same claims, passages and citations as rows holds one row per served node and per served edge, in the reply’s order, with "Times admitted" beside each citation | G020, G030, G031, G032, G033, G048, G052, G053, G054, G055 |
+| NFR-17: the table view holds the same claims, passages and citations as rows sorts "Times admitted" by the number, where the digits as text would give another order | G032, G033, G063 |
+| NFR-17: the table view holds the same claims, passages and citations as rows sorts the Items table by Connections shown, ascending then descending, with aria-sort | G048, G052, G058, G059 |
+| NFR-17: the table view holds the same claims, passages and citations as rows sorts the Items table by Name, ascending then descending, with aria-sort | G048, G052, G056, G059 |
+| NFR-17: the table view holds the same claims, passages and citations as rows sorts the Items table by Type, ascending then descending, with aria-sort | G020, G048, G052, G057, G059 |
+| NFR-17: the table view holds the same claims, passages and citations as rows sorts the Relationships table by From, ascending then descending, with aria-sort | G032, G033, G048, G052, G053, G060 |
+| NFR-17: the table view holds the same claims, passages and citations as rows sorts the Relationships table by Relationship, ascending then descending, with aria-sort | G032, G033, G048, G052, G053, G061 |
+| NFR-17: the table view holds the same claims, passages and citations as rows sorts the Relationships table by Times admitted, ascending then descending, with aria-sort | G032, G033, G048, G052, G053, G063 |
+| NFR-17: the table view holds the same claims, passages and citations as rows sorts the Relationships table by To, ascending then descending, with aria-sort | G032, G033, G048, G052, G053, G062 |
+| a line’s weight: how often the pairing was admitted draws a pairing admitted once, 2 to 4 times, and 5 times or more in three classes, each a heavier stroke than the last, and says each number in the table | G031, G032, G034, G035, G036, G037 |
+| a line’s weight: how often the pairing was admitted marks the selected claim’s lines as the first view does, draws them last, and leaves each its own weight | G031, G036, G039, G040, G041, G042, G084 |
+| a partial view is not presented as complete a selection cut by depth: says so before the skip link and the switch, from the reply’s own maximum, and as each table’s description | G006, G096, G097 |
+| a partial view is not presented as complete a selection cut by the node count: says so before the skip link and the switch, from the reply’s own maximum, and as each table’s description | G006, G096, G097, G098 |
+| a partial view is not presented as complete says nothing of the kind about a whole view, and describes neither table | G099 |
+| a partial view is not presented as complete the overview cut by the node count: says so before the skip link and the switch, from the reply’s own maximum, and as each table’s description | G006, G096, G097 |
+| a selected passage’s lines, and selecting from the pane’s own lists following a claim in a passage pane’s "Cited by" list selects that claim: the address, the request’s two parameters, and focus on the Claim review | G013, G020, G064, G065, G066, G073, G084, G087, G127 |
+| a selected passage’s lines, and selecting from the pane’s own lists following a passage in the Claim review’s "Supported by" list selects that passage: the address, the request’s two parameters, and focus on the pane | G013, G020, G064, G065, G066, G073, G087, G088, G126 |
+| a selected passage’s lines, and selecting from the pane’s own lists marks the lines that arrive at a selected passage, and no other, and draws them last | G013, G025, G030, G031, G039, G040, G047, G064, G065, G088, G125 |
+| claims and passages on the diagram: shape, colour and a word for each draws a claim as a square and a passage as a circle, names each type in a word, and lists the same two in the legend with what a heavier line means | G014, G015, G016, G017, G018, G019, G020, G021, G022, G030 |
+| claims and passages on the diagram: shape, colour and a word for each holds exactly the served nodes and edges on the diagram, and makes no node of an edge’s missing end | G028, G029, G030, G031, G032, G053 |
+| claims and passages on the diagram: shape, colour and a word for each puts the claims in the first column and the passages in the second, one row each in the reply’s order, and ends every line on the facing edges of the two columns | G017, G018, G024, G025, G026, G027, G030, G031 |
+| each table’s own sort, the view’s own words, and two more addresses and replies keeps each table’s sort its own: sorting one leaves the other sorted as it was | G032, G033, G048, G052, G053, G056, G058, G059, G062, G128 |
+| each table’s own sort, the view’s own words, and two more addresses and replies marks an AI-flagged passage of a document with "Suggested by AI" in its pane, without the sentence about a meeting’s summary | G020, G030, G047, G048, G051, G052, G087, G088, G089, G090, G094, G132 |
+| each table’s own sort, the view’s own words, and two more addresses and replies reads two empty focus parameters as no selection, and asks for the overview once, with no focus parameter | G013, G043, G048, G052, G131 |
+| each table’s own sort, the view’s own words, and two more addresses and replies says what this view is under the page heading, in its own words, and the legend says how the selected item is marked | G043, G129, G130 |
+| selecting a claim, and the Claim review a selected claim is not a link anywhere, and the Claim review says there is nothing to open | G013, G020, G065, G073, G082, G083, G084, G085 |
+| selecting a claim, and the Claim review leaves focus alone when the page is opened at a selection nobody made on it | G070, G071, G073 |
+| selecting a claim, and the Claim review marks the node the reply’s focus names, and nothing on the address’s word alone | G072 |
+| selecting a claim, and the Claim review reads "Single source" and the answers from the claim’s served detail, never from the lines drawn | G073, G074, G076 |
+| selecting a claim, and the Claim review reviews a claim with one passage and 1 answer: its text, "Single source" or not, the answers that admitted it, what supports it, and both dates | G014, G020, G048, G064, G073, G075, G077, G079, G081 |
+| selecting a claim, and the Claim review reviews a claim with one passage and 12 answers: its text, "Single source" or not, the answers that admitted it, what supports it, and both dates | G014, G020, G064, G073, G075, G076, G078, G080, G081 |
+| selecting a claim, and the Claim review reviews a claim with two passages and 4 answers: its text, "Single source" or not, the answers that admitted it, what supports it, and both dates | G014, G020, G048, G064, G073, G076, G079, G080, G081 |
+| selecting a claim, and the Claim review says how to select while nothing is selected, under the heading "Selected", and marks no node | G086 |
+| selecting a claim, and the Claim review selecting a claim from its Items row: the address, the request’s two parameters, the selection and where focus goes | G013, G064, G065, G066, G068, G073, G084 |
+| selecting a claim, and the Claim review selecting a claim from its node: the address, the request’s two parameters, the selection and where focus goes | G013, G064, G065, G066, G067, G073, G084 |
+| selecting a claim, and the Claim review selecting a claim from the From end of a Relationships row: the address, the request’s two parameters, the selection and where focus goes | G013, G064, G065, G066, G069, G073, G084 |
+| selecting a claim, and the Claim review writes the first and the last date apart where they differ | G073, G080 |
+| selecting a passage: its pane, and selecting it again opens its source a passage of a document: the first selection shows its source and the claims that cite it; the second opens the source’s page | G013, G014, G020, G064, G065, G066, G067, G079, G087, G088, G089, G091, G093, G094 |
+| selecting a passage: its pane, and selecting it again opens its source a passage of a meeting: the first selection shows its source and the claims that cite it; the second opens the source’s page | G013, G014, G020, G030, G047, G064, G065, G066, G067, G079, G087, G088, G089, G090, G092, G093, G094 |
+| selecting a passage: its pane, and selecting it again opens its source selecting a passage from the To end of a Relationships row selects it, and Back from its source returns to the selection | G013, G053, G064, G065, G093, G095 |
+| text from an answer or a source is rendered as text renders markup in a claim’s text as the characters it is, on the diagram, in both tables and in the Claim review | G020, G030, G032, G053, G073, G084, G119, G120 |
+| text from an answer or a source is rendered as text renders markup in a selected passage’s source title as characters in the pane | G020, G030, G087, G089, G093, G119, G120, G121 |
+| the count line, and the counts the server sent counts the line from the served nodes, claims then passages, and again for each reply | G043, G045, G064, G084 |
+| the count line, and the counts the server sent counts unequal numbers of each, and none of the edges | G043, G044, G045, G046 |
+| the count line, and the counts the server sent shows the connection count and the weight the server sent, and recounts neither | G029, G030, G032, G033 |
+| the states: loading, failure, the empty view and the empty selection ignores a reply that lands after the address has moved on | G013, G043, G048, G052, G065, G102, G109 |
+| the states: loading, failure, the empty view and the empty selection says it is loading, with neither map nor table, until the reply lands | G045, G102, G103, G104 |
+| the states: loading, failure, the empty view and the empty selection sends no request for a type of the first view, and shows the empty selection | G003, G004, G113, G118 |
+| the states: loading, failure, the empty view and the empty selection sends no request for a type with an empty identifier, and shows the empty selection | G003, G004, G113, G115, G117 |
+| the states: loading, failure, the empty view and the empty selection sends no request for a type without an identifier, and shows the empty selection | G003, G004, G113, G115 |
+| the states: loading, failure, the empty view and the empty selection sends no request for an identifier without a type, and shows the empty selection | G003, G004, G113, G116 |
+| the states: loading, failure, the empty view and the empty selection shows a 400 as the same empty selection, with no retry and none of the server’s words | G065, G113, G114 |
+| the states: loading, failure, the empty view and the empty selection shows a 403 as the not-permitted notice alone, with no switch and nothing about a map | G110, G111 |
+| the states: loading, failure, the empty view and the empty selection shows a failure as an error with the client’s own words and no map and no table, and "Try again" reads again | G003, G013, G105, G106 |
+| the states: loading, failure, the empty view and the empty selection shows nothing of the overview while a selection is loading, nor after it has failed | G013, G064, G065, G067, G102, G103, G107, G108 |
+| the states: loading, failure, the empty view and the empty selection shows the empty selection, with the way back to the whole view, for a focus the reply holds nothing for | G013, G065, G112, G113 |
+| the states: loading, failure, the empty view and the empty selection shows the empty view as two sentences that name nothing kept from the reader, with no map, no table and no error, and the way back to the first view | G100, G101, G133 |
+| the states: loading, failure, the empty view and the empty selection shows the rate limit’s 429 in the client’s own words, with no map and no table, and "Try again" reads again | G106 |
+| the switch between the two views another value of view asks its own route once and the other view’s not at all | G010, G012 |
+| the switch between the two views drops the selection when the first view is left for the second | G002, G004, G012, G013 |
+| the switch between the two views drops the selection when the second view is left for the first | G003, G004, G012, G084 |
+| the switch between the two views offers each view’s link to the other straight after "Skip to the table view", and following it changes the view, the route asked and where focus is | G001, G002, G003, G005, G006, G007, G008, G009, G012, G013 |
+| the switch between the two views reads a claim in the first view’s address as no selection of that view’s, and sends no request | G011, G012 |
+| the switch between the two views the first view asks its own route once and the other view’s not at all | G012 |
+| the switch between the two views the first view, with a selection asks its own route once and the other view’s not at all | G012 |
+| the switch between the two views the second view asks its own route once and the other view’s not at all | G013 |
+| the switch between the two views the second view, with a selection asks its own route once and the other view’s not at all | G013 |
+| the view’s wording, and the way in when signed out lands on the first view after signing in when the second view was opened signed out: the return from sign-in keeps the path only (a recorded limitation) | G134 |
+| the view’s wording, and the way in when signed out words no sentence of the second view so as to suggest that anything is kept from the reader | G133 |
+| **`frontend/tests/tabOrder.test.jsx`** | |
+| FR-20 / NFR-17: the knowledge map, its diagram and its table view (D-132) its second view, claims and passages (D-138) a selected claim is not a stop on the diagram: a claim has no page for a second selection to open | G018, G030, G083, G084, G122, G124 |
+| FR-20 / NFR-17: the knowledge map, its diagram and its table view (D-132) its second view, claims and passages (D-138) as each role: the skip link, the switch, the claims then the passages, the pane, then each table region ahead of its headings and rows | G006, G018, G025, G026, G030, G032, G054, G079, G087, G094, G122, G123, G124 |
+
+The breaks, each applied alone:
+
+- **G001:** The link between the two views does not carry the secondary button's class (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G002:** The first view's switch links to the first view's own address (`frontend/src/utils/evidenceMap.js`).
+- **G003:** The second view's switch links to the second view's own address (`frontend/src/utils/evidenceMap.js`).
+- **G004:** The switch carries the address's selection across to the other view (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G005:** The first view offers the switch after the legend, the map and the panel, not straight after the skip link (`frontend/src/pages/KnowledgeMap.jsx`).
+- **G006:** The second view offers the switch before "Skip to the table view" (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G007:** Following the switch does not tell the page which view it led to, so no heading takes focus (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G008:** The view a switch led to does not put focus on its heading (`frontend/src/hooks/useArrivalFocus.js`).
+- **G009:** The first view asks whether a switch led to the second view, so a switch back moves no focus (`frontend/src/pages/KnowledgeMap.jsx`).
+- **G010:** Any value of the view parameter is read as the second view (`frontend/src/utils/evidenceMap.js`).
+- **G011:** An address whose focus_type is a claim or a passage is read as the second view without view=evidence (`frontend/src/utils/evidenceMap.js`).
+- **G012:** An address that does not name a view is read as the second view (`frontend/src/utils/evidenceMap.js`).
+- **G013:** The API module sends each of the second view's requests twice and answers from the second (`frontend/src/api/knowledgeMap.js`).
+- **G014:** A shape carries no class of its type, so no fill of its own (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G015:** A passage is drawn with the claim's square (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G016:** The claim's shape has its fill set as an SVG attribute (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G017:** The SVG layer of lines is not aria-hidden (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G018:** Each line in the hidden layer is a tab stop (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G019:** The legend lists the claim and not the passage (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G020:** A claim is called a Passage and a passage a Claim (`frontend/src/constants.js`).
+- **G021:** The second view names the browser tab after its diagram, not the knowledge map (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G022:** The claim's class is filled with the passage's token (`frontend/src/pages/KnowledgeMap.css`).
+- **G023:** The claim's class is filled with the decorative border colour, which has no 3:1 pair (`frontend/src/pages/KnowledgeMap.css`).
+- **G024:** The claims' column takes the passages' share of the width (`frontend/src/utils/evidenceMap.js`).
+- **G025:** A passage is placed in the claims' column (`frontend/src/utils/evidenceMap.js`).
+- **G026:** The diagram's links are rendered in the reply's order, not column by column (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G027:** A line ends on the far edge of the passages' column (`frontend/src/utils/evidenceMap.js`).
+- **G028:** An edge whose passage is not among the served nodes is kept, with a stand-in for the missing end (`frontend/src/utils/evidenceMap.js`).
+- **G029:** Every node's count is recounted from the edges of the reply, not the served connection_count (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G030:** The diagram leaves out the last node it placed (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G031:** The diagram leaves out one line (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G032:** The Relationships table leaves out its last row (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G033:** "Times admitted" shows the claim's answer count, not the edge's weight (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G034:** A pairing admitted twice is drawn light: medium begins at 3 (`frontend/src/utils/evidenceMap.js`).
+- **G035:** A pairing admitted four times is drawn heavy: heavy begins at 4 (`frontend/src/utils/evidenceMap.js`).
+- **G036:** The medium line is as wide as the light one (`frontend/src/pages/KnowledgeMap.css`).
+- **G037:** The heavy line has a stroke colour of its own (`frontend/src/pages/KnowledgeMap.css`).
+- **G038:** The light line has no width (`frontend/src/pages/KnowledgeMap.css`).
+- **G039:** No line is marked as the selected node's (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G040:** The selected node's lines are not drawn after the others (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G041:** A later rule gives every selected line the heaviest width, whatever its pairing's weight (`frontend/src/pages/KnowledgeMap.css`).
+- **G042:** The selected node carries no class of its own, so no heavier outline (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G043:** The count line counts a passage for every line drawn (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G044:** The count line gives the claims the passages' number and the passages the claims' (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G045:** The count line is not a status region (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G046:** With no edge, an empty Relationships table is drawn instead of the sentence (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G047:** A flagged passage's node on the diagram does not say "Suggested by AI" (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G048:** A flagged passage named in a table or in the pane does not say "Suggested by AI" (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G049:** A flagged passage's node does not carry the dashed-boundary class (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G050:** Every passage's node carries the dashed-boundary class, flagged or not (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G051:** Every passage of a meeting is marked as AI content, whatever the reply's flag says (`frontend/src/utils/evidenceMap.js`).
+- **G052:** The Items table opens sorted by name, not in the reply's order (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G053:** A Relationships row puts the passage under From and the claim under To (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G054:** The Items table's scroll region is not a tab stop (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G055:** "Skip to the table view" does not move focus (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G056:** The Items table's Name column does not sort (`frontend/src/utils/evidenceMap.js`).
+- **G057:** Type sorts by the type alone, not then by label (`frontend/src/utils/evidenceMap.js`).
+- **G058:** The Connections shown column sorts by name (`frontend/src/utils/evidenceMap.js`).
+- **G059:** Sorting the Items table reorders the reply's own nodes, and with them the diagram (`frontend/src/utils/evidenceMap.js`).
+- **G060:** From sorts by the From end alone, not then by the To end (`frontend/src/utils/evidenceMap.js`).
+- **G061:** The Relationship column does not sort (`frontend/src/utils/evidenceMap.js`).
+- **G062:** To sorts by the To end alone, not then by the From end (`frontend/src/utils/evidenceMap.js`).
+- **G063:** "Times admitted" sorts by its digits as text: 12 before 3 (`frontend/src/utils/evidenceMap.js`).
+- **G064:** Selecting a node links to the map's address without view=evidence (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G065:** A selection's request carries the page's own view parameter to the API (`frontend/src/api/knowledgeMap.js`).
+- **G066:** After a selection focus goes to the page heading, not the pane's heading (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G067:** A selection made on the diagram does not move focus (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G068:** A selection made from the Items table does not move focus (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G069:** A selection made from the Relationships table does not move focus (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G070:** Focus is moved to the pane's heading on every load, also one nobody selected on the page (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G071:** The page starts with a switch to the second view already noted, so opening it by its address moves focus (`frontend/src/pages/KnowledgeMap.jsx`).
+- **G072:** The selected node is the one the address names, not the one the reply's focus names (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G073:** The pane is headed "Selected" for a selected claim, not "Claim review" (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G074:** "Single source" is said where one passage is listed, not where passage_count is 1 (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G075:** "Single source" is never said (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G076:** "Admitted in N answers" counts the passages listed, not answer_count (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G077:** A single-source claim admitted once is said to rest on the same passage every time (`frontend/src/utils/evidenceMap.js`).
+- **G078:** A single-source claim admitted many times is not said to rest on the same passage (`frontend/src/utils/evidenceMap.js`).
+- **G079:** The pane lists the far end of every line in the view, not only the selected node's own (`frontend/src/utils/evidenceMap.js`).
+- **G080:** "Last admitted" shows the date the claim was first admitted (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G081:** A date in the Claim review is written as the reply's raw timestamp (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G082:** The Claim review does not say a claim has nothing to open (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G083:** A selected claim is a link, to its own selection, and so a tab stop (`frontend/src/utils/evidenceMap.js`).
+- **G084:** A selected claim is not marked aria-current (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G085:** "Show the whole map" in the pane links to the first view (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G086:** The pane offers "Show the whole map" while nothing is selected (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G087:** The pane is headed "Claim review" for a selected passage (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G088:** A selected passage does not say what a second selection does (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G089:** The pane gives a passage's source as its title alone, without "Document" or "Meeting" (`frontend/src/utils/evidenceMap.js`).
+- **G090:** The pane does not mark a flagged passage as AI content (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G091:** The pane marks every selected passage as AI content, flagged or not (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G092:** A selected passage of a meeting opens the documents' address for its source (`frontend/src/utils/evidenceMap.js`).
+- **G093:** A selected passage still links to its own selection, so a second selection opens nothing (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G094:** The pane offers no action that opens a selected passage's source (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G095:** Opening a selected passage's source replaces the selection's history entry, so Back loses the selection (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G096:** The truncation notice comes after the skip link (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G097:** The Items table is not described by the truncation sentence (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G098:** A selection cut by the node count is given the overview's sentence (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G099:** A view that is not truncated is still said to be partial (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G100:** The empty view is shown as the empty selection (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G101:** The empty view and the empty selection offer no switch back to the first view (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G102:** The view does not say it is loading (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G103:** An Items table is drawn while the request is loading (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G104:** The switch back is offered while the request is loading (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G105:** A failure offers "Try again" and no switch back to the first view (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G106:** "Try again" sends no request (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G107:** A reply is shown whatever request it answered, so the earlier view stays up while the next loads (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G108:** After a selection that fails, focus is left where the removed link was (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G109:** A reply that lands for a request the page has left is kept (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G110:** A 403 is shown as a failure with "Try again", not the not-permitted notice (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G111:** A 403 shows the switch to the first view under the not-permitted notice (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G112:** An empty selection is shown as the empty view, with no way back to the whole view (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G113:** "Show the whole map" in the empty selection links to the first view (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G114:** A 400 is shown as a failure with "Try again" (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G115:** A focus_type with no focus_id is sent to the server (`frontend/src/utils/evidenceMap.js`).
+- **G116:** A focus_id with no focus_type is sent to the server (`frontend/src/utils/evidenceMap.js`).
+- **G117:** A focus_type with an empty focus_id is sent to the server (`frontend/src/utils/evidenceMap.js`).
+- **G118:** A focus_type of the first view's is sent to the second view's route (`frontend/src/utils/evidenceMap.js`).
+- **G119:** A node's label on the diagram is rendered as markup (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G120:** A node's label in a table or a pane list is rendered as markup (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G121:** A selected passage's source title is rendered as markup in the pane (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G122:** The diagram's scroll region is not a tab stop (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G123:** The pane comes before the diagram in the page (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G124:** A stylesheet rule hides the skip link and the switch while each is still a tab stop (`frontend/src/pages/KnowledgeMap.css`).
+- **G125:** Only a selected claim's lines are marked; a selected passage's are not (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G126:** A link in the Claim review's "Supported by" list does not tell the page a selection was made (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G127:** A link in a passage pane's "Cited by" list does not tell the page a selection was made (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G128:** The Relationships table reads and sets the Items table's sort (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G129:** The second view says the first view's introduction (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G130:** The legend's sentence about the selected item is gone (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G131:** Two empty focus parameters are read as a malformed selection, not as the overview (`frontend/src/utils/evidenceMap.js`).
+- **G132:** The sentence about a meeting's summary is shown for an AI-flagged passage of a document (`frontend/src/pages/KnowledgeMapEvidence.jsx`).
+- **G133:** The empty view's sentence says there are no claims the reader is permitted to see (`frontend/src/constants.js`).
+- **G134:** The return from sign-in keeps the address's query, so the second view is returned to (`frontend/src/auth/RequireAuth.jsx`).
+
+**Owed in a browser.** jsdom applies no stylesheet and paints nothing, so these are not tested:
+
+- a screen-reader run (NVDA or VoiceOver) through the second view's two tables;
+- reflow at 320 CSS pixels, and an axe run on the view;
+- that the two shapes, the three line widths, the dashed outline and the switch beside the skip
+  link paint as the stylesheet says;
+- steps 8 to 12 of the demonstration script's FR-20 walk, on the alpha, after it is redeployed.
+  No migration is needed for this view.
+
+**Dated note, 17 November 2026: the security review of the built code.**
+
+The `security-reviewer` agent read the route at `998d288` and the screen at `2407a22`, the screen's
+commit before its message was completed (now `f75b070`, with two tests added). It ran nothing:
+"traced" means it followed the code, "inferred" means it rests on behaviour it could not execute.
+
+**Its verdict, in its words:** "I found no way for material outside a caller's role scope to reach
+the response of `GET /api/knowledge-map/evidence` or be inferred from it; the three rules hold in
+the code. What remains is one medium integrity issue the record does not state, two low issues,
+and three informational ones."
+
+**What it found sound,** each traced in code:
+
+- **Scope before caps.** The rules are conditions on the one query, or applied before a row
+  touches a claim, a passage, a weight or a date. `walk` receives only scoped values, so a count,
+  a date, a weight, the order and `truncated` cannot move with rows the caller may not see. The
+  same text from a restricted answer and from a public one is one claim, counted from the public
+  rows only.
+- **Rule 2's SQL** is well typed, duplicates are harmless, and a deleted supplied chunk fails
+  closed.
+- **Time.** A re-stamp is read live. Reprocess, re-index, deletion and a regenerated meeting
+  summary all delete chunks and create new ones; no path edits a chunk's text in place. The role
+  is re-read on each request.
+- **What the model is given:** the system prompt, the supplied passages, the question and the
+  asker's own earlier questions. No earlier answer, title or metadata.
+- **Authorisation and caching.** 401, then 403, then 400. GET only. Never-cached. No server-side
+  cache.
+- **The screen.** Every server string is rendered as text. Addresses are built with
+  `URLSearchParams` and `encodeURIComponent`. A passage opens only its document's or meeting's
+  page, which enforce their own scope. Nothing is kept in storage.
+
+| Finding | Severity | What | Disposition |
+|---|---|---|---|
+| S1 | medium, integrity | Claims are an anonymous, lasting, organisation-wide channel for text a user steered the model into writing: by a question's wording, or by a directive in an uploaded document's body. Citation verification checks the identifier and not the content, so the sentence is stored and joined to a real passage. Before this view such a statement reached only the asker, and two accepted risks in `apps/ai/prompting.py` rested on that | **Recorded, at the user's choice** (the second table of choices above); no control is built. Both comments in `apps/ai/prompting.py` now say what this view changes. An Administrator removes such a claim by reprocessing or deleting a source it rests on. Scope is not affected: rule 2 means the model's choice of citation cannot widen what a role sees. Whether Claude Haiku 5.5 complies with such a direction was not tested |
+| S2 | low | The two dates were the answer's exact moment, which every statement of one answer shares. A reader could group claims back into another person's answers and, from the times, guess who asked | **Fixed** in `4934900`: a date is the calendar day in the project's time zone, and claims within a day are ordered by identifier. The page already showed the day only |
+| S3 | low today, growing | The route was unthrottled, and rule 2 compares each answered row's supplied identifiers with every chunk in scope, so its cost grows with the log. One signed-in user repeating it could slow the server | **Fixed in part,** at the user's choice: both views are rate limited, 30 requests a minute for each user, in `4934900`. **Not done:** rewriting rule 2 so that its cost is linear, which the reviewer also named. The log is never pruned, so the cost of one request still grows |
+| S4 | informational | A claim's identifier was an unkeyed SHA-256 of its text, and it sits in addresses. Anyone who came by one could confirm a guessed statement offline | **Fixed** in `4934900`: HMAC-SHA-256 under `SECRET_KEY`. A changed key changes every identifier |
+| S5 | informational | Rule 2 passes a row whose list of supplied passages is empty, and did not require the cited chunk to be among them. No writer makes such a row today | **Fixed** in `4934900`: rule 1 is now "the cited chunk is one of the supplied passages", which refuses both shapes. The reviewer also saw no test of a role the scope rules do not know on this route; one was added after the requirements audit (its A7) |
+| S6 | informational | Rule 2 tests a supplied but uncited passage by the chunk's stamp only, not by its source's, where rule 3 tests the cited one by both | **Recorded, not changed.** It equals what `POST /api/ask` would give that role, so nothing new is shown |
+
+**What an Employee can still learn,** in the reviewer's words: "what colleagues, Administrators
+included, asked about and when, from statements generated wholly from Employee-readable passages.
+That includes anything an asker typed into the question, or into an earlier question in the same
+thread, that the model echoed." Since the fix for S2, "when" is the day.
+
+**The corrections were not read by the reviewer again.** They are covered by tests and breaks of
+their own, in the server table of the build's note. **Not covered by the review,** in its words:
+"Any execution: tests, query plans, timings, and whether Claude Haiku 5.5 actually complies with
+the injection in S1"; the first view beyond the two added lines; the stylesheet and the front-end
+tests; deployment settings; and what the alpha's log already holds. Its full report is in this
+session's shared notes, `fr20-evidence-review-security.md`.
+
+**The requirements audit of `9421e93` (17 November 2026), verbatim.** The `requirements-auditor` agent's report, quoted whole and unedited, extracted mechanically from the agent's transcript. What changed because of it follows the quotation.
+
+> **Verdict: INCOMPLETE.** The route and the screen do what D-138 and the applicable clauses of FR-20, NFR-17 and UC-11 say, and I found no way past the three scoping rules from either role. It is incomplete because four deviations are not recorded, several record sentences are false or stale, and one screen clause is tested in a shape the route no longer sends. Every fix is to a record or a test; none needs the route or the screen to change.
+>
+> Root for every path below: `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-20-relationship-visualisation-136f6b`, at `9421e93`, tree clean. TEM is `apps/api/tests/test_evidence_map.py`. KMT is `frontend/tests/knowledgeMap.test.jsx`. "Both roles" means the test runs from an Employee and an Administrator session.
+>
+> | Clause or decision | Satisfied? | Evidence |
+> |---|---|---|
+> | Choice 1: two views, switched by a button beside "Skip to the table view" | Yes | `frontend/src/pages/KnowledgeMap.jsx:724, 819-833`; `frontend/src/pages/KnowledgeMapEvidence.jsx:77-89, 838`; KMT:2330, 2390, 2421, 2445; `frontend/tests/tabOrder.test.jsx:386` |
+> | Choice 2: everyone's claims, scoped; the question and the asker never shown | Yes, both roles | `apps/api/evidence_map.py:147-163`; TEM:397 (searches the bytes), 603 |
+> | Choice 3: no contributors; the pane is the Claim review; no review action | Yes | `KnowledgeMapEvidence.jsx:420-457`; KMT:3021, 3078, 3098; TEM:900 (no user table is read) |
+> | S1 recorded, no control built | Yes | `apps/ai/prompting.py:172, 379`; `docs/decisions.md:18695` |
+> | Rate limit: both views, 30 a minute, one budget per user | Yes, both roles | `apps/api/views.py:2954, 2987`; `apps/core/constants.py:546`; `config/settings.py:250`; TEM:826 (4 cases, at the real rate); screen: KMT:1386, 3428 |
+> | A claim is `statement_text` with whitespace collapsed; the same text is one claim | Yes, both roles | `evidence_map.py:78-84, 191`; TEM:336 |
+> | A passage is on the map only through a claim, shown as title and place | Yes, both roles | `evidence_map.py:108-115, 180-190`; TEM:294, 299, 378 |
+> | A line's weight is how often the pairing was admitted | Yes | `evidence_map.py:196-197`; TEM:336; KMT:2624, 2800, 2932 |
+> | The Claim review's contents | Yes; dates see A4 | KMT:3021, 3065, 3078 |
+> | Invariant 4: 401 without a session, 403 without the code, server-side | Yes, both roles | `views.py:2985`; TEM:259, 268; `apps/api/tests/test_rbac.py:69, 145`; `test_never_cache.py:59` |
+> | Rule 1: the cited chunk is one of the supplied passages | Yes, both roles | `evidence_map.py:151-156`; TEM:492, 512; break E01 fails both |
+> | Rule 2: every supplied passage is in scope | Yes, both roles | `evidence_map.py:159`; TEM:531, 553, 784; break E02 |
+> | Rule 3: the cited chunk's source is in scope | Documents: yes, both roles. Meetings: partial (A7) | `evidence_map.py:164-167, 175-179`; TEM:584; `test_source_rows_fail_closed.py:465-484`; break E03 |
+> | Invariant 1: scope before caps, one empty body, counts and dates of the role's own rows | Yes, both roles | `evidence_map.py:125-137`; TEM:473, 531, 679, 784 |
+> | Invariant 5: verification unchanged; "supplied" is what the model was given | Yes | `apps/retrieval/pipeline.py:522-539, 574-581`; `apps/retrieval/conversation.py:166-170` (questions only, never an answer) |
+> | Invariant 6: no claim shown without a passage | Yes by structure, not asserted (A7) | `apps/api/knowledge_map.py:334-368` |
+> | A date is a day; a claim's identifier is keyed | Server: yes, both roles. Screen: A4 | `evidence_map.py:87-97, 195`; TEM:414, 428, 444 |
+> | FR-20: node type by colour and shape | Yes | `KnowledgeMapEvidence.jsx:99-102`; KMT:2480; `frontend/tests/contrast.test.js:159` |
+> | FR-20: selecting reveals connections; selecting again opens the item | Passage: yes. Claim: declined, D-138 departure 2, and its reason is true | KMT:2962, 3197, 3265, 3098 |
+> | NFR-17, UC-11 A1: sortable, keyboard-reachable tables with the same nodes and relationships | Yes in structure; the screen-reader run is owed and recorded | `KnowledgeMapEvidence.jsx:549-625`; KMT:2800-2932; `tabOrder.test.jsx:386` |
+> | FR-20, UC-11 A2: caps, and a partial view never shown as complete | Yes; the caps' values see A1 | TEM:638, 769, 807; KMT:3328, 3354 |
+> | UC-11 E1 and the failure states | Yes | TEM:294; KMT:3368, 3404, 3498, 3513, 3534 |
+> | UC-11 E2: return to the map after signing in | Partial, and not recorded for this view (A3) | `frontend/src/auth/RequireAuth.jsx:21` |
+> | Read only; statements do not grow with the log | Yes, both roles | TEM:858, 900 |
+> | A malformed query is 400 by shape only | Yes, both roles | `apps/api/serializers.py:1758-1807`; TEM:734, 751, 758 |
+> | The first view, where changed | Yes | `knowledge_map.py:83-87`; `views.py:2954`; KMT:1386 |
+> | "In the mock-up and not built" | Each reason given is true; the list is short of three things (A5) | `docs/decisions.md:18750-18766` |
+> | The two draft notes | What I checked holds | The three commits' contents; `2407a22` to `f75b070` adds two tests; 45 server and 132 front-end breaks, none failing nothing, none left applied |
+> | Definition of done, items 1 to 5 | 1 yes. 2: `pytest` 5,262 passed, dual-role 50 of 50 (read from the log); one screen clause, A4. 3 yes. 4 yes, four commits each `(FR-20)`; the branch has no upstream. 5: this report, which has gaps | |
+>
+> **Findings.**
+>
+> - **A1, medium (untuned constant, record).** The two caps were derived for the first view's graph and are applied unmeasured to one that grows with the log. `apps/core/constants.py:314-330` says the cap "never binds" on the reference corpus; that is untrue of this view. One answer adds up to six claims and their passages, so the overview reaches 50 nodes after about five answers. Claims of one day are then cut in hash order, and older claims can be reached only by walking from a passage. Nothing records this, and step 8 of the demonstration script does not say whether the partial-view notice is expected. To close: count the view's nodes for each role on a database that holds the walk's answers, record the figure and the consequence in D-138, and add the expected notice to step 8.
+> - **A2, medium (record).** The proposal's out-of-scope list has "Dependency and impact analysis overlays on the relationship visualisation" (`C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\proposal.txt:234`). A view of which claims rest on which passage, with "Single source", is open to that reading. D-138 quotes line 244 of the same list and is silent on line 234. To close: one departure that names the line and the user's instruction.
+> - **A3, low (unrecorded, untested).** `RequireAuth.jsx:21` keeps the path only. `/knowledge-map?view=evidence` opened signed out therefore returns, after sign-in, to the first view. D-132's item 7 records the lost selection; here the view itself is lost. To close: a sentence in D-138's departures, and a test of what happens.
+> - **A4, low (test in a stale shape).** The route sends `YYYY-MM-DD`. Every front-end fixture gives a timestamp (KMT:2075-2090, 3071-3072; `tabOrder.test.jsx:397`) under the heading "in the route's shape" (KMT:2021). `frontend/src/utils/evidenceMap.js:193` and KMT:3053 still say "timestamp". The draft build note admits the difference, but no front-end test renders the shape the route sends. `frontend/src/utils/dates.js:9-12` reads a bare date as UTC midnight: right in Melbourne, a day early west of UTC. To close: date-only fixtures and the two comments.
+> - **A5, low (mock-up).** Three things in the picture are neither built nor listed: "Read the passage" (the build selects the passage, then opens its source's page, and never shows passage text), "over 90 days", and "If §2.1 is rewritten, all 96 answers change at once". The reason given for "N documents" restates the build. To close: add the three, and give that one a reason.
+> - **A6, low (false or stale sentences).**
+>   1. `docs/api-contract.md:1792, 1924`: "Always 200 from a permitted session", with no `429` in those rows or in 1793 and 1925; the same sentence at `views.py:2944, 2981`.
+>   2. `docs/decisions.md:18771`: "The first view ... is unchanged". It gained a rate limit and a link.
+>   3. `docs/accessibility.md:380`: "section 3's table". The pairs are in section 1.
+>   4. `KnowledgeMapEvidence.jsx:700`: "because nothing stores them" is not D-138's reason for "Open the N answers" or for the filters.
+>   5. `frontend/src/constants.js:1641`, `KnowledgeMapEvidence.jsx:705-706` and KMT:3368 call the empty sentence "D-138's words". D-138 holds no such words. The sentence says "your role can read", which the first view's empty sentence avoids, and the suite's rule against such wording (KMT:430) is not applied to it.
+>   6. `frontend/src/pages/KnowledgeMap.css:201-202` says a selected line's difference is "not carried by colour alone". In this view it is: lines 342-352 override the width, and the two strokes are 2.97 to 1 against each other. Section 9 states the change without that reasoning.
+>   7. TEM:473 and TEM:568 are headed "Rule 1"; break E01 fails neither.
+>   8. `docs/schema-v1.md` section 3 lacks `EVIDENCE_MAP_NODE_TYPES` and `EVIDENCE_MAP_RELATIONSHIPS` (`constants.py:721-724`).
+> - **A7, low (tests).**
+>   1. Rule 3 for a meeting has no break and is tested from an Employee session only (`test_source_rows_fail_closed.py:465`); TEM:584 uses a document.
+>   2. `evidence_map.py:157` (`answered=True`) and the blank-statement branch at line 177 are conditions beyond the three rules, with no test and no mention in any record.
+>   3. `assert_well_formed` (TEM:199-222) does not assert that every returned claim has an edge.
+>   4. The reviewer's remark that no test covers a role with no effective roles still stands, and the draft security note omits it.
+> - **A8, informational (set-level).** `useEvidenceMap` (`KnowledgeMapEvidence.jsx:641-677`) is a copy of `useKnowledgeMap` (`KnowledgeMap.jsx:524-560`), and `connectionsShown` is copied word for word (lines 165 and 132). The line-weight steps 2 and 5 are literals at `evidenceMap.js:222-223`. No AI SDK import, no chunk write, and no clause enforced only in the interface.
+>
+> **Built and not asked for.** Nothing beyond the five choices the draft build note lists (the switch on the empty and failure states, focus after a switch, the diagram's heading, darker selected lines, the AI mark). Until that note is in `docs/decisions.md`, no record holds them.
+>
+> **Not checked.** I ran nothing: the suite figure is read from `pytest_full_9421e93.log`, and I saw no front-end suite figure for this head. I did not read the 132 front-end break texts or the per-break logs, only the tables and summaries, and I did not read every one of the 1,886 added test lines. Nothing was checked in a browser or on the alpha, and I did not test whether Claude Haiku 5.5 complies with the injection in S1. The first view was read only where this work changed it. The mock-up was read at `C:\Users\mozza\AppData\Local\Temp\claude\30dddaf38f2c365b\1f1e6ed5-86ea-46a9-9cfa-bd98f20bdc7c\images\1.png`; the brief's path under `scratchpad\images` does not exist.
+>
+> INCOMPLETE: the behaviour and the scoping hold from both roles; closing A1 to A7 in the records and tests makes it complete with recorded deviations.
+
+**What was done with each finding.** The corrections are in `6875507` and in these notes. The auditor
+ran nothing; the suites and the breaks named below were run by the session.
+
+| Finding | Severity | What | Disposition |
+|---|---|---|---|
+| A1 | medium, record | The two caps were derived for the first view and applied unmeasured to a graph that grows with every answer | **Recorded** as departure 9, with the arithmetic and what was counted, read-only, on the alpha's database and the development one. `apps/core/constants.py` marks the cap *tune* for this view, and step 8 of the walk says when the partial-view notice is expected. **Not tuned:** no database held enough answers to see the view at its cap |
+| A2 | medium, record | The proposal lists "Dependency and impact analysis overlays on the relationship visualisation" as out of scope, and this entry was silent on it | **Recorded** as departure 7, which says the line was not put to the user before the view was built. It was reported to him when the audit returned and again with the pull request |
+| A3 | low | `/knowledge-map?view=evidence` opened signed out returns to the first view after sign-in: unrecorded and untested | **Recorded** as departure 8. A front-end test holds what happens, and break G134 fails it |
+| A4 | low, test | The front-end fixtures gave timestamps where the route gives a day | **Fixed**: every fixture is date-only, the comments say so, and the Claim review's test asserts each `<time>`'s `dateTime`. **Recorded, not changed:** the page reads a bare date as UTC midnight, so a browser west of UTC shows the day before. Every date-only value in the app is written that way |
+| A5 | low, record | Three things in the mock-up were neither built nor listed, and the reason for "N documents" restated the build | **Fixed** in "In the mock-up and not built" |
+| A6 | low, record | Eight false or stale sentences | **Fixed**, each: the contract's four rows and both views' docstrings name the `429`; departure 1 says what the first view gained; `docs/accessibility.md` cites section 1 and gives the reasoning for a selected line's colour; the comment on the unbuilt parts gives each its reason; the empty sentence is no longer called this entry's words, and is reworded (below); the stylesheet's comments say what holds in each view; two test docstrings name the rule they test; `docs/schema-v1.md` lists the two vocabularies |
+| A7 | low, tests | No test of rule 3 for a meeting from both roles; two conditions beyond the three rules untested and unrecorded; no assertion that a returned claim has a passage; no test of a role the scope rules do not know | **Fixed**: four tests in `apps/api/tests/test_evidence_map.py`, an assertion in its check of every view, and the module's docstring names the two conditions. Breaks E31 to E34 and V03 were added for them |
+| A8 | informational | The second view's request hook and one helper are copies of the first view's, and the line-weight steps are literals | **Recorded, not changed.** The copies were deliberate: they leave the first view's code as D-132's breaks expect it. The two steps are presentation values in the view's own utility |
+
+**The empty view's sentence was reworded after the audit** (A6). As first built it read "No claims
+yet. A claim appears here once a question has been answered from passages your role can read.",
+which the session had written into the screen's brief. "Your role can read" tells the reader that
+something is kept from them, which UC-11 E1 and the first view's own empty sentence avoid. It now
+reads "There are no claims on the map yet. Ask a question, and the statements of its answer appear
+here." A test holds every sentence of the view to the first view's rule against such wording, and
+the empty sentence to a stricter one.
+
+**The corrections were not read by the auditor again.** A third run could not return a clean
+verdict in any case: the screen-reader run, the reflow, the axe run and the walk on the alpha are
+owed by a person.

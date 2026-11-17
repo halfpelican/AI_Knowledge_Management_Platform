@@ -69,6 +69,7 @@ PROTECTED_ROUTES = {"api-root", "auth-logout", "auth-me", "role-list", "user-lis
                     # NIT3004: FR-20's knowledge map, behind view_knowledge_map, which both
                     # roles hold (D-132)
                     "knowledge-map",
+                    "knowledge-map-evidence",  # its second view, behind the same code (D-138)
                     "document-browse",  # Stage 5 item 2: FR-15 (D-72); its DELETE is document-detail's
                     "document-download",  # Stage 5 item 2a: FR-15's download link (D-75)
                     # NIT3004: FR-10's classification routes (D-104, D-105). contribute_content is
@@ -148,6 +149,9 @@ PERMISSIONED_ROUTES = {
     # collection and no single scoped object, so the 403 has no 404 to precede.
     # apps/api/tests/test_knowledge_map.py proves the 403 by revoking the code from each role.
     "knowledge-map": VIEW_KNOWLEDGE_MAP_PERMISSION,
+    # The map's second view (D-138), behind the same code. A collection, as the first is.
+    # apps/api/tests/test_evidence_map.py proves the 403 by revoking the code from each role.
+    "knowledge-map-evidence": VIEW_KNOWLEDGE_MAP_PERMISSION,
 }
 # Codes checked inside a view rather than declared on it, so the seed test below covers them.
 IN_VIEW_PERMISSION_CODES = {

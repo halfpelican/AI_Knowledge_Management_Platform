@@ -23,8 +23,8 @@ import {
 export const KNOWLEDGE_MAP_PATH = '/knowledge-map'
 
 /** The two parameters a selection is, in the address and in the API query alike. */
-const FOCUS_TYPE_PARAM = 'focus_type'
-const FOCUS_ID_PARAM = 'focus_id'
+export const FOCUS_TYPE_PARAM = 'focus_type'
+export const FOCUS_ID_PARAM = 'focus_id'
 
 const NODE_TYPES = Object.values(KNOWLEDGE_MAP_NODE_TYPE)
 
@@ -88,6 +88,15 @@ export function focusOf(node) {
   return { type: node.type, id: node.item_id }
 }
 
+/**
+ * A click that follows a link here, not one that opens it in another tab or window:
+ * the main button, with no modifier key. Both views of the map ask it before they
+ * note that a selection was made on the page.
+ */
+export function isPlainClick(event) {
+  return event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey
+}
+
 /** The repository's filter parameter for each tag dimension: `Topic` is `topic`. */
 const TAG_FILTER_PARAMS = Object.fromEntries(
   TAG_OPTION_DIMENSIONS.map((dimension) => [dimension, dimension.toLowerCase()]),
@@ -128,7 +137,7 @@ export function itemAddress(node) {
 /* ---- What the reply holds ------------------------------------------------ */
 
 /** A reply's list under `key`, or an empty one where it did not arrive as a list. */
-function listOf(map, key) {
+export function listOf(map, key) {
   return Array.isArray(map?.[key]) ? map[key] : []
 }
 
@@ -351,7 +360,8 @@ export function gridPlace({ column, row }) {
   return { gridColumn: column * 2 + 1, gridRow: row + 1 }
 }
 
-function percent(fraction) {
+/** A fraction of the diagram as a percentage, to three places. */
+export function percent(fraction) {
   return `${Number((fraction * 100).toFixed(3))}%`
 }
 
@@ -398,7 +408,8 @@ export const RELATIONSHIP_SORT_FIELDS = { from: 'from', relationship: 'relations
 
 const collator = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true })
 
-function compareText(first, second) {
+/** Two texts in reading order: case and accents ignored, and "passage 2" before "passage 10". */
+export function compareText(first, second) {
   return collator.compare(String(first ?? ''), String(second ?? ''))
 }
 
@@ -443,7 +454,7 @@ const RELATIONSHIP_COMPARATORS = {
  * ascending (the sort is stable), and descending is ascending reversed. With no
  * sort, or a field the table does not have, the rows are returned as given.
  */
-function sorted(rows, sort, comparators) {
+export function sorted(rows, sort, comparators) {
   if (!sort) return rows
   const descending = sort.startsWith('-')
   const compare = comparators[descending ? sort.slice(1) : sort]

@@ -45,6 +45,15 @@
  * and auth provider, against a faked API (tests/fakeApi.js). The location is read
  * by a probe in a layout effect and asserted in `waitFor`, as is everything an
  * effect does (tests/dashboard.test.jsx says why).
+ *
+ * **The second view, claims and passages (D-138), is the file's second half**, at
+ * /knowledge-map?view=evidence against `GET /api/knowledge-map/evidence`. Its tests
+ * are the first view's clauses again for the other vocabulary, and what only this
+ * view has: the switch between the two views and that each asks only its own
+ * route, a line's weight, the AI mark on a passage, "Times admitted", and the
+ * Claim review. The same limits hold: which claims and passages a role may see,
+ * every count, weight and date are the server's, and pytest's
+ * (apps/api/tests/test_evidence_map.py).
  */
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { useLayoutEffect } from 'react'
@@ -53,14 +62,18 @@ import { afterEach, describe, expect, it } from 'vitest'
 import App from '../src/App.jsx'
 import { messageForStatus } from '../src/api/client.js'
 import {
+  EVIDENCE_MAP_NODE_TYPE,
+  EVIDENCE_MAP_RELATIONSHIP,
   KNOWLEDGE_MAP_NODE_TYPE,
   KNOWLEDGE_MAP_RELATIONSHIP,
   KNOWLEDGE_MAP_TRUNCATION_REASON,
   ROLES,
+  SOURCE_TYPE,
   TEXT,
 } from '../src/constants.js'
+import { formatDate } from '../src/utils/dates.js'
 import { heldResponse, serveApi } from './fakeApi.js'
-import { tabTo } from './keyboard.js'
+import { pressTab, tabTo } from './keyboard.js'
 import { colourTokensIn, resolve, rulesMatching } from './stylesheets.js'
 
 const EMPLOYEE = {
@@ -1370,6 +1383,32 @@ describe.each(BOTH_ROLES)('FR-20 knowledge map, as an $role', (user) => {
       expect(mapRequests(answered)).toEqual(['', ''])
     })
 
+    it('shows the rate limit’s 429 in the client’s own words, with no map and no table, and "Try again" reads again', async () => {
+      // Both views are rate limited since D-138 (the user's decision of 17 November 2026).
+      let attempt = 0
+      const answered = serveMap(user, {
+        '': () => {
+          attempt += 1
+          return attempt === 1
+            ? { status: 429, headers: { 'Retry-After': '42' }, body: { detail: 'Request was throttled. Expected available in 42 seconds.' } }
+            : { body: OVERVIEW }
+        },
+      })
+      renderMap()
+
+      const title = await screen.findByText(TEXT.mapLoadFailed)
+      const alert = title.closest('[role="alert"]')
+      expect(alert.textContent).toContain(messageForStatus(429))
+      expect(screen.getByRole('main').textContent).not.toMatch(/throttled|Expected available/)
+      nothingDrawn()
+
+      fireEvent.click(screen.getByRole('button', { name: TEXT.uploadRetry }))
+
+      await findDiagram()
+      expect(screen.queryByText(TEXT.mapLoadFailed)).toBeNull()
+      expect(mapRequests(answered)).toEqual(['', ''])
+    })
+
     it('shows nothing of the overview while a selection is loading, nor after it has failed', async () => {
       const held = heldResponse()
       const answered = serveMap(user, { '': OVERVIEW, [LEAVE.item_id]: held.route })
@@ -1967,6 +2006,1935 @@ describe.each(BOTH_ROLES)('FR-20 knowledge map, as an $role', (user) => {
       await waitFor(() => expect(probe.location.pathname).toBe('/knowledge-map'))
       expect(screen.getByRole('heading', { level: 1, name: TEXT.mapHeading })).toBeTruthy()
       expect(mapRequests(answered)).toEqual([''])
+    })
+  })
+})
+
+/* ==== The second view: claims and passages (D-138) ========================== */
+
+const { claim: CLAIM, passage: PASSAGE } = EVIDENCE_MAP_NODE_TYPE
+const { cites: CITES } = EVIDENCE_MAP_RELATIONSHIP
+
+/** The second view's address with nothing selected. */
+const EVIDENCE_PATH = '/knowledge-map?view=evidence'
+
+/* ---- The evidence map object, in the route's shape ------------------------ */
+
+/** A claim's identifier in the route's shape: 64 hexadecimal digits, told apart by its last. */
+function claimId(number) {
+  return String(number).padStart(64, 'c0de')
+}
+
+/** A claim node: the first view's six keys, and `detail`. */
+function claimNode(number, text, connectionCount, { answers, passages, first, last }) {
+  const itemId = claimId(number)
+  return {
+    id: `${CLAIM}:${itemId}`,
+    type: CLAIM,
+    item_id: itemId,
+    label: text,
+    dimension: null,
+    connection_count: connectionCount,
+    detail: { answer_count: answers, passage_count: passages, first_admitted_at: first, last_admitted_at: last },
+  }
+}
+
+/** A passage node: its label is its source's title and its place in the source, as the server writes it. */
+function passageNode(number, source, position, connectionCount, aiGenerated = false) {
+  const itemId = uuid(number)
+  return {
+    id: `${PASSAGE}:${itemId}`,
+    type: PASSAGE,
+    item_id: itemId,
+    label: `${source.title} · passage ${position}`,
+    dimension: null,
+    connection_count: connectionCount,
+    detail: {
+      source_type: source.type,
+      source_id: source.id,
+      source_title: source.title,
+      position,
+      ai_generated: aiGenerated,
+    },
+  }
+}
+
+/** An edge: "claim, cites, passage", and how often that pairing was admitted. */
+function cites(from, to, weight) {
+  return { source: from.id, target: to.id, relationship: CITES, weight }
+}
+
+const HANDBOOK = { type: SOURCE_TYPE.document, id: uuid(201), title: 'Staff Handbook' }
+const LEAVE_POLICY = { type: SOURCE_TYPE.document, id: uuid(202), title: 'Leave Policy 2026' }
+const BUDGET_MEETING = { type: SOURCE_TYPE.meeting, id: uuid(203), title: 'Budget Review Meeting' }
+
+/** One passage, twelve answers: a single-source claim admitted more than once. */
+const ACCRUAL = claimNode(1, 'Annual leave accrues at four weeks a year.', 1, {
+  answers: 12,
+  passages: 1,
+  first: '2026-03-14',
+  last: '2026-08-02',
+})
+/** Two passages, four answers. */
+const CARRY_OVER = claimNode(2, 'Unused leave carries over for twelve months.', 2, {
+  answers: 4,
+  passages: 2,
+  first: '2026-05-06',
+  last: '2026-09-21',
+})
+/** One passage, one answer: a single-source claim admitted once. */
+const FREEZE = claimNode(3, 'Discretionary travel is frozen until 31 January.', 1, {
+  answers: 1,
+  passages: 1,
+  first: '2026-10-19',
+  last: '2026-10-19',
+})
+
+const P_POLICY = passageNode(101, LEAVE_POLICY, 1, 1)
+const P_HANDBOOK = passageNode(102, HANDBOOK, 2, 1)
+/** A passage of the meeting's AI-written summary: the reply flags it, and nothing in its label says so. */
+const P_SUMMARY = passageNode(103, BUDGET_MEETING, 4, 2, true)
+
+/**
+ * The overview, with its nodes in a walk's order (a claim, then its passages) and
+ * not in column order, and its edges in an order neither table arrives at by
+ * sorting. The weights are 12, 3, 1 and 1: a heavy line, a medium one and two
+ * light ones, and numbers whose order as text is not their order as numbers.
+ */
+const EVIDENCE_NODES = [ACCRUAL, P_POLICY, CARRY_OVER, P_HANDBOOK, P_SUMMARY, FREEZE]
+const EVIDENCE_EDGES = [
+  cites(ACCRUAL, P_POLICY, 12),
+  cites(CARRY_OVER, P_HANDBOOK, 3),
+  cites(CARRY_OVER, P_SUMMARY, 1),
+  cites(FREEZE, P_SUMMARY, 1),
+]
+const EVIDENCE = mapObject({ nodes: EVIDENCE_NODES, edges: EVIDENCE_EDGES })
+
+const FOCUS_ACCRUAL = mapObject({ focus: ACCRUAL, nodes: [ACCRUAL, P_POLICY], edges: [cites(ACCRUAL, P_POLICY, 12)] })
+
+const FOCUS_CARRY_OVER = mapObject({
+  focus: CARRY_OVER,
+  nodes: [CARRY_OVER, P_HANDBOOK, P_SUMMARY, FREEZE],
+  edges: [cites(CARRY_OVER, P_HANDBOOK, 3), cites(CARRY_OVER, P_SUMMARY, 1), cites(FREEZE, P_SUMMARY, 1)],
+})
+
+/** The other claim on the same passage is two steps away, with only one of its two passages in the view. */
+const FOCUS_FREEZE = mapObject({
+  focus: FREEZE,
+  nodes: [FREEZE, P_SUMMARY, counted(CARRY_OVER, 1)],
+  edges: [cites(FREEZE, P_SUMMARY, 1), cites(CARRY_OVER, P_SUMMARY, 1)],
+  truncatedBy: KNOWLEDGE_MAP_TRUNCATION_REASON.depth,
+})
+
+const FOCUS_P_HANDBOOK = mapObject({
+  focus: P_HANDBOOK,
+  nodes: [P_HANDBOOK, CARRY_OVER, counted(P_SUMMARY, 1)],
+  edges: [cites(CARRY_OVER, P_HANDBOOK, 3), cites(CARRY_OVER, P_SUMMARY, 1)],
+  truncatedBy: KNOWLEDGE_MAP_TRUNCATION_REASON.depth,
+})
+
+const FOCUS_P_SUMMARY = mapObject({
+  focus: P_SUMMARY,
+  nodes: [P_SUMMARY, CARRY_OVER, FREEZE, P_HANDBOOK],
+  edges: [cites(CARRY_OVER, P_SUMMARY, 1), cites(FREEZE, P_SUMMARY, 1), cites(CARRY_OVER, P_HANDBOOK, 3)],
+})
+
+/* ---- What the second view should say, worked out here and not by src/ ----- */
+
+const EVIDENCE_TYPE_WORD = {
+  [CLAIM]: TEXT.evidenceTypeClaim,
+  [PASSAGE]: TEXT.evidenceTypePassage,
+}
+
+/** A label as a control reads it: with the AI mark after it where the reply flags the passage. */
+function aiMarked(item, text) {
+  return item.detail?.ai_generated === true ? `${text}, ${TEXT.aiSuggested}` : text
+}
+
+/** A node's label in the Items table. */
+function evidenceShown(item) {
+  return aiMarked(item, item.label)
+}
+
+/** "Passage: Staff Handbook · passage 2". */
+function evidenceTyped(item) {
+  return aiMarked(item, TEXT.mapTypedLabel(EVIDENCE_TYPE_WORD[item.type], item.label))
+}
+
+/** A node's accessible name on the diagram: type, label, the AI mark if any, "N connections shown". */
+function evidenceNodeName(item) {
+  return `${evidenceTyped(item)}, ${TEXT.mapConnectionsShown(item.connection_count)}`
+}
+
+/** A selected claim's name on the diagram: the same, and "Selected". It opens nothing. */
+function selectedClaimName(item) {
+  return `${evidenceNodeName(item)}, ${TEXT.mapSelectedMark}`
+}
+
+/** The page's query for a selection: `view`, then the two parameters, as `URLSearchParams` writes them. */
+function evidenceSearch(item) {
+  return `?view=evidence&focus_type=${item.type}&focus_id=${item.item_id}`
+}
+
+/** The API's query for the same selection: the two parameters, and no `view`. */
+function evidenceApiSearch(item) {
+  return `?focus_type=${item.type}&focus_id=${item.item_id}`
+}
+
+function evidenceItemsRow(item) {
+  return [evidenceShown(item), EVIDENCE_TYPE_WORD[item.type], String(item.connection_count)]
+}
+
+function citationRow(from, to, weight) {
+  return [evidenceTyped(from), TEXT.evidenceRelationshipCites, evidenceTyped(to), String(weight)]
+}
+
+/* ---- Serving and finding -------------------------------------------------- */
+
+/** `GET /api/knowledge-map/evidence`, answered from the request's own `focus_id`, as `mapRoute` does. */
+function serveEvidence(user, replies, extra = {}) {
+  return serveApi({
+    'GET /api/auth/me': { body: user },
+    'GET /api/knowledge-map/evidence': mapRoute(replies),
+    ...extra,
+  })
+}
+
+/** The query string of every request to the second view's route, in order. */
+function evidenceRequests(answered) {
+  return answered.filter((request) => request.path === '/api/knowledge-map/evidence').map((request) => request.search)
+}
+
+function findEvidenceDiagram() {
+  return screen.findByRole('region', { name: TEXT.evidenceDiagramHeading })
+}
+
+function evidenceDiagram() {
+  return screen.getByRole('region', { name: TEXT.evidenceDiagramHeading })
+}
+
+/** The right-hand pane: "Claim review" for a selected claim, "Selected" otherwise. */
+function pane(heading = TEXT.mapSelectedHeading) {
+  return screen.getByRole('region', { name: heading })
+}
+
+function claimReview() {
+  return pane(TEXT.evidenceClaimReviewHeading)
+}
+
+function evidenceItems() {
+  return screen.getByRole('table', { name: TEXT.evidenceItemsCaption })
+}
+
+function citationsTable() {
+  return screen.getByRole('table', { name: TEXT.evidenceRelationshipsCaption })
+}
+
+/** The diagram's link for a node that is not selected. */
+function evidenceNode(item) {
+  return within(evidenceDiagram()).getByRole('link', { name: evidenceNodeName(item) })
+}
+
+/** The one thing in `container` marked as the selection, link or not. */
+function selectedIn(container) {
+  const marked = container.querySelectorAll('[aria-current="true"]')
+  expect(marked).toHaveLength(1)
+  return marked[0]
+}
+
+function pageHeading() {
+  return screen.getByRole('heading', { level: 1, name: TEXT.mapHeading })
+}
+
+/** A pane group's links, by the group's heading. */
+function paneLinks(container, heading) {
+  const group = within(container).getByRole('heading', { level: 3, name: heading }).closest('.knowledge-map__group')
+  return within(group).getAllByRole('link')
+}
+
+/** The pane's facts, by term: the text of each value, and its `<time>`'s `dateTime` where it has one. */
+function factsOf(container) {
+  return Object.fromEntries(
+    [...container.querySelectorAll('dt')].map((term) => {
+      const value = term.nextElementSibling
+      expect(value.tagName).toBe('DD')
+      return [term.textContent, { text: value.textContent, dateTime: value.querySelector('time')?.getAttribute('datetime') ?? null }]
+    }),
+  )
+}
+
+/** An element's inline declarations, by property. Inline style on the map is position only. */
+function styleOf(element) {
+  return Object.fromEntries(
+    (element.getAttribute('style') ?? '')
+      .split(';')
+      .map((declaration) => declaration.split(':').map((part) => part.trim()))
+      .filter(([property]) => property),
+  )
+}
+
+/** What the stylesheets declare for a rendered element, by property (the last rule wins). */
+function declaredFor(element) {
+  return Object.fromEntries(
+    rulesMatching(element)
+      .flatMap((rule) => rule.declarations)
+      .map((declaration) => [declaration.property, declaration.value]),
+  )
+}
+
+/** The lines the diagram draws, in the order they are drawn. */
+function drawnLines() {
+  return [...evidenceDiagram().querySelectorAll('svg.knowledge-map__lines line')]
+}
+
+/** Which of the three weights a line is drawn in: the one weight class it carries. */
+function weightOf(line) {
+  const weights = [...line.classList].filter((name) => /^knowledge-map__line--(light|medium|heavy)$/.test(name))
+  expect(weights).toHaveLength(1)
+  return weights[0].replace('knowledge-map__line--', '')
+}
+
+function evidenceOrder() {
+  return within(evidenceDiagram())
+    .getAllByRole('listitem')
+    .map((cell) => cell.querySelector('.knowledge-map__node-label').textContent)
+}
+
+/** Reaches a heading's sort button by Tab, as a keyboard user does, and activates it. */
+function pressColumn(table, label) {
+  const button = sortButton(table, label)
+  expect(tabTo(button)).toBe(button)
+  expect(button.tagName).toBe('BUTTON')
+  expect(button.getAttribute('type')).toBe('button')
+  fireEvent.click(button)
+  // The control that was pressed keeps the focus, so it can be pressed again.
+  expect(document.activeElement).toBe(sortButton(table, label))
+}
+
+/** No map, no table, no pane and no skip link: what every state without a map must hold to. */
+function noEvidenceDrawn() {
+  expect(screen.queryByRole('region', { name: TEXT.evidenceDiagramHeading })).toBeNull()
+  expect(screen.queryByRole('table')).toBeNull()
+  expect(screen.queryByRole('region', { name: TEXT.mapSelectedHeading })).toBeNull()
+  expect(screen.queryByRole('region', { name: TEXT.evidenceClaimReviewHeading })).toBeNull()
+  expect(screen.queryByRole('link', { name: TEXT.mapSkipToTables })).toBeNull()
+}
+
+const NOT_FOUND_DOCUMENT = { status: 404, body: { detail: 'No Document matches the given query.' } }
+const NOT_FOUND_MEETING = { status: 404, body: { detail: 'No Meeting matches the given query.' } }
+
+/* ---- Tests ---------------------------------------------------------------- */
+
+describe.each(BOTH_ROLES)('the knowledge map’s second view, claims and passages (D-138), as an $role', (user) => {
+  describe('the switch between the two views', () => {
+    it('offers each view’s link to the other straight after "Skip to the table view", and following it changes the view, the route asked and where focus is', async () => {
+      const answered = serveMap(user, { '': OVERVIEW }, { 'GET /api/knowledge-map/evidence': mapRoute({ '': EVIDENCE }) })
+      renderMap()
+      await findDiagram()
+      const main = screen.getByRole('main')
+
+      // The first view: the link to the second, in words written out here.
+      expect(TEXT.evidenceSwitchToClaims).toBe('Show claims and passages')
+      const toClaims = within(main).getByRole('link', { name: 'Show claims and passages' })
+      const skip = within(main).getByRole('link', { name: TEXT.mapSkipToTables })
+      // A real link with the button's look, and the very next link after the skip
+      // link: nothing sits between them, and the legend and the map come after both.
+      expect(toClaims.tagName).toBe('A')
+      expect(toClaims.getAttribute('href')).toBe(EVIDENCE_PATH)
+      expect([...toClaims.classList]).toEqual(['btn', 'btn--secondary'])
+      let links = within(main).getAllByRole('link')
+      expect(links.indexOf(toClaims)).toBe(links.indexOf(skip) + 1)
+      const legend = screen.getByRole('region', { name: TEXT.mapLegendHeading })
+      expect(toClaims.compareDocumentPosition(legend) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      expect(toClaims.compareDocumentPosition(diagram()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      // And the next stop for the keyboard.
+      tabTo(skip)
+      expect(pressTab()).toBe(toClaims)
+      expect(within(main).queryByRole('link', { name: TEXT.evidenceSwitchToMap })).toBeNull()
+
+      fireEvent.click(toClaims)
+
+      // The second view, at its own address, read from its own route.
+      await waitFor(() => expect(address()).toBe(EVIDENCE_PATH))
+      await findEvidenceDiagram()
+      expect(mapRequests(answered)).toEqual([''])
+      expect(evidenceRequests(answered)).toEqual([''])
+      expect(screen.queryByRole('region', { name: TEXT.mapDiagramHeading })).toBeNull()
+      // The link that was followed went with the first view: focus is on the page heading.
+      await waitFor(() => expect(document.activeElement).toBe(pageHeading()))
+      // Still the knowledge map's page, by its heading and in the navigation.
+      const navigation = screen.getByRole('navigation', { name: 'Primary' })
+      expect(within(navigation).getByRole('link', { name: TEXT.mapHeading }).getAttribute('aria-current')).toBe('page')
+
+      // The second view: the link back, in the same place.
+      expect(TEXT.evidenceSwitchToMap).toBe('Show documents, meetings, tags and contributors')
+      const toMap = within(main).getByRole('link', { name: 'Show documents, meetings, tags and contributors' })
+      expect(toMap.tagName).toBe('A')
+      expect(toMap.getAttribute('href')).toBe('/knowledge-map')
+      expect([...toMap.classList]).toEqual(['btn', 'btn--secondary'])
+      links = within(main).getAllByRole('link')
+      expect(links.indexOf(toMap)).toBe(links.indexOf(within(main).getByRole('link', { name: TEXT.mapSkipToTables })) + 1)
+      expect(toMap.compareDocumentPosition(evidenceDiagram()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      expect(within(main).queryByRole('link', { name: TEXT.evidenceSwitchToClaims })).toBeNull()
+
+      fireEvent.click(toMap)
+
+      await waitFor(() => expect(address()).toBe('/knowledge-map'))
+      await findDiagram()
+      expect(mapRequests(answered)).toEqual(['', ''])
+      expect(evidenceRequests(answered)).toEqual([''])
+      expect(screen.queryByRole('region', { name: TEXT.evidenceDiagramHeading })).toBeNull()
+      await waitFor(() => expect(document.activeElement).toBe(pageHeading()))
+    })
+
+    it.each([
+      { at: 'the first view', path: '/knowledge-map', asks: '/api/knowledge-map', found: findDiagram },
+      {
+        at: 'the first view, with a selection',
+        path: `/knowledge-map${focusSearch(LEAVE)}`,
+        asks: '/api/knowledge-map',
+        found: findDiagram,
+      },
+      // Only `view=evidence` is the second view: any other value is the first.
+      { at: 'another value of view', path: '/knowledge-map?view=claims', asks: '/api/knowledge-map', found: findDiagram },
+      { at: 'the second view', path: EVIDENCE_PATH, asks: '/api/knowledge-map/evidence', found: findEvidenceDiagram },
+      {
+        at: 'the second view, with a selection',
+        path: `/knowledge-map${evidenceSearch(CARRY_OVER)}`,
+        asks: '/api/knowledge-map/evidence',
+        found: findEvidenceDiagram,
+      },
+    ])('$at asks its own route once and the other view’s not at all', async ({ path, asks, found }) => {
+      // Both routes are served, so a request to the wrong one would be answered and counted.
+      const answered = serveApi({
+        'GET /api/auth/me': { body: user },
+        'GET /api/knowledge-map': mapRoute({ '': OVERVIEW, [LEAVE.item_id]: FOCUS_LEAVE }),
+        'GET /api/knowledge-map/evidence': mapRoute({ '': EVIDENCE, [CARRY_OVER.item_id]: FOCUS_CARRY_OVER }),
+      })
+      renderMap(path)
+      await found()
+      await letLateWorkLand()
+
+      expect(answered.map((request) => request.path)).toEqual(['/api/auth/me', asks])
+    })
+
+    it('drops the selection when the second view is left for the first', async () => {
+      const answered = serveEvidence(
+        user,
+        { [CARRY_OVER.item_id]: FOCUS_CARRY_OVER },
+        { 'GET /api/knowledge-map': mapRoute({ '': OVERVIEW }) },
+      )
+      renderMap(`/knowledge-map${evidenceSearch(CARRY_OVER)}`)
+      await findEvidenceDiagram()
+      expect(selectedIn(evidenceDiagram()).textContent).toBe(selectedClaimName(CARRY_OVER))
+
+      // The link names the first view and nothing of the selection.
+      const toMap = screen.getByRole('link', { name: TEXT.evidenceSwitchToMap })
+      expect(toMap.getAttribute('href')).toBe('/knowledge-map')
+      fireEvent.click(toMap)
+
+      await waitFor(() => expect(address()).toBe('/knowledge-map'))
+      await findDiagram()
+      // The first view's overview was asked for, with no focus, and nothing is marked.
+      expect(mapRequests(answered)).toEqual([''])
+      expect(screen.getByRole('main').querySelectorAll('[aria-current="true"]')).toHaveLength(0)
+      expect(within(panel()).getByText(TEXT.mapSelectedNone)).toBeTruthy()
+      expect(screen.getByRole('main').textContent).not.toContain(CARRY_OVER.label)
+    })
+
+    it('drops the selection when the first view is left for the second', async () => {
+      const answered = serveMap(
+        user,
+        { [LEAVE.item_id]: FOCUS_LEAVE },
+        { 'GET /api/knowledge-map/evidence': mapRoute({ '': EVIDENCE }) },
+      )
+      renderMap(`/knowledge-map${focusSearch(LEAVE)}`)
+      await findDiagram()
+      expect(selectedOnDiagram().textContent).toBe(selectedNodeName(LEAVE))
+
+      const toClaims = screen.getByRole('link', { name: TEXT.evidenceSwitchToClaims })
+      expect(toClaims.getAttribute('href')).toBe(EVIDENCE_PATH)
+      fireEvent.click(toClaims)
+
+      await waitFor(() => expect(address()).toBe(EVIDENCE_PATH))
+      await findEvidenceDiagram()
+      expect(evidenceRequests(answered)).toEqual([''])
+      expect(screen.getByRole('main').querySelectorAll('[aria-current="true"]')).toHaveLength(0)
+      expect(within(pane()).getByText(TEXT.evidenceSelectedNone)).toBeTruthy()
+      expect(screen.getByRole('main').textContent).not.toContain(LEAVE.label)
+    })
+
+    it('reads a claim in the first view’s address as no selection of that view’s, and sends no request', async () => {
+      // A claim is not a node of the first view. (A document in the second view's
+      // address is among that view's malformed addresses, below.)
+      const answered = serveApi({ 'GET /api/auth/me': { body: user } })
+      renderMap(`/knowledge-map?focus_type=${CLAIM}&focus_id=${CARRY_OVER.item_id}`)
+      await screen.findByText(TEXT.mapEmptySelection)
+      expect(screen.getByRole('link', { name: TEXT.mapShowWhole }).getAttribute('href')).toBe('/knowledge-map')
+      await act(async () => {})
+      expect(answered.map((request) => request.path)).toEqual(['/api/auth/me'])
+    })
+  })
+
+  describe('claims and passages on the diagram: shape, colour and a word for each', () => {
+    it('draws a claim as a square and a passage as a circle, names each type in a word, and lists the same two in the legend with what a heavier line means', async () => {
+      serveEvidence(user, { '': EVIDENCE })
+      renderMap(EVIDENCE_PATH)
+      await findEvidenceDiagram()
+
+      const drawn = {}
+      for (const item of [ACCRUAL, P_POLICY]) {
+        const link = evidenceNode(item)
+        // The word: the accessible name begins with the type.
+        expect(link.textContent.startsWith(`${EVIDENCE_TYPE_WORD[item.type]}: `)).toBe(true)
+        const glyph = glyphOf(link)
+        expect(glyph.getAttribute('class')).toBe(`knowledge-map__glyph knowledge-map__glyph--${item.type}`)
+        // The shape is decoration for a screen reader, which has the word.
+        expect(glyph.closest('svg').getAttribute('aria-hidden')).toBe('true')
+        drawn[item.type] = glyph
+      }
+      // Different elements, not only different classes.
+      expect(outlineOf(drawn[CLAIM])).toBe('rect')
+      expect(outlineOf(drawn[PASSAGE])).toBe('circle')
+      // The words themselves, written out here.
+      expect(EVIDENCE_TYPE_WORD).toEqual({ [CLAIM]: 'Claim', [PASSAGE]: 'Passage' })
+
+      // Each shape has one fill in the stylesheets, from one colour token, and the two differ.
+      const fills = [drawn[CLAIM], drawn[PASSAGE]].map(fillTokensOf)
+      for (const tokens of fills) expect(tokens).toHaveLength(1)
+      expect(fills[0][0]).not.toBe(fills[1][0])
+      // No colour is written on the shapes or the lines themselves.
+      expect(screen.getByRole('main').querySelectorAll('svg [fill], svg [stroke], svg [style]')).toHaveLength(0)
+      // Every drawing is decoration beside words (SC 1.1.1): the lines' layer, the
+      // legend's two shapes and its sample lines, and a shape per node. Each is
+      // hidden from assistive technology, holds nothing focusable and no text.
+      const drawings = [...screen.getByRole('main').querySelectorAll('svg')]
+      expect(drawings).toHaveLength(1 + 2 + 1 + EVIDENCE_NODES.length)
+      for (const svg of drawings) {
+        expect(svg.getAttribute('aria-hidden')).toBe('true')
+        expect(svg.getAttribute('focusable')).toBe('false')
+        expect(svg.querySelectorAll('a, button, [tabindex]')).toHaveLength(0)
+        expect(svg.textContent).toBe('')
+      }
+
+      // The legend: the same two words, each beside the shape the diagram draws for it.
+      const legend = screen.getByRole('region', { name: TEXT.mapLegendHeading })
+      const entries = within(legend).getAllByRole('listitem')
+      expect(entries.map((entry) => entry.textContent)).toEqual(['Claim', 'Passage'])
+      for (const [index, type] of Object.values(EVIDENCE_MAP_NODE_TYPE).entries()) {
+        const glyph = glyphOf(entries[index])
+        expect(outlineOf(glyph)).toBe(outlineOf(drawn[type]))
+        expect(glyph.getAttribute('class')).toBe(drawn[type].getAttribute('class'))
+      }
+      // And what a line and its weight mean, in a sentence beside three sample
+      // lines in the three weights, lightest first.
+      expect(TEXT.evidenceLegendLine).toBe(
+        'A line joins a claim to a passage it cites. A heavier line means the pairing was admitted more often.',
+      )
+      const sentence = within(legend).getByText(TEXT.evidenceLegendLine)
+      const samples = [...sentence.parentElement.querySelectorAll('svg line')]
+      expect(samples.map(weightOf)).toEqual(['light', 'medium', 'heavy'])
+      expect(sentence.parentElement.querySelector('svg').getAttribute('aria-hidden')).toBe('true')
+      // The first view's four types are nowhere in this legend.
+      expect(legend.textContent).not.toContain(TEXT.mapTypeContributor)
+      expect(legend.textContent).not.toContain(TEXT.mapLegendLine)
+
+      // The page is still the knowledge map's, and the tab is named for it.
+      await waitFor(() => expect(document.title.startsWith(TEXT.mapHeading)).toBe(true))
+    })
+
+    it('puts the claims in the first column and the passages in the second, one row each in the reply’s order, and ends every line on the facing edges of the two columns', async () => {
+      serveEvidence(user, { '': EVIDENCE })
+      renderMap(EVIDENCE_PATH)
+      await findEvidenceDiagram()
+
+      // The grid: the claims, the gutter the lines cross, the passages.
+      const list = within(evidenceDiagram()).getByRole('list')
+      const template = styleOf(list)['grid-template-columns']
+      expect(template).toBe('minmax(0, 5fr) minmax(0, 3fr) minmax(0, 4fr)')
+      expect(styleOf(evidenceDiagram().querySelector('.knowledge-map__columns'))['grid-template-columns']).toBe(template)
+      expect(
+        [...evidenceDiagram().querySelectorAll('.knowledge-map__column-heading')].map((heading) => [
+          heading.textContent,
+          styleOf(heading)['grid-column'],
+        ]),
+      ).toEqual([
+        ['Claims', '1'],
+        ['Passages', '3'],
+      ])
+      // Where each track begins and ends, worked out from that template alone.
+      const shares = [...template.matchAll(/minmax\(0, (\d+)fr\)/g)].map((match) => Number(match[1]))
+      const total = shares.reduce((sum, share) => sum + share, 0)
+      const edges = shares
+        .reduce((found, share) => [...found, found.at(-1) + share], [0])
+        .map((edge) => `${Number(((edge / total) * 100).toFixed(3))}%`)
+      expect(edges).toEqual(['0%', '41.667%', '66.667%', '100%'])
+
+      // The nodes in the order they are rendered, which is the tab order: down the
+      // claims, then down the passages; within a column, the reply's order.
+      expect(
+        within(list)
+          .getAllByRole('listitem')
+          .map((cell) => [
+            cell.querySelector('.knowledge-map__node-label').textContent,
+            styleOf(cell)['grid-column'],
+            styleOf(cell)['grid-row'],
+          ]),
+      ).toEqual([
+        [ACCRUAL.label, '1', '1'],
+        [CARRY_OVER.label, '1', '2'],
+        [FREEZE.label, '1', '3'],
+        [P_POLICY.label, '3', '1'],
+        [P_HANDBOOK.label, '3', '2'],
+        [P_SUMMARY.label, '3', '3'],
+      ])
+
+      // The lines, one per edge and in the edges' order, in the layer assistive
+      // technology does not see. Three rows, so their middles are a sixth, a half
+      // and five sixths of the height.
+      const layer = evidenceDiagram().querySelector('svg.knowledge-map__lines')
+      expect(layer.getAttribute('aria-hidden')).toBe('true')
+      expect(layer.querySelectorAll('a, button, [tabindex]')).toHaveLength(0)
+      const [claimsEnd, passagesStart] = edges.slice(1, 3)
+      expect(drawnLines().map((line) => ['x1', 'y1', 'x2', 'y2'].map((name) => line.getAttribute(name)))).toEqual([
+        [claimsEnd, '16.667%', passagesStart, '16.667%'], // the accrual claim cites the policy
+        [claimsEnd, '50%', passagesStart, '50%'], // the carry-over claim cites the handbook
+        [claimsEnd, '50%', passagesStart, '83.333%'], // the carry-over claim cites the summary
+        [claimsEnd, '83.333%', passagesStart, '83.333%'], // the freeze claim cites the summary
+      ])
+    })
+
+    it('holds exactly the served nodes and edges on the diagram, and makes no node of an edge’s missing end', async () => {
+      // Not a reply the route allows: both ends of every edge are in `nodes`.
+      const absent = passageNode(151, HANDBOOK, 9, 1)
+      serveEvidence(user, { '': mapObject({ nodes: [ACCRUAL, P_POLICY], edges: [cites(ACCRUAL, P_POLICY, 12), cites(ACCRUAL, absent, 2)] }) })
+      renderMap(EVIDENCE_PATH)
+      await findEvidenceDiagram()
+
+      expect(within(evidenceDiagram()).getAllByRole('listitem')).toHaveLength(2)
+      expect(drawnLines()).toHaveLength(1)
+      expect(rowsOf(evidenceItems())).toEqual([ACCRUAL, P_POLICY].map(evidenceItemsRow))
+      expect(rowsOf(citationsTable())).toEqual([citationRow(ACCRUAL, P_POLICY, 12)])
+      expect(screen.getByRole('main').textContent).not.toContain(absent.label)
+      expect(screen.getByRole('main').innerHTML).not.toContain(absent.item_id)
+    })
+  })
+
+  describe('a line’s weight: how often the pairing was admitted', () => {
+    it('draws a pairing admitted once, 2 to 4 times, and 5 times or more in three classes, each a heavier stroke than the last, and says each number in the table', async () => {
+      // One claim per weight, each on the same passage, at both ends of each class.
+      const weights = [1, 2, 4, 5, 12]
+      const passage = passageNode(161, HANDBOOK, 3, weights.length)
+      const claims = weights.map((weight, index) =>
+        claimNode(60 + index, `Claim admitted ${weight} times.`, 1, {
+          answers: weight,
+          passages: 1,
+          first: '2026-03-14',
+          last: '2026-08-02',
+        }),
+      )
+      serveEvidence(user, {
+        '': mapObject({ nodes: [...claims, passage], edges: claims.map((claim, index) => cites(claim, passage, weights[index])) }),
+      })
+      renderMap(EVIDENCE_PATH)
+      await findEvidenceDiagram()
+
+      const lines = drawnLines()
+      expect(lines.map(weightOf)).toEqual(['light', 'medium', 'medium', 'heavy', 'heavy'])
+      for (const line of lines) expect(line.classList.contains('knowledge-map__line')).toBe(true)
+
+      // The three classes are three widths in the stylesheet, each greater than the
+      // last, in one stroke colour: weight changes the width and nothing else.
+      const [light, medium, , heavy] = lines.map(declaredFor)
+      const width = (declared) => parseFloat(resolve(declared['stroke-width']))
+      expect(width(medium)).toBeGreaterThan(width(light))
+      expect(width(heavy)).toBeGreaterThan(width(medium))
+      expect(new Set([light, medium, heavy].map((declared) => declared.stroke)).size).toBe(1)
+      expect(colourTokensIn(light.stroke)).toHaveLength(1)
+
+      // The number itself is in the Relationships table, so the weight is not the
+      // only place it is said.
+      expect(rowsOf(citationsTable()).map((row) => row[3])).toEqual(['1', '2', '4', '5', '12'])
+    })
+
+    it('marks the selected claim’s lines as the first view does, draws them last, and leaves each its own weight', async () => {
+      serveEvidence(user, { [CARRY_OVER.item_id]: FOCUS_CARRY_OVER })
+      renderMap(`/knowledge-map${evidenceSearch(CARRY_OVER)}`)
+      await findEvidenceDiagram()
+
+      // Three edges, in the reply's order: two touch the selected claim (3 and 1
+      // times), then one that does not (once). The one that does not is drawn first.
+      const lines = drawnLines()
+      expect(lines.map((line) => line.classList.contains('knowledge-map__line--selected'))).toEqual([false, true, true])
+      expect(lines.map(weightOf)).toEqual(['light', 'medium', 'light'])
+      // The selected lines are a different stroke in the stylesheet, and a light
+      // one is as wide selected as not: the width still says how often.
+      const [plainLight, selectedMedium, selectedLight] = lines.map(declaredFor)
+      expect(colourTokensIn(selectedLight.stroke)).toHaveLength(1)
+      expect(colourTokensIn(selectedLight.stroke)).not.toEqual(colourTokensIn(plainLight.stroke))
+      expect(selectedLight['stroke-width']).toBe(plainLight['stroke-width'])
+      expect(parseFloat(resolve(selectedMedium['stroke-width']))).toBeGreaterThan(
+        parseFloat(resolve(selectedLight['stroke-width'])),
+      )
+      // The selected node's own outline is the heavier one, as in the first view.
+      const node = selectedIn(evidenceDiagram())
+      expect(node.classList.contains('knowledge-map__node--selected')).toBe(true)
+      expect(parseFloat(resolve(declaredFor(node)['border-width']))).toBeGreaterThan(
+        parseFloat(resolve(declaredFor(evidenceNode(FREEZE)).border)),
+      )
+    })
+  })
+
+  describe('the count line, and the counts the server sent', () => {
+    it('counts the line from the served nodes, claims then passages, and again for each reply', async () => {
+      serveEvidence(user, { '': EVIDENCE, [ACCRUAL.item_id]: FOCUS_ACCRUAL })
+      renderMap(EVIDENCE_PATH)
+      await findEvidenceDiagram()
+
+      expect(screen.getByText('3 claims · 3 passages shown').getAttribute('role')).toBe('status')
+      // Counted from what is on screen, and nothing like "3 of 40".
+      expect(screen.getByRole('main').textContent).not.toMatch(/\d+ of \d+/)
+
+      fireEvent.click(evidenceNode(ACCRUAL))
+
+      await waitFor(() => expect(selectedIn(evidenceDiagram()).textContent).toBe(selectedClaimName(ACCRUAL)))
+      expect(screen.getByText('1 claim · 1 passage shown').getAttribute('role')).toBe('status')
+      expect(screen.queryByText('3 claims · 3 passages shown')).toBeNull()
+    })
+
+    it('counts unequal numbers of each, and none of the edges', async () => {
+      // Four passages, one claim and no edge at all.
+      const passages = [1, 2, 3, 4].map((position) => passageNode(170 + position, HANDBOOK, position, 0))
+      serveEvidence(user, { '': mapObject({ nodes: [counted(ACCRUAL, 0), ...passages] }) })
+      renderMap(EVIDENCE_PATH)
+      await findEvidenceDiagram()
+
+      expect(screen.getByText('1 claim · 4 passages shown').getAttribute('role')).toBe('status')
+      // No edge: the Relationships table gives way to a sentence.
+      expect(screen.getByText(TEXT.mapNoRelationships)).toBeTruthy()
+      expect(screen.queryByRole('table', { name: TEXT.evidenceRelationshipsCaption })).toBeNull()
+    })
+
+    it('shows the connection count and the weight the server sent, and recounts neither', async () => {
+      // Counts no page could work out from the one edge served: 7 and 9.
+      const claim = counted(ACCRUAL, 7)
+      const passage = counted(P_POLICY, 9)
+      serveEvidence(user, { '': mapObject({ nodes: [claim, passage], edges: [cites(claim, passage, 31)] }) })
+      renderMap(EVIDENCE_PATH)
+      await findEvidenceDiagram()
+
+      for (const item of [claim, passage]) {
+        expect(within(evidenceNode(item)).getByText(TEXT.mapConnectionsShown(item.connection_count))).toBeTruthy()
+      }
+      expect(rowsOf(evidenceItems()).map((row) => row[2])).toEqual(['7', '9'])
+      expect(rowsOf(citationsTable()).map((row) => row[3])).toEqual(['31'])
+    })
+  })
+
+  describe('NFR-15: a passage that is AI-generated content says so in words', () => {
+    it('says "Suggested by AI" wherever the flagged passage’s label is shown, and on no other node', async () => {
+      serveEvidence(user, { '': EVIDENCE })
+      renderMap(EVIDENCE_PATH)
+      await findEvidenceDiagram()
+      const main = screen.getByRole('main')
+
+      // The app's one mark for AI content, in the words every other screen uses.
+      expect(TEXT.aiSuggested).toBe('Suggested by AI')
+      expect(P_SUMMARY.detail.ai_generated).toBe(true)
+
+      // On the diagram: in the node's own name, and with the dashed boundary AI
+      // content has everywhere as a second cue.
+      const node = evidenceNode(P_SUMMARY)
+      expect(node.textContent).toBe(`Passage: ${P_SUMMARY.label}, Suggested by AI, ${TEXT.mapConnectionsShown(2)}`)
+      expect(within(node).getByText('Suggested by AI').classList.contains('ai-mark')).toBe(true)
+      expect(declaredFor(node)['border-style']).toBe('var(--border-style-ai)')
+      // In the Items table and at the To end of both of its Relationships rows.
+      expect(rowsOf(evidenceItems())).toContainEqual([`${P_SUMMARY.label}, Suggested by AI`, 'Passage', '2'])
+      expect(rowsOf(citationsTable()).map((row) => row[2])).toEqual([
+        `Passage: ${P_POLICY.label}`,
+        `Passage: ${P_HANDBOOK.label}`,
+        `Passage: ${P_SUMMARY.label}, Suggested by AI`,
+        `Passage: ${P_SUMMARY.label}, Suggested by AI`,
+      ])
+      // Inside the control each time, so it is part of the control's name: once on
+      // the diagram, once in Items, twice in Relationships. And nowhere else.
+      const marks = within(main).getAllByText('Suggested by AI')
+      expect(marks).toHaveLength(4)
+      for (const mark of marks) expect(mark.closest('a').textContent).toContain(P_SUMMARY.label)
+      // A passage the reply does not flag carries no mark and a solid boundary.
+      expect(evidenceNode(P_HANDBOOK).textContent).not.toContain('Suggested by AI')
+      expect(declaredFor(evidenceNode(P_HANDBOOK))['border-style']).toBeUndefined()
+    })
+
+    it('says it in the Claim review’s "Supported by" list, beside the passage it marks', async () => {
+      serveEvidence(user, { [CARRY_OVER.item_id]: FOCUS_CARRY_OVER })
+      renderMap(`/knowledge-map${evidenceSearch(CARRY_OVER)}`)
+      await findEvidenceDiagram()
+
+      expect(paneLinks(claimReview(), TEXT.evidenceSupportedBy).map((link) => link.textContent)).toEqual([
+        `Passage: ${P_HANDBOOK.label}`,
+        `Passage: ${P_SUMMARY.label}, Suggested by AI`,
+      ])
+    })
+
+    it('reads the mark from the reply’s flag and from nothing in the label', async () => {
+      // The same label twice: one passage flagged, one not.
+      const written = passageNode(181, BUDGET_MEETING, 6, 1, false)
+      const generated = passageNode(182, BUDGET_MEETING, 6, 1, true)
+      expect(written.label).toBe(generated.label)
+      serveEvidence(user, {
+        '': mapObject({ nodes: [counted(FREEZE, 2), written, generated], edges: [cites(FREEZE, written, 1), cites(FREEZE, generated, 1)] }),
+      })
+      renderMap(EVIDENCE_PATH)
+      await findEvidenceDiagram()
+
+      expect(rowsOf(evidenceItems()).map((row) => row[0])).toEqual([
+        FREEZE.label,
+        written.label,
+        `${generated.label}, Suggested by AI`,
+      ])
+    })
+  })
+
+  describe('NFR-17: the table view holds the same claims, passages and citations as rows', () => {
+    it('holds one row per served node and per served edge, in the reply’s order, with "Times admitted" beside each citation', async () => {
+      serveEvidence(user, { '': EVIDENCE })
+      renderMap(EVIDENCE_PATH)
+      await findEvidenceDiagram()
+
+      expect(rowsOf(evidenceItems())).toEqual(EVIDENCE_NODES.map(evidenceItemsRow))
+      // Written out for one of each: a claim's own text and a passage's label, its type, the served count.
+      expect(rowsOf(evidenceItems())).toContainEqual(['Unused leave carries over for twelve months.', 'Claim', '2'])
+      expect(rowsOf(evidenceItems())).toContainEqual(['Staff Handbook · passage 2', 'Passage', '1'])
+      // One row per edge, read "from, relationship, to", then how often.
+      expect(rowsOf(citationsTable())).toEqual([
+        citationRow(ACCRUAL, P_POLICY, 12),
+        citationRow(CARRY_OVER, P_HANDBOOK, 3),
+        citationRow(CARRY_OVER, P_SUMMARY, 1),
+        citationRow(FREEZE, P_SUMMARY, 1),
+      ])
+      expect(rowsOf(citationsTable())[1]).toEqual([
+        'Claim: Unused leave carries over for twelve months.',
+        'cites',
+        'Passage: Staff Handbook · passage 2',
+        '3',
+      ])
+      // The diagram draws the same: a node each, a line each.
+      expect(within(evidenceDiagram()).getAllByRole('listitem')).toHaveLength(EVIDENCE_NODES.length)
+      expect(drawnLines()).toHaveLength(EVIDENCE_EDGES.length)
+
+      // Each table is in its own named, focusable region, with its columns as headers.
+      for (const [table, heading, columns] of [
+        [evidenceItems(), TEXT.mapItemsHeading, ['Name', 'Type', 'Connections shown']],
+        [citationsTable(), TEXT.mapRelationshipsHeading, ['From', 'Relationship', 'To', 'Times admitted']],
+      ]) {
+        const region = table.closest('[role="region"]')
+        expect(region.getAttribute('tabindex')).toBe('0')
+        expect(within(screen.getByRole('main')).getByRole('region', { name: heading })).toBe(region)
+        expect(within(table).getAllByRole('columnheader').map((header) => header.textContent)).toEqual(columns)
+      }
+      // Both under the table view's heading, which the skip link lands on.
+      const heading = screen.getByRole('heading', { level: 2, name: TEXT.mapTablesHeading })
+      const skip = screen.getByRole('link', { name: TEXT.mapSkipToTables })
+      expect(skip.getAttribute('href')).toBe(`#${heading.id}`)
+      fireEvent.click(skip)
+      expect(document.activeElement).toBe(heading)
+      expect(heading.closest('section').contains(evidenceItems())).toBe(true)
+      expect(heading.closest('section').contains(citationsTable())).toBe(true)
+      expect(address()).toBe(EVIDENCE_PATH)
+    })
+
+    const ITEM_SORTS = [
+      // Annual…, Budget Review Meeting…, Discretionary…, Leave Policy…, Staff Handbook…, Unused….
+      { column: TEXT.mapItemsColumnName, index: 0, ascending: [ACCRUAL, P_SUMMARY, FREEZE, P_POLICY, P_HANDBOOK, CARRY_OVER] },
+      // Claims, then passages; by label within a type.
+      { column: TEXT.mapItemsColumnType, index: 1, ascending: [ACCRUAL, FREEZE, CARRY_OVER, P_SUMMARY, P_POLICY, P_HANDBOOK] },
+      // The four with 1, then the two with 2; by label within a count.
+      {
+        column: TEXT.mapItemsColumnConnections,
+        index: 2,
+        ascending: [ACCRUAL, FREEZE, P_POLICY, P_HANDBOOK, P_SUMMARY, CARRY_OVER],
+      },
+    ]
+
+    it.each(ITEM_SORTS)('sorts the Items table by $column, ascending then descending, with aria-sort', async ({ column, index, ascending }) => {
+      serveEvidence(user, { '': EVIDENCE })
+      renderMap(EVIDENCE_PATH)
+      await findEvidenceDiagram()
+      const table = evidenceItems()
+      const expected = (direction) => [0, 1, 2].map((position) => (position === index ? direction : null))
+
+      // The reply's order, and no column claiming a sort, until one is pressed.
+      expect(sortStates(table)).toEqual([null, null, null])
+      expect(rowsOf(table)).toEqual(EVIDENCE_NODES.map(evidenceItemsRow))
+      const drawnBefore = evidenceOrder()
+      const citationsBefore = rowsOf(citationsTable())
+
+      pressColumn(table, column)
+      expect(sortStates(table)).toEqual(expected('ascending'))
+      expect(rowsOf(table)).toEqual(ascending.map(evidenceItemsRow))
+
+      pressColumn(table, column)
+      expect(sortStates(table)).toEqual(expected('descending'))
+      expect(rowsOf(table)).toEqual([...ascending].reverse().map(evidenceItemsRow))
+
+      // The sort is the table's own: the other table, the diagram and the address are as they were.
+      expect(sortStates(citationsTable())).toEqual([null, null, null, null])
+      expect(rowsOf(citationsTable())).toEqual(citationsBefore)
+      expect(evidenceOrder()).toEqual(drawnBefore)
+      expect(address()).toBe(EVIDENCE_PATH)
+    })
+
+    const R1 = citationRow(ACCRUAL, P_POLICY, 12)
+    const R2 = citationRow(CARRY_OVER, P_HANDBOOK, 3)
+    const R3 = citationRow(CARRY_OVER, P_SUMMARY, 1)
+    const R4 = citationRow(FREEZE, P_SUMMARY, 1)
+
+    const CITATION_SORTS = [
+      // By the From cell's text, "Claim: Annual…", "Claim: Discretionary…", "Claim: Unused…", then the To cell's.
+      { column: TEXT.mapRelationshipsColumnFrom, index: 0, ascending: [R1, R4, R3, R2] },
+      // One relationship, so by the two ends.
+      { column: TEXT.mapRelationshipsColumnRelationship, index: 1, ascending: [R1, R4, R3, R2] },
+      // By the To cell's text: the meeting's passage, the policy's, the handbook's.
+      { column: TEXT.mapRelationshipsColumnTo, index: 2, ascending: [R4, R3, R1, R2] },
+      // By the number: 1, 1, 3, 12. As text, 12 would come before 3.
+      { column: TEXT.evidenceColumnTimesAdmitted, index: 3, ascending: [R4, R3, R2, R1] },
+    ]
+
+    it.each(CITATION_SORTS)(
+      'sorts the Relationships table by $column, ascending then descending, with aria-sort',
+      async ({ column, index, ascending }) => {
+        serveEvidence(user, { '': EVIDENCE })
+        renderMap(EVIDENCE_PATH)
+        await findEvidenceDiagram()
+        const table = citationsTable()
+        const expected = (direction) => [0, 1, 2, 3].map((position) => (position === index ? direction : null))
+
+        expect(sortStates(table)).toEqual([null, null, null, null])
+        expect(rowsOf(table)).toEqual([R1, R2, R3, R4])
+        const drawnBefore = evidenceOrder()
+
+        pressColumn(table, column)
+        expect(sortStates(table)).toEqual(expected('ascending'))
+        expect(rowsOf(table)).toEqual(ascending)
+
+        pressColumn(table, column)
+        expect(sortStates(table)).toEqual(expected('descending'))
+        expect(rowsOf(table)).toEqual([...ascending].reverse())
+
+        // The other table and the diagram are as they were.
+        expect(sortStates(evidenceItems())).toEqual([null, null, null])
+        expect(rowsOf(evidenceItems())).toEqual(EVIDENCE_NODES.map(evidenceItemsRow))
+        expect(evidenceOrder()).toEqual(drawnBefore)
+      },
+    )
+
+    it('sorts "Times admitted" by the number, where the digits as text would give another order', async () => {
+      serveEvidence(user, { '': EVIDENCE })
+      renderMap(EVIDENCE_PATH)
+      await findEvidenceDiagram()
+
+      expect(TEXT.evidenceColumnTimesAdmitted).toBe('Times admitted')
+      pressColumn(citationsTable(), 'Times admitted')
+
+      const numbers = rowsOf(citationsTable()).map((row) => row[3])
+      expect(numbers).toEqual(['1', '1', '3', '12'])
+      expect(numbers).not.toEqual([...numbers].sort())
+      // And the heading says the direction in words.
+      expect(
+        within(citationsTable()).getByRole('button', {
+          name: new RegExp(`^Times admitted\\s*, ${TEXT.repositorySortedAscending}$`),
+        }),
+      ).toBeTruthy()
+    })
+  })
+
+  describe('selecting a claim, and the Claim review', () => {
+    const ORIGINS = [
+      { from: 'its node', find: () => evidenceNode(CARRY_OVER) },
+      { from: 'its Items row', find: () => within(evidenceItems()).getByRole('link', { name: evidenceShown(CARRY_OVER) }) },
+      {
+        from: 'the From end of a Relationships row',
+        find: () => within(citationsTable()).getAllByRole('link', { name: evidenceTyped(CARRY_OVER) })[1],
+      },
+    ]
+
+    it.each(ORIGINS)('selecting a claim from $from: the address, the request’s two parameters, the selection and where focus goes', async ({ find }) => {
+      const answered = serveEvidence(user, { '': EVIDENCE, [CARRY_OVER.item_id]: FOCUS_CARRY_OVER })
+      renderMap(EVIDENCE_PATH)
+      await findEvidenceDiagram()
+
+      // A link to the second view's own address, holding the view and the focus.
+      const link = find()
+      expect(link.tagName).toBe('A')
+      expect(link.getAttribute('href')).toBe(`/knowledge-map${evidenceSearch(CARRY_OVER)}`)
+      expect(link.getAttribute('aria-current')).toBeNull()
+      link.focus()
+      fireEvent.click(link)
+
+      await waitFor(() => expect(address()).toBe(`/knowledge-map${evidenceSearch(CARRY_OVER)}`))
+      await waitFor(() => expect(selectedIn(evidenceDiagram()).textContent).toBe(selectedClaimName(CARRY_OVER)))
+      // A second request, to the second view's route, for the walk from the claim:
+      // the route's two parameters, the claim's 64 hexadecimal digits as written,
+      // and no `view`, which is the page's own.
+      const requests = evidenceRequests(answered)
+      expect(requests).toEqual(['', evidenceApiSearch(CARRY_OVER)])
+      expect([...new URLSearchParams(requests[1]).entries()]).toEqual([
+        ['focus_type', 'claim'],
+        ['focus_id', CARRY_OVER.item_id],
+      ])
+      expect(CARRY_OVER.item_id).toMatch(/^[0-9a-f]{64}$/)
+      // The link that was followed went with the overview: focus is on the pane's
+      // heading, which takes it by script without being a tab stop.
+      const heading = screen.getByRole('heading', { level: 2, name: TEXT.evidenceClaimReviewHeading })
+      await waitFor(() => expect(document.activeElement).toBe(heading))
+      expect(heading.getAttribute('tabindex')).toBe('-1')
+    })
+
+    const REVIEWS = [
+      {
+        kind: 'one passage and 12 answers',
+        claim: ACCRUAL,
+        reply: FOCUS_ACCRUAL,
+        single: true,
+        admitted: 'Admitted in 12 answers. Every one of them rests on the same passage.',
+        passages: [P_POLICY],
+      },
+      {
+        kind: 'two passages and 4 answers',
+        claim: CARRY_OVER,
+        reply: FOCUS_CARRY_OVER,
+        single: false,
+        admitted: 'Admitted in 4 answers.',
+        passages: [P_HANDBOOK, P_SUMMARY],
+      },
+      {
+        kind: 'one passage and 1 answer',
+        claim: FREEZE,
+        reply: FOCUS_FREEZE,
+        single: true,
+        admitted: 'Admitted in 1 answer.',
+        passages: [P_SUMMARY],
+      },
+    ]
+
+    it.each(REVIEWS)(
+      'reviews a claim with $kind: its text, "Single source" or not, the answers that admitted it, what supports it, and both dates',
+      async ({ claim, reply, single, admitted, passages }) => {
+        serveEvidence(user, { [claim.item_id]: reply })
+        // Opened at the selection's own address, as a reload or Back would.
+        renderMap(`/knowledge-map${evidenceSearch(claim)}`)
+        await findEvidenceDiagram()
+
+        // Headed "Claim review", in the words written out here.
+        const review = claimReview()
+        expect(within(review).getByRole('heading', { level: 2 }).textContent).toBe('Claim review')
+        expect(screen.queryByRole('region', { name: TEXT.mapSelectedHeading })).toBeNull()
+        // The claim: its type in a word and in its shape, and its own text.
+        expect(review.querySelector('.knowledge-map__panel-item').textContent).toBe(`Claim ${claim.label}`)
+        expect(glyphOf(review).classList.contains(`knowledge-map__glyph--${CLAIM}`)).toBe(true)
+
+        // "Single source" for a claim every answer rests on one passage for, and not otherwise.
+        expect(within(review).queryAllByText('Single source')).toHaveLength(single ? 1 : 0)
+        // How many answers admitted it, singular for one; and for a single-source
+        // claim admitted more than once, that they all rest on the same passage.
+        expect(review.querySelector('.knowledge-map__review').textContent).toBe(admitted)
+
+        // "Supported by": the claim's passages in this view, each the link that selects it.
+        expect(within(review).getAllByRole('heading', { level: 3 }).map((heading) => heading.textContent)).toEqual([
+          'Supported by',
+        ])
+        const supporting = paneLinks(review, 'Supported by')
+        expect(supporting.map((link) => link.textContent)).toEqual(passages.map(evidenceTyped))
+        expect(supporting.map((link) => link.getAttribute('href'))).toEqual(
+          passages.map((passage) => `/knowledge-map${evidenceSearch(passage)}`),
+        )
+
+        // When it was first and last admitted: each the reply's own calendar day,
+        // written as the app writes dates everywhere else.
+        const { first_admitted_at: first, last_admitted_at: last } = claim.detail
+        expect(factsOf(review)).toEqual({
+          'First admitted': { text: formatDate(first), dateTime: first },
+          'Last admitted': { text: formatDate(last), dateTime: last },
+        })
+        expect(formatDate(first)).not.toBe('')
+        expect(formatDate(last)).not.toBe('')
+        // Each `<time>` carries the day as the route sent it: `YYYY-MM-DD`, with no
+        // time of day added to it or made up for it.
+        const times = [...review.querySelectorAll('time')]
+        expect(times.map((time) => time.getAttribute('datetime'))).toEqual([first, last])
+        for (const time of times) expect(time.getAttribute('datetime')).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+      },
+    )
+
+    it('writes the first and the last date apart where they differ', async () => {
+      serveEvidence(user, { [ACCRUAL.item_id]: FOCUS_ACCRUAL })
+      renderMap(`/knowledge-map${evidenceSearch(ACCRUAL)}`)
+      await findEvidenceDiagram()
+
+      const facts = factsOf(claimReview())
+      expect(facts['First admitted'].dateTime).toBe('2026-03-14')
+      expect(facts['Last admitted'].dateTime).toBe('2026-08-02')
+      expect(facts['First admitted'].text).not.toBe(facts['Last admitted'].text)
+      // A day and nothing more: no time of day is shown beside it.
+      expect(facts['First admitted'].text).not.toMatch(/:|Z$/)
+    })
+
+    it('reads "Single source" and the answers from the claim’s served detail, never from the lines drawn', async () => {
+      // One passage drawn, and the server says the claim rests on two: not a single source.
+      const partly = claimNode(41, 'Leave requests need two weeks of notice.', 1, {
+        answers: 5,
+        passages: 2,
+        first: '2026-04-01',
+        last: '2026-04-09',
+      })
+      serveEvidence(user, { [partly.item_id]: mapObject({ focus: partly, nodes: [partly, P_HANDBOOK], edges: [cites(partly, P_HANDBOOK, 9)] }) })
+      renderMap(`/knowledge-map${evidenceSearch(partly)}`)
+      await findEvidenceDiagram()
+
+      const review = claimReview()
+      expect(paneLinks(review, TEXT.evidenceSupportedBy)).toHaveLength(1)
+      expect(within(review).queryByText(TEXT.evidenceSingleSource)).toBeNull()
+      // Five answers, as sent: not the 9 on the line, and not the one line.
+      expect(review.querySelector('.knowledge-map__review').textContent).toBe('Admitted in 5 answers.')
+      expect(review.textContent).not.toContain(TEXT.evidenceSameSource)
+    })
+
+    it('a selected claim is not a link anywhere, and the Claim review says there is nothing to open', async () => {
+      const answered = serveEvidence(user, { [CARRY_OVER.item_id]: FOCUS_CARRY_OVER, '': EVIDENCE })
+      renderMap(`/knowledge-map${evidenceSearch(CARRY_OVER)}`)
+      await findEvidenceDiagram()
+      const main = screen.getByRole('main')
+
+      // On the diagram, in its Items row and at the From end of both of its
+      // Relationships rows: marked, and plain text.
+      expect(selectedIn(evidenceDiagram()).tagName).toBe('SPAN')
+      expect(selectedIn(evidenceItems()).tagName).toBe('SPAN')
+      expect(selectedIn(evidenceItems()).textContent).toBe(`${CARRY_OVER.label}, ${TEXT.mapSelectedMark}`)
+      const ends = [...citationsTable().querySelectorAll('[aria-current="true"]')]
+      expect(ends).toHaveLength(2)
+      for (const end of ends) {
+        expect(end.tagName).toBe('SPAN')
+        expect(end.textContent).toBe(`Claim: ${CARRY_OVER.label}, ${TEXT.mapSelectedMark}`)
+      }
+      // No link on the page carries the claim, none offers to open anything, and
+      // no name says "Select again".
+      const links = within(main).getAllByRole('link')
+      expect(links.filter((link) => link.textContent.includes(CARRY_OVER.label))).toEqual([])
+      expect(links.filter((link) => /^Open/.test(link.textContent))).toEqual([])
+      expect(main.textContent).not.toMatch(/Select again/)
+      // And the pane says why, in the words written out here.
+      expect(within(claimReview()).getByText('A claim has no page of its own, so there is nothing to open.')).toBeTruthy()
+
+      // "Show the whole map" clears the selection and stays in this view.
+      const whole = within(claimReview()).getByRole('link', { name: TEXT.mapShowWhole })
+      expect(whole.getAttribute('href')).toBe(EVIDENCE_PATH)
+      fireEvent.click(whole)
+      await waitFor(() => expect(address()).toBe(EVIDENCE_PATH))
+      await waitFor(() => expect(within(pane()).getByText(TEXT.evidenceSelectedNone)).toBeTruthy())
+      expect(main.querySelectorAll('[aria-current="true"]')).toHaveLength(0)
+      expect(evidenceRequests(answered)).toEqual([evidenceApiSearch(CARRY_OVER), ''])
+    })
+
+    it('says how to select while nothing is selected, under the heading "Selected", and marks no node', async () => {
+      serveEvidence(user, { '': EVIDENCE })
+      renderMap(EVIDENCE_PATH)
+      await findEvidenceDiagram()
+
+      expect(within(pane()).getByText(TEXT.evidenceSelectedNone)).toBeTruthy()
+      expect(within(pane()).queryByRole('link')).toBeNull()
+      expect(screen.queryByRole('region', { name: TEXT.evidenceClaimReviewHeading })).toBeNull()
+      expect(screen.getByRole('main').querySelectorAll('[aria-current="true"]')).toHaveLength(0)
+    })
+
+    it('leaves focus alone when the page is opened at a selection nobody made on it', async () => {
+      serveEvidence(user, { [CARRY_OVER.item_id]: FOCUS_CARRY_OVER })
+      renderMap(`/knowledge-map${evidenceSearch(CARRY_OVER)}`)
+      await findEvidenceDiagram()
+      await act(async () => {})
+
+      expect(document.activeElement).not.toBe(screen.getByRole('heading', { level: 2, name: TEXT.evidenceClaimReviewHeading }))
+      expect(document.activeElement).not.toBe(pageHeading())
+    })
+
+    it('marks the node the reply’s focus names, and nothing on the address’s word alone', async () => {
+      serveEvidence(user, { [CARRY_OVER.item_id]: { ...FOCUS_CARRY_OVER, focus: null } })
+      renderMap(`/knowledge-map${evidenceSearch(CARRY_OVER)}`)
+      await findEvidenceDiagram()
+
+      expect(screen.getByRole('main').querySelectorAll('[aria-current="true"]')).toHaveLength(0)
+      expect(within(pane()).getByText(TEXT.evidenceSelectedNone)).toBeTruthy()
+    })
+  })
+
+  describe('selecting a passage: its pane, and selecting it again opens its source', () => {
+    const PASSAGES = [
+      {
+        kind: 'a passage of a document',
+        item: P_HANDBOOK,
+        reply: FOCUS_P_HANDBOOK,
+        claims: [CARRY_OVER],
+        source: 'Document: Staff Handbook',
+        opens: `/documents/${HANDBOOK.id}`,
+        openLabel: 'Open the document',
+        again: TEXT.mapSelectAgainDocument,
+        note: null,
+        destination: { [`GET /api/documents/${HANDBOOK.id}`]: NOT_FOUND_DOCUMENT },
+      },
+      {
+        kind: 'a passage of a meeting',
+        item: P_SUMMARY,
+        reply: FOCUS_P_SUMMARY,
+        claims: [CARRY_OVER, FREEZE],
+        source: 'Meeting: Budget Review Meeting',
+        opens: `/meetings/${BUDGET_MEETING.id}`,
+        openLabel: 'Open the meeting',
+        again: TEXT.mapSelectAgainMeeting,
+        // The app's mark, then the sentence a cited summary passage carries in an answer.
+        note: `Suggested by AI ${TEXT.aiSummaryPassage}`,
+        destination: {
+          [`GET /api/meetings/${BUDGET_MEETING.id}`]: NOT_FOUND_MEETING,
+          [`GET /api/meetings/${BUDGET_MEETING.id}/summary`]: NOT_FOUND_MEETING,
+        },
+      },
+    ]
+
+    it.each(PASSAGES)(
+      '$kind: the first selection shows its source and the claims that cite it; the second opens the source’s page',
+      async ({ item, reply, claims, source, opens, openLabel, again, note, destination }) => {
+        const answered = serveEvidence(user, { '': EVIDENCE, [item.item_id]: reply }, destination)
+        renderMap(EVIDENCE_PATH)
+        await findEvidenceDiagram()
+        const focused = reply.nodes[0]
+
+        // First selection: a link to the view's own address, holding the focus.
+        const first = evidenceNode(item)
+        expect(first.getAttribute('href')).toBe(`/knowledge-map${evidenceSearch(item)}`)
+        expect(first.getAttribute('aria-current')).toBeNull()
+        first.focus()
+        fireEvent.click(first)
+
+        await waitFor(() => expect(address()).toBe(`/knowledge-map${evidenceSearch(item)}`))
+        await waitFor(() =>
+          expect(selectedIn(evidenceDiagram()).textContent).toBe(`${evidenceNodeName(focused)}, ${TEXT.mapSelectedMark}. ${again}`),
+        )
+        // The walk from the passage, named by its UUID.
+        expect(evidenceRequests(answered)).toEqual(['', evidenceApiSearch(item)])
+        expect([...new URLSearchParams(evidenceRequests(answered)[1]).entries()]).toEqual([
+          ['focus_type', 'passage'],
+          ['focus_id', item.item_id],
+        ])
+
+        // The pane, headed "Selected": the passage's label, its source's type and
+        // title, the AI note where the reply flags it, and the claims that cite it.
+        const selectedPane = pane()
+        expect(screen.queryByRole('region', { name: TEXT.evidenceClaimReviewHeading })).toBeNull()
+        await waitFor(() =>
+          expect(document.activeElement).toBe(within(selectedPane).getByRole('heading', { level: 2, name: TEXT.mapSelectedHeading })),
+        )
+        expect(selectedPane.querySelector('.knowledge-map__panel-item').textContent).toBe(`Passage ${item.label}`)
+        expect(glyphOf(selectedPane).classList.contains(`knowledge-map__glyph--${PASSAGE}`)).toBe(true)
+        expect(factsOf(selectedPane)).toEqual({ Source: { text: source, dateTime: null } })
+        expect(selectedPane.querySelector('.knowledge-map__panel-ai')?.textContent ?? null).toBe(note)
+        expect(within(selectedPane).getAllByRole('heading', { level: 3 }).map((heading) => heading.textContent)).toEqual([
+          'Cited by',
+        ])
+        const citing = paneLinks(selectedPane, 'Cited by')
+        expect(citing.map((link) => link.textContent)).toEqual(claims.map(evidenceTyped))
+        expect(citing.map((link) => link.getAttribute('href'))).toEqual(
+          claims.map((claim) => `/knowledge-map${evidenceSearch(claim)}`),
+        )
+        // A passage is not a claim: nothing of the Claim review is said of it.
+        expect(selectedPane.textContent).not.toContain(TEXT.evidenceSingleSource)
+        expect(selectedPane.textContent).not.toContain(TEXT.evidenceClaimNoPage)
+
+        // Second selection: the same node is now a link to its source's page, on
+        // the diagram, in its Items row, at its end of every Relationships row and
+        // as the pane's open action.
+        const second = selectedIn(evidenceDiagram())
+        expect(second.tagName).toBe('A')
+        expect(second.getAttribute('href')).toBe(opens)
+        expect(selectedIn(evidenceItems()).getAttribute('href')).toBe(opens)
+        const ends = within(citationsTable()).getAllByRole('link', { current: true })
+        expect(ends).toHaveLength(claims.length)
+        for (const end of ends) expect(end.getAttribute('href')).toBe(opens)
+        expect(within(selectedPane).getByRole('link', { name: openLabel }).getAttribute('href')).toBe(opens)
+
+        fireEvent.click(second)
+
+        await waitFor(() => expect(address()).toBe(opens))
+        await waitFor(() => expect(screen.queryByRole('heading', { level: 1, name: TEXT.mapHeading })).toBeNull())
+      },
+    )
+
+    it('selecting a passage from the To end of a Relationships row selects it, and Back from its source returns to the selection', async () => {
+      const answered = serveEvidence(
+        user,
+        { '': EVIDENCE, [P_HANDBOOK.item_id]: FOCUS_P_HANDBOOK },
+        { [`GET /api/documents/${HANDBOOK.id}`]: NOT_FOUND_DOCUMENT },
+      )
+      renderMap(EVIDENCE_PATH)
+      await findEvidenceDiagram()
+
+      const end = within(citationsTable()).getByRole('link', { name: evidenceTyped(P_HANDBOOK) })
+      expect(end.closest('td')).not.toBeNull()
+      expect(end.getAttribute('href')).toBe(`/knowledge-map${evidenceSearch(P_HANDBOOK)}`)
+      fireEvent.click(end)
+      await waitFor(() => expect(selectedIn(evidenceDiagram()).getAttribute('href')).toBe(`/documents/${HANDBOOK.id}`))
+
+      fireEvent.click(selectedIn(evidenceDiagram()))
+      await waitFor(() => expect(address()).toBe(`/documents/${HANDBOOK.id}`))
+      await waitFor(() => expect(screen.queryByRole('heading', { level: 1, name: TEXT.mapHeading })).toBeNull())
+
+      await act(async () => probe.navigate(-1))
+
+      // The view and the selection are both in the address, so both come back.
+      await waitFor(() => expect(address()).toBe(`/knowledge-map${evidenceSearch(P_HANDBOOK)}`))
+      await findEvidenceDiagram()
+      expect(selectedIn(evidenceDiagram()).getAttribute('href')).toBe(`/documents/${HANDBOOK.id}`)
+      expect(evidenceRequests(answered)).toEqual(['', evidenceApiSearch(P_HANDBOOK), evidenceApiSearch(P_HANDBOOK)])
+    })
+  })
+
+  describe('a partial view is not presented as complete', () => {
+    const PARTIAL = [
+      {
+        kind: 'the overview cut by the node count',
+        path: EVIDENCE_PATH,
+        key: '',
+        reply: mapObject({
+          nodes: EVIDENCE_NODES,
+          edges: EVIDENCE_EDGES,
+          truncatedBy: KNOWLEDGE_MAP_TRUNCATION_REASON.nodeCount,
+          maximumNodes: 37,
+          maximumDepth: 3,
+        }),
+        sentence: TEXT.mapTruncatedOverview(37),
+        number: '37 items',
+      },
+      {
+        kind: 'a selection cut by the node count',
+        path: `/knowledge-map${evidenceSearch(FREEZE)}`,
+        key: FREEZE.item_id,
+        reply: { ...FOCUS_FREEZE, truncated_by: KNOWLEDGE_MAP_TRUNCATION_REASON.nodeCount, maximum_node_count: 37 },
+        sentence: TEXT.mapTruncatedSelection(37),
+        number: '37 items',
+      },
+      {
+        kind: 'a selection cut by depth',
+        path: `/knowledge-map${evidenceSearch(FREEZE)}`,
+        key: FREEZE.item_id,
+        reply: { ...FOCUS_FREEZE, maximum_node_count: 37, maximum_traversal_depth: 3 },
+        sentence: TEXT.mapTruncatedDepth(3),
+        number: '3 steps',
+      },
+    ]
+
+    it.each(PARTIAL)(
+      '$kind: says so before the skip link and the switch, from the reply’s own maximum, and as each table’s description',
+      async ({ path, key, reply, sentence, number }) => {
+        serveEvidence(user, { [key]: reply })
+        renderMap(path)
+        await findEvidenceDiagram()
+
+        expect(sentence).toContain(number)
+        const notice = screen.getByText(sentence)
+        expect(notice.closest('[role="status"]').textContent).toBe(sentence)
+        // Nothing on the page is worded as though something were kept from the reader.
+        expect(screen.getByRole('main').textContent).not.toMatch(WITHHOLDING)
+
+        // Ahead of the skip link, the switch and the map.
+        const skip = screen.getByRole('link', { name: TEXT.mapSkipToTables })
+        const toMap = screen.getByRole('link', { name: TEXT.evidenceSwitchToMap })
+        expect(notice.compareDocumentPosition(skip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+        expect(skip.compareDocumentPosition(toMap) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+        expect(toMap.compareDocumentPosition(evidenceDiagram()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+
+        // And each table is described by the same sentence.
+        expect(screen.getByRole('table', { name: TEXT.evidenceItemsCaption, description: sentence })).toBeTruthy()
+        expect(screen.getByRole('table', { name: TEXT.evidenceRelationshipsCaption, description: sentence })).toBeTruthy()
+      },
+    )
+
+    it('says nothing of the kind about a whole view, and describes neither table', async () => {
+      serveEvidence(user, { '': EVIDENCE })
+      renderMap(EVIDENCE_PATH)
+      await findEvidenceDiagram()
+
+      const main = screen.getByRole('main')
+      for (const partial of PARTIAL) expect(main.textContent).not.toContain(partial.sentence)
+      expect(main.textContent).not.toContain(TEXT.mapTruncatedOther)
+      expect(evidenceItems().getAttribute('aria-describedby')).toBeNull()
+      expect(citationsTable().getAttribute('aria-describedby')).toBeNull()
+    })
+  })
+
+  describe('the states: loading, failure, the empty view and the empty selection', () => {
+    it('shows the empty view as two sentences that name nothing kept from the reader, with no map, no table and no error, and the way back to the first view', async () => {
+      serveEvidence(user, { '': EMPTY_MAP })
+      renderMap(EVIDENCE_PATH)
+
+      // The words, written out here.
+      const sentence = await screen.findByText(
+        'There are no claims on the map yet. Ask a question, and the statements of its answer appear here.',
+      )
+      expect(TEXT.evidenceEmpty).toBe(sentence.textContent)
+      expect(sentence.closest('[role="status"]')).not.toBeNull()
+      expect(screen.queryByRole('alert')).toBeNull()
+      noEvidenceDrawn()
+      // The same reply for a knowledge base nobody has asked anything of and for a
+      // role with no claim in its scope, so nothing on the page may be worded as
+      // though something were kept from the reader (UC-11 E1): no role, no scope.
+      expect(TEXT.evidenceEmpty).not.toMatch(WITHHOLDING)
+      expect(TEXT.evidenceEmpty).not.toMatch(/\brole\b|\bscope\b|can read|may read/i)
+      expect(screen.getByRole('main').textContent).not.toMatch(WITHHOLDING)
+      // Not the first view's empty sentence, and not the empty selection.
+      expect(screen.queryByText(TEXT.mapEmpty)).toBeNull()
+      expect(screen.queryByText(TEXT.mapEmptySelection)).toBeNull()
+      // This view is reached only by the switch, so the switch back is still offered.
+      expect(screen.getByRole('link', { name: TEXT.evidenceSwitchToMap }).getAttribute('href')).toBe('/knowledge-map')
+    })
+
+    it('says it is loading, with neither map nor table, until the reply lands', async () => {
+      const held = heldResponse()
+      serveEvidence(user, { '': held.route })
+      renderMap(EVIDENCE_PATH)
+
+      const loading = await screen.findByText(TEXT.mapLoading)
+      expect(loading.getAttribute('role')).toBe('status')
+      noEvidenceDrawn()
+      expect(screen.queryByRole('link', { name: TEXT.evidenceSwitchToMap })).toBeNull()
+
+      await act(async () => held.release({ body: EVIDENCE }))
+
+      await findEvidenceDiagram()
+      expect(screen.queryByText(TEXT.mapLoading)).toBeNull()
+      expect(rowsOf(evidenceItems())).toHaveLength(EVIDENCE_NODES.length)
+    })
+
+    it('shows a failure as an error with the client’s own words and no map and no table, and "Try again" reads again', async () => {
+      let attempt = 0
+      const answered = serveEvidence(user, {
+        '': () => {
+          attempt += 1
+          return attempt === 1 ? { status: 500, body: { detail: 'Traceback (most recent call last): boom' } } : { body: EVIDENCE }
+        },
+      })
+      renderMap(EVIDENCE_PATH)
+
+      const title = await screen.findByText(TEXT.mapLoadFailed)
+      const alert = title.closest('[role="alert"]')
+      expect(alert.textContent).toContain(messageForStatus(500))
+      expect(screen.getByRole('main').textContent).not.toMatch(/Traceback|boom/)
+      noEvidenceDrawn()
+      expect(screen.getByRole('link', { name: TEXT.evidenceSwitchToMap }).getAttribute('href')).toBe('/knowledge-map')
+
+      fireEvent.click(screen.getByRole('button', { name: TEXT.uploadRetry }))
+
+      await findEvidenceDiagram()
+      expect(screen.queryByText(TEXT.mapLoadFailed)).toBeNull()
+      expect(evidenceRequests(answered)).toEqual(['', ''])
+    })
+
+    it('shows the rate limit’s 429 in the client’s own words, with no map and no table, and "Try again" reads again', async () => {
+      // Both views are rate limited since D-138 (the user's decision of 17 November 2026).
+      let attempt = 0
+      const answered = serveEvidence(user, {
+        '': () => {
+          attempt += 1
+          return attempt === 1
+            ? { status: 429, headers: { 'Retry-After': '42' }, body: { detail: 'Request was throttled. Expected available in 42 seconds.' } }
+            : { body: EVIDENCE }
+        },
+      })
+      renderMap(EVIDENCE_PATH)
+
+      const title = await screen.findByText(TEXT.mapLoadFailed)
+      const alert = title.closest('[role="alert"]')
+      expect(alert.textContent).toContain(messageForStatus(429))
+      expect(screen.getByRole('main').textContent).not.toMatch(/throttled|Expected available/)
+      noEvidenceDrawn()
+
+      fireEvent.click(screen.getByRole('button', { name: TEXT.uploadRetry }))
+
+      await findEvidenceDiagram()
+      expect(screen.queryByText(TEXT.mapLoadFailed)).toBeNull()
+      expect(evidenceRequests(answered)).toEqual(['', ''])
+    })
+
+    it('shows nothing of the overview while a selection is loading, nor after it has failed', async () => {
+      const held = heldResponse()
+      const answered = serveEvidence(user, { '': EVIDENCE, [CARRY_OVER.item_id]: held.route })
+      renderMap(EVIDENCE_PATH)
+      await findEvidenceDiagram()
+
+      fireEvent.click(evidenceNode(CARRY_OVER))
+
+      // In flight: the earlier reply is not shown under the new address.
+      await screen.findByText(TEXT.mapLoading)
+      expect(address()).toBe(`/knowledge-map${evidenceSearch(CARRY_OVER)}`)
+      noEvidenceDrawn()
+
+      await act(async () => held.release({ status: 500, body: null }))
+
+      // Failed: still no map and no table from the overview.
+      await screen.findByText(TEXT.mapLoadFailed)
+      noEvidenceDrawn()
+      expect(screen.getByRole('main').textContent).not.toContain(ACCRUAL.label)
+      expect(evidenceRequests(answered)).toEqual(['', evidenceApiSearch(CARRY_OVER)])
+      // The link that was followed is gone, so focus is put on the page heading.
+      await waitFor(() => expect(document.activeElement).toBe(pageHeading()))
+    })
+
+    it('ignores a reply that lands after the address has moved on', async () => {
+      const held = heldResponse()
+      const answered = serveEvidence(user, { [CARRY_OVER.item_id]: held.route, '': EVIDENCE })
+      renderMap(`/knowledge-map${evidenceSearch(CARRY_OVER)}`)
+      await screen.findByText(TEXT.mapLoading)
+
+      await act(async () => probe.navigate(EVIDENCE_PATH))
+      await findEvidenceDiagram()
+
+      held.release({ body: FOCUS_CARRY_OVER })
+      await letLateWorkLand()
+
+      // The whole view is still what is shown, under its own address.
+      expect(address()).toBe(EVIDENCE_PATH)
+      expect(rowsOf(evidenceItems())).toEqual(EVIDENCE_NODES.map(evidenceItemsRow))
+      expect(screen.getByRole('main').querySelectorAll('[aria-current="true"]')).toHaveLength(0)
+      expect(screen.getByText('3 claims · 3 passages shown')).toBeTruthy()
+      expect(evidenceRequests(answered)).toEqual([evidenceApiSearch(CARRY_OVER), ''])
+    })
+
+    it('shows a 403 as the not-permitted notice alone, with no switch and nothing about a map', async () => {
+      const answered = serveEvidence(user, {
+        '': { status: 403, body: { detail: 'You do not have permission to perform this action.' } },
+      })
+      renderMap(EVIDENCE_PATH)
+
+      const title = await screen.findByText(TEXT.notPermittedTitle)
+      expect(title.closest('[role="alert"]').textContent).toContain(TEXT.notPermitted)
+      noEvidenceDrawn()
+      expect(screen.queryByRole('button', { name: TEXT.uploadRetry })).toBeNull()
+      expect(screen.queryByText(TEXT.evidenceEmpty)).toBeNull()
+      expect(screen.queryByRole('link', { name: TEXT.evidenceSwitchToMap })).toBeNull()
+      expect(evidenceRequests(answered)).toEqual([''])
+    })
+
+    it('shows the empty selection, with the way back to the whole view, for a focus the reply holds nothing for', async () => {
+      const unknown = claimId(99)
+      const answered = serveEvidence(user, { [unknown]: EMPTY_MAP, '': EVIDENCE })
+      renderMap(`/knowledge-map?view=evidence&focus_type=claim&focus_id=${unknown}`)
+
+      const sentence = await screen.findByText(TEXT.mapEmptySelection)
+      expect(sentence.closest('[role="status"]')).not.toBeNull()
+      expect(screen.queryByRole('alert')).toBeNull()
+      expect(screen.queryByText(TEXT.evidenceEmpty)).toBeNull()
+      noEvidenceDrawn()
+
+      // "Show the whole map" stays in this view.
+      const whole = screen.getByRole('link', { name: TEXT.mapShowWhole })
+      expect(whole.getAttribute('href')).toBe(EVIDENCE_PATH)
+      fireEvent.click(whole)
+
+      await findEvidenceDiagram()
+      expect(address()).toBe(EVIDENCE_PATH)
+      expect(evidenceRequests(answered)).toEqual([`?focus_type=claim&focus_id=${unknown}`, ''])
+    })
+
+    it('shows a 400 as the same empty selection, with no retry and none of the server’s words', async () => {
+      const answered = serveEvidence(user, {
+        'not-a-claim': { status: 400, body: { focus_id: ['focus_id is not an identifier of that focus_type.'] } },
+      })
+      renderMap('/knowledge-map?view=evidence&focus_type=claim&focus_id=not-a-claim')
+
+      await screen.findByText(TEXT.mapEmptySelection)
+      expect(screen.getByRole('link', { name: TEXT.mapShowWhole }).getAttribute('href')).toBe(EVIDENCE_PATH)
+      expect(screen.queryByRole('button', { name: TEXT.uploadRetry })).toBeNull()
+      expect(screen.queryByRole('alert')).toBeNull()
+      expect(screen.getByRole('main').textContent).not.toContain('not an identifier')
+      noEvidenceDrawn()
+      expect(evidenceRequests(answered)).toEqual(['?focus_type=claim&focus_id=not-a-claim'])
+    })
+
+    it.each([
+      { what: 'a type without an identifier', search: '&focus_type=claim' },
+      { what: 'an identifier without a type', search: `&focus_id=${claimId(1)}` },
+      { what: 'a type with an empty identifier', search: '&focus_type=passage&focus_id=' },
+      // A document is a node of the first view, not of this one.
+      { what: 'a type of the first view', search: `&focus_type=document&focus_id=${uuid(1)}` },
+    ])('sends no request for $what, and shows the empty selection', async ({ search }) => {
+      // Neither map route is served: a request to either would be refused and fail the test.
+      const answered = serveApi({ 'GET /api/auth/me': { body: user } })
+      renderMap(`${EVIDENCE_PATH}${search}`)
+
+      await screen.findByText(TEXT.mapEmptySelection)
+      expect(screen.getByRole('link', { name: TEXT.mapShowWhole }).getAttribute('href')).toBe(EVIDENCE_PATH)
+      expect(screen.getByRole('link', { name: TEXT.evidenceSwitchToMap }).getAttribute('href')).toBe('/knowledge-map')
+      expect(screen.queryByText(TEXT.mapLoading)).toBeNull()
+      noEvidenceDrawn()
+      await act(async () => {})
+      expect(answered.map((request) => request.path)).toEqual(['/api/auth/me'])
+    })
+  })
+
+  describe('text from an answer or a source is rendered as text', () => {
+    const hostile = (word) => `<img src="x" onerror="window.__mapInjected = true"><b>${word}</b>`
+
+    it('renders markup in a claim’s text as the characters it is, on the diagram, in both tables and in the Claim review', async () => {
+      const claim = claimNode(51, hostile('claim'), 1, {
+        answers: 2,
+        passages: 1,
+        first: '2026-03-14',
+        last: '2026-08-02',
+      })
+      const passage = passageNode(191, { ...HANDBOOK, title: hostile('title') }, 1, 1)
+      serveEvidence(user, { [claim.item_id]: mapObject({ focus: claim, nodes: [claim, passage], edges: [cites(claim, passage, 2)] }) })
+      renderMap(`/knowledge-map${evidenceSearch(claim)}`)
+      await findEvidenceDiagram()
+
+      const main = screen.getByRole('main')
+      expect(main.querySelectorAll('img, b')).toHaveLength(0)
+      expect(window.__mapInjected).toBeUndefined()
+      // Each appears as written.
+      expect(selectedIn(evidenceDiagram()).querySelector('.knowledge-map__node-label').textContent).toBe(claim.label)
+      expect(within(evidenceNode(passage)).getByText(passage.label)).toBeTruthy()
+      expect(rowsOf(evidenceItems()).map((row) => row[0])).toEqual([`${claim.label}, ${TEXT.mapSelectedMark}`, passage.label])
+      expect(rowsOf(citationsTable())).toEqual([
+        [`Claim: ${claim.label}, ${TEXT.mapSelectedMark}`, TEXT.evidenceRelationshipCites, `Passage: ${passage.label}`, '2'],
+      ])
+      expect(claimReview().querySelector('.knowledge-map__panel-name').textContent).toBe(claim.label)
+      expect(paneLinks(claimReview(), TEXT.evidenceSupportedBy).map((link) => link.textContent)).toEqual([
+        `Passage: ${passage.label}`,
+      ])
+    })
+
+    it('renders markup in a selected passage’s source title as characters in the pane', async () => {
+      const source = { ...HANDBOOK, title: hostile('title') }
+      const passage = passageNode(192, source, 1, 1)
+      const claim = claimNode(52, hostile('claim'), 1, {
+        answers: 1,
+        passages: 1,
+        first: '2026-03-14',
+        last: '2026-03-14',
+      })
+      serveEvidence(user, { [passage.item_id]: mapObject({ focus: passage, nodes: [passage, claim], edges: [cites(claim, passage, 1)] }) })
+      renderMap(`/knowledge-map${evidenceSearch(passage)}`)
+      await findEvidenceDiagram()
+
+      expect(screen.getByRole('main').querySelectorAll('img, b')).toHaveLength(0)
+      expect(window.__mapInjected).toBeUndefined()
+      expect(pane().querySelector('.knowledge-map__panel-name').textContent).toBe(passage.label)
+      expect(factsOf(pane())).toEqual({ Source: { text: `Document: ${source.title}`, dateTime: null } })
+      expect(paneLinks(pane(), TEXT.evidenceCitedBy).map((link) => link.textContent)).toEqual([`Claim: ${claim.label}`])
+      // Its source's page is still the one the reply named.
+      expect(selectedIn(evidenceDiagram()).getAttribute('href')).toBe(`/documents/${HANDBOOK.id}`)
+    })
+  })
+
+  describe('a selected passage’s lines, and selecting from the pane’s own lists', () => {
+    it('marks the lines that arrive at a selected passage, and no other, and draws them last', async () => {
+      const answered = serveEvidence(user, { '': EVIDENCE, [P_SUMMARY.item_id]: FOCUS_P_SUMMARY })
+      renderMap(EVIDENCE_PATH)
+      await findEvidenceDiagram()
+      // Nothing is selected yet, so no line is marked.
+      expect(drawnLines().filter((line) => line.classList.contains('knowledge-map__line--selected'))).toEqual([])
+
+      fireEvent.click(evidenceNode(P_SUMMARY))
+
+      await waitFor(() =>
+        expect(selectedIn(evidenceDiagram()).textContent).toBe(
+          `${evidenceNodeName(P_SUMMARY)}, ${TEXT.mapSelectedMark}. ${TEXT.mapSelectAgainMeeting}`,
+        ),
+      )
+      expect(evidenceRequests(answered)).toEqual(['', evidenceApiSearch(P_SUMMARY)])
+      // The selected passage is the first of the two in its column, and the two
+      // claims are the two rows of theirs: the rows' middles are 25% and 75%.
+      const cell = selectedIn(evidenceDiagram()).closest('li')
+      expect([styleOf(cell)['grid-column'], styleOf(cell)['grid-row']]).toEqual(['3', '1'])
+      // Three edges. A passage is the far end of a line, so the marked lines are
+      // the two that arrive at the selected passage's row, whichever claim they
+      // leave. The third arrives at the other passage: unmarked, and drawn first.
+      const lines = drawnLines()
+      expect(
+        lines.map((line) => [
+          line.getAttribute('y1'),
+          line.getAttribute('y2'),
+          line.classList.contains('knowledge-map__line--selected'),
+        ]),
+      ).toEqual([
+        ['25%', '75%', false], // the carry-over claim cites the handbook
+        ['25%', '25%', true], // the carry-over claim cites the selected summary passage
+        ['75%', '25%', true], // the freeze claim cites the selected summary passage
+      ])
+      // Each keeps the weight of its own pairing: 3 times, once, once.
+      expect(lines.map(weightOf)).toEqual(['medium', 'light', 'light'])
+    })
+
+    it('following a passage in the Claim review’s "Supported by" list selects that passage: the address, the request’s two parameters, and focus on the pane', async () => {
+      const answered = serveEvidence(user, {
+        [CARRY_OVER.item_id]: FOCUS_CARRY_OVER,
+        [P_HANDBOOK.item_id]: FOCUS_P_HANDBOOK,
+      })
+      renderMap(`/knowledge-map${evidenceSearch(CARRY_OVER)}`)
+      await findEvidenceDiagram()
+
+      const [handbook] = paneLinks(claimReview(), TEXT.evidenceSupportedBy)
+      expect(handbook.textContent).toBe(evidenceTyped(P_HANDBOOK))
+      expect(handbook.getAttribute('href')).toBe(`/knowledge-map${evidenceSearch(P_HANDBOOK)}`)
+      handbook.focus()
+      fireEvent.click(handbook)
+
+      await waitFor(() => expect(address()).toBe(`/knowledge-map${evidenceSearch(P_HANDBOOK)}`))
+      await waitFor(() =>
+        expect(selectedIn(evidenceDiagram()).textContent).toBe(
+          `${evidenceNodeName(P_HANDBOOK)}, ${TEXT.mapSelectedMark}. ${TEXT.mapSelectAgainDocument}`,
+        ),
+      )
+      // A second request, for the walk from the passage: the route's two parameters and no `view`.
+      const requests = evidenceRequests(answered)
+      expect(requests).toEqual([evidenceApiSearch(CARRY_OVER), evidenceApiSearch(P_HANDBOOK)])
+      expect([...new URLSearchParams(requests[1]).entries()]).toEqual([
+        ['focus_type', 'passage'],
+        ['focus_id', P_HANDBOOK.item_id],
+      ])
+      // The pane is now the passage's, headed "Selected", and the link that was
+      // followed went with the Claim review: focus is on the new pane's heading.
+      expect(screen.queryByRole('region', { name: TEXT.evidenceClaimReviewHeading })).toBeNull()
+      expect(pane().querySelector('.knowledge-map__panel-item').textContent).toBe(`Passage ${P_HANDBOOK.label}`)
+      await waitFor(() =>
+        expect(document.activeElement).toBe(within(pane()).getByRole('heading', { level: 2, name: TEXT.mapSelectedHeading })),
+      )
+    })
+
+    it('following a claim in a passage pane’s "Cited by" list selects that claim: the address, the request’s two parameters, and focus on the Claim review', async () => {
+      const answered = serveEvidence(user, { [P_SUMMARY.item_id]: FOCUS_P_SUMMARY, [FREEZE.item_id]: FOCUS_FREEZE })
+      renderMap(`/knowledge-map${evidenceSearch(P_SUMMARY)}`)
+      await findEvidenceDiagram()
+
+      // The second of the two claims that cite the passage.
+      const [, freeze] = paneLinks(pane(), TEXT.evidenceCitedBy)
+      expect(freeze.textContent).toBe(evidenceTyped(FREEZE))
+      expect(freeze.getAttribute('href')).toBe(`/knowledge-map${evidenceSearch(FREEZE)}`)
+      freeze.focus()
+      fireEvent.click(freeze)
+
+      await waitFor(() => expect(address()).toBe(`/knowledge-map${evidenceSearch(FREEZE)}`))
+      await waitFor(() => expect(selectedIn(evidenceDiagram()).textContent).toBe(selectedClaimName(FREEZE)))
+      const requests = evidenceRequests(answered)
+      expect(requests).toEqual([evidenceApiSearch(P_SUMMARY), evidenceApiSearch(FREEZE)])
+      expect([...new URLSearchParams(requests[1]).entries()]).toEqual([
+        ['focus_type', 'claim'],
+        ['focus_id', FREEZE.item_id],
+      ])
+      // The pane is now the Claim review of that claim, and its heading has the focus.
+      expect(screen.queryByRole('region', { name: TEXT.mapSelectedHeading })).toBeNull()
+      expect(claimReview().querySelector('.knowledge-map__panel-item').textContent).toBe(`Claim ${FREEZE.label}`)
+      await waitFor(() =>
+        expect(document.activeElement).toBe(screen.getByRole('heading', { level: 2, name: TEXT.evidenceClaimReviewHeading })),
+      )
+    })
+  })
+
+  describe('each table’s own sort, the view’s own words, and two more addresses and replies', () => {
+    it('keeps each table’s sort its own: sorting one leaves the other sorted as it was', async () => {
+      serveEvidence(user, { '': EVIDENCE })
+      renderMap(EVIDENCE_PATH)
+      await findEvidenceDiagram()
+      // The orders, worked out here. Items by Name: Annual…, Budget Review Meeting…,
+      // Discretionary…, Leave Policy…, Staff Handbook…, Unused….
+      const byName = [ACCRUAL, P_SUMMARY, FREEZE, P_POLICY, P_HANDBOOK, CARRY_OVER].map(evidenceItemsRow)
+      // Items by Connections shown: the four with 1, then the two with 2, by label within a count.
+      const byConnections = [ACCRUAL, FREEZE, P_POLICY, P_HANDBOOK, P_SUMMARY, CARRY_OVER].map(evidenceItemsRow)
+      // Relationships by To, descending: the handbook's passage, the policy's, then
+      // the meeting's twice, the carry-over claim's row ahead of the freeze claim's.
+      const byToDescending = [
+        citationRow(CARRY_OVER, P_HANDBOOK, 3),
+        citationRow(ACCRUAL, P_POLICY, 12),
+        citationRow(CARRY_OVER, P_SUMMARY, 1),
+        citationRow(FREEZE, P_SUMMARY, 1),
+      ]
+      const drawnBefore = evidenceOrder()
+
+      // Items, then Relationships.
+      pressColumn(evidenceItems(), TEXT.mapItemsColumnName)
+      pressColumn(citationsTable(), TEXT.mapRelationshipsColumnTo)
+      pressColumn(citationsTable(), TEXT.mapRelationshipsColumnTo)
+
+      // Items is still sorted by Name, as it was before the other table was touched.
+      expect(sortStates(evidenceItems())).toEqual(['ascending', null, null])
+      expect(rowsOf(evidenceItems())).toEqual(byName)
+      expect(sortStates(citationsTable())).toEqual([null, null, 'descending', null])
+      expect(rowsOf(citationsTable())).toEqual(byToDescending)
+
+      // And the other way about: sorting Items again leaves Relationships as it is.
+      pressColumn(evidenceItems(), TEXT.mapItemsColumnConnections)
+      expect(sortStates(evidenceItems())).toEqual([null, null, 'ascending'])
+      expect(rowsOf(evidenceItems())).toEqual(byConnections)
+      expect(sortStates(citationsTable())).toEqual([null, null, 'descending', null])
+      expect(rowsOf(citationsTable())).toEqual(byToDescending)
+      // The three orders differ, so none of these could pass for another.
+      expect(byName).not.toEqual(byConnections)
+      expect(byName).not.toEqual(EVIDENCE_NODES.map(evidenceItemsRow))
+      // Neither sort moved a node on the diagram or changed the address.
+      expect(evidenceOrder()).toEqual(drawnBefore)
+      expect(address()).toBe(EVIDENCE_PATH)
+    })
+
+    it('says what this view is under the page heading, in its own words, and the legend says how the selected item is marked', async () => {
+      serveEvidence(user, { '': EVIDENCE })
+      renderMap(EVIDENCE_PATH)
+      await findEvidenceDiagram()
+      const main = screen.getByRole('main')
+
+      // The view's own introduction: one paragraph, after the heading and ahead of
+      // the count line and the map. Not the first view's, which is about other things.
+      const intro = within(main).getByText(TEXT.evidenceIntro)
+      expect(intro.tagName).toBe('P')
+      expect(pageHeading().compareDocumentPosition(intro) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      expect(intro.compareDocumentPosition(screen.getByText('3 claims · 3 passages shown')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      expect(intro.compareDocumentPosition(evidenceDiagram()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      expect(TEXT.evidenceIntro).not.toBe(TEXT.mapIntro)
+      expect(within(main).queryByText(TEXT.mapIntro)).toBeNull()
+      // It says what a claim is, what selecting does, and that the table view holds the same.
+      expect(TEXT.evidenceIntro).toMatch(/A claim is a statement an answer made/)
+      expect(TEXT.evidenceIntro).toMatch(/Select a claim to review it, or a passage to see which claims cite it/)
+      expect(TEXT.evidenceIntro).toMatch(/table view/)
+      expect(TEXT.evidenceIntro).not.toMatch(WITHHOLDING)
+
+      // The legend: how the selected item is marked, in the words written out here.
+      // Its lines are darker, not heavier: in this view a line's weight says how
+      // often its pairing was admitted, so the first view's sentence is not used.
+      const legend = screen.getByRole('region', { name: TEXT.mapLegendHeading })
+      expect(TEXT.evidenceLegendSelected).toBe(
+        'The selected item has a heavier outline and darker lines, and is marked “Selected”.',
+      )
+      expect(within(legend).getByText(TEXT.evidenceLegendSelected).tagName).toBe('P')
+      expect(TEXT.evidenceLegendSelected).not.toBe(TEXT.mapLegendSelected)
+      expect(legend.textContent).not.toContain(TEXT.mapLegendSelected)
+    })
+
+    it('reads two empty focus parameters as no selection, and asks for the overview once, with no focus parameter', async () => {
+      const answered = serveEvidence(user, { '': EVIDENCE })
+      renderMap(`${EVIDENCE_PATH}&focus_type=&focus_id=`)
+
+      await findEvidenceDiagram()
+      await letLateWorkLand()
+      // One request to the second view's route, with nothing in its query.
+      expect(evidenceRequests(answered)).toEqual([''])
+      expect(answered.map((request) => request.path)).toEqual(['/api/auth/me', '/api/knowledge-map/evidence'])
+      // The whole view, with nothing selected: not the empty selection.
+      expect(screen.getByText('3 claims · 3 passages shown')).toBeTruthy()
+      expect(rowsOf(evidenceItems())).toEqual(EVIDENCE_NODES.map(evidenceItemsRow))
+      expect(within(pane()).getByText(TEXT.evidenceSelectedNone)).toBeTruthy()
+      expect(screen.getByRole('main').querySelectorAll('[aria-current="true"]')).toHaveLength(0)
+      expect(screen.queryByText(TEXT.mapEmptySelection)).toBeNull()
+    })
+
+    it('marks an AI-flagged passage of a document with "Suggested by AI" in its pane, without the sentence about a meeting’s summary', async () => {
+      // Not a reply the server sends today: only a meeting's summary is flagged.
+      // The sentence is about a meeting's summary, so a document's passage must not carry it.
+      const flagged = passageNode(195, HANDBOOK, 7, 1, true)
+      expect(flagged.detail.source_type).toBe(SOURCE_TYPE.document)
+      serveEvidence(user, {
+        [flagged.item_id]: mapObject({ focus: flagged, nodes: [flagged, ACCRUAL], edges: [cites(ACCRUAL, flagged, 2)] }),
+      })
+      renderMap(`/knowledge-map${evidenceSearch(flagged)}`)
+      await findEvidenceDiagram()
+
+      // The pane's AI note: the mark, and nothing after it.
+      const selectedPane = pane()
+      const note = selectedPane.querySelector('.knowledge-map__panel-ai')
+      expect(note).not.toBeNull()
+      expect(note.textContent).toBe('Suggested by AI')
+      expect(within(note).getByText('Suggested by AI').classList.contains('ai-mark')).toBe(true)
+      expect(screen.getByRole('main').textContent).not.toContain(TEXT.aiSummaryPassage)
+      // The rest of the pane is a document passage's: its source, and the open action.
+      expect(selectedPane.querySelector('.knowledge-map__panel-item').textContent).toBe(`Passage ${flagged.label}`)
+      expect(factsOf(selectedPane)).toEqual({ Source: { text: 'Document: Staff Handbook', dateTime: null } })
+      expect(within(selectedPane).getByRole('link', { name: TEXT.mapOpenDocument }).getAttribute('href')).toBe(
+        `/documents/${HANDBOOK.id}`,
+      )
+      // And the node still carries the mark, wherever its label is shown.
+      expect(selectedIn(evidenceDiagram()).textContent).toBe(
+        `Passage: ${flagged.label}, Suggested by AI, ${TEXT.mapConnectionsShown(1)}, ${TEXT.mapSelectedMark}. ${TEXT.mapSelectAgainDocument}`,
+      )
+      expect(rowsOf(evidenceItems())[0][0]).toBe(
+        `${flagged.label}, Suggested by AI, ${TEXT.mapSelectedMark}. ${TEXT.mapSelectAgainDocument}`,
+      )
+    })
+  })
+
+  describe('the view’s wording, and the way in when signed out', () => {
+    it('words no sentence of the second view so as to suggest that anything is kept from the reader', () => {
+      // The sentences a reader meets in this view's states, as the first view's test lists its own.
+      const sentences = [
+        TEXT.evidenceEmpty,
+        TEXT.evidenceIntro,
+        TEXT.evidenceSelectedNone,
+        TEXT.evidenceLegendLine,
+        TEXT.evidenceLegendSelected,
+        TEXT.evidenceClaimNoPage,
+        TEXT.evidenceAdmittedIn(1),
+        TEXT.evidenceAdmittedIn(12),
+        TEXT.evidenceSameSource,
+        TEXT.evidenceItemsCaption,
+        TEXT.evidenceRelationshipsCaption,
+        // The first view's, used again in this view's states.
+        TEXT.mapEmptySelection,
+        TEXT.mapNoRelationships,
+        TEXT.mapTruncatedOverview(50),
+        TEXT.mapTruncatedSelection(50),
+        TEXT.mapTruncatedDepth(2),
+        TEXT.mapTruncatedOther,
+      ]
+      for (const sentence of sentences) {
+        expect(sentence).not.toMatch(WITHHOLDING)
+      }
+      // And every text this view adds, by its name, so one added later is held to the same rule.
+      const added = Object.entries(TEXT).filter(([name]) => name.startsWith('evidence'))
+      // The sweep reaches them: the empty sentence, the introduction and a switch's label are among them.
+      expect(added.map(([name]) => name)).toEqual(
+        expect.arrayContaining(['evidenceEmpty', 'evidenceIntro', 'evidenceSelectedNone', 'evidenceSwitchToMap']),
+      )
+      for (const [name, value] of added) {
+        // The view's functions each take a count.
+        const said = typeof value === 'function' ? [value(1), value(2)] : [value]
+        for (const text of said) expect(text, name).not.toMatch(WITHHOLDING)
+      }
+    })
+
+    it('lands on the first view after signing in when the second view was opened signed out: the return from sign-in keeps the path only (a recorded limitation)', async () => {
+      let signedIn = false
+      const answered = serveApi({
+        'GET /api/auth/me': () => (signedIn ? { body: user } : NOT_SIGNED_IN),
+        'POST /api/auth/login': () => {
+          signedIn = true
+          return { body: user }
+        },
+        'GET /api/knowledge-map': mapRoute({ '': OVERVIEW }),
+        'GET /api/knowledge-map/evidence': mapRoute({ '': EVIDENCE }),
+      })
+      renderMap(EVIDENCE_PATH)
+
+      // Sent to sign in, having asked neither map route for anything.
+      fireEvent.change(await screen.findByLabelText('Email'), { target: { value: user.email } })
+      expect(probe.location.pathname).toBe('/login')
+      expect(mapRequests(answered)).toEqual([])
+      expect(evidenceRequests(answered)).toEqual([])
+      fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'Correct-Horse-1' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+
+      // Back at the knowledge map's path, without the `view` the address held: the
+      // first view, read from the first view's route. The second view was never asked.
+      await findDiagram()
+      await waitFor(() => expect(address()).toBe('/knowledge-map'))
+      expect(screen.getByRole('heading', { level: 1, name: TEXT.mapHeading })).toBeTruthy()
+      expect(screen.queryByRole('region', { name: TEXT.evidenceDiagramHeading })).toBeNull()
+      expect(mapRequests(answered)).toEqual([''])
+      expect(evidenceRequests(answered)).toEqual([])
+      // The second view is one link away.
+      expect(screen.getByRole('link', { name: TEXT.evidenceSwitchToClaims }).getAttribute('href')).toBe(EVIDENCE_PATH)
     })
   })
 })

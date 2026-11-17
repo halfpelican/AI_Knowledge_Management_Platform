@@ -358,3 +358,63 @@ and requests nothing: `componentSheet.test.jsx :: shows the knowledge map’s
 legend with its four types and a sample map with a node of each, from sample
 data, asking the API for nothing`. The node-colour pairs are in its Contrast
 table (`src/components/contrastPairs.js`).
+
+## 9. The knowledge map's second view (D-138, 16 November 2026)
+
+The same page's second view, at `/knowledge-map?view=evidence`: claims joined to the passages
+they cite. It is asserted structurally, as section 8's view is, and the same three browser
+measurements are owed for it (the end of this section).
+
+**Reaching it (SC 2.4.3).** A link styled as a button, "Show claims and passages", is the next
+link and the next tab stop after "Skip to the table view". In the second view the same place
+holds "Show documents, meetings, tags and contributors". After a switch, focus is on the page's
+heading. `knowledgeMap.test.jsx`, under "the switch between the two views", as each role.
+
+**Type by colour and shape, and never by colour alone (SC 1.4.1, SC 1.4.11).**
+
+| Type | Shape | Fill | On `--color-surface` | Also in words |
+|---|---|---|---|---|
+| Claim | square (`rect`) | `--color-text` #1f2933 | 14.76:1 | "Claim" in the legend, the node's name and the Type column |
+| Passage | circle | `--color-primary` | 6.70:1 | "Passage", in the same three places |
+
+Both pairs were already in section 1's table. `contrast.test.js :: the second view (D-138): gives
+the claim and the passage one fill token each, two different ones, each a tested 3:1 pair on the
+surface`.
+
+**What a line's weight says is also said in a number (SC 1.4.1).** A heavier line means the
+pairing was admitted more often: three widths, for 1, for 2 to 4, and for 5 or more. The lines
+are in an `aria-hidden` layer. The same number is the Relationships table's "Times admitted"
+column, one row per line. `contrast.test.js :: the second view (D-138): a line’s three weights
+are three widths, each greater than the last, and no colour of their own`.
+
+**The selected item** has a heavier outline, darker lines, `aria-current` and the visible word
+"Selected". Its lines keep their weight, so the legend says "darker lines" for this view.
+A selected item's lines therefore differ from the others by colour alone, and the two strokes
+are 2.97:1 against each other, under 3:1. What those lines say is also in text: the pane lists
+what the selected item is joined to ("Supported by" or "Cited by"), and the Relationships
+table has a row for each line. The first view's selected lines are heavier as well as darker.
+
+**AI-generated content says so in words (NFR-15).** A passage of a meeting's AI-written summary
+carries the app's "Suggested by AI" mark wherever its label is shown: its node, its Items row,
+the To cells and the Claim review's list. A dashed outline is a second cue and never the only
+one. `knowledgeMap.test.jsx`, under "NFR-15: a passage that is AI-generated content says so in
+words".
+
+**The table equivalent (NFR-17, SC 1.1.1, SC 1.3.1).** Two tables, as section 8's view has:
+Items (Name, Type, Connections shown) and Relationships (From, Relationship, To, Times admitted).
+Every column heading is a button that sorts, with `aria-sort`, and "Times admitted" sorts as a
+number. Each row's ends are the same links as the nodes, so a row selects as a node does.
+`knowledgeMap.test.jsx`, under "NFR-17: the table view holds the same claims, passages and
+citations as rows".
+
+**The Claim review pane.** A selected claim is plain text, not a link, and the pane says "A
+claim has no page of its own, so there is nothing to open." After a selection made on the page
+has loaded, focus is on the pane's heading. A selected passage links to its source's page.
+
+**Tab order.** `tabOrder.test.jsx`, under "its second view, claims and passages (D-138)": the
+view's whole walk as each role, with no stop hidden by a stylesheet rule, the switch straight
+after the skip link, claims before passages, and a selected claim not a stop.
+
+**Owed in a browser, by a person,** as for section 8's view: a screen-reader run (NVDA or
+VoiceOver) through both tables; reflow at 320 CSS pixels; an axe run; and that the two shapes,
+the three line widths and the switch beside the skip link paint as the stylesheet says.
