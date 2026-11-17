@@ -22,6 +22,7 @@ from django.utils import timezone
 from django.utils.http import content_disposition_header
 from django.utils.text import Truncator
 from rest_framework import status
+from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -162,6 +163,7 @@ from .transcription_slot import (
 from .permissions import HasRolePermission, role_holds
 from .repository import RepositoryFilters, browse, classification_of, repository_documents
 from .serializers import (
+    CURRENT_PASSWORD_INCORRECT_MESSAGE,
     AnswerSerializer,
     AskSerializer,
     ClassificationConfirmSerializer,
@@ -879,8 +881,17 @@ class PasswordChangeView(APIView):
       sessions are not touched.
     - FR-03's lock and count stay as they are, as a completed reset leaves them (D-137).
 
-    Two changes racing on one account each verified the current password, so either caller could
-    have made the change alone. The later save wins, and the other session is signed out.
+    **The password must still be the one verified when it is changed** (the final review of 17
+    November 2026, CHG-1). The serializer verifies the current password against the row read when
+    the request was authenticated. Before the save, the row is read again and locked, FOR NO KEY
+    UPDATE and of the users row alone, as a reset's confirm locks it. Unless its hash is still the
+    one verified, the change is refused with the 400 a wrong current password gets, since the
+    password typed is no longer the account's, and nothing is changed. Until then a reset completed
+    in that window was undone by the change's save, and the session that made the change was kept on
+    a password the reset had replaced. Two changes racing on one account take turns on the lock: the
+    first is made, and the second, whose current password is no longer the current one, gets the 400.
+    The new hash is made before the lock is taken, so the lock is held for a few queries, never for a
+    hash, as a reset's is.
     """
 
     throttle_classes = [ScopedRateThrottle]
@@ -890,8 +901,18 @@ class PasswordChangeView(APIView):
         user = request.user
         serializer = PasswordChangeSerializer(data=request.data, context={"user": user})
         serializer.is_valid(raise_exception=True)  # 400 in DRF's shape
+        # The hash the current password was just verified against, before set_password replaces it.
+        verified_hash = user.password
         user.set_password(serializer.validated_data["new_password"])
         with transaction.atomic():
+            current = (
+                User.objects.select_for_update(no_key=True, of=("self",)).filter(pk=user.pk).first()
+            )
+            if current is None or current.password != verified_hash:
+                # A reset or another change committed since the check, or the account is gone
+                # (CHG-1). Raised inside the transaction, so nothing is written, and answered as the
+                # serializer's own 400.
+                raise ValidationError({"current_password": [CURRENT_PASSWORD_INCORRECT_MESSAGE]})
             # The password column alone. This row was read when the request was authenticated, so
             # a full save would write back what it held then, undoing a role change an
             # Administrator made since, or a lock FR-02 set since.

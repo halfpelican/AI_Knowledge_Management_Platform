@@ -2075,8 +2075,17 @@ every `401` as an expired session and signs the user out (D-137). Nothing is cha
 - **Errors in both fields come in one `400`.** A wrong current password and a weak new one are
   named together. The unchanged-password check is the exception: it runs only once both fields
   pass, so a new password equal to a wrong current one draws only the `current_password` error.
+- **A current password that stopped being current while the request ran** (the final review of
+  17 November 2026, CHG-1): the same
+  `{"current_password": ["Your current password is incorrect."]}`. The password typed is checked
+  against the account as the request found it. Just before the new one is saved, the account's row
+  is locked and read again, and its stored password must still be the one checked. If a reset or
+  another change was committed in between, the password typed is no longer the account's, and
+  nothing is changed. Two changes at once on one account take turns: the first is made, and the
+  second gets this `400`.
 
-**The order** is fixed: `401` for no session, then the CSRF `403`, then the `429`, then the body.
+**The order** is fixed: `401` for no session, then the CSRF `403`, then the `429`, then the body, and
+last the check that the current password is still the account's.
 
 **What a change does to sessions.**
 

@@ -17,6 +17,11 @@ file holds, each from D-137 or from a rule the project already has:
   included. Every other session of the user ends, and other users' sessions do not.
 - **The change touches the password alone.** FR-03's lock and count stay as they were, and a role
   change committed while the request ran is not written back over.
+- **The password must still be the one verified when it is changed** (the final review of 17
+  November 2026, CHG-1). A reset committed after the current password was checked refuses the
+  change with the 400 a wrong current password gets: the reset's password stands, and the session
+  that sent the change ends, as the reset ended every session. The check is made on the account's
+  row locked FOR NO KEY UPDATE, the only lock the change takes.
 - **Passwords are taken as typed,** as registration and sign-in take them: neither field is trimmed.
 - **The answers are the contract's words,** and the ``csrftoken`` cookie is not rotated, so the token
   the page held before the change still works after it.
@@ -32,9 +37,12 @@ from dataclasses import dataclass
 import pytest
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.contrib.auth.hashers import make_password
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.sessions.models import Session
 from django.core.exceptions import ValidationError
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -263,6 +271,52 @@ def test_a_role_change_committed_while_the_password_changes_is_not_written_back_
     assert (stored.role_id, stored.failed_attempts) == (other_role.pk, 3)
     assert stored.check_password(NEW_PASSWORD)
     assert client.get(ME).json()["role"] == other_role.role_name
+
+
+# --- The password must still be the one verified (the final review of 17 November 2026, CHG-1) --
+
+# What a reset sets in the test below.
+RESET_PASSWORD = "Reset-Harbour-73-Quill"
+
+
+def test_a_reset_committed_after_the_check_refuses_the_change_and_its_session_ends(
+    session_client, monkeypatch
+):
+    """The current password is verified against the row read when the request was authenticated.
+    Here a reset commits after that, as the validators run on the new password: a new hash in the
+    password column alone, as a completed reset leaves it. The change used to save over it, answer
+    200 and keep its session on the replaced password. Now it is the 400 a wrong current password
+    gets, since the password typed is no longer the account's, the reset's password stands, and the
+    session that sent the change ends on its next request, as the reset ended every session."""
+    client, user = session_client.client, session_client.user
+    real_validate_password = apps.api.serializers.validate_password
+
+    def validate_after_a_reset(password, user=None, password_validators=None):
+        User.objects.filter(pk=user.pk).update(password=make_password(RESET_PASSWORD))
+        return real_validate_password(password, user=user, password_validators=password_validators)
+
+    monkeypatch.setattr(apps.api.serializers, "validate_password", validate_after_a_reset)
+
+    response = change(client)
+
+    assert (response.status_code, response.json()) == (400, WRONG_CURRENT_BODY)
+    stored = User.objects.get(pk=user.pk)
+    assert stored.check_password(RESET_PASSWORD)
+    assert not stored.check_password(NEW_PASSWORD)
+    assert client.get(ME).status_code == 401
+
+
+def test_the_change_checks_and_saves_under_a_no_key_update_lock_on_the_users_row_alone(session_client):
+    """The check above holds only if nothing commits between it and the save, so both are made under
+    the account's row lock, FOR NO KEY UPDATE and of the users row alone, as a reset's confirm takes
+    it: a reset arriving meanwhile waits, then finds a password its link no longer matches. Read from
+    the SQL, as the picture upload's lock is."""
+    with CaptureQueriesContext(connection) as queries:
+        assert change(session_client.client).status_code == 200
+
+    locks = [query["sql"] for query in queries.captured_queries if " FOR " in query["sql"]]
+    assert len(locks) == 1, locks
+    assert locks[0].endswith('FOR NO KEY UPDATE OF "users"'), locks[0]
 
 
 # --- 400: the current password ---------------------------------------------------------------------
