@@ -277,8 +277,10 @@ if ($LASTEXITCODE -ne 0) { throw "Not starting: manage.py check reported an erro
   `SPA_DIST_DIR`. Stop the server, do step 5, and start it again.
 - **Errors** go to `C:\kmp-demo\2026-11-13\logs\errors.log` (D-75), with failed provider attempts
   as WARNINGs (D-82's note).
-- **To stop:** Ctrl+C. A restart also clears the throttle counters and in-flight slots, which live
-  in the process's memory (D-79).
+- **To stop:** Ctrl+C. A restart also clears the throttle counters, the in-flight slots and the
+  password reset's 300-second cooldowns, which live in the process's memory (D-79, D-137).
+  Ctrl+C also drops any reset email still being written or sent in its thread. Nothing retries
+  it, and the person can ask again.
 
 ## 7. Record the deployed commit
 

@@ -18658,13 +18658,18 @@ Their verdicts:
 **Status:** Settled by the user (Benjamin Morovan, lead) · **Date:** 2026-11-16 · **Concerns:**
 PR #119 (`feat/UI`, Sagarika Dey's "Modified User Interface"), FR-01, FR-02, FR-04, FR-03 (left as
 written), FR-05's role management screen and the meeting attendee lists (where pictures appear),
-the proposal's §1.9, D-10, D-21, D-25 · **Supersedes:**
+NFR-06, the proposal's §1.9, D-10, D-21, D-25 · **Supersedes:**
 - FR-04's "Sessions also expire automatically after 60 minutes of inactivity", for a session
   started with "Remember me" ticked, and for no other session;
+- NFR-06's "User authentication sessions must expire after 60 minutes of inactivity", for the same
+  sessions and no others. Added on 17 November 2026; Benjamin's answer is in the note of that date
+  below;
 - the proposal's §1.9 item "Self-service password reset flow", which this entry takes out of the
   out-of-scope list.
 
-It supersedes no D-number.
+For those remembered sessions, and no others, it also replaces D-10's 60-minute inactivity
+expiry. D-10 is otherwise unchanged. This sentence was added on 17 November 2026 with NFR-06. The
+entry supersedes no other D-number.
 
 **What prompted it.** PR #119 at `dd452ac` added behaviour with no server behind it:
 
@@ -18730,6 +18735,38 @@ server branch is built, from git rather than from this plan.
 - **A person changing their own name or email address.** Nobody asked for it, and it is not built.
 - **An Administrator setting or resetting someone else's password.** FR-03 says an Administrator
   never does, and that is unchanged.
+
+**Note of 17 November 2026: NFR-06 is named.** The requirements audit of the server branch found
+the following:
+- A session started with "Remember me" ticked still answers 200 after 60 minutes and 1 second
+  idle, for both roles, as this entry chose.
+- NFR-06 says every authentication session expires after 60 minutes of inactivity. It is verified
+  by exactly that idle test, expecting a 401.
+- This entry named FR-04's sentence but not NFR-06's.
+- It also said it superseded no D-number, although for those sessions it replaces D-10's
+  60 minutes.
+
+The audit rated this high, because only Benjamin could say which way the record should go. The
+question was put to him on 17 November 2026:
+
+| Question | Recommended to him | Chosen |
+|---|---|---|
+| Does D-137 also supersede NFR-06 for sessions started with "Remember me" ticked? | Yes, name NFR-06 too, a change to the record only | **Yes, name NFR-06 too** |
+
+The other option was "No, keep NFR-06 whole": a remembered session would survive closing the
+browser but still end after 60 minutes without use, which would reverse the seven-day answer
+above.
+
+What changed, all of it in the record:
+- the Concerns and Supersedes lines at the top of this entry, and the sentence on D-10 under them;
+- three places that said "FR-04's" and now say "FR-04's and NFR-06's":
+  - the FR-04 section of `docs/api-contract.md`;
+  - the comment on `REMEMBERED_SESSION_DAYS` in `apps/core/constants.py`;
+  - the docstring of `apps/api/tests/test_fr04_remember_me.py`.
+
+No code changed. For a session started without "Remember me", NFR-06 holds as written. Its own
+check is tested from both roles, a 401 after 60 minutes and 1 second idle:
+`test_fr04_remember_me.py::test_an_unremembered_session_ends_after_sixty_minutes_without_use`.
 
 ## D-138 · The knowledge map gains a second view, claims joined to the passages they cite, beside the first
 

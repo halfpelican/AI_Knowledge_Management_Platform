@@ -44,7 +44,8 @@ Never `password_hash`, `failed_attempts` or `locked_until`.
 ## Stage 2 — FR-01, FR-02, FR-04, FR-05, FR-06
 
 Every code below is quoted from the FR's own Responses clause unless marked
-*convention*.
+*convention*. A row or a clause marked "Since D-137" quotes D-137, the lead's decision of 16
+November 2026, not an FR.
 
 | Method | Path | Auth | Success | Failures |
 |---|---|---|---|---|
@@ -1742,7 +1743,7 @@ Administrators hold it. A requester without it gets the plain user object.
 
 ```json
 {"id": "uuid", "name": "Jane Doe", "email": "jane.doe@company.com", "role": "Employee",
- "created_at": "2026-09-20T10:00:00+10:00",
+ "created_at": "2026-09-20T10:00:00+10:00", "picture": null,
  "lock": {"locked_until": "2026-11-13T10:42:00+11:00",
           "locked_at": "2026-11-13T10:27:00+11:00", "source_ip": "203.0.113.42"}}
 ```
@@ -2048,8 +2049,9 @@ server. Each part is recorded here as it is built.
 - **Nothing else about login changes:** the `200` user object, the `401`, the `403` with
   `retry_after`, the lockout and the `auth` throttle.
 
-D-137 supersedes FR-04's "Sessions also expire automatically after 60 minutes of inactivity" for a
-session started with "Remember me" ticked, and for no other session.
+D-137 supersedes FR-04's "Sessions also expire automatically after 60 minutes of inactivity", and
+NFR-06's "User authentication sessions must expire after 60 minutes of inactivity", for a session
+started with "Remember me" ticked, and for no other session. NFR-06 was named on 17 November 2026.
 
 ### Changing one's own password
 
@@ -2220,15 +2222,15 @@ address.
   If you did not ask, you can ignore this email: your password is unchanged.
   ```
 
-  - `uid` is the account's id, URL-safe base64 with no padding; `token` is Django's
-    `default_token_generator` token. The page at `/reset-password` posts both, with the new password,
-    to `confirm`.
+  - `uid` is the account's id, URL-safe base64 with no padding; `token` is a Django password reset
+    token whose time is read in UTC (`apps.accounts.password_reset.token_generator`). The page at
+    `/reset-password` posts both, with the new password, to `confirm`.
   - **The link's address is `PUBLIC_BASE_URL`, never the request's `Host` header** (D-137). A link
     built from the `Host` header could be mailed to a victim pointing at someone else's site.
     `PUBLIC_BASE_URL` defaults to the alpha's address, `http://127.0.0.1:8000`.
 - **Not emailed, silently:** an address no account uses; an account retired with an unusable password
-  (D-89), since a reset would bring it back; and an account already emailed in the last 300 seconds
-  (`PASSWORD_RESET_COOLDOWN_SECONDS`). **A locked account is emailed:** FR-03's lock does not stop a
+  (D-89), since a reset would bring it back; and an account for which a send was attempted in the
+  last 300 seconds (`PASSWORD_RESET_COOLDOWN_SECONDS`), whether or not that send succeeded. **A locked account is emailed:** FR-03's lock does not stop a
   reset.
 - **At most 4 emails are worked on at once** in one server process
   (`MAXIMUM_PASSWORD_RESET_EMAILS_IN_FLIGHT`). A request past that is answered the same, sends
@@ -2247,7 +2249,8 @@ address.
   id, an id no account has, a retired account, and a token that is wrong, is another account's, has
   been used, or is more than 60 minutes old.
 - **A link works for 60 minutes and once.** It still works 3,600 seconds after it was made, and not a
-  second later (`PASSWORD_RESET_LINK_MINUTES`). A completed reset changes the password hash its token
+  second later (`PASSWORD_RESET_LINK_MINUTES`). The seconds are counted in UTC, so a daylight-saving
+  change neither lengthens nor shortens a link's life. A completed reset changes the password hash its token
   was made from, so the link works once, and of two confirms sent with one link at once only the
   first to commit sets a password. A successful sign-in also ends the link. A failed sign-in and
   FR-03's lock do not.

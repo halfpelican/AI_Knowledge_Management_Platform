@@ -276,7 +276,8 @@ PASSWORD_RESET_TIMEOUT = PASSWORD_RESET_LINK_MINUTES * 60
 PASSWORD_RESET_EMAIL_RUNNER = "thread"
 
 # --- REST framework (CLAUDE.md section 6 invariant 4, D-21) -----------------------
-# Every route is protected unless it opts out explicitly (registration and login).
+# Every route is protected unless it opts out explicitly: registration and login (D-21), the
+# lockout policy (D-130) and the two password-reset routes (D-137).
 # apps.api.authentication.SessionAuthentication names its scheme so DRF answers an
 # unauthenticated request with 401 rather than its 403 fallback.
 

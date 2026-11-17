@@ -912,10 +912,11 @@ SESSION_INACTIVITY_MINUTES = 60
 
 # "Remember me" (D-137, the lead's decision of 16 November 2026): a session started with
 # "remember": true on POST /api/auth/login expires after this many days without use, for both
-# roles, instead of SESSION_INACTIVITY_MINUTES. D-137 supersedes FR-04's 60 minutes for those
-# sessions and for no other. LoginView passes it to set_expiry() in whole seconds. Django keeps a
-# whole number of seconds as an inactivity age, which SESSION_SAVE_EVERY_REQUEST restarts on every
-# request, so the seven days slide with use as the 60 minutes do.
+# roles, instead of SESSION_INACTIVITY_MINUTES. D-137 supersedes FR-04's and NFR-06's 60 minutes
+# for those sessions and for no other (NFR-06 was named on 17 November 2026). LoginView passes it to
+# set_expiry() in whole seconds. Django keeps a whole number of seconds as an inactivity age, which
+# SESSION_SAVE_EVERY_REQUEST restarts on every request, so the seven days slide with use as the 60
+# minutes do.
 REMEMBERED_SESSION_DAYS = 7
 
 # --- Profile pictures (D-137, the lead's decision of 16 November 2026) ----------------------

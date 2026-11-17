@@ -577,7 +577,7 @@ def declares_a_body_over_the_upload_ceiling(request) -> bool:
 
 
 class RegisterView(APIView):
-    permission_classes = [AllowAny]  # one of the two opt-outs (D-21)
+    permission_classes = [AllowAny]  # an opt-out (D-21); config/settings.py lists all five
     # Anonymous and unthrottled, this endpoint is an unlimited "is this address
     # registered?" oracle, and the answer feeds the lockout below (D-26).
     throttle_classes = [ScopedRateThrottle]
@@ -672,7 +672,7 @@ class LoginView(SendsCsrfCookieMixin, APIView):
     locked account under any circumstance, regardless of the password submitted."
     """
 
-    permission_classes = [AllowAny]  # one of the two opt-outs (D-21)
+    permission_classes = [AllowAny]  # an opt-out (D-21); config/settings.py lists all five
     # Five requests lock any account, so without this anyone could hold every
     # account in the organisation locked indefinitely (D-26).
     throttle_classes = [ScopedRateThrottle]

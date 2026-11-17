@@ -2,8 +2,9 @@
 without use.
 
 D-137 (Benjamin Morovan, lead, 16 November 2026) supersedes FR-04's "Sessions also expire
-automatically after 60 minutes of inactivity" for a session started with "Remember me" ticked, and
-for no other session. So:
+automatically after 60 minutes of inactivity", and NFR-06's "User authentication sessions must
+expire after 60 minutes of inactivity" (named in D-137 on 17 November 2026), for a session started
+with "Remember me" ticked, and for no other session. So:
 
 - ``"remember": true`` gives the session REMEMBERED_SESSION_DAYS (7) days without use, for both
   roles. The cookie's Max-Age and the django_session row's expire_date both say so.
