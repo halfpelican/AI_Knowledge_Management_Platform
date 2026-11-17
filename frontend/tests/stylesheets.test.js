@@ -11,10 +11,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   allRules,
+  compareSpecificity,
   parseColour,
   parseStylesheet,
   readStylesheet,
   resolve,
+  specificity,
   styleRules,
   stylesheetFiles,
   tokens,
@@ -54,6 +56,29 @@ describe('the stylesheet reader reads everything', () => {
     expect(parseColour('#fff')).toEqual({ r: 255, g: 255, b: 255, a: 1 })
     expect(parseColour('rgb(31 41 51 / 60%)')).toEqual({ r: 31, g: 41, b: 51, a: 0.6 })
     expect(parseColour('var(--x)')).toBeNull()
+  })
+
+  // tests/sharedButton.test.jsx holds the home page's button rules to outranking
+  // Button.css's by specificity, so the count has to be the browser's.
+  it.each([
+    ['.btn', [0, 1, 0]],
+    ['a', [0, 0, 1]],
+    ['a:hover', [0, 1, 1]],
+    ['.btn--primary:hover:not(:disabled)', [0, 3, 0]],
+    ['.home-actions .btn--primary:hover:not(:disabled)', [0, 4, 0]],
+    ['.dialog__actions > .btn', [0, 2, 0]],
+    ['input[type="file"]', [0, 1, 1]],
+    [':where(.home-actions) .btn', [0, 1, 0]],
+    ['#main .notice p::before', [1, 1, 2]],
+    ['*', [0, 0, 0]],
+  ])('counts the specificity of %s as the browser does', (selector, expected) => {
+    expect(specificity(selector)).toEqual(expected)
+  })
+
+  it('orders specificities column by column', () => {
+    expect(compareSpecificity([0, 2, 0], [0, 1, 9])).toBeGreaterThan(0)
+    expect(compareSpecificity([0, 1, 1], [0, 1, 1])).toBe(0)
+    expect(compareSpecificity([0, 3, 0], [1, 0, 0])).toBeLessThan(0)
   })
 })
 
