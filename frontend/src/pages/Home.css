@@ -69,6 +69,9 @@
   margin-bottom: var(--space-8);
 }
 
+/* Every button on every screen has this class, and this file comes after
+   components/Button.css, so this rule leaves the border to Button.css: a border
+   here reset the secondary button's 3:1 boundary to transparent everywhere. */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -79,7 +82,6 @@
   font-size: var(--text-base);
   font-weight: var(--weight-semibold);
   text-decoration: none;
-  border: var(--border-width) solid transparent;
   cursor: pointer;
   transition: all 0.15s ease;
 }
