@@ -19,9 +19,12 @@ from D-137, from the values the build was given, or from a rule the project alre
   once.
 - **Using the link.** It sets the new password, which must pass registration's validators for that
   account, and answers 200. A bad uid, a wrong, expired or used token and an unknown account are one
-  400 with one message. A link works for 60 minutes and once, even for two confirms at once. Every
-  session of the account ends, remembered ones included. Nobody is signed in, and FR-03's lock and
-  count are left as they were.
+  400 with one message. A link works for 60 minutes and once, even for two confirms at once. A
+  successful sign-in ends it; a failed sign-in and FR-03's lock do not. Every session of the account
+  ends, remembered ones included. Nobody is signed in, and FR-03's lock and count are left as they
+  were.
+- **The words.** Both routes' answers, the email's subject and its text are the contract's, which
+  quotes each of them.
 - **The settings.** The file outbox is the default, and SMTP is used once EMAIL_HOST is set, on port
   587 with TLS. TLS and SSL together stop the settings loading. PUBLIC_BASE_URL is read from the
   environment and must be an absolute http or https address.
@@ -103,6 +106,31 @@ REFUSED_LINK = {"detail": PASSWORD_RESET_LINK_REFUSED_MESSAGE}
 REQUIRED = ["This field is required."]
 BLANK = ["This field may not be blank."]
 NULL = ["This field may not be null."]
+
+# docs/api-contract.md, "Resetting a forgotten password", quotes each of these word for word: both
+# routes' answers, and the email's subject and text, the link's line aside. The tests that compare
+# with the constants the code defines would pass a rewording, which changes both.
+CONTRACT_REQUESTED = {
+    "detail": "If an account uses this address, an email with a link to reset its password is on its "
+    "way. The link works once, within 60 minutes."
+}
+CONTRACT_COMPLETE = {"detail": "Your password has been reset. Sign in with your new password."}
+CONTRACT_REFUSED_LINK = {
+    "detail": "This password reset link does not work. It may have expired or been used already; ask "
+    "for a new one."
+}
+CONTRACT_SUBJECT = "Reset your Organisational Knowledge Platform password"
+CONTRACT_EMAIL_TEXT = (
+    "Someone asked to reset the password of your Organisational Knowledge Platform account.\n"
+    "\n"
+    "To choose a new password, open this link:\n"
+    "\n"
+    "{link}\n"
+    "\n"
+    "The link works once, within 60 minutes of this email.\n"
+    "\n"
+    "If you did not ask, you can ignore this email: your password is unchanged.\n"
+)
 
 # The longest a thread test waits for something that must happen before it fails instead.
 PATIENCE = 30
@@ -478,6 +506,40 @@ def test_a_link_has_expired_a_second_after_60_minutes(account, mailoutbox, token
     assert stored(account).check_password(PASSWORD)
 
 
+def test_a_successful_sign_in_ends_an_outstanding_link(account, mailoutbox):
+    """The contract: "A successful sign-in also ends the link." The token hashes the last sign-in,
+    which a sign-in changes. The account has never signed in, so its last sign-in goes from none to
+    one, which does not hang on the clock: the token keeps the last sign-in to the whole second."""
+    assert stored(account).last_login is None
+    link = mailed_link(account, mailoutbox)
+    assert login_with(account, PASSWORD).status_code == 200
+
+    response = confirm(**link)
+
+    assert response.status_code == 400
+    assert response.json() == REFUSED_LINK
+    assert stored(account).check_password(PASSWORD)
+
+
+def test_a_failed_sign_in_and_a_lock_leave_an_outstanding_link_working(account, mailoutbox):
+    """The contract: "A failed sign-in and FR-03's lock do not" end the link. Here LOCKOUT_THRESHOLD
+    wrong passwords, after the link was made, count up and then lock the account, and the link still
+    sets the password, leaving the lock and the count as they were (D-137: "No, the lock stays")."""
+    link = mailed_link(account, mailoutbox)
+    for number in range(LOCKOUT_THRESHOLD):
+        assert login_with(account, f"Wrong-Guess-{number}!").status_code == 401
+    locked = stored(account)
+    assert locked.failed_attempts == LOCKOUT_THRESHOLD
+    assert locked.locked_until is not None
+
+    response = confirm(**link)
+
+    assert response.status_code == 200
+    after = stored(account)
+    assert after.check_password(NEW_PASSWORD)
+    assert (after.failed_attempts, after.locked_until) == (LOCKOUT_THRESHOLD, locked.locked_until)
+
+
 def _not_base64(account, token):
     return "!!not*base64!!", token
 
@@ -611,6 +673,23 @@ def test_the_new_password_is_taken_as_typed_spaces_and_all(account, mailoutbox):
 
     assert login_with(account, spaced).status_code == 200
     assert login_with(account, NEW_PASSWORD).status_code == 401
+
+
+def test_the_answers_and_the_email_are_the_contracts_words(account, mailoutbox):
+    """Each in the words the contract quotes: the request's 200, the email's subject and text, the
+    one 400 for a link that does not work, and the confirm's 200. The link's own line is checked by
+    the tests above, so the text is compared with that line taken from the email."""
+    asked = ask(account.email)
+    [message] = mailoutbox
+    link = link_in(message)
+    refused = confirm("x", "y")
+    completed = confirm(**parameters_of(link))
+
+    assert (asked.status_code, asked.json()) == (200, CONTRACT_REQUESTED)
+    assert message.subject == CONTRACT_SUBJECT
+    assert message.body == CONTRACT_EMAIL_TEXT.format(link=link)
+    assert (refused.status_code, refused.json()) == (400, CONTRACT_REFUSED_LINK)
+    assert (completed.status_code, completed.json()) == (200, CONTRACT_COMPLETE)
 
 
 def test_a_link_that_does_not_work_is_refused_before_the_new_password_is_judged(account):
