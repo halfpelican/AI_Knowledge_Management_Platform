@@ -56,6 +56,7 @@ PERMISSION_GUARDED = {
     ("api/departments", "POST"),  # manage_tags
     ("api/departments/<uuid:pk>", "DELETE"),  # manage_tags
     ("api/knowledge-map", "GET"),  # view_knowledge_map (D-132), held by both roles until revoked
+    ("api/knowledge-map/evidence", "GET"),  # the same code (D-138)
 }
 
 

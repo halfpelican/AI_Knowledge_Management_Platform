@@ -169,6 +169,14 @@ Your reply:
 # no-answer for a question that looked answerable — or, where a real identifier is echoed
 # alongside it, a statement attributed to a passage that does not support it.
 #
+# SINCE D-138 (17 November 2026) "the asker's own" needs a qualifier. A verified statement is
+# now also a claim on the knowledge map's second view, shown to every role that may read the
+# passages it was generated from. That is still no disclosure: those passages are what the
+# view checks. But a sentence an asker steered the model into writing is no longer seen by
+# the asker alone. It is finding S1 of that build's security review, and the user chose to
+# record it: an Administrator removes such a claim by reprocessing or deleting a source it
+# rests on.
+#
 # THE TRANSFORMATION: the label's SQUARE brackets become ROUND ones, and nothing else
 # changes. A question containing "[chunk_id: 9f2...]" reaches the prompt as
 # "(chunk_id: 9f2...)". Four properties were wanted and this is the least that has all four:
@@ -368,6 +376,9 @@ def build_user_prompt(
     - Prose directives in passage bodies are therefore possible, and are NOT DETECTABLE by
       set-membership verification. Detecting them would need a model judging a model, which
       invariant 5 refuses outright.
+    - Since D-138 (17 November 2026) a sentence attached that way is shown to other users too,
+      as a claim on the knowledge map's second view. D-138 records it (its security review's
+      S1), and that the user chose to record it and add no control.
     - The evidence that the model does mine passage BODIES is already in this repository,
       not hypothetical: item 6's third fabricated identifier was ``5. Offboarding``, a
       section heading lifted out of a passage body and returned as a chunk_id (see the

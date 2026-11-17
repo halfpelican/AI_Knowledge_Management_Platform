@@ -26,6 +26,8 @@ from apps.core.constants import (
     DOCUMENT_SORT_VALUES,
     DOCUMENT_STATUS_VALUES,
     DOCUMENT_TYPES,
+    EVIDENCE_MAP_CLAIM,
+    EVIDENCE_MAP_NODE_TYPES,
     KNOWLEDGE_GAP_STATUS_VALUES,
     KNOWLEDGE_MAP_NODE_TYPES,
     LOGIN_ATTEMPT_LOCKOUT,
@@ -1738,6 +1740,66 @@ class KnowledgeMapQuerySerializer(serializers.Serializer):
 
     @property
     def focus(self) -> tuple[str, UUID] | None:
+        """``(focus_type, focus_id)`` after validation, or ``None`` when no focus was sent."""
+        focus_type = self.validated_data["focus_type"]
+        if focus_type is None:
+            return None
+        return focus_type, self.validated_data["focus_id"]
+
+
+# A selection in the second view names a passage by its chunk's UUID and a claim by a keyed hash
+# of its text, 64 hexadecimal digits (``apps/api/evidence_map.py``). The 400 body names
+# ``focus_id``.
+EVIDENCE_FOCUS_MALFORMED_MESSAGE = "focus_id is not an identifier of that focus_type."
+_CLAIM_IDENTIFIER_LENGTH = 64
+_HEXADECIMAL = frozenset("0123456789abcdef")
+
+
+class EvidenceMapQuerySerializer(serializers.Serializer):
+    """``GET /api/knowledge-map/evidence``'s query parameters, read only through this (D-65,
+    D-138). The rules are ``KnowledgeMapQuerySerializer``'s, for the second view's two types.
+
+    **Both or neither,** as there: neither is the overview, both are a selection, and one without
+    the other is a 400 keyed on the missing parameter. An empty value is an absent one.
+
+    **Shape only: the focus is never looked up here.** A passage is named by a UUID. A claim has
+    no row of its own and is named by a keyed hash of its text, 64 hexadecimal digits. Anything
+    else is a 400 keyed on ``focus_id``. A NUL byte is refused twice over: by ``CharField``, and
+    because it is no hexadecimal digit and no UUID holds one. Every
+    well-formed pair reaches the walk, where a focus that is not in the caller's own graph gets
+    the one empty answer, whatever the reason.
+
+    ``focus`` is the validated pair in one spelling, lower case, or ``None`` for the overview.
+    """
+
+    focus_type = serializers.ChoiceField(
+        choices=EVIDENCE_MAP_NODE_TYPES, required=False, default=None
+    )
+    focus_id = serializers.CharField(required=False, default=None)
+
+    def validate(self, attrs):
+        focus_type, focus_id = attrs.get("focus_type"), attrs.get("focus_id")
+        if focus_type is not None and focus_id is None:
+            raise serializers.ValidationError({"focus_id": [FOCUS_INCOMPLETE_MESSAGE]})
+        if focus_id is not None and focus_type is None:
+            raise serializers.ValidationError({"focus_type": [FOCUS_INCOMPLETE_MESSAGE]})
+        if focus_type is None:
+            return attrs
+        malformed = serializers.ValidationError({"focus_id": [EVIDENCE_FOCUS_MALFORMED_MESSAGE]})
+        if focus_type == EVIDENCE_MAP_CLAIM:
+            identifier = focus_id.lower()
+            if len(identifier) != _CLAIM_IDENTIFIER_LENGTH or not set(identifier) <= _HEXADECIMAL:
+                raise malformed
+        else:
+            try:
+                identifier = str(UUID(focus_id))
+            except ValueError:
+                raise malformed from None
+        attrs["focus_id"] = identifier
+        return attrs
+
+    @property
+    def focus(self) -> tuple[str, str] | None:
         """``(focus_type, focus_id)`` after validation, or ``None`` when no focus was sent."""
         focus_type = self.validated_data["focus_type"]
         if focus_type is None:
