@@ -1444,6 +1444,23 @@ export const TEXT = {
   homeIntro:
     'Search and ask questions of your organisation’s documents and meeting transcripts. Every answer cites the material it came from.',
 
+  /* ---- Home: PR #119's offer, features and illustration (FR-01, FR-02) -- */
+  // Sagarika Dey's words for the page she redesigned. Its heading and lead are
+  // `homeHeading` and `homeIntro` above, and its badge is APP_TITLE.
+  homeSignIn: 'Sign in',
+  homeRegister: 'Create an account',
+  homeFeatureSearchTitle: 'Knowledge search',
+  homeFeatureSearchText: 'Find answers across documents and meeting transcripts.',
+  homeFeatureCitationsTitle: 'Verified citations',
+  homeFeatureCitationsText: 'Every answer links back to its source passage.',
+  homeFeatureAccessTitle: 'Role-based access',
+  homeFeatureAccessText: 'See only what your role permits.',
+  // The chat bubbles inside the illustration. The illustration is decoration and is
+  // aria-hidden, so a screen reader reads none of these; the lead says it in words.
+  homeIllustrationGreeting: 'Hello!',
+  homeIllustrationReply: 'How can I help?',
+  homeIllustrationRequest: 'Search our knowledge base.',
+
   /* ---- FR-14 dashboard --------------------------------------------------- */
   // FR-14: the platform's entry point after login. "It exists to orient the user
   // rather than to hold functionality of its own: each panel is a route into the

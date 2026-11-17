@@ -13,11 +13,12 @@ import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-rou
 import { describe, expect, it } from 'vitest'
 import App from '../src/App.jsx'
 import { AuthContext } from '../src/auth/context.js'
-import { dashboardPathForRole, ROLES, TEXT } from '../src/constants.js'
+import { APP_TITLE, dashboardPathForRole, ROLES, TEXT } from '../src/constants.js'
 import Dashboard from '../src/pages/Dashboard.jsx'
 import { formatDate } from '../src/utils/dates.js'
 import { threadInSearch } from '../src/utils/threadAddress.js'
 import { serveApi } from './fakeApi.js'
+import { stopName, tabbable } from './keyboard.js'
 
 const EMPLOYEE = {
   id: 'user-employee',
@@ -229,10 +230,75 @@ describe('FR-14: the landing page after login', () => {
     renderApp('/')
 
     expect(await screen.findByRole('heading', { level: 1, name: TEXT.homeHeading })).toBeTruthy()
-    expect(screen.getByRole('link', { name: 'create an account' }).getAttribute('href')).toBe('/register')
+    // PR #119 made the sentence's lowercase "create an account" link a button-styled
+    // link reading "Create an account". The name is still matched exactly.
+    expect(screen.getByRole('link', { name: TEXT.homeRegister }).getAttribute('href')).toBe('/register')
     expect(document.body.textContent).not.toMatch(/under construction|alpha build/i)
     // No dashboard request for a visitor with no session.
     expect(dashboardQueries(answered)).toEqual([])
+  })
+})
+
+describe('FR-01 / FR-02: the home page a visitor sees, as PR #119 designed it', () => {
+  /** The home page for a visitor with no session, once its heading is there; returns the main landmark. */
+  async function visitHome() {
+    serveApi({ 'GET /api/auth/me': { status: 401, body: { detail: 'Not signed in.' } } })
+    renderApp('/')
+    await screen.findByRole('heading', { level: 1, name: TEXT.homeHeading })
+    return screen.getByRole('main')
+  }
+
+  it('offers sign-in, then registration, as the only links and the only tab stops in the page itself', async () => {
+    const main = await visitHome()
+
+    // The navigation offers both as well; these are the page's own, in reading order.
+    const links = within(main)
+      .getAllByRole('link')
+      .map((link) => [stopName(link), link.getAttribute('href')])
+    expect(links).toEqual([
+      [TEXT.homeSignIn, '/login'],
+      [TEXT.homeRegister, '/register'],
+    ])
+    // The keyboard reaches both, in that order, and nothing else in the page: not
+    // the features, and not the illustration.
+    expect(tabbable(main).map(stopName)).toEqual([TEXT.homeSignIn, TEXT.homeRegister])
+    // Her badge is the platform's name, and the lead says what it does.
+    expect(within(main).getByText(APP_TITLE)).toBeTruthy()
+    expect(within(main).getByText(TEXT.homeIntro)).toBeTruthy()
+  })
+
+  it('hides the illustration and every glyph from assistive technology, and keeps the words beside them readable (SC 1.1.1)', async () => {
+    const main = await visitHome()
+    const hidden = (node) => node.closest('[aria-hidden="true"]') !== null
+
+    // Every emoji on the page, the features' and the illustration's, is decoration a
+    // screen reader would otherwise read out by its Unicode name.
+    const walker = document.createTreeWalker(main, NodeFilter.SHOW_TEXT)
+    const glyphs = []
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if (/\p{Extended_Pictographic}/u.test(node.textContent)) glyphs.push(node.parentElement)
+    }
+    expect(glyphs.length).toBeGreaterThan(0)
+    expect(glyphs.filter((glyph) => !hidden(glyph)).map((glyph) => glyph.outerHTML)).toEqual([])
+
+    // The illustration's chat is a picture of a conversation, not one: it is not read.
+    for (const words of [TEXT.homeIllustrationGreeting, TEXT.homeIllustrationReply, TEXT.homeIllustrationRequest]) {
+      expect(hidden(within(main).getByText(words)), words).toBe(true)
+    }
+    // What each glyph stands for is said in words, and those are read.
+    for (const words of [
+      TEXT.homeFeatureSearchTitle,
+      TEXT.homeFeatureSearchText,
+      TEXT.homeFeatureCitationsTitle,
+      TEXT.homeFeatureCitationsText,
+      TEXT.homeFeatureAccessTitle,
+      TEXT.homeFeatureAccessText,
+      TEXT.homeIntro,
+    ]) {
+      expect(hidden(within(main).getByText(words)), words).toBe(false)
+    }
+    // Nothing a keyboard can reach sits inside the decoration.
+    expect(tabbable(main).filter(hidden)).toEqual([])
   })
 })
 

@@ -1,6 +1,6 @@
 import { Link, Navigate } from 'react-router-dom'
 import useAuth from '../auth/useAuth.js'
-import { dashboardPathForRole, TEXT } from '../constants.js'
+import { APP_TITLE, dashboardPathForRole, TEXT } from '../constants.js'
 import useDocumentTitle from '../hooks/useDocumentTitle.js'
 import './Home.css'
 
@@ -12,7 +12,14 @@ import './Home.css'
  * Login already sends them there by role (FR-02); this covers everything else
  * that leads to `/` — the 403 page's "Return to the home page", a bookmark, the
  * address typed by hand. A visitor who is not signed in is offered sign-in and
- * registration.
+ * registration (FR-02, FR-01).
+ *
+ * The page is PR #119's design (Sagarika Dey): the offer and three features on
+ * the left, an illustration on the right. Every word comes from TEXT. The emoji
+ * beside each feature and the whole illustration are decoration, so both are
+ * aria-hidden (WCAG 2.1 SC 1.1.1): each feature's words say what its glyph shows,
+ * and the lead says what the illustration does. Nothing in the illustration is
+ * focusable.
  */
 export default function Home() {
   useDocumentTitle(TEXT.homeHeading)
@@ -31,49 +38,47 @@ export default function Home() {
       <div className="home-hero">
         {/* Left side: content */}
         <div className="home-content">
-          <div className="home-badge">Organisational Knowledge Platform</div>
-          <h1>Welcome back</h1>
-          <p className="home-lead">
-            Search and ask questions of your organisation's documents and meeting
-            transcripts. Every answer cites the material it came from.
-          </p>
+          <div className="home-badge">{APP_TITLE}</div>
+          <h1>{TEXT.homeHeading}</h1>
+          <p className="home-lead">{TEXT.homeIntro}</p>
 
           <div className="home-actions">
             <Link to="/login" className="btn btn--primary btn--large">
-              Sign in
+              {TEXT.homeSignIn}
             </Link>
             <Link to="/register" className="btn btn--outline btn--large">
-              Create an account
+              {TEXT.homeRegister}
             </Link>
           </div>
 
           <div className="home-features">
             <div className="home-feature">
-              <span className="home-feature__icon">🔍</span>
+              <span className="home-feature__icon" aria-hidden="true">🔍</span>
               <div>
-                <strong>Knowledge search</strong>
-                <p>Find answers across documents and meeting transcripts.</p>
+                <strong>{TEXT.homeFeatureSearchTitle}</strong>
+                <p>{TEXT.homeFeatureSearchText}</p>
               </div>
             </div>
             <div className="home-feature">
-              <span className="home-feature__icon">📄</span>
+              <span className="home-feature__icon" aria-hidden="true">📄</span>
               <div>
-                <strong>Verified citations</strong>
-                <p>Every answer links back to its source passage.</p>
+                <strong>{TEXT.homeFeatureCitationsTitle}</strong>
+                <p>{TEXT.homeFeatureCitationsText}</p>
               </div>
             </div>
             <div className="home-feature">
-              <span className="home-feature__icon">🔐</span>
+              <span className="home-feature__icon" aria-hidden="true">🔐</span>
               <div>
-                <strong>Role-based access</strong>
-                <p>See only what your role permits.</p>
+                <strong>{TEXT.homeFeatureAccessTitle}</strong>
+                <p>{TEXT.homeFeatureAccessText}</p>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Right side: illustration / visual */}
-        <div className="home-visual">
+        {/* Right side: illustration / visual. Decoration only: aria-hidden as a
+            whole, with nothing focusable inside it. */}
+        <div className="home-visual" aria-hidden="true">
           <div className="home-visual__shape home-visual__shape--1"></div>
           <div className="home-visual__shape home-visual__shape--2"></div>
           <div className="home-visual__shape home-visual__shape--3"></div>
@@ -81,9 +86,9 @@ export default function Home() {
             <div className="home-visual__device">
               <div className="home-visual__screen">
                 <div className="home-visual__chat">
-                  <div className="home-visual__bubble home-visual__bubble--left">Hello!</div>
-                  <div className="home-visual__bubble home-visual__bubble--right">How can I help?</div>
-                  <div className="home-visual__bubble home-visual__bubble--left">Search our knowledge base.</div>
+                  <div className="home-visual__bubble home-visual__bubble--left">{TEXT.homeIllustrationGreeting}</div>
+                  <div className="home-visual__bubble home-visual__bubble--right">{TEXT.homeIllustrationReply}</div>
+                  <div className="home-visual__bubble home-visual__bubble--left">{TEXT.homeIllustrationRequest}</div>
                 </div>
                 <div className="home-visual__cursor"></div>
               </div>
