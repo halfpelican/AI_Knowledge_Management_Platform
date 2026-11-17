@@ -7,8 +7,8 @@ import Avatar from '../components/Avatar.jsx'
 import Button from '../components/Button.jsx'
 import Dialog from '../components/Dialog.jsx'
 import Notice from '../components/Notice.jsx'
+import PasswordInput from '../components/PasswordInput.jsx'
 import PasswordRequirements from '../components/PasswordRequirements.jsx'
-import TextInput from '../components/TextInput.jsx'
 import { MAX_PICTURE_BYTES, PICTURE_EXTENSIONS, PICTURE_TYPES, PROFILE_TEXT, ROLES, VALIDATION } from '../constants.js'
 import useDocumentTitle from '../hooks/useDocumentTitle.js'
 import { passwordMeetsPolicy } from '../utils/password.js'
@@ -432,12 +432,14 @@ export default function Profile() {
             {`${PROFILE_TEXT.passwordChanged} ${PROFILE_TEXT.passwordChangedSessions}`}
           </Notice>
         ) : null}
+        {/* Each password field has FR-02's Show toggle, as every other password field in
+            the app has (NFR-14, FEA-3): components/PasswordInput.jsx. */}
         <form className="profile-form" onSubmit={handlePasswordSubmit} noValidate>
           <div className="profile-form__row">
-            <TextInput
+            <PasswordInput
               label={PROFILE_TEXT.currentPasswordLabel}
               name="currentPassword"
-              type="password"
+              toggleLabel={PROFILE_TEXT.showCurrentPassword}
               autoComplete="current-password"
               required
               value={values.currentPassword}
@@ -446,10 +448,10 @@ export default function Profile() {
               onBlur={handleBlur}
             />
             {/* The requirements panel describes the field, as on registration. */}
-            <TextInput
+            <PasswordInput
               label={PROFILE_TEXT.newPasswordLabel}
               name="newPassword"
-              type="password"
+              toggleLabel={PROFILE_TEXT.showNewPassword}
               autoComplete="new-password"
               required
               value={values.newPassword}
@@ -460,10 +462,10 @@ export default function Profile() {
             />
           </div>
           <PasswordRequirements id={requirementsId} password={values.newPassword} />
-          <TextInput
+          <PasswordInput
             label={PROFILE_TEXT.confirmPasswordLabel}
             name="confirmPassword"
-            type="password"
+            toggleLabel={PROFILE_TEXT.showConfirmedPassword}
             autoComplete="new-password"
             required
             value={values.confirmPassword}

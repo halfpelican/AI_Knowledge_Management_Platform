@@ -278,6 +278,11 @@ export const PROFILE_TEXT = {
   currentPasswordLabel: 'Current password',
   newPasswordLabel: 'New password',
   confirmPasswordLabel: 'Confirm new password',
+  // FR-02's Show toggle on each of the three (FEA-3, NFR-14), named for its field as the
+  // reset page names its two (src/pages/ResetPassword.jsx).
+  showCurrentPassword: 'Show current password',
+  showNewPassword: 'Show new password',
+  showConfirmedPassword: 'Show confirmed password',
   currentPasswordRequired: 'Enter your current password.',
   newPasswordRequired: 'Enter a new password.',
   confirmNewPasswordRequired: 'Re-enter your new password.',

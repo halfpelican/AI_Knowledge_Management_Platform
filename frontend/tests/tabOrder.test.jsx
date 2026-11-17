@@ -271,9 +271,13 @@ describe('tab order, screen by screen', () => {
       PROFILE_TEXT.navLabel,
       'Log out',
       PROFILE_TEXT.changePicture,
+      // Each password field, then its Show toggle (FEA-3), as on the reset page.
       PROFILE_TEXT.currentPasswordLabel,
+      PROFILE_TEXT.showCurrentPassword,
       PROFILE_TEXT.newPasswordLabel,
+      PROFILE_TEXT.showNewPassword,
       PROFILE_TEXT.confirmPasswordLabel,
+      PROFILE_TEXT.showConfirmedPassword,
       PROFILE_TEXT.choosePicture,
     ])
     expect(stops.filter((stop) => stop.type === 'file')).toEqual([])
