@@ -26,6 +26,10 @@ do not account for — so this table cannot rot while the stylesheets move on.
 The component sheet at `/components` renders the core of this table live
 (`src/components/contrastPairs.js`), and `frontend/tests/componentSheet.test.jsx`
 recomputes each of its documented pairs from the CSS on disk.
+`frontend/tests/componentSheetTokens.test.jsx` reads the table the sheet renders:
+it gives jsdom the values a browser computes for `tokens.css`'s custom properties,
+then holds every row to the ratio `tokens.css` gives and to "Pass", never "n/a"
+or "Fail", and every token to a swatch or a row on the sheet.
 
 ### Text (SC 1.4.3, AA 4.5:1)
 
@@ -54,6 +58,7 @@ recomputes each of its documented pairs from the CSS on disk.
 | `--color-primary` #1d4ed8 | `--color-surface` #ffffff | 6.70:1 | 4.5:1 | Pass | links; the in-page 403’s link sits on the error notice |
 | `--color-primary` #1d4ed8 | `--color-surface-alt` #f3f4f6 | 6.09:1 | 4.5:1 | Pass | links; the in-page 403’s link sits on the error notice |
 | `--color-primary` #1d4ed8 | `--color-danger-surface` #fef3f2 | 6.16:1 | 4.5:1 | Pass | links; the in-page 403’s link sits on the error notice |
+| `--color-primary` #1d4ed8 | `--color-info-surface` #eff6ff | 6.16:1 | 4.5:1 | Pass | a link in an info notice, which sits on PR #119’s info fill: the knowledge map’s empty selection, in both its views |
 | `--color-primary-hover` #1e40af | `--color-surface` #ffffff | 8.72:1 | 4.5:1 | Pass | link hover |
 | `--color-primary-hover` #1e40af | `--color-surface-alt` #f3f4f6 | 7.93:1 | 4.5:1 | Pass | link hover |
 | `--color-primary-hover` #1e40af | `--color-danger-surface` #fef3f2 | 8.02:1 | 4.5:1 | Pass | link hover |
@@ -177,7 +182,10 @@ own fill. A badge is not a control, and its text names the role.
 `frontend/tests/keyboard.js` presses Tab as a browser does (keydown first, so
 the dialogue's trap can claim it; one stop per radio group; disabled controls
 and closed `<details>` skipped). `frontend/tests/tabOrder.test.jsx` walks
-sign-in, dashboard, documents, upload, meetings and ask end to end and asserts,
+sign-in, the home page and the two account-recovery pages to a visitor not
+signed in (the forgotten-password page before and after it is sent, the reset
+page with its link and with a link that does not work), then the dashboard,
+documents, upload, meetings, the Profile page and ask, end to end, and asserts,
 on every screen:
 
 - the skip link is the first stop, hidden until focused and shown the moment it
@@ -186,7 +194,9 @@ on every screen:
   what lets the Ask screen's two-column layout collapse to one column without
   reordering (the aside is after the main column in the DOM);
 - nothing reachable is invisible while it holds focus, checked against the
-  stylesheets through `tests/stylesheets.js`;
+  stylesheets through `tests/stylesheets.js`. The one stop allowed to be hidden
+  is a file input whose label shows its focus ring, as the drop zone's does;
+  until 18 November 2026 any field with a visible label was let through;
 - no trap: the walk fails if focus revisits a stop before leaving the page, and
   the delete confirmation's Tab cycle is tested inside the dialogue both ways;
 - the table region that scrolls at narrow widths is itself a stop
@@ -199,11 +209,20 @@ its order).
 
 ## 4. Text equivalents (SC 1.1.1)
 
-The interface has no raster images and no canvas charts. It has one graphic,
-FR-20's node-link diagram, which is drawn as SVG and has a text equivalent of
-its own (the last three rows below, and section 8). Its other non-text content
-is bars, glyphs and markers. Each carries its information as text
-(`frontend/tests/textEquivalents.test.jsx`):
+The interface has no canvas charts. Its raster images are D-137's profile
+pictures, drawn by `components/Avatar.jsx` wherever people are listed: the
+header, role management, the attendee lists and the Profile page. Each is
+decoration, because the person's name is always beside it: the picture's `alt`
+is empty, and the initials shown in its place are `aria-hidden` and painted by
+the stylesheet, so nothing is read twice (`frontend/tests/avatars.test.jsx`,
+`frontend/tests/profileCard.test.jsx`). The Profile page's preview of a picture
+chosen but not yet sent is named "Preview"; no test holds that name. It has one
+graphic, FR-20's node-link diagram, which is drawn as SVG and has a text
+equivalent of its own (the three knowledge map rows below, and section 8). Its
+other non-text content is bars, glyphs and markers. Each carries its information
+as text
+(`frontend/tests/textEquivalents.test.jsx`, except where a row names another
+file):
 
 | Non-text content | Text equivalent |
 |---|---|
@@ -217,10 +236,29 @@ is bars, glyphs and markers. Each carries its information as text
 | Knowledge map: a node's shape and colour (FR-20) | The node is a link whose name begins with its type in a word ("Document: Leave policy, 3 connections shown"); the shape is an `aria-hidden` SVG. The Items table has a Type column in words, and the legend puts each shape beside its word |
 | Knowledge map: the lines (FR-20) | The Relationships table: one row per line, read "from, relationship, to" in words. The lines' SVG layer is `aria-hidden` and holds nothing focusable and no text |
 | Knowledge map: the selected node's heavier outline and lines | `aria-current`, the visible word "Selected", and what a second selection does, in the node's name; the Selected panel lists its connections as links |
+| A profile picture, or the initials in its place (D-137) | The person's name, always beside it. The picture's `alt` is empty and the initials are `aria-hidden`, painted from `data-initials` by `Avatar.css` (`avatars.test.jsx`) |
+| The home page's illustration and its feature glyphs (PR #119) | Decoration, `aria-hidden` as a whole: each feature's words say what its glyph shows, and the lead says what the illustration does. Nothing in it is focusable (`dashboard.test.jsx :: hides the illustration and every glyph from assistive technology…`) |
 
 The sweep in the same file asserts no `aria-hidden` subtree contains a
 focusable element, and the tab-order walk cannot visit one (an `aria-hidden`
 ancestor is a hiding cause).
+
+**Motion (SC 2.2.2, Pause, Stop, Hide).** The home page's illustration is the
+one thing that moves on its own beside the page's content. Its cursor blinks
+four times, 4 seconds, and holds still; each of its three icons floats once,
+the last coming to rest 4.2 seconds after the page opens. So every animation
+ends within five seconds, and none needs a control to stop it. A visitor whose
+system asks for reduced motion sees none of it: `Home.css` sets
+`animation: none` on both under `prefers-reduced-motion: reduce`, rather than
+relying on `base.css`'s rule, which shortens an animation but does not cap its
+count. `frontend/tests/homeMotion.test.jsx :: SC 2.2.2: the home page’s motion
+stops on its own, and not at all for a visitor who asks for less` holds both
+from the stylesheets, delays counted. The loading indicators, the button's
+spinner and the indeterminate progress bar, are not counted here: they run only
+while work is in flight, which is the case SC 2.2.2's exception for essential
+motion is about. Under reduced motion, `base.css`'s rule shortens their
+animation but does not cap its count, so they are not still; that is a known
+low, not fixed here.
 
 ## 5. Reflow (SC 1.4.10) — usability finding 6's check
 

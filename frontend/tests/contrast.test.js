@@ -49,9 +49,11 @@ const SURFACES = [
 const TEXT_PAIRS = [
   { fg: '--color-text', on: SURFACES },
   { fg: '--color-text-muted', on: SURFACES },
-  // Links and link-styled controls: page, panels, and the in-page 403's link on
-  // the error notice (components/NotPermitted.jsx).
-  { fg: '--color-primary', on: ['--color-surface', '--color-surface-alt', '--color-danger-surface'] },
+  // Links and link-styled controls: page, panels, the in-page 403's link on the
+  // error notice (components/NotPermitted.jsx), and the link in an info notice,
+  // which since #119 sits on --color-info-surface (the knowledge map's empty
+  // selection, in both its views).
+  { fg: '--color-primary', on: ['--color-surface', '--color-surface-alt', '--color-danger-surface', '--color-info-surface'] },
   { fg: '--color-primary-hover', on: ['--color-surface', '--color-surface-alt', '--color-danger-surface'] },
   // Button and skip-link text on the primary fills.
   { fg: '--color-primary-text', on: ['--color-primary', '--color-primary-hover'] },
@@ -252,9 +254,11 @@ const EXEMPT = new Set([
 ])
 
 /** Selectors whose rules may use --color-border on a border: separators and panels, not controls.
-    The last entry is FR-20's node and its reference in a table or the panel, with their
-    modifiers, and not the classes that merely begin the same way (`__node-text`, `__nodes`). */
-const CONTROL_SELECTOR = /^(button|input|select|textarea|a\b|\.btn|\.facet|\.citation(?!-)|\.ask-threads__item|\.password-toggle|\.sort-header__button|\.skip-link|\.knowledge-map__(node|ref)(?![a-z_]|-[a-z]))/
+    `.profile-avatar__upload` is the Profile page's "Change picture", a button styled by its
+    class (D-137). The last entry is FR-20's node and its reference in a table or the panel,
+    with their modifiers, and not the classes that merely begin the same way (`__node-text`,
+    `__nodes`). */
+const CONTROL_SELECTOR = /^(button|input|select|textarea|a\b|\.btn|\.facet|\.citation(?!-)|\.ask-threads__item|\.password-toggle|\.sort-header__button|\.skip-link|\.profile-avatar__upload|\.knowledge-map__(node|ref)(?![a-z_]|-[a-z]))/
 
 const PROPERTIES_THAT_TAKE_COLOUR =
   /^(color|background|background-color|border|border-color|border-(top|right|bottom|left)(-color)?|outline|outline-color|box-shadow|caret-color|fill|stroke|text-decoration-color)$/

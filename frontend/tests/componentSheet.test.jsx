@@ -6,6 +6,8 @@
  * drifting.
  */
 import { fireEvent, render, screen, within } from '@testing-library/react'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 import ComponentSheet from '../src/components/ComponentSheet.jsx'
@@ -122,5 +124,22 @@ describe('the sheet shows every shared component in its states', () => {
     renderSheet()
     const table = screen.getByRole('table', { name: 'Contrast ratio of each text and background pair' })
     expect(within(table).getAllByRole('row')).toHaveLength(CONTRAST_PAIRS.length + 1)
+  })
+
+  // The sheet's index of screens fell behind the route table: PR #119's home page,
+  // D-137's account pages and two NIT3004 screens were missing from it.
+  it('lists every screen in the route table of src/App.jsx under Screens', () => {
+    const source = readFileSync(join(import.meta.dirname, '..', 'src', 'App.jsx'), 'utf8')
+    const declared = [...source.matchAll(/\bpath="([^"]+)"/g)].map((match) => `/${match[1]}`)
+    // Every `path=` was read, as tests/askNavLink.test.jsx checks for its walk.
+    expect(declared).toHaveLength(source.match(/\bpath=/g).length)
+    // The index route, which has no path, and not the sheet's own.
+    const screens = ['/', ...declared.filter((path) => path !== '/components')]
+
+    renderSheet()
+    const listed = within(screen.getByRole('region', { name: 'Screens' }))
+      .getAllByRole('listitem')
+      .flatMap((item) => [...item.querySelectorAll('code')].map((code) => code.textContent))
+    expect(screens.filter((path) => !listed.includes(path))).toEqual([])
   })
 })

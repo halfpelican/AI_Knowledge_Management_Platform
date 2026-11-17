@@ -40,7 +40,9 @@ export const CONTRAST_PAIRS = [
   // the redesign added, on what it sits on. tests/contrast.test.js holds the same.
   { label: 'Body text on page background (home, sign-in card)', fg: '--color-text', bg: '--color-background', minimum: 4.5 },
   { label: 'Heading on page background', fg: '--color-heading', bg: '--color-background', minimum: 4.5 },
-  { label: 'Table title on surface', fg: '--color-heading', bg: '--color-surface', minimum: 4.5 },
+  // A title in a plain table cell, as in the knowledge map's tables. A row-header title,
+  // as in the document table, takes .data-table th's muted text on the alt surface.
+  { label: 'Title in a plain table cell, on surface', fg: '--color-heading', bg: '--color-surface', minimum: 4.5 },
   { label: 'Link on page background (sign-in card)', fg: '--color-link', bg: '--color-background', minimum: 4.5 },
   { label: 'Link on surface (dashboard panels)', fg: '--color-link', bg: '--color-surface', minimum: 4.5 },
   { label: 'Info notice text on info surface', fg: '--color-primary-hover', bg: '--color-info-surface', minimum: 4.5 },

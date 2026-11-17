@@ -150,6 +150,12 @@ const BUILT = [
   },
   { name: 'Meeting summary and action items, on the meeting page (FR-16)', paths: ['/meetings/:meetingId'] },
   { name: 'Knowledge map, with its table view (FR-20, NFR-17)', paths: ['/knowledge-map'] },
+  { name: 'Knowledge-gap log (FR-19, Administrator only)', paths: ['/admin/knowledge-gaps'] },
+  { name: 'Tag and department administration (FR-10, Administrator only)', paths: ['/admin/tags'] },
+  // PR #119's screens, on D-137's routes.
+  { name: 'Home page for a visitor not signed in, with sign-in and registration (FR-01, FR-02)', paths: ['/'] },
+  { name: 'Forgotten password, and the reset page its email links to (FR-02, D-137)', paths: ['/forgot-password', '/reset-password'] },
+  { name: 'Profile: the password change and the profile picture (FR-01, FR-04, D-137)', paths: ['/profile'] },
 ]
 
 /* Fixture for the FR-20 section below: a map object in the contract's own shape
