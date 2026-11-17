@@ -20,11 +20,14 @@ What these tests hold the build to:
   pixels is a 413 without a pixel decoded: a spy on Pillow's ``load`` shows it never ran.
 - **What a decode may cost** (the review of 17 November 2026, PIC-1). A WebP declaring too many
   pixels is refused before Pillow opens it, so libwebp never allocates its canvas: a spy on its
-  decoder shows none was created, for each of the three ways a WebP header gives its size. A JPEG is
-  decoded at a reduced scale, and an opaque picture is never copied at full size before it is
-  scaled. At most MAXIMUM_PICTURE_DECODES_IN_FLIGHT pictures are decoded at once: past that an upload
-  is a 429 ``picture_busy`` with ``Retry-After``, and every place is given back, whatever the upload
-  came to.
+  decoder shows none was created, for each of the three ways a WebP header gives its size, and for
+  a lossless WebP of 25 to 29 bytes, whose size Pillow reads too (the final review, PIC-1R). A JPEG
+  is decoded at a reduced scale, and an opaque picture is never copied at full size before it is
+  scaled. A JPEG of more than 100 scans is the 415 before Pillow opens it, its scans counted as its
+  FF DA pairs, a comment's included; libjpeg's own progressive JPEGs are accepted, and a PNG's FF DA
+  pairs are not counted (the final review, JPG-1). At most MAXIMUM_PICTURE_DECODES_IN_FLIGHT pictures
+  are decoded at once: past that an upload is a 429 ``picture_busy`` with ``Retry-After``, and every
+  place is given back, whatever the upload came to.
 - **A 16-bit greyscale PNG** (the review's COR-1) is scaled to 8 bits rather than clipped to white,
   its 16-bit transparency key becomes its alpha band, and its EXIF orientation still applies.
 - **Only pixels are kept.** A JPEG carrying EXIF (GPS, camera, orientation), an ICC profile and a
@@ -791,6 +794,43 @@ def test_a_webp_at_the_pixel_cap_is_decoded_and_one_pixel_more_is_413_unopened(
     assert len(webp_decoders) == 1
 
 
+def a_short_lossless_webp(width, height, length):
+    """The final review's file (PIC-1R): a lossless WebP of only ``length`` bytes, declaring ``width``
+    x ``height``. Its RIFF header, its VP8L chunk's name and length, and the first bytes of the
+    chunk: the signature byte and the 14-bit sizes, less one, then nothing of a picture."""
+    payload_length = length - 20
+    sizes = (width - 1) | ((height - 1) << 14)
+    payload = (bytes([0x2F]) + sizes.to_bytes(4, "little")).ljust(payload_length, b"\0")
+    data = (b"RIFF" + (length - 8).to_bytes(4, "little") + b"WEBP"
+            + b"VP8L" + payload_length.to_bytes(4, "little") + payload)
+    assert len(data) == length
+    return data
+
+
+@pytest.mark.parametrize("length", range(25, 30))
+def test_a_lossless_webp_of_25_to_29_bytes_declaring_too_many_pixels_is_413_unopened(
+    session_client, media_root, webp_decoders, length
+):
+    """Pillow reads a lossless WebP's size from its first 25 bytes, and libwebp opens one of 26 or
+    28: declaring 13,000 x 13,000, which is under Pillow's own refusal, one made libwebp commit about
+    1.3 GB before the cap refused it. The server now reads the size from the same bytes, so no
+    decoder is created. The control: the same file declaring 16 x 16 reaches Pillow, the spy sees its
+    decoder, and with no picture in it the answer is the 415."""
+    client = session_client.client
+
+    response = upload(client, a_short_lossless_webp(13000, 13000, length), name="me.webp",
+                      content_type="image/webp")
+
+    assert response.status_code == 413, response.content
+    assert response.json() == {"detail": PICTURE_TOO_MANY_PIXELS_MESSAGE}
+    assert webp_decoders == []
+    assert_nothing_stored(session_client.user, media_root)
+    small = upload(client, a_short_lossless_webp(16, 16, length), name="me.webp",
+                   content_type="image/webp")
+    assert (small.status_code, small.json()) == (415, {"detail": UNSUPPORTED_PICTURE_MESSAGE})
+    assert webp_decoders == [length]
+
+
 def test_a_large_jpeg_is_decoded_at_a_reduced_scale(session_client, media_root, decoded):
     """A JPEG is decoded at the smallest scale that still leaves twice the stored size on each side,
     as Pillow's thumbnail would ask for it: 4096 x 3072 at 2048 x 1536, a quarter of its pixels, and
@@ -803,6 +843,168 @@ def test_a_large_jpeg_is_decoded_at_a_reduced_scale(session_client, media_root, 
     assert response.status_code == 200, response.content
     assert decoded == [(2048, 1536)]
     assert Image.open(io.BytesIO(stored_png(media_root, session_client.user))).size == (512, 384)
+
+
+# How many scans a JPEG may have (the final review of 17 November 2026, JPG-1). libjpeg decodes a
+# progressive JPEG scan by scan, each scan a pass over every block of its component, and nothing in
+# it limits how many scans a file has. The review's file was a flat 5000 x 5000 progressive JPEG
+# whose last luma refinement scan (Ss=1, Se=63, Ah=1, Al=0) was repeated, 42 bytes each time,
+# 121,315 times in 5 MB: about 47 minutes of one core, extrapolated from the review's timings,
+# holding one of the two decode places throughout.
+
+# Pillow's progressive JPEG of an RGB picture: libjpeg's own script of ten scans, the last of them
+# the luma refinement scan, as (components, Ss, Se, Ah, Al).
+PILLOWS_PROGRESSIVE_SCANS = 10
+LUMA_REFINEMENT_SCAN = ((1,), 1, 63, 1, 0)
+
+
+def jpeg_segments(data: bytes) -> list[tuple[str, bytes]]:
+    """A JPEG as its marker segments, by marker, with each scan (``SOS``) carrying its entropy-coded
+    data: everything up to the next marker that is neither a stuffed FF 00 nor a restart marker."""
+    assert data[:2] == b"\xff\xd8"
+    position, segments = 2, [("SOI", data[:2])]
+    while position < len(data):
+        assert data[position] == 0xFF, position
+        marker = data[position + 1]
+        if marker == 0xD9:
+            segments.append(("EOI", data[position:position + 2]))
+            break
+        end = position + 2 + int.from_bytes(data[position + 2:position + 4], "big")
+        if marker == 0xDA:
+            while data[end] != 0xFF or data[end + 1] == 0x00 or 0xD0 <= data[end + 1] <= 0xD7:
+                end += 1
+            segments.append(("SOS", data[position:end]))
+        else:
+            segments.append((f"{marker:02X}", data[position:end]))
+        position = end
+    return segments
+
+
+def scan_header(sos: bytes) -> tuple:
+    """A scan's (components, Ss, Se, Ah, Al), read from its SOS marker segment."""
+    count = sos[4]
+    components = tuple(sos[5 + 2 * index] for index in range(count))
+    start, end, approximation = sos[5 + 2 * count:8 + 2 * count]
+    return components, start, end, approximation >> 4, approximation & 0x0F
+
+
+def a_progressive_jpeg(size=(64, 64), extra_scans=0) -> bytes:
+    """A flat grey progressive JPEG, with its last scan, the luma refinement scan, repeated
+    ``extra_scans`` more times before its EOI, as the review's file repeated it: the SOS and its
+    entropy-coded data alone, since the Huffman table the scan uses stays defined. A valid JPEG of
+    ``10 + extra_scans`` scans, each SOS one FF DA in its bytes."""
+    flat = Image.new("RGB", size, (128, 128, 128))
+    parts = jpeg_segments(encoded(flat, "JPEG", quality=50, progressive=True))
+    scans = [raw for marker, raw in parts if marker == "SOS"]
+    assert len(scans) == PILLOWS_PROGRESSIVE_SCANS
+    assert scan_header(scans[-1]) == LUMA_REFINEMENT_SCAN
+    body = b"".join(raw for marker, raw in parts if marker != "EOI")
+    data = body + scans[-1] * extra_scans + b"\xff\xd9"
+    assert data.count(b"\xff\xda") == PILLOWS_PROGRESSIVE_SCANS + extra_scans
+    return data
+
+
+@pytest.fixture
+def opened(monkeypatch):
+    """Every file Pillow is asked to open while the fixture is in use: a spy on ``Image.open``. A test
+    reads it before opening anything itself."""
+    seen = []
+    real_open = Image.open
+
+    def spy(fp, *args, **kwargs):
+        seen.append(fp)
+        return real_open(fp, *args, **kwargs)
+
+    monkeypatch.setattr(Image, "open", spy)
+    return seen
+
+
+def test_a_jpeg_repeating_its_refinement_scan_is_415_unopened(
+    session_client, media_root, decoded, opened
+):
+    """The review's file, smaller: 500 repeats of the luma refinement scan, 510 scans in all, in a
+    file of a few kilobytes. Refused before Pillow opens it, so no scan is decoded."""
+    data = a_progressive_jpeg((256, 256), extra_scans=500)
+    assert len(data) < 50_000
+
+    response = upload(session_client.client, data, name="me.jpg", content_type="image/jpeg")
+
+    assert response.status_code == 415, response.content
+    assert response.json() == {"detail": UNSUPPORTED_PICTURE_MESSAGE}
+    assert opened == []
+    assert decoded == []
+    assert_nothing_stored(session_client.user, media_root)
+
+
+def test_a_jpeg_of_100_scans_is_decoded_and_one_more_is_415_unopened(
+    session_client, media_root, decoded, opened
+):
+    """The cap's comparison, at the value the contract quotes: a JPEG of 100 scans is decoded and
+    stored, and one of 101 is refused before Pillow opens it. Also the control for the test above:
+    the spies see the JPEG that is admitted."""
+    client = session_client.client
+
+    at_the_cap = upload(client, a_progressive_jpeg(extra_scans=90), name="me.jpg", content_type="image/jpeg")
+    assert at_the_cap.status_code == 200, at_the_cap.content
+    assert (len(opened), decoded) == (1, [(64, 64)])
+
+    over = upload(client, a_progressive_jpeg(extra_scans=91), name="me.jpg", content_type="image/jpeg")
+    assert over.status_code == 415, over.content
+    assert over.json() == {"detail": UNSUPPORTED_PICTURE_MESSAGE}
+    assert (len(opened), decoded) == (1, [(64, 64)])
+    assert pictures.MAX_PICTURE_JPEG_SCANS == 100
+    assert Image.open(io.BytesIO(stored_png(media_root, session_client.user))).size == (64, 64)
+
+
+def test_ff_da_pairs_in_a_jpegs_metadata_count_as_scans(session_client, decoded):
+    """What counting FF DA pairs costs, pinned so that a change to it is seen: every pair in the file
+    counts, a comment's with the scans. A baseline JPEG has one scan, so a comment of 99 pairs leaves
+    it at the cap, and one of 100 takes it over."""
+    client = session_client.client
+
+    def with_comment(pairs):
+        data = encoded(a_photo(), "JPEG", comment=b"\xff\xda" * pairs)
+        assert data.count(b"\xff\xda") == 1 + pairs
+        return data
+
+    assert upload(client, with_comment(99), name="me.jpg", content_type="image/jpeg").status_code == 200
+    over = upload(client, with_comment(100), name="me.jpg", content_type="image/jpeg")
+    assert (over.status_code, over.json()) == (415, {"detail": UNSUPPORTED_PICTURE_MESSAGE})
+    assert decoded == [(64, 48)]
+
+
+def test_ff_da_pairs_are_counted_only_in_a_jpeg(session_client, media_root):
+    """A PNG's compressed data is close to random, so FF DA turns up in it by chance, about 80 times
+    in 5 MB, and means nothing there. Only a file that starts with a JPEG's SOI marker is counted, so
+    a PNG carrying 500 pairs in a private chunk is stored as any other."""
+    base = encoded(a_photo(), "PNG")
+    payload = b"\xff\xda" * 500
+    chunk = (struct.pack(">I", len(payload)) + b"prVt" + payload
+             + struct.pack(">I", zlib.crc32(b"prVt" + payload) & 0xFFFFFFFF))
+    data = base[:33] + chunk + base[33:]  # after the signature and IHDR
+
+    response = upload(session_client.client, data)
+
+    assert response.status_code == 200, response.content
+    assert Image.open(io.BytesIO(stored_png(media_root, session_client.user))).size == (64, 48)
+
+
+@pytest.mark.parametrize(
+    "mode, colour, scans",
+    [("L", 128, 6), ("RGB", (200, 30, 30), 10), ("CMYK", (10, 20, 30, 40), 18)],
+    ids=["grey", "rgb", "cmyk"],
+)
+def test_an_ordinary_progressive_jpeg_is_accepted(session_client, media_root, mode, colour, scans):
+    """libjpeg's own progressive scripts, which Pillow writes: 6 scans for grey, 10 for RGB and 18
+    for CMYK, the most it writes for any picture Pillow reads. Each is well under the cap."""
+    data = encoded(Image.new(mode, (80, 60), colour), "JPEG", progressive=True)
+    assert data.count(b"\xff\xda") == scans
+
+    response = upload(session_client.client, data, name="me.jpg", content_type="image/jpeg")
+
+    assert response.status_code == 200, response.content
+    stored = Image.open(io.BytesIO(stored_png(media_root, session_client.user)))
+    assert (stored.format, stored.size, stored.mode) == ("PNG", (80, 60), "RGB")
 
 
 def test_an_opaque_picture_is_never_copied_at_full_size_before_it_is_scaled(
@@ -909,6 +1111,7 @@ def test_a_decode_place_is_given_back_whatever_the_upload_comes_to(session_clien
         ("text, which Pillow cannot identify", b"This is not a picture.\n" * 20, 415),
         ("a PNG declaring too many pixels", png_declaring(6000, 5000), 413),
         ("a WebP declaring too many pixels", declaring_a_canvas(a_webp("animated"), 6000, 5000), 413),
+        ("a JPEG of 101 scans", a_progressive_jpeg(extra_scans=91), 415),
         ("a truncated PNG, which fails as it is decoded", png[: len(png) // 2], 415),
         ("a picture", encoded(a_photo(), "PNG"), 200),
         ("another picture", encoded(a_photo(colour=(9, 9, 9)), "PNG"), 200),

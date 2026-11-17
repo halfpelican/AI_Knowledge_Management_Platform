@@ -10,11 +10,13 @@ users are listed, so what is stored has to be safe to show to anybody. Three thi
   reads the header only, so a small file declaring enormous dimensions is refused at
   MAX_PICTURE_PIXELS without being decompressed. **A WebP is different:** Pillow opens one by
   creating libwebp's decoder, which allocates the canvas twice over, so a WebP's canvas is read
-  from its first bytes here, as libwebp reads it (``webp_canvas_size``), and refused before Pillow
-  opens it. Until the review of 17 November 2026 (PIC-1) it was not, and a 140-byte WebP declaring
-  13,300 x 13,300 pixels made libwebp commit about 1.4 GB of memory before the cap refused it.
-  Pillow raises its own ``DecompressionBombError`` while reading a header that declares more than
-  twice its MAX_IMAGE_PIXELS, and that is the same refusal.
+  from its first bytes here, wherever Pillow reads one (``webp_canvas_size``), and refused before
+  Pillow opens it. Until the review of 17 November 2026 (PIC-1) it was not, and a 140-byte WebP
+  declaring 13,300 x 13,300 pixels made libwebp commit about 1.4 GB of memory before the cap refused
+  it. The final review that day (PIC-1R) found the size still unread in a lossless WebP of 25 to 29
+  bytes, which Pillow reads and libwebp opens: about 1.3 GB for one of 26 bytes. Pillow raises its
+  own ``DecompressionBombError`` while reading a header that declares more than twice its
+  MAX_IMAGE_PIXELS, and that is the same refusal.
 - **Nothing but the pixels is kept.** The first frame is decoded, turned upright by its EXIF
   orientation, converted to RGB, or RGBA when it has transparency, and scaled down to fit
   PICTURE_MAX_DIMENSION. Then a fresh image is built from those pixels alone, with
@@ -35,6 +37,23 @@ once. So:
 - **A JPEG is decoded at a reduced scale.** libjpeg can divide each side by 2, 4 or 8 as it decodes,
   and the largest of those that still leaves twice the stored size on each side is used, as Pillow's
   ``thumbnail`` asks for when the picture is not decoded yet. PNG and WebP have no such scale.
+- **A JPEG has at most MAX_PICTURE_JPEG_SCANS scans** (the final review of 17 November 2026, JPG-1).
+  The reduced scale reduces only the output: libjpeg still decodes every scan, each a pass over
+  every block of its component, however few bytes the scan takes. The review's 5 MB file repeated
+  one 42-byte refinement scan to hold a decode place for about 47 minutes. So before Pillow opens a
+  JPEG, ``jpeg_scan_bound`` counts its scans, and one with more than the cap is ``UnreadablePicture``.
+
+  **The count is an upper bound, and what that costs.** It is the number of FF DA byte pairs in the
+  whole file. Every scan begins with its SOS marker, FF DA, and no scan's entropy-coded data holds
+  one, since an FF there is followed only by 00 or a restart marker. So the count is never short of
+  the scans libjpeg decodes, however the file is malformed. But it counts FF DA wherever it falls,
+  in metadata too: EXIF, an ICC profile, a comment, an embedded thumbnail (a small JPEG with scans of
+  its own), or a second picture after the first one ends. So a JPEG whose other bytes hold more FF
+  DA pairs than the cap leaves room for is refused with the same 415. By chance a pair is one in
+  65,536, so it takes about 6.5 MB of random bytes to hold 100, more than MAX_PICTURE_BYTES allows.
+  Walking the marker segments instead would leave metadata out, but it counts correctly only if it
+  reads a malformed file exactly as libjpeg does: a walker that skipped bytes libjpeg reads as scans
+  would count short, and the cap would hold nothing back.
 - **The decoded picture is the one full-size image** of a picture already RGB or RGBA: it is turned
   upright in place and converted only if its mode must change. (Pillow's own scaling premultiplies
   an alpha band at full size, which this does not avoid.)
@@ -68,6 +87,7 @@ from PIL import Image, ImageOps
 
 from apps.accounts.models import User
 from apps.core.constants import (
+    MAX_PICTURE_JPEG_SCANS,
     MAX_PICTURE_PIXELS,
     MAXIMUM_PICTURE_DECODES_IN_FLIGHT,
     PICTURE_FORMATS,
@@ -81,9 +101,16 @@ STORED_NAME = "picture.png"
 _EPOCH = datetime(1970, 1, 1, tzinfo=dt_timezone.utc)
 _ONE_MICROSECOND = timedelta(microseconds=1)
 
-# How much of a WebP holds its canvas's size: "RIFF", the file's length, "WEBP", then the first
-# chunk's name and length and the first ten bytes of its payload (``webp_canvas_size``).
+# How much of a WebP Pillow reads to find its canvas's size, and this too: "RIFF", the file's
+# length, "WEBP", then the first chunk's name and length and the first ten bytes of its payload
+# (``webp_canvas_size``).
 WEBP_HEADER_BYTES = 30
+# How much of that a lossless WebP needs: its VP8L chunk gives its size in the first five bytes of
+# its payload, so Pillow reads the size of one of 25 bytes or more (PIC-1R).
+WEBP_LOSSLESS_HEADER_BYTES = 25
+# A JPEG begins with its SOI marker, and each of its scans with an SOS marker (``jpeg_scan_bound``).
+JPEG_START = b"\xff\xd8"
+JPEG_SCAN_MARKER = b"\xff\xda"
 # A JPEG is decoded at the most reduced of libjpeg's scales that still leaves at least this much on
 # each side: twice the stored size, as Pillow's thumbnail asks for with its default reducing_gap of 2.
 _JPEG_DRAFT_SIZE = (2 * PICTURE_MAX_DIMENSION, 2 * PICTURE_MAX_DIMENSION)
@@ -131,50 +158,84 @@ def _decode_place():
 
 
 def webp_canvas_size(header: bytes) -> tuple[int, int] | None:
-    """The canvas a WebP's first WEBP_HEADER_BYTES declare, or None when it is not a WebP whose size
-    they give.
+    """The canvas a WebP's first WEBP_HEADER_BYTES declare, or None when they are not a WebP whose
+    size they give. ``header`` is shorter when the file is: then it is the whole file.
 
-    Read as libwebp reads it when Pillow opens the file, which is when it allocates the canvas, and
-    as Pillow 13 reads it for its own check, from the first chunk, the one Pillow requires a WebP to
-    begin with:
+    Read wherever Pillow 13 reads a size when it opens a WebP (``WebPImagePlugin._get_size``), which
+    it does just before it creates libwebp's decoder, the step that allocates the canvas. Pillow reads
+    from the first chunk, the one it requires a WebP to begin with, and needs only as many bytes as
+    that chunk's kind of header takes:
 
     - ``VP8X``, the extended format (animation, alpha, metadata): the canvas, 24 bits for each side,
-      less one.
-    - ``VP8 ``, a lossy picture: its key frame's 14-bit width and height, after the start code.
-    - ``VP8L``, a lossless picture: 14 bits for each side, less one, after the signature byte.
+      less one, in the first WEBP_HEADER_BYTES.
+    - ``VP8 ``, a lossy picture: its key frame's 14-bit width and height, after the start code, in
+      the first WEBP_HEADER_BYTES.
+    - ``VP8L``, a lossless picture: 14 bits for each side, less one, after the signature byte, in
+      the first WEBP_LOSSLESS_HEADER_BYTES. Until the final review of 17 November 2026 (PIC-1R) a
+      lossless WebP was read only from WEBP_HEADER_BYTES, so one of 25 to 29 bytes reached Pillow,
+      which read its size, and libwebp, which opened one of 26 or 28 bytes declaring 13,000 x 13,000
+      and committed about 1.3 GB before the cap refused it.
 
-    None for anything else, which then reaches Pillow as before: a WebP with no such header has no
-    canvas for libwebp to allocate, and fails to open.
+    None for anything else, which then reaches Pillow as before. Pillow reads no size from it either,
+    and libwebp creates no decoder for it: tried on one of each, a lossless header of 24 bytes, a
+    VP8X or VP8 one of 29, a wrong signature byte and a wrong start code, with the libwebp (1.6.0)
+    that Pillow 13 bundles.
     """
-    if len(header) < WEBP_HEADER_BYTES or header[:4] != b"RIFF" or header[8:12] != b"WEBP":
+    if header[:4] != b"RIFF" or header[8:12] != b"WEBP":
         return None
     chunk = header[12:16]
-    if chunk == b"VP8X":
+    if chunk == b"VP8X" and len(header) >= WEBP_HEADER_BYTES:
         return int.from_bytes(header[24:27], "little") + 1, int.from_bytes(header[27:30], "little") + 1
-    if chunk == b"VP8 " and header[23:26] == b"\x9d\x01\x2a":
+    if chunk == b"VP8 " and len(header) >= WEBP_HEADER_BYTES and header[23:26] == b"\x9d\x01\x2a":
         width = int.from_bytes(header[26:28], "little") & 0x3FFF
         return width, int.from_bytes(header[28:30], "little") & 0x3FFF
-    if chunk == b"VP8L" and header[20] == 0x2F:
+    if chunk == b"VP8L" and len(header) >= WEBP_LOSSLESS_HEADER_BYTES and header[20] == 0x2F:
         bits = int.from_bytes(header[21:25], "little")
         return (bits & 0x3FFF) + 1, ((bits >> 14) & 0x3FFF) + 1
     return None
 
 
+def jpeg_scan_bound(data: bytes) -> int:
+    """At most how many scans libjpeg decodes from ``data``, a JPEG: the FF DA pairs in all of it.
+
+    An upper bound, never short. Every scan begins with its SOS marker, FF DA, and an FF inside a
+    scan's entropy-coded data is followed only by 00 or a restart marker, so FF DA cannot be there.
+    FF DA in metadata, or after the picture ends, counts too: the module docstring says what that
+    costs, and why the marker segments are not walked instead (JPG-1).
+    """
+    return data.count(JPEG_SCAN_MARKER)
+
+
 def reencode_picture(upload) -> bytes:
     """The upload's first frame as a PNG of at most PICTURE_MAX_DIMENSION a side, and nothing else.
 
-    Raises ``PicturesBusy`` before reading anything when MAXIMUM_PICTURE_DECODES_IN_FLIGHT pictures
-    are being decoded already, ``PictureTooLarge`` before decoding anything when the header declares
-    more than MAX_PICTURE_PIXELS, and ``UnreadablePicture`` for anything Pillow cannot open or decode
-    as a PNG, JPEG or WebP. ``upload`` is any binary file object; it is read from the start.
+    Raises, in this order:
+
+    1. ``PicturesBusy`` before reading anything when MAXIMUM_PICTURE_DECODES_IN_FLIGHT pictures are
+       being decoded already.
+    2. Before Pillow opens the file: ``PictureTooLarge`` for a WebP whose header declares more than
+       MAX_PICTURE_PIXELS, and ``UnreadablePicture`` for a JPEG of more than MAX_PICTURE_JPEG_SCANS
+       scans by ``jpeg_scan_bound``.
+    3. ``UnreadablePicture`` for anything Pillow cannot open as a PNG, JPEG or WebP.
+    4. ``PictureTooLarge`` before decoding anything when the header declares more than
+       MAX_PICTURE_PIXELS.
+    5. ``UnreadablePicture`` for a picture Pillow cannot decode.
+
+    ``upload`` is any binary file object; it is read from the start.
     """
     with _decode_place():
         upload.seek(0)
-        canvas = webp_canvas_size(upload.read(WEBP_HEADER_BYTES))
-        upload.seek(0)
+        header = upload.read(WEBP_HEADER_BYTES)
+        canvas = webp_canvas_size(header)
         if canvas is not None and canvas[0] * canvas[1] > MAX_PICTURE_PIXELS:
-            # Before Image.open, which for a WebP allocates the canvas twice over (PIC-1).
+            # Before Image.open, which for a WebP allocates the canvas twice over (PIC-1, PIC-1R).
             raise PictureTooLarge
+        if header.startswith(JPEG_START):
+            upload.seek(0)
+            if jpeg_scan_bound(upload.read()) > MAX_PICTURE_JPEG_SCANS:
+                # Before Image.open: libjpeg would decode every scan, however small (JPG-1).
+                raise UnreadablePicture
+        upload.seek(0)
         try:
             source = Image.open(upload, formats=PICTURE_FORMATS)
         except (Image.DecompressionBombError, Image.DecompressionBombWarning) as error:

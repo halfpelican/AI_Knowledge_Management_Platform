@@ -943,6 +943,18 @@ MAX_PICTURE_PIXELS = 25_000_000
 # The stored picture's largest side, in pixels. Every upload is scaled down, keeping its shape, to
 # fit a square of this side, never scaled up, and stored as a PNG.
 PICTURE_MAX_DIMENSION = 512
+# The most scans a JPEG picture may have (the final review of 17 November 2026, JPG-1). libjpeg
+# decodes a progressive JPEG scan by scan, each scan a pass over every block of its component however
+# few bytes it takes, and the format sets no limit on how many scans a file has. The review's 5 MB
+# file was a 5000 x 5000 picture repeating one 42-byte refinement scan 121,315 times. Each took about
+# 23.5 ms, which comes to about 47 minutes holding a decode place, extrapolated from the 3,000 it
+# timed. Why 100: libjpeg's own progressive scripts, which Pillow writes, have 6 scans for a
+# greyscale picture, 10 for colour and 18 for CMYK, so 100 is more than five times the most of them.
+# And a 5000 x 5000 JPEG of 100 such scans decoded in 1.6 s on the development machine, against
+# 0.1 s for libjpeg's own 10. A JPEG with more is refused with the 415 before Pillow opens it, its
+# scans counted as an upper bound (apps/accounts/pictures.py says what that costs). Set by the
+# build, not by D-137.
+MAX_PICTURE_JPEG_SCANS = 100
 # The most pictures one server process decodes at once, across every user (PIC-1). A decode of a
 # picture at MAX_PICTURE_PIXELS touched about 400 to 500 MB, and ten at once took a process's peak
 # working set from 53 MB to 4,191 MB. The `picture` throttle bounds how many a user sends in an

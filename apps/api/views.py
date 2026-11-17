@@ -994,11 +994,15 @@ class OwnPictureView(ThrottlePostOnlyMixin, APIView):
        being decoded already, anyone's (the review of 17 November 2026, PIC-1). Pillow has read
        nothing of the picture.
     6. 413 for a WebP whose header declares more than MAX_PICTURE_PIXELS, read from its first bytes
-       before Pillow opens it, since opening a WebP allocates its canvas (PIC-1).
-    7. 415 when Pillow cannot open the content as a PNG, JPEG or WebP: a wrong format, under any
+       wherever Pillow reads a size, before Pillow opens it, since opening a WebP allocates its
+       canvas (PIC-1, and the final review's PIC-1R for a lossless WebP of 25 to 29 bytes).
+    7. 415, the same message as 8, for a JPEG of more than MAX_PICTURE_JPEG_SCANS scans, counted
+       from its bytes before Pillow opens it, since libjpeg decodes every scan however small (the
+       final review of 17 November 2026, JPG-1).
+    8. 415 when Pillow cannot open the content as a PNG, JPEG or WebP: a wrong format, under any
        name or declared type (``apps/accounts/pictures.py``).
-    8. 413 for a header declaring more than MAX_PICTURE_PIXELS, before a pixel is decoded.
-    9. 415, the same message as 7, when the picture cannot be decoded: corrupt or truncated.
+    9. 413 for a header declaring more than MAX_PICTURE_PIXELS, before a pixel is decoded.
+    10. 415, the same message as 8, when the picture cannot be decoded: corrupt or truncated.
 
     Then the picture is re-encoded, stored under a new random name, and ``picture_updated_at`` set,
     in one transaction that locks the user's row, and the previous file is deleted once that

@@ -2105,21 +2105,31 @@ enumerates these codes; each is D-137's, or a rule this contract already has.
 
 | Method | Path | Auth | Success | Failures |
 |---|---|---|---|---|
-| POST | `/api/users/me/picture` | session, both roles, no permission code | `200` the user object, its `picture` the new address. Multipart, one file part, `picture`: a PNG, JPEG or WebP of at most 5 MB | `400 {"picture": ["No picture was submitted."]}` with no file part named `picture`; `401` no valid session; `403 {"detail": "CSRF Failed: ..."}` without `X-CSRFToken`; `413 {"detail": "Picture exceeds the maximum permitted size of 5 MB."}` for a body declaring more than 5 MB plus 64 KiB, refused unread, or for a file over 5 MB; `413 {"detail": "This picture's dimensions are too large. Choose a picture of at most 25 megapixels."}` for a header declaring more than 25,000,000 pixels, refused before a pixel is decoded, and for a WebP before it is opened; `415 {"detail": "Choose a PNG, JPEG or WebP picture. This file is not one, or it is damaged."}` for any other format, under any name, and for a corrupt or truncated picture, one body for all; `415` with DRF's own body for a request that is not multipart; `429` past the `picture` rate, with DRF's body and `Retry-After`; `429 {"detail": "The server is busy with other pictures. This picture was not saved and nothing was changed; it can be sent again in a few seconds.", "code": "picture_busy"}` with `Retry-After: 5` while `MAXIMUM_PICTURE_DECODES_IN_FLIGHT` (2) pictures are being decoded, anyone's. Nothing is stored for any of them |
+| POST | `/api/users/me/picture` | session, both roles, no permission code | `200` the user object, its `picture` the new address. Multipart, one file part, `picture`: a PNG, JPEG or WebP of at most 5 MB | `400 {"picture": ["No picture was submitted."]}` with no file part named `picture`; `401` no valid session; `403 {"detail": "CSRF Failed: ..."}` without `X-CSRFToken`; `413 {"detail": "Picture exceeds the maximum permitted size of 5 MB."}` for a body declaring more than 5 MB plus 64 KiB, refused unread, or for a file over 5 MB; `413 {"detail": "This picture's dimensions are too large. Choose a picture of at most 25 megapixels."}` for a header declaring more than 25,000,000 pixels, refused before a pixel is decoded, and for a WebP before it is opened; `415 {"detail": "Choose a PNG, JPEG or WebP picture. This file is not one, or it is damaged."}` for any other format, under any name, for a corrupt or truncated picture, and for a JPEG of more than 100 scans, refused before it is opened, one body for all; `415` with DRF's own body for a request that is not multipart; `429` past the `picture` rate, with DRF's body and `Retry-After`; `429 {"detail": "The server is busy with other pictures. This picture was not saved and nothing was changed; it can be sent again in a few seconds.", "code": "picture_busy"}` with `Retry-After: 5` while `MAXIMUM_PICTURE_DECODES_IN_FLIGHT` (2) pictures are being decoded, anyone's. Nothing is stored for any of them |
 | DELETE | `/api/users/me/picture` | session, both roles, no permission code | `200` the user object, `picture` null. Idempotent: a user with no picture gets the same `200`. No body is read | `401`; `403` CSRF |
 | GET | `/api/users/{id}/picture` | session, both roles, no permission code | `200` the picture as PNG bytes, with `Content-Type: image/png`, `X-Content-Type-Options: nosniff`, `Content-Disposition: inline; filename="picture.png"` and the API's never-cache headers. The `Accept` header is not consulted | `401`; `404 {"detail": "No User matches the given query."}` for an unknown id, a user with no picture, and a stored file gone from disk alike |
 
 **The order on `POST`** is fixed: the `401`, the CSRF `403`, the rate's `429`, the declared-length
 `413` (the body is not read), the `400`, the file's `413`, the `picture_busy` `429` (Pillow reads
-nothing of the picture), the pixel `413` for a WebP, read from its first 30 bytes, then the `415` for
-content that is not a PNG, JPEG or WebP, the pixel `413` for a PNG or JPEG, and the `415` for a
-picture that cannot be decoded.
+nothing of the picture). Then, before Pillow opens the file, the pixel `413` for a WebP, read from its
+first 30 bytes, or its first 25 if it is lossless (the final review of 17 November 2026, PIC-1R), and
+the `415` for a JPEG of more than 100 scans. Then the `415` for content that is not a PNG, JPEG or
+WebP, the pixel `413` for a PNG or JPEG, and the `415` for a picture that cannot be decoded.
 
 **How many at once** (the review of 17 November 2026, PIC-1). Decoding a picture at the 25-megapixel
 cap touches hundreds of megabytes, so the server decodes at most `MAXIMUM_PICTURE_DECODES_IN_FLIGHT`
 (2) at once, across every user. An upload past that is answered at once with the `picture_busy`
 `429`, which counts against the `picture` rate as every upload does. The client tells it from the
 rate's `429` by `code`, and waits out its `Retry-After` before sending the picture again.
+
+**How many scans** (the final review of 17 November 2026, JPG-1). A JPEG of more than 100 scans is
+refused with the one `415`, before Pillow opens it. libjpeg decodes every scan over the whole picture,
+however few bytes the scan takes, so a 5 MB file repeating one small scan could hold a decode place
+for most of an hour. The scans are counted as the file's FF DA byte pairs: every scan begins with
+one, and no scan's coded data holds one, so the count is never short. FF DA pairs in a JPEG's
+metadata count too, so a JPEG carrying more than its scans leave room for is refused the same way;
+an ordinary picture comes nowhere near. The progressive JPEGs libjpeg's own scripts write have at
+most 18 scans. A PNG's or a WebP's bytes are not counted.
 
 **What is stored.**
 

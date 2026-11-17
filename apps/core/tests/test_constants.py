@@ -83,6 +83,7 @@ ACCOUNT_SELF_SERVICE_NAMES = [
     "PICTURE_MAX_DIMENSION",
     "MAXIMUM_PICTURE_DECODES_IN_FLIGHT",
     "PICTURE_BUSY_RETRY_SECONDS",
+    "MAX_PICTURE_JPEG_SCANS",
     "PASSWORD_RESET_LINK_MINUTES",
     "PASSWORD_RESET_COOLDOWN_SECONDS",
     "MAXIMUM_PASSWORD_RESET_EMAILS_IN_FLIGHT",
@@ -456,6 +457,15 @@ def test_the_picture_decode_bound_is_the_builds():
     assert constants.PICTURE_BUSY_RETRY_SECONDS == 5
     for name in ("MAXIMUM_PICTURE_DECODES_IN_FLIGHT", "PICTURE_BUSY_RETRY_SECONDS"):
         assert type(getattr(constants, name)) is int, name
+
+
+def test_the_jpeg_scan_cap_is_the_builds():
+    """The final review of 17 November 2026, JPG-1: the most scans a JPEG picture may have. Set by
+    the build, not by D-137, and pinned so that changing it is a decision. A whole number, since it
+    is a count. apps/api/tests/test_fr01_profile_pictures.py uploads libjpeg's own progressive
+    files, up to its CMYK script's 18 scans, under it."""
+    assert constants.MAX_PICTURE_JPEG_SCANS == 100
+    assert type(constants.MAX_PICTURE_JPEG_SCANS) is int
 
 
 def test_effective_roles_are_closed_under_generalisation():
