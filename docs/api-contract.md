@@ -2101,7 +2101,8 @@ request came in on still exists, because a logout processed meanwhile, from anot
 may have deleted it, and a change that went on would then answer `200` with a new key that no logout
 has ended. A logout that lands after this check, in the few queries before the change commits, still
 loses to the new key. Within one tab the page covers that case: it sends Log out only once a change in
-flight has answered.
+flight has answered, or after 15 seconds at most. If a change still answers `200` after those 15
+seconds, the page sends one more Log out, on a best-effort basis, to end the new key's session too.
 
 **The order** is fixed: `401` for no session, then the CSRF `403`, then the `429`, then the body, then
 the check that the current password is still the account's, and last the check that the session still

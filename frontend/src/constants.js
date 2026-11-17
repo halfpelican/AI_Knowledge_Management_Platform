@@ -64,7 +64,8 @@ export const REMEMBERED_SESSION_DAYS = 7
 
 /**
  * The longest Log out waits for a password change in flight before it goes ahead, in
- * milliseconds (FEA-11, Benjamin's answer of 18 November 2026: 15 seconds). The wait is
+ * milliseconds (FEA-11). The 15 seconds were set by the build, not by Benjamin: D-137's
+ * front-end note lists the value for him to confirm or change. The wait is
  * LOG-1's (src/auth/AuthProvider.jsx); the limit keeps FR-04's "immediately redirected"
  * from waiting on a change that has stalled. The page's own value, with no counterpart
  * on the server.

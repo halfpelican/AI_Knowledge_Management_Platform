@@ -910,8 +910,9 @@ class PasswordChangeView(APIView):
 
     **What the check does not cover:** a logout that lands after the check but before the change
     commits still loses to the change's new key. The front end's wait (664ad04) covers that case
-    within one tab: Log out sends nothing until a change in flight has answered. A logout from another
-    tab in that window is not covered.
+    within one tab: Log out sends nothing until a change in flight has answered, for at most 15
+    seconds (2ac9c1c). If a change still succeeds after that, the page sends one more Log out, on a
+    best-effort basis. A logout from another tab in that window is not covered.
     """
 
     throttle_classes = [ScopedRateThrottle]
