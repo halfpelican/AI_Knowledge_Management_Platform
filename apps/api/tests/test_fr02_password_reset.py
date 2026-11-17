@@ -20,10 +20,11 @@ from D-137, from the values the build was given, or from a rule the project alre
   once.
 - **Using the link.** It sets the new password, which must pass registration's validators for that
   account, and answers 200. A bad uid, a wrong, expired or used token and an unknown account are one
-  400 with one message. A link works for 60 minutes and once, even for two confirms at once. A
-  successful sign-in ends it; a failed sign-in and FR-03's lock do not. Every session of the account
-  ends, remembered ones included. Nobody is signed in, and FR-03's lock and count are left as they
-  were.
+  400 with one message. A link works for 60 minutes and once, even for two confirms at once. The 60
+  minutes are real ones, timed in UTC, across a daylight-saving change too (the review of 17
+  November 2026, DOC-1). A successful sign-in ends it; a failed sign-in and FR-03's lock do not.
+  Every session of the account ends, remembered ones included. Nobody is signed in, and FR-03's lock
+  and count are left as they were.
 - **The words.** Both routes' answers, the email's subject and its text are the contract's, which
   quotes each of them.
 - **The settings.** The file outbox is the default, and SMTP is used once EMAIL_HOST is set, on port
@@ -46,6 +47,7 @@ import smtplib
 import threading
 import time
 import uuid
+import zoneinfo
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
@@ -54,9 +56,9 @@ from urllib.parse import parse_qs, urlsplit
 import pytest
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.contrib.auth import tokens as django_tokens
 from django.contrib.auth.hashers import make_password
 from django.contrib.auth.password_validation import validate_password
-from django.contrib.auth.tokens import PasswordResetTokenGenerator, default_token_generator
 from django.contrib.sessions.models import Session
 from django.core.cache.backends import locmem
 from django.core.exceptions import ImproperlyConfigured, ValidationError
@@ -216,25 +218,58 @@ def validator_messages(password, user):
     return refused.value.messages
 
 
+# The zone of the naive local time Django's own token generator reads, taken to be TIME_ZONE's.
+LOCAL_ZONE = zoneinfo.ZoneInfo(settings.TIME_ZONE)
+
+
 @dataclass
 class TokenClock:
-    """The time the token generator reads, stopped, and moved only by ``advance()``. Its own clock is
-    naive local time, ``datetime.now()``, which its ``_now`` exists to let a test replace."""
+    """One real instant, stopped, and moved only by ``advance()``, read through both clocks a reset
+    link's age could be measured on (the review of 17 November 2026, DOC-1):
 
-    now: datetime.datetime
+    - ``utc``, as ``django.utils.timezone.now``: the clock ``password_reset.token_generator`` reads.
+    - ``local``, as ``datetime.now()`` in django.contrib.auth.tokens: the naive local time Django's
+      own generator reads, taken to be TIME_ZONE's, Australia/Melbourne's.
 
-    def read(self, generator=None):
-        return self.now
+    So a test of a link's age is about its age whichever clock times it, and the daylight-saving
+    tests, at instants where the two clocks disagree, show which one does. The instant is kept in
+    UTC, where adding a timedelta adds real time. Added to a time in Melbourne it would add wall-clock
+    time: 61 minutes after 02:50 AEDT on 4 April 2027 would come out as 03:51 AEST, 121 real minutes
+    later.
+    """
+
+    instant: datetime.datetime
+
+    def utc(self):
+        return self.instant
+
+    def local(self):
+        return self.instant.astimezone(LOCAL_ZONE).replace(tzinfo=None)
 
     def advance(self, **delta):
-        self.now += datetime.timedelta(**delta)
+        self.instant += datetime.timedelta(**delta)
 
 
 @pytest.fixture
 def token_clock(monkeypatch):
-    clock = TokenClock(datetime.datetime.now())
-    monkeypatch.setattr(PasswordResetTokenGenerator, "_now", clock.read)
+    clock = TokenClock(timezone.now())
+
+    class LocalTime(datetime.datetime):
+        """The ``datetime`` django.contrib.auth.tokens reads, with ``now()`` reading the clock."""
+
+        @classmethod
+        def now(cls, tz=None):
+            return clock.local() if tz is None else clock.utc().astimezone(tz)
+
+    monkeypatch.setattr(timezone, "now", clock.utc)
+    monkeypatch.setattr(django_tokens, "datetime", LocalTime)
     return clock
+
+
+def local_wall_clock(clock) -> str:
+    """What a wall clock in TIME_ZONE reads at the clock's instant, with the zone's abbreviation."""
+    there = clock.instant.astimezone(LOCAL_ZONE)
+    return f"{there:%Y-%m-%d %H:%M} {there.tzname()}"
 
 
 class LaterTime:
@@ -333,7 +368,7 @@ def test_the_email_is_one_plain_text_message_with_the_link_and_what_it_means(acc
     carried = parameters_of(link)
     assert uuid.UUID(urlsafe_base64_decode(carried["uid"]).decode()) == account.pk
     assert carried["uid"] == uid_of(account)
-    assert default_token_generator.check_token(account, carried["token"])
+    assert password_reset.token_generator.check_token(account, carried["token"])
     assert "The link works once" in message.body
     assert f"within {PASSWORD_RESET_LINK_MINUTES} minutes" in message.body
     assert "your password is unchanged" in message.body
@@ -533,6 +568,53 @@ def test_a_link_has_expired_a_second_after_60_minutes(account, mailoutbox, token
     assert stored(account).check_password(PASSWORD)
 
 
+# Melbourne's clocks go back an hour at 03:00 AEDT (UTC+11) on Sunday 4 April 2027, to 02:00 AEST
+# (UTC+10), and forward an hour at 02:00 AEST on Sunday 3 October 2027, to 03:00 AEDT: the first two
+# changes after the build. Each instant is given in UTC, and each test checks what a wall clock in
+# Melbourne reads at it.
+BEFORE_THE_CLOCKS_GO_BACK = datetime.datetime(2027, 4, 3, 15, 50, tzinfo=datetime.timezone.utc)
+BEFORE_THE_CLOCKS_GO_FORWARD = datetime.datetime(2027, 10, 2, 15, 59, tzinfo=datetime.timezone.utc)
+
+
+def test_a_link_made_before_the_clocks_go_back_has_expired_61_real_minutes_later(
+    account, mailoutbox, token_clock
+):
+    """The review of 17 November 2026, DOC-1. Timed by naive local time, as Django's own generator
+    times it, this link was 60 seconds old at 02:51 AEST, since the clocks went back an hour in
+    between, and it still set a password. A link made in that hour worked for up to two real hours."""
+    token_clock.instant = BEFORE_THE_CLOCKS_GO_BACK
+    assert local_wall_clock(token_clock) == "2027-04-04 02:50 AEDT"
+    link = mailed_link(account, mailoutbox)
+
+    token_clock.advance(minutes=61)
+    assert local_wall_clock(token_clock) == "2027-04-04 02:51 AEST"
+
+    response = confirm(**link)
+
+    assert response.status_code == 400
+    assert response.json() == REFUSED_LINK
+    assert stored(account).check_password(PASSWORD)
+
+
+def test_a_link_made_before_the_clocks_go_forward_still_works_a_real_minute_later(
+    account, mailoutbox, token_clock
+):
+    """DOC-1 the other way. Timed by naive local time, this link was 61 minutes old at 03:00 AEDT,
+    since the clocks went forward an hour in between, and it was refused a minute after it was made."""
+    token_clock.instant = BEFORE_THE_CLOCKS_GO_FORWARD
+    assert local_wall_clock(token_clock) == "2027-10-03 01:59 AEST"
+    link = mailed_link(account, mailoutbox)
+
+    token_clock.advance(minutes=1)
+    assert local_wall_clock(token_clock) == "2027-10-03 03:00 AEDT"
+
+    response = confirm(**link)
+
+    assert response.status_code == 200
+    assert response.json() == {"detail": PASSWORD_RESET_COMPLETE_MESSAGE}
+    assert stored(account).check_password(NEW_PASSWORD)
+
+
 def test_a_successful_sign_in_ends_an_outstanding_link(account, mailoutbox):
     """The contract: "A successful sign-in also ends the link." The token hashes the last sign-in,
     which a sign-in changes. The account has never signed in, so its last sign-in goes from none to
@@ -594,7 +676,7 @@ def _a_token_with_its_time_moved_on(account, token):
 
 def _another_accounts_token(account, token):
     other = User.objects.create_user("colleague@example.com", PASSWORD, name="Casey Colleague")
-    return uid_of(account), default_token_generator.make_token(other)
+    return uid_of(account), password_reset.token_generator.make_token(other)
 
 
 def _another_accounts_uid(account, token):
@@ -647,7 +729,7 @@ def test_an_account_retired_after_its_link_was_made_can_use_no_link(account, mai
     account.save(update_fields=["password"])
 
     assert confirm(**link).json() == REFUSED_LINK
-    made_now = confirm(uid_of(account), default_token_generator.make_token(account))
+    made_now = confirm(uid_of(account), password_reset.token_generator.make_token(account))
 
     assert made_now.status_code == 400
     assert made_now.json() == REFUSED_LINK
@@ -881,10 +963,10 @@ def test_two_confirms_with_one_link_at_once_set_one_password(account, monkeypatc
 
     Without the row lock B would check the old row, save over A and answer 200 while A was held: the
     one wait for something that must not happen, two seconds, is for B to finish in that time."""
-    uid, token = uid_of(account), default_token_generator.make_token(account)
+    uid, token = uid_of(account), password_reset.token_generator.make_token(account)
     calls = Counter()
     a_holds_the_row, release_a, b_judged_the_link = threading.Event(), threading.Event(), threading.Event()
-    real_generator = default_token_generator
+    real_generator = password_reset.token_generator
 
     class HeldGenerator:
         def make_token(self, user):
@@ -902,7 +984,7 @@ def test_two_confirms_with_one_link_at_once_set_one_password(account, monkeypatc
                 b_judged_the_link.set()
             return result
 
-    monkeypatch.setattr(password_reset, "default_token_generator", HeldGenerator())
+    monkeypatch.setattr(password_reset, "token_generator", HeldGenerator())
     first = ConfirmThread("A", uid, token, NEW_PASSWORD)
     second = ConfirmThread("B", uid, token, OTHER_PASSWORD)
     try:

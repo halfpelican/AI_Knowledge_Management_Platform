@@ -48,12 +48,13 @@ the file outbox, a stop while the file is being written can leave it cut short.
 connection and inside a test's transaction, so the email is in ``mail.outbox`` when the response
 arrives. The thread path has its own tests, which join every thread they start.
 
-**The link** (``user_for_reset_link``). Its token is Django's ``default_token_generator``: an HMAC under
-SECRET_KEY of the account's id, password hash, last sign-in and address, with the time it was made.
-So it stops working PASSWORD_RESET_TIMEOUT after it was made (PASSWORD_RESET_LINK_MINUTES), and once
-the password changes, which is what makes a link work once. A successful sign-in ends it too, since
-it changes the last sign-in. FR-03's lock and count are not hashed, so neither a failed sign-in nor a
-lock spoils a link.
+**The link** (``user_for_reset_link``). Its token is Django's reset token, made and checked by
+``token_generator``: an HMAC under SECRET_KEY of the account's id, password hash, last sign-in and
+address, with the time it was made, which ``ResetTokenGenerator`` reads in UTC. So it stops working
+PASSWORD_RESET_TIMEOUT after it was made (PASSWORD_RESET_LINK_MINUTES), daylight saving or not, and
+once the password changes, which is what makes a link work once. A successful sign-in ends it too,
+since it changes the last sign-in. FR-03's lock and count are not hashed, so neither a failed
+sign-in nor a lock spoils a link.
 """
 
 from __future__ import annotations
@@ -61,15 +62,17 @@ from __future__ import annotations
 import logging
 import threading
 import uuid
+from datetime import timezone as dt_timezone
 from urllib.parse import urlencode
 
 from django.conf import settings
 from django.contrib.auth.password_validation import validate_password
-from django.contrib.auth.tokens import default_token_generator
+from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.core.mail import send_mail
 from django.db import connections, transaction
+from django.utils import timezone
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 
@@ -180,12 +183,34 @@ def _cooldown_key(user) -> str:
     return f"password-reset-cooldown:{user.pk}"
 
 
+class ResetTokenGenerator(PasswordResetTokenGenerator):
+    """Django's reset token, with the time it was made, and its age, read in UTC.
+
+    Django's own generator reads naive local time, ``datetime.now()``. That is TIME_ZONE's
+    (Australia/Melbourne) on Linux, where Django sets the process's zone, and the machine's own on
+    Windows, where it cannot. Both keep daylight saving, and across a change that clock jumps an
+    hour, so a link's age is an hour out. On it, a link made in the hour before the clocks go back
+    worked for up to two real hours, and one made just before they go forward could be refused a
+    minute later (the review of 17 November 2026, DOC-1). UTC keeps no daylight saving, so here a
+    link works for PASSWORD_RESET_TIMEOUT of real time. The token, its HMAC and its salt are Django's.
+    """
+
+    def _now(self):
+        # UTC whatever zone the time comes in, and naive, as the base class counts its seconds from
+        # a naive 1 January 2001.
+        return timezone.now().astimezone(dt_timezone.utc).replace(tzinfo=None)
+
+
+# Makes and checks every reset link's token. Nothing else in the platform makes or checks one.
+token_generator = ResetTokenGenerator()
+
+
 def reset_link(user) -> str:
     """The link a reset email carries, built from PUBLIC_BASE_URL alone (D-137)."""
     query = urlencode(
         {
             "uid": urlsafe_base64_encode(force_bytes(user.pk)),
-            "token": default_token_generator.make_token(user),
+            "token": token_generator.make_token(user),
         }
     )
     return f"{settings.PUBLIC_BASE_URL}{RESET_PAGE_PATH}?{query}"
@@ -223,7 +248,7 @@ def user_for_reset_link(uid: str, token: str):
     user = User.objects.filter(pk=pk).first()
     if user is None or not user.has_usable_password():
         return None
-    if not default_token_generator.check_token(user, token):
+    if not token_generator.check_token(user, token):
         return None
     return user
 
@@ -257,7 +282,7 @@ def reset_password(uid: str, token: str, new_password: str):
         current = (
             User.objects.select_for_update(no_key=True, of=("self",)).filter(pk=user.pk).first()
         )
-        if current is None or not default_token_generator.check_token(current, token):
+        if current is None or not token_generator.check_token(current, token):
             raise ResetLinkRefused
         user.save(update_fields=["password"])
     return user
