@@ -10,6 +10,7 @@ import ActionItems from './ActionItems.jsx'
 import AiMark, { PersonMark } from './AiMark.jsx'
 import { AnswerBody, PartialMatches, SourcesPanel } from './Answer.jsx'
 import AttendeePicker from './AttendeePicker.jsx'
+import Avatar from './Avatar.jsx'
 import { ActiveFilterList, FacetGroup, SortHeader } from './Browse.jsx'
 import Button from './Button.jsx'
 import DashboardPanel from './DashboardPanel.jsx'
@@ -50,17 +51,80 @@ const COLOR_TOKENS = [
   '--color-warning-surface',
   '--color-focus',
   '--color-overlay',
+  // PR #119's redesign (tokens.css): its names for roles the palette already
+  // filled, the repository's notices, the document table's status badges and the
+  // home screen's illustration. The contrast table reads a colour's value only
+  // from this list, so each colour a pair in contrastPairs.js names is here.
+  '--color-background',
+  '--color-heading',
+  '--color-link',
+  '--color-accent',
+  '--color-info-surface',
+  '--color-danger-text',
+  '--color-status-indexed',
+  '--color-status-indexed-surface',
+  '--color-status-not-indexed',
+  '--color-status-not-indexed-surface',
+  '--color-illustration-device',
+  '--color-illustration-figure',
+  '--color-illustration-bubble-text',
 ]
 
-const SPACING_TOKENS = ['--space-1', '--space-2', '--space-3', '--space-4', '--space-5', '--space-6', '--space-7']
+const SPACING_TOKENS = [
+  '--space-1',
+  '--space-2',
+  '--space-3',
+  '--space-4',
+  '--space-5',
+  '--space-6',
+  '--space-7',
+  '--space-8',
+  '--space-10',
+]
 
 const FONT_TOKENS = ['--font-sans', '--font-mono']
 
-const TYPE_TOKENS = ['--text-sm', '--text-base', '--text-lg', '--text-xl', '--text-2xl']
+const TYPE_TOKENS = [
+  '--text-xs',
+  '--text-sm',
+  '--text-base',
+  '--text-lg',
+  '--text-xl',
+  '--text-2xl',
+  '--text-3xl',
+  '--text-4xl',
+]
 
-const RADIUS_TOKENS = ['--radius-sm', '--radius-md', '--radius-full']
+const WEIGHT_TOKENS = ['--weight-regular', '--weight-medium', '--weight-semibold', '--weight-bold']
 
-const FOCUS_TOKENS = ['--color-focus', '--focus-ring-width', '--focus-ring-offset']
+const LEADING_TOKENS = ['--leading-tight', '--leading-normal']
+
+const RADIUS_TOKENS = ['--radius-sm', '--radius-md', '--radius-lg', '--radius-xl', '--radius-full']
+
+/* Decorative depth under PR #119's cards and panels: never the boundary of
+   anything, so no contrast pair (tokens.css, "Elevation"). */
+const SHADOW_TOKENS = ['--shadow-sm', '--shadow-md', '--shadow-lg']
+
+/* tokens.css's "Borders and layout" group, with #119's checkbox size. */
+const LAYOUT_TOKENS = [
+  '--border-width',
+  '--border-width-strong',
+  '--border-width-emphasis',
+  '--control-min-height',
+  '--content-max-width',
+  '--measure-text',
+  '--layout-card-min-width',
+  '--layout-panel-min-width',
+  '--layout-figure-min-width',
+  '--layout-map-min-width',
+  '--layout-map-panel-width',
+  '--layout-field-max-width',
+  '--dropzone-min-height',
+  '--size-5',
+  '--opacity-disabled',
+]
+
+const FOCUS_TOKENS = ['--color-focus', '--focus-ring-width', '--focus-ring-offset', '--focus-ring']
 
 const LAYER_TOKENS = ['--z-skip-link', '--z-dialog', '--duration-spinner']
 
@@ -326,13 +390,23 @@ const SAMPLE_AI_SEARCH_GROUP = {
   ],
 }
 
+/* D-137's avatar, for the section below. A real picture is the user object's
+   `picture`, an address under GET /api/users/{id}/picture that needs a session,
+   and the sheet asks the API for nothing. The site's own icon stands in: an image
+   on this origin that the browser can load for anyone. */
+const SAMPLE_PICTURE = '/favicon.svg'
+
 const ALL_TOKENS = [
   ...new Set([
     ...COLOR_TOKENS,
     ...SPACING_TOKENS,
     ...FONT_TOKENS,
     ...TYPE_TOKENS,
+    ...WEIGHT_TOKENS,
+    ...LEADING_TOKENS,
     ...RADIUS_TOKENS,
+    ...SHADOW_TOKENS,
+    ...LAYOUT_TOKENS,
     ...FOCUS_TOKENS,
     ...LAYER_TOKENS,
     ...AI_TOKENS,
@@ -469,6 +543,24 @@ export default function ComponentSheet() {
             </li>
           ))}
         </ul>
+        <ul className="token-list">
+          {WEIGHT_TOKENS.map((name) => (
+            <li key={name} className="type-row">
+              <p className="type-row__sample" style={{ fontWeight: `var(${name})` }}>
+                The quick brown fox jumps over the lazy dog
+              </p>
+              <code>{name}</code> <span className="token-row__value">{values[name]}</span>
+            </li>
+          ))}
+        </ul>
+        <ul className="token-list">
+          {LEADING_TOKENS.map((name) => (
+            <li key={name} className="token-row">
+              <code>{name}</code>
+              <span className="token-row__value">{values[name]}</span>
+            </li>
+          ))}
+        </ul>
       </section>
 
       <section aria-labelledby="sheet-radii">
@@ -477,6 +569,40 @@ export default function ComponentSheet() {
           {RADIUS_TOKENS.map((name) => (
             <li key={name} className="token-row">
               <span className="radius-box" style={{ borderRadius: `var(${name})` }} aria-hidden="true" />
+              <code>{name}</code>
+              <span className="token-row__value">{values[name]}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section aria-labelledby="sheet-elevation">
+        <h2 id="sheet-elevation">Elevation</h2>
+        <p>
+          The depth under the restyled cards and panels and the home screen&apos;s illustration (PR #119). It is
+          decoration only: every card keeps its border, so a shadow is never the boundary of anything and needs
+          no contrast pair.
+        </p>
+        <ul className="token-list">
+          {SHADOW_TOKENS.map((name) => (
+            <li key={name} className="token-row">
+              <span className="radius-box" style={{ boxShadow: `var(${name})` }} aria-hidden="true" />
+              <code>{name}</code>
+              <span className="token-row__value">{values[name]}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section aria-labelledby="sheet-layout">
+        <h2 id="sheet-layout">Borders and layout</h2>
+        <p>
+          Border widths, the widths and heights the layouts are built from (the 44px control height among them),
+          and the opacity of a disabled control.
+        </p>
+        <ul className="token-list">
+          {LAYOUT_TOKENS.map((name) => (
+            <li key={name} className="token-row">
               <code>{name}</code>
               <span className="token-row__value">{values[name]}</span>
             </li>
@@ -758,6 +884,28 @@ export default function ComponentSheet() {
             onChange={setDemoAttendees}
           />
         </div>
+      </section>
+
+      <section aria-labelledby="sheet-avatar">
+        <h2 id="sheet-avatar">Avatar (D-137)</h2>
+        <p>
+          A person&apos;s profile picture, or their initials where they have none, wherever people are listed:
+          the header&apos;s link to the Profile page, role management, the attendee picker above and a
+          meeting&apos;s attendees. The name is always beside it, so it is decoration: the picture has an empty{' '}
+          <code>alt</code>, and the initials are <code>aria-hidden</code> and painted by the stylesheet rather
+          than written into the page, so a row header or a link still reads as the name alone. A picture that
+          cannot be loaded gives way to the initials. The Profile page shows the same component larger.
+        </p>
+        <ul className="avatar-list">
+          <li className="avatar-list__person">
+            <Avatar name="Jane Doe" picture={SAMPLE_PICTURE} />
+            <span>Jane Doe (jane@example.com), with a picture</span>
+          </li>
+          <li className="avatar-list__person">
+            <Avatar name="Erin Employee" picture={null} />
+            <span>Erin Employee (erin@example.com), with none: her initials</span>
+          </li>
+        </ul>
       </section>
 
       <section aria-labelledby="sheet-progress">
