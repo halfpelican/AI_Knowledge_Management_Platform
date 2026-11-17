@@ -22,6 +22,13 @@ file holds, each from D-137 or from a rule the project already has:
   change with the 400 a wrong current password gets: the reset's password stands, and the session
   that sent the change ends, as the reset ended every session. The check is made on the account's
   row locked FOR NO KEY UPDATE, the only lock the change takes.
+- **The session must still exist when the password is changed** (LOG-1, Benjamin's answer of 18
+  November 2026). A logout processed while the change ran, from another tab for example, deleted
+  the session the change came in on. The change is then the 401 for no session, with the
+  ``sessionid`` cookie cleared: the password is not saved, the old one still signs in, and no session
+  is created. The session is checked under the account's lock, after the current password is checked
+  again and before the password is written, so the second of two changes from one session still gets
+  the contract's CHG-3 answer, Django's 400 with no cookie.
 - **Passwords are taken as typed,** as registration and sign-in take them: neither field is trimmed.
 - **The answers are the contract's words,** and the ``csrftoken`` cookie is not rotated, so the token
   the page held before the change still works after it.
@@ -317,6 +324,146 @@ def test_the_change_checks_and_saves_under_a_no_key_update_lock_on_the_users_row
     locks = [query["sql"] for query in queries.captured_queries if " FOR " in query["sql"]]
     assert len(locks) == 1, locks
     assert locks[0].endswith('FOR NO KEY UPDATE OF "users"'), locks[0]
+
+
+# --- The session must still exist when the password is changed (LOG-1) ------------------------------
+
+# DRF's answer for no session, the one every protected route gives a request without one.
+NO_SESSION_BODY = {"detail": "Authentication credentials were not provided."}
+# Django's answer when a session it would save has been deleted (config/errors.py). The contract's
+# CHG-3 answer quotes it.
+BAD_REQUEST_BODY = {"detail": "Bad request."}
+
+
+def session_keys():
+    return set(Session.objects.values_list("session_key", flat=True))
+
+
+def test_a_session_deleted_while_the_change_ran_is_401_and_nothing_is_changed_or_created(
+    session_client, monkeypatch
+):
+    """LOG-1, from the security review of PR #119, and Benjamin's answer of 18 November 2026. A logout
+    sent from another tab while the change hashes deletes the session row the change came in on, as
+    POST /api/auth/logout does. Here the row is deleted as the validators run, after the current
+    password is checked. The change used to save the password anyway and cycle the deleted session to
+    a new key: a 200 carrying a live session after the logout. Now it is the 401 for no session. The
+    password is not saved, the old one still signs in, the user's other sessions go on, no session row
+    is created, and the ``sessionid`` cookie is cleared."""
+    client, user = session_client.client, session_client.user
+    key = session_key(client)
+    other_device = signed_in(user)
+    hash_before = stored_hash(user)
+    real_validate_password = apps.api.serializers.validate_password
+
+    def validate_after_a_logout(password, user=None, password_validators=None):
+        Session.objects.filter(session_key=key).delete()
+        return real_validate_password(password, user=user, password_validators=password_validators)
+
+    monkeypatch.setattr(apps.api.serializers, "validate_password", validate_after_a_logout)
+    keys_before = session_keys()
+
+    response = change(client)
+
+    assert (response.status_code, response.json()) == (401, NO_SESSION_BODY)
+    assert response["WWW-Authenticate"] == "Session"
+    cookie = response.cookies[settings.SESSION_COOKIE_NAME]
+    assert (cookie.value, cookie["max-age"]) == ("", 0)
+    assert session_keys() == keys_before - {key}
+    assert stored_hash(user) == hash_before
+    assert client.get(ME).status_code == 401
+    assert other_device.get(ME).status_code == 200
+    assert login_with(user, PASSWORD).status_code == 200
+    assert login_with(user, NEW_PASSWORD).status_code == 401
+
+
+def test_a_logout_from_another_tab_while_the_change_ran_leaves_no_session_signed_in(
+    session_client, monkeypatch
+):
+    """The same race through the two routes. A second client holding the same cookie, as another tab
+    of the browser does, logs out while the change runs. The front end's wait (664ad04) cannot see a
+    change sent from another tab, so only the server can refuse this one. The logout is answered 200,
+    the change 401, and no session is left that signs anyone in."""
+    client, user = session_client.client, session_client.user
+    key = session_key(client)
+    other_tab = replay(key)
+    logouts = []
+    real_validate_password = apps.api.serializers.validate_password
+
+    def validate_after_a_logout(password, user=None, password_validators=None):
+        logouts.append(other_tab.post(LOGOUT).status_code)
+        return real_validate_password(password, user=user, password_validators=password_validators)
+
+    monkeypatch.setattr(apps.api.serializers, "validate_password", validate_after_a_logout)
+    keys_before = session_keys()
+
+    response = change(client)
+
+    assert logouts == [200]
+    assert (response.status_code, response.json()) == (401, NO_SESSION_BODY)
+    assert session_keys() == keys_before - {key}
+    assert User.objects.get(pk=user.pk).check_password(PASSWORD)
+    assert client.get(ME).status_code == 401
+    assert other_tab.get(ME).status_code == 401
+
+
+def test_the_session_is_checked_under_the_lock_after_the_password_and_before_it_is_written(
+    session_client,
+):
+    """The check leaves a logout only the few queries between it and the commit, so it is made as late
+    as it can be: under the account's lock, after the current password is checked again (CHG-1), and
+    before the password is written. Made before the lock, it would miss a logout that landed while the
+    change waited behind a reset or another change. Made once the key is cycled, it would find the new
+    key. Read from the SQL, as the lock is in the test above: one read of this session's row lies
+    between the locking read and the write."""
+    client = session_client.client
+    key = session_key(client)
+    locking_read = 'FOR NO KEY UPDATE OF "users"'
+    password_write = 'UPDATE "users" SET "password_hash"'  # the password field's column
+
+    with CaptureQueriesContext(connection) as queries:
+        assert change(client).status_code == 200
+
+    statements = [query["sql"] for query in queries.captured_queries]
+    lock = next(index for index, sql in enumerate(statements) if sql.endswith(locking_read))
+    write = next(index for index, sql in enumerate(statements) if sql.startswith(password_write))
+    reads = [
+        sql
+        for sql in statements[lock + 1 : write]
+        if sql.startswith("SELECT") and '"django_session"' in sql and key in sql
+    ]
+    assert len(reads) == 1, statements[lock : write + 1]
+
+
+def test_one_session_sending_the_change_twice_keeps_the_first_changes_new_key(
+    session_client, monkeypatch
+):
+    """The contract's CHG-3 answer, which the session's check must not change. The first change gives
+    the session a new key and deletes the old one. So the second request, read before the first
+    committed, reaches the lock with neither its password nor its session still current. The password
+    is checked first, and Django answers its 400 with no cookie, so the browser keeps the first change's
+    new key. The session's 401 would clear it. Here the first change is made through a second client
+    holding the same cookie, while the second one's validators run. This test passes without the
+    session's check too: what it holds is the order of the two checks."""
+    client, user = session_client.client, session_client.user
+    first_tab = replay(session_key(client))
+    first = []
+    real_validate_password = apps.api.serializers.validate_password
+
+    def validate_after_the_first_change(password, user=None, password_validators=None):
+        # Unpatched first, so the first change's own validators are the real ones.
+        monkeypatch.setattr(apps.api.serializers, "validate_password", real_validate_password)
+        first.append(change(first_tab))
+        return real_validate_password(password, user=user, password_validators=password_validators)
+
+    monkeypatch.setattr(apps.api.serializers, "validate_password", validate_after_the_first_change)
+
+    second = change(client)
+
+    assert [response.status_code for response in first] == [200]
+    assert (second.status_code, second.json()) == (400, BAD_REQUEST_BODY)
+    assert settings.SESSION_COOKIE_NAME not in second.cookies
+    assert first_tab.get(ME).status_code == 200
+    assert User.objects.get(pk=user.pk).check_password(NEW_PASSWORD)
 
 
 # --- 400: the current password ---------------------------------------------------------------------

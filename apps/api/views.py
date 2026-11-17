@@ -22,7 +22,7 @@ from django.utils import timezone
 from django.utils.http import content_disposition_header
 from django.utils.text import Truncator
 from rest_framework import status
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import NotAuthenticated, ValidationError
 from rest_framework.parsers import JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -896,6 +896,22 @@ class PasswordChangeView(APIView):
     (docs/api-contract.md; the final requirements audit of 17 November 2026, CHG-3).
     The new hash is made before the lock is taken, so the lock is held for a few queries, never for a
     hash, as a reset's is.
+
+    **The session must still exist when the password is changed** (LOG-1, from the security review of
+    PR #119, and Benjamin's answer of 18 November 2026). Under the same lock, after the check above and
+    before the save, ``request.session.exists()`` reads ``django_session`` for the key this request
+    came in on. If a logout processed while the change ran, from another tab for example, has deleted
+    that row, ``update_session_auth_hash()`` would cycle the deleted key to a new one, and the 200
+    would carry a live session after the logout. So the change is then refused with the 401 for no
+    session: the password is not saved, no session is created, and the ``sessionid`` cookie is
+    cleared. The password is checked first, so the second request of CHG-3, whose session the first
+    change deleted, still gets Django's 400 with no cookie, and the browser keeps the first change's
+    new key.
+
+    **What the check does not cover:** a logout that lands after the check but before the change
+    commits still loses to the change's new key. The front end's wait (664ad04) covers that case
+    within one tab: Log out sends nothing until a change in flight has answered. A logout from another
+    tab in that window is not covered.
     """
 
     throttle_classes = [ScopedRateThrottle]
@@ -917,6 +933,14 @@ class PasswordChangeView(APIView):
                 # (CHG-1). Raised inside the transaction, so nothing is written, and answered as the
                 # serializer's own 400.
                 raise ValidationError({"current_password": [CURRENT_PASSWORD_INCORRECT_MESSAGE]})
+            if not request.session.exists(request.session.session_key):
+                # A logout deleted this request's session while it ran (LOG-1). Cycling the deleted
+                # key would leave a live session behind the logout, so nothing is written. flush()
+                # empties this request's copy of the session first, so SessionMiddleware clears the
+                # cookie. Left full, the copy would be saved under the deleted key, and Django would
+                # answer its 400 in place of the 401.
+                request.session.flush()
+                raise NotAuthenticated()
             # The password column alone. This row was read when the request was authenticated, so
             # a full save would write back what it held then, undoing a role change an
             # Administrator made since, or a lock FR-02 set since.
