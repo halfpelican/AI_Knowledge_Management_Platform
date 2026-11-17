@@ -107,6 +107,16 @@ describe('the production build', () => {
         expect(byName.has(url.slice(1)), `${url} is in the build`).toBe(true)
       }
 
+      // REF-1: the built page keeps index.html's referrer policy, ahead of every file it
+      // loads (tests/referrerPolicy.test.js).
+      const source = String(html.source)
+      const policy = source.search(/<meta name="referrer" content="same-origin"\s*\/?>/)
+      expect(policy, 'the built index.html sets the same-origin referrer policy').toBeGreaterThan(-1)
+      const firstLoad = Math.min(
+        ...[/<link\b/, /<script\b/].map((tag) => source.search(tag)).filter((index) => index > -1),
+      )
+      expect(policy, 'the policy comes before the first link or script').toBeLessThan(firstLoad)
+
       const code = files
         .filter((file) => file.type === 'chunk')
         .map((file) => file.code)

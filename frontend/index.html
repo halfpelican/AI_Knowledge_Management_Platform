@@ -2,6 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!-- REF-1: a request this page makes to another origin carries no Referer, so the
+         reset link's token, in the address until the page removes it, never leaves the
+         site in one. Set here, ahead of everything the page loads, so it does not rest on
+         the server's Referrer-Policy header alone; the Vite dev server sends none. -->
+    <meta name="referrer" content="same-origin" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Organisational Knowledge Platform</title>

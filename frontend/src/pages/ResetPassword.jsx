@@ -60,7 +60,9 @@ function validateNewPassword(values) {
  * address with one without them, through React Router, which calls
  * `history.replaceState`. Replaced, not pushed, so no history entry keeps the token,
  * and the address a later request or link sends as its Referer no longer holds it.
- * (The server's `Referrer-Policy` is Django's `same-origin` besides.)
+ * Until then, index.html's `<meta name="referrer" content="same-origin">` keeps it out
+ * of any Referer sent to another origin (REF-1), as the server's `Referrer-Policy`,
+ * Django's `same-origin`, does too.
  *
  * **A link without both values** is the dead-link state at once, and nothing is sent.
  *
