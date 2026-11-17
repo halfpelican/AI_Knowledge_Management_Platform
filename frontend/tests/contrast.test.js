@@ -248,9 +248,8 @@ const EXEMPT = new Set([
 
 /** Selectors whose rules may use --color-border on a border: separators and panels, not controls.
     The last entry is FR-20's node and its reference in a table or the panel, with their
-    modifiers, and not the classes that merely begin the same way (`__node-text`, `__nodes`).
-    `.profile-picture__label` is PR #119's profile picture chooser, a label drawn as a button. */
-const CONTROL_SELECTOR = /^(button|input|select|textarea|a\b|\.btn|\.facet|\.citation(?!-)|\.ask-threads__item|\.password-toggle|\.sort-header__button|\.skip-link|\.profile-picture__label|\.knowledge-map__(node|ref)(?![a-z_]|-[a-z]))/
+    modifiers, and not the classes that merely begin the same way (`__node-text`, `__nodes`). */
+const CONTROL_SELECTOR = /^(button|input|select|textarea|a\b|\.btn|\.facet|\.citation(?!-)|\.ask-threads__item|\.password-toggle|\.sort-header__button|\.skip-link|\.knowledge-map__(node|ref)(?![a-z_]|-[a-z]))/
 
 const PROPERTIES_THAT_TAKE_COLOUR =
   /^(color|background|background-color|border|border-color|border-(top|right|bottom|left)(-color)?|outline|outline-color|box-shadow|caret-color|fill|stroke|text-decoration-color)$/

@@ -71,10 +71,6 @@
   cursor: pointer;
 }
 
-.profile-avatar__upload input {
-  display: none;
-}
-
 .profile-details {
   flex: 1;
   min-width: 200px;
@@ -145,25 +141,6 @@
 .profile-form__actions {
   display: flex;
   gap: var(--space-3);
-}
-
-.profile-picture__label {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
-  /* The file picker drawn as a button: a control's boundary, 3:1 (SC 1.4.11). */
-  border: var(--border-width) solid var(--color-border-strong);
-  border-radius: var(--radius-md);
-  background-color: var(--color-surface);
-  cursor: pointer;
-  font-size: var(--text-base);
-  color: var(--color-text);
-  transition: border-color 0.15s ease;
-}
-
-.profile-picture__label:hover {
-  border-color: var(--color-primary);
 }
 
 .profile-picture__preview {
