@@ -36,11 +36,19 @@ recomputes each of its documented pairs from the CSS on disk.
 | `--color-text` #1f2933 | `--color-danger-surface` #fef3f2 | 13.57:1 | 4.5:1 | Pass | body text everywhere a notice can put it |
 | `--color-text` #1f2933 | `--color-success-surface` #ecfdf3 | 13.99:1 | 4.5:1 | Pass | body text everywhere a notice can put it |
 | `--color-text` #1f2933 | `--color-warning-surface` #fffaeb | 14.14:1 | 4.5:1 | Pass | body text everywhere a notice can put it |
+| `--color-text` #1f2933 | `--color-background` #ffffff | 14.76:1 | 4.5:1 | Pass | body text everywhere a notice can put it (PR #119’s surfaces) |
+| `--color-text` #1f2933 | `--color-info-surface` #eff6ff | 13.56:1 | 4.5:1 | Pass | body text everywhere a notice can put it (PR #119’s surfaces) |
+| `--color-text` #1f2933 | `--color-status-indexed-surface` #dcfce7 | 13.43:1 | 4.5:1 | Pass | body text everywhere a notice can put it (PR #119’s surfaces) |
+| `--color-text` #1f2933 | `--color-status-not-indexed-surface` #fef3c7 | 13.25:1 | 4.5:1 | Pass | body text everywhere a notice can put it (PR #119’s surfaces) |
 | `--color-text-muted` #4b5563 | `--color-surface` #ffffff | 7.56:1 | 4.5:1 | Pass | hints, metadata, empty states |
 | `--color-text-muted` #4b5563 | `--color-surface-alt` #f3f4f6 | 6.87:1 | 4.5:1 | Pass | hints, metadata, empty states |
 | `--color-text-muted` #4b5563 | `--color-danger-surface` #fef3f2 | 6.95:1 | 4.5:1 | Pass | hints, metadata, empty states |
 | `--color-text-muted` #4b5563 | `--color-success-surface` #ecfdf3 | 7.17:1 | 4.5:1 | Pass | hints, metadata, empty states |
 | `--color-text-muted` #4b5563 | `--color-warning-surface` #fffaeb | 7.24:1 | 4.5:1 | Pass | hints, metadata, empty states |
+| `--color-text-muted` #4b5563 | `--color-background` #ffffff | 7.56:1 | 4.5:1 | Pass | hints, metadata, empty states (PR #119’s surfaces) |
+| `--color-text-muted` #4b5563 | `--color-info-surface` #eff6ff | 6.94:1 | 4.5:1 | Pass | hints, metadata, empty states (PR #119’s surfaces) |
+| `--color-text-muted` #4b5563 | `--color-status-indexed-surface` #dcfce7 | 6.88:1 | 4.5:1 | Pass | hints, metadata, empty states (PR #119’s surfaces) |
+| `--color-text-muted` #4b5563 | `--color-status-not-indexed-surface` #fef3c7 | 6.79:1 | 4.5:1 | Pass | hints, metadata, empty states (PR #119’s surfaces) |
 | `--color-primary` #1d4ed8 | `--color-surface` #ffffff | 6.70:1 | 4.5:1 | Pass | links; the in-page 403’s link sits on the error notice |
 | `--color-primary` #1d4ed8 | `--color-surface-alt` #f3f4f6 | 6.09:1 | 4.5:1 | Pass | links; the in-page 403’s link sits on the error notice |
 | `--color-primary` #1d4ed8 | `--color-danger-surface` #fef3f2 | 6.16:1 | 4.5:1 | Pass | links; the in-page 403’s link sits on the error notice |
@@ -57,6 +65,15 @@ recomputes each of its documented pairs from the CSS on disk.
 | `--color-success` #067647 | `--color-success-surface` #ecfdf3 | 5.40:1 | 4.5:1 | Pass | the Indexed chip, the sheet’s pass column |
 | `--color-warning` #93370d | `--color-surface` #ffffff | 7.52:1 | 4.5:1 | Pass | the AI-unavailable notice’s title (NFR-19) |
 | `--color-warning` #93370d | `--color-warning-surface` #fffaeb | 7.21:1 | 4.5:1 | Pass | the AI-unavailable notice’s title (NFR-19) |
+| `--color-heading` #1f2933 | `--color-background` #ffffff | 14.76:1 | 4.5:1 | Pass | the landing page’s heading and feature titles (PR #119) |
+| `--color-heading` #1f2933 | `--color-surface` #ffffff | 14.76:1 | 4.5:1 | Pass | a title in a plain table cell, as in the knowledge map’s target columns (PR #119); a row-header title, as in the document table, takes `.data-table th`’s `--color-text-muted` on `--color-surface-alt` instead, 6.87:1 above |
+| `--color-link` #1d4ed8 | `--color-background` #ffffff | 6.70:1 | 4.5:1 | Pass | the sign-in card’s “Forgot password” link (PR #119) |
+| `--color-link` #1d4ed8 | `--color-surface` #ffffff | 6.70:1 | 4.5:1 | Pass | the dashboard panels’ links on hover (PR #119) |
+| `--color-primary-hover` #1e40af | `--color-info-surface` #eff6ff | 8.01:1 | 4.5:1 | Pass | every info notice’s text: PR #119’s rule in `Repository.css` comes after `Notice.css`’s in the build, so it reaches every screen |
+| `--color-danger-text` #991b1b | `--color-danger-surface` #fef3f2 | 7.64:1 | 4.5:1 | Pass | every error notice’s text, by the same rule (PR #119); the title keeps `--color-danger` |
+| `--color-status-indexed` #166534 | `--color-status-indexed-surface` #dcfce7 | 6.49:1 | 4.5:1 | Pass | the document table’s “Indexed” badge (FR-15, PR #119) |
+| `--color-status-not-indexed` #92400e | `--color-status-not-indexed-surface` #fef3c7 | 6.37:1 | 4.5:1 | Pass | the badge for every other status (FR-15, PR #119) |
+| `--color-illustration-bubble-text` #e5e7eb | `--color-text-muted` #4b5563 | 6.10:1 | 4.5:1 | Pass | the landing illustration’s left chat bubble (PR #119) |
 
 ### User-interface component boundaries and fills (SC 1.4.11, AA 3:1)
 
@@ -79,6 +96,10 @@ recomputes each of its documented pairs from the CSS on disk.
 | `--color-warning` #93370d | `--color-warning-surface` #fffaeb | 7.21:1 | 3:1 | Pass | the unavailable notice’s edge |
 | `--color-text-muted` #4b5563 | `--color-surface` #ffffff | 7.56:1 | 3:1 | Pass | the knowledge map’s contributor shape (FR-20, D-132) |
 | `--color-text` #1f2933 | `--color-surface` #ffffff | 14.76:1 | 3:1 | Pass | the knowledge map’s selected node: its outline and its lines (FR-20, D-132) |
+| `--color-border-strong` #667085 | `--color-background` #ffffff | 4.97:1 | 3:1 | Pass | the landing page’s outline button (PR #119) |
+| `--color-illustration-device` #111827 | `--color-background` #ffffff | 17.74:1 | 3:1 | Pass | the landing illustration’s device and figure, on the page (PR #119) |
+| `--color-illustration-figure` #544ce6 | `--color-illustration-device` #111827 | 3.00:1 | 3:1 | Pass | the figure’s body on the figure’s circle (PR #119) |
+| `--color-accent` #1d4ed8 | `--color-background` #ffffff | 6.70:1 | 3:1 | Pass | the token behind one of the illustration’s shapes, drawn at 12% opacity (PR #119) |
 
 FR-20's knowledge map also uses four pairs already in this table, each against
 `--color-surface`, which is what the diagram, its legend and its Selected panel
@@ -86,6 +107,33 @@ sit on: `--color-primary` (6.70:1) fills the document shape, `--color-success`
 (5.69:1) the meeting shape, `--color-warning` (7.52:1) the tag shape, and
 `--color-border-strong` (4.97:1) draws the lines and each node's outline.
 Section 8 names the tests that hold the four fills to four different tokens.
+
+**PR #119's redesign (17 November 2026).** Its rows are the ones marked PR #119
+in both tables: 21 cases in `contrast.test.js`, recomputed for this table from
+`tokens.css`. Two notes go with them.
+
+- **Four of the home page illustration's colours changed.** The illustration
+  is `aria-hidden` decoration, and SC 1.4.11 asks no contrast of it. But
+  `contrast.test.js` accounts for every colour token a stylesheet uses by a
+  pair or an exemption, and none was exempted:
+  - the screen, #0b0c10, 1.10:1 against the device, is now the device's
+    #111827, so the bezel between them is gone;
+  - the figure's body, #4f46e5, 2.82:1 on the figure, is now #544ce6, 3.00:1;
+  - the keyboard, #1f2937, is now `--color-text`, #1f2933, which looks the
+    same, and still measures 1.20:1 against the device, which no pair checks;
+  - the left chat bubble, #374151, is now the lighter `--color-text-muted`,
+    on which its text measures 6.10:1 (8.33:1 before).
+
+  Only the first two fixed a failing pair; the last two are existing tokens in
+  place of new ones. Exempting the illustration's colours instead would
+  restore all four.
+- **The info and error notices have lost their leading edge.** PR #119's
+  `.notice--info` and `.notice--error` in `Repository.css` come after
+  `Notice.css`'s in the build, so on every screen they draw a 1px
+  `--color-border` all round in place of the 4px edge. While they stand, the
+  notice edges the `--color-primary` and `--color-danger` rows above name are
+  not drawn. A notice is not a control and says what it is in words, so no AA
+  criterion depends on the edge.
 
 ### Documented exceptions
 
@@ -95,6 +143,7 @@ Section 8 names the tests that hold the four fills to four different tokens.
 | `--color-overlay` (the modal scrim) | Decorative and `aria-hidden`; nothing is read through it. The dialogue restates its own surface and text colour, which the test asserts, because white text on the bare composite would measure about 4.05:1 | `contrast.test.js :: the modal scrim backs no text` |
 | The password strength meter's fills | The bar is `aria-hidden` decoration; its text equivalent is the visible "Password strength: …" sentence (SC 1.1.1) | `tests/textEquivalents.test.jsx` |
 | The button spinner (`currentColor`) | `aria-hidden` decoration; the label changes with it | `tests/textEquivalents.test.jsx` |
+| `--shadow-sm`, `--shadow-md`, `--shadow-lg` (PR #119; `--color-text`’s rgb 31 41 51 at 6–14% alpha, inside the token) | Decorative depth, never a boundary anything depends on. Of their eleven uses, eight are on elements with a border of their own (the dashboard’s panels and filter box, the profile card and form, the repository’s filter and browse boxes, every table’s scroll region), one is a primary button’s hover, whose fill is its boundary, and two are on the `aria-hidden` illustration, whose white icon tiles stand out from the page by their shadow alone | No test holds this. `contrast.test.js`’s sweep follows `var(--shadow-sm)` into the token and finds a colour literal, not a `--color-` token, so it never sees the colour; `stylesheets.test.js :: keeps every colour literal in tokens.css` keeps that literal in the one file. The eleven uses were checked by hand on 17 November 2026 |
 
 ## 2. Focus states (SC 2.4.7)
 
