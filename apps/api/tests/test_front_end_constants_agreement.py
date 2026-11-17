@@ -50,6 +50,9 @@ copies a value of ``apps/core/constants.py``:
 - ``EVIDENCE_MAP_NODE_TYPE`` and ``EVIDENCE_MAP_RELATIONSHIP`` (since 16 November 2026, D-138):
   the node types and the relationship ``GET /api/knowledge-map/evidence`` returns, for the same
   reason.
+- ``REMEMBERED_SESSION_DAYS`` (since 17 November 2026, D-137): the days a session started with
+  "Remember me" ticked lasts without use. The sign-in page names it in the checkbox's hint, so a
+  drifted copy would promise a session the server does not give.
 
 **What it does not hold.** ``TEXT.noAnswerFallback`` and ``TEXT.provenanceRemovedFallback``
 are held by the front-end suite, which reads ``apps/core/constants.py`` itself
@@ -187,6 +190,17 @@ def test_the_clients_copy_of_each_column_width_equals_the_model_constant(client_
     assert client == server, (
         f"constants.js has {client_name} = {client}, and apps/core/models.py has "
         f"{server_name} = {server}. The screen would refuse, or allow, what the server does not."
+    )
+
+
+def test_the_clients_remembered_session_days_equal_the_servers(client_source):
+    """D-137's "Remember me": the hint beside the checkbox names how long the session lasts
+    without use, from the client's copy, and the server keeps the session that long."""
+    client = _javascript_integer(_exported(client_source, "REMEMBERED_SESSION_DAYS"))
+    assert client == constants.REMEMBERED_SESSION_DAYS, (
+        f"constants.js has REMEMBERED_SESSION_DAYS = {client}, and apps/core/constants.py has "
+        f"{constants.REMEMBERED_SESSION_DAYS}. The sign-in page's hint would promise a session "
+        "length the server does not give."
     )
 
 

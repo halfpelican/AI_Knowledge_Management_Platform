@@ -50,6 +50,29 @@ function durationInWords(seconds) {
   return minutes === 1 ? '1 minute' : `${minutes} minutes`
 }
 
+/* ---- D-137 on the sign-in pages: "Remember me", a forgotten password, the reset (FR-02, FR-04) ---- */
+
+/**
+ * How long a session started with "Remember me" ticked lasts without use, in days,
+ * mirroring apps/core/constants.py REMEMBERED_SESSION_DAYS (D-137: seven days, both
+ * roles, sliding with use). The sign-in page names it in the checkbox's hint, so the
+ * hint promises what the server gives. apps/api/tests/test_front_end_constants_agreement.py
+ * fails when the two drift. The server decides the session's length regardless
+ * (CLAUDE.md §6, invariant 4).
+ */
+export const REMEMBERED_SESSION_DAYS = 7
+
+/**
+ * Fixed text for D-137's parts of the sign-in pages. Kept in one block of its own, as
+ * TEXT keeps the rest, so each sentence has one copy.
+ */
+export const SIGN_IN_TEXT = {
+  // "Remember me on this device" is #119's label. Its hint says what ticking it does and
+  // when not to: the session this sign-in starts lasts until it goes REMEMBERED_SESSION_DAYS
+  // without a request (D-137), and anyone at this device has it until then.
+  rememberHint: `Ticked, your session on this device lasts until it goes ${REMEMBERED_SESSION_DAYS} days without use. Do not tick it on a shared computer.`,
+}
+
 /**
  * The two document statuses a 201 can carry (docs/schema-v1.md §3, mirrored in
  * apps/core/constants.py DOCUMENT_STATUS_VALUES). The interface branches on

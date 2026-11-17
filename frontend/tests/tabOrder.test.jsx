@@ -138,7 +138,11 @@ describe('tab order, screen by screen', () => {
       'Email',
       'Password',
       'Show password',
+      // PR #119's "Remember me" checkbox, wired by D-137, and its "Forgot password?"
+      // link, which leads to D-137's reset.
+      'Remember me on this device',
       screen.getByRole('button', { name: 'Sign in' }),
+      'Forgot password?',
     ])
   })
 

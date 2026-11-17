@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { Link, Navigate, useLocation } from 'react-router-dom'
 import { ACCOUNT_LOCKED_CODE, getLockoutPolicy } from '../api/auth.js'
 import { ApiError, LOGIN_FAILED_MESSAGE } from '../api/client.js'
@@ -7,7 +7,7 @@ import Button from '../components/Button.jsx'
 import Notice from '../components/Notice.jsx'
 import PasswordInput from '../components/PasswordInput.jsx'
 import TextInput from '../components/TextInput.jsx'
-import { dashboardPathForRole, LOCKOUT_WARNING_REMAINING, TEXT } from '../constants.js'
+import { dashboardPathForRole, LOCKOUT_WARNING_REMAINING, SIGN_IN_TEXT, TEXT } from '../constants.js'
 import useDocumentTitle from '../hooks/useDocumentTitle.js'
 import { extractFieldErrors } from '../utils/fieldErrors.js'
 import { validateLogin } from '../utils/validation.js'
@@ -143,6 +143,9 @@ function withoutEndedLocks(records, at, policy) {
  * text or null; `lockMessage` is the locked state's text or null; `lockSeconds`
  * is the time its lock has left, and while it is above zero Sign in is disabled
  * and the countdown is shown.
+ *
+ * D-137: `values.remember` is the "Remember me" checkbox, controlled like the two
+ * fields, and `onChange` receives its change as theirs.
  */
 export function LoginForm({
   values,
@@ -156,6 +159,7 @@ export function LoginForm({
   onChange,
   onSubmit,
 }) {
+  const rememberHintId = useId()
   const arrivalNotice = arrival ? ARRIVAL_NOTICES[arrival] : null
   const locked = lockSeconds > 0
   return (
@@ -200,11 +204,24 @@ export function LoginForm({
         error={fieldErrors.password}
         onChange={onChange}
       />
+      {/* D-137's "Remember me": ticked, the sign-in sends `remember: true` and the
+          server keeps the session for REMEMBERED_SESSION_DAYS without use. The hint
+          says so, and that it is not for a shared computer; it sits outside the label,
+          so the checkbox is named by the label alone and described by the hint. */}
       <div className="auth-form__options">
         <label className="remember-me">
-          <input type="checkbox" name="remember" defaultChecked={false} />
+          <input
+            type="checkbox"
+            name="remember"
+            checked={values.remember === true}
+            aria-describedby={rememberHintId}
+            onChange={onChange}
+          />
           Remember me on this device
         </label>
+        <p id={rememberHintId} className="field__hint">
+          {SIGN_IN_TEXT.rememberHint}
+        </p>
       </div>
       <div className="auth-form__actions">
         {/* FR-02: "On submit, 'Login' button disables and shows a loading
@@ -254,6 +271,10 @@ export function LoginForm({
  * the page shows depends on what the server says of an account, except the
  * right-password 403, so it is the same for an address with no account.
  *
+ * D-137's "Remember me" is a controlled checkbox, unticked to begin with. Ticked, the
+ * attempt sends `remember: true`; unticked, it sends no `remember`, which the contract
+ * reads as false. A failed attempt keeps the box as it was, as it keeps the address.
+ *
  * On success the user goes to the page they were sent here from, else to their
  * role's dashboard.
  * FR-02's own clause is "On success, user is redirected to a role-specific
@@ -267,7 +288,7 @@ export default function Login() {
   const { user, loading, login } = useAuth()
   const location = useLocation()
   const arrival = location.state?.reason
-  const [values, setValues] = useState({ email: location.state?.email ?? '', password: '' })
+  const [values, setValues] = useState({ email: location.state?.email ?? '', password: '', remember: false })
   const [fieldErrors, setFieldErrors] = useState({})
   const [formError, setFormError] = useState(null)
   const [submitting, setSubmitting] = useState(false)
@@ -339,8 +360,9 @@ export default function Login() {
   }
 
   function handleChange(event) {
-    const { name, value } = event.target
-    setValues((current) => ({ ...current, [name]: value }))
+    const { name, type, value, checked } = event.target
+    // The checkbox's value is whether it is ticked (D-137); the fields' is their text.
+    setValues((current) => ({ ...current, [name]: type === 'checkbox' ? checked : value }))
   }
 
   async function handleSubmit(event) {
@@ -358,8 +380,9 @@ export default function Login() {
     const attempted = normalisedAddress(values.email)
     setSubmitting(true)
     try {
-      // Sets the user, and the redirect above sends them on.
-      await login({ email: values.email.trim(), password: values.password })
+      // Sets the user, and the redirect above sends them on. `remember` is the box as
+      // it is now (D-137).
+      await login({ email: values.email.trim(), password: values.password, remember: values.remember })
       setRecords((current) => withoutAddress(current, attempted))
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {

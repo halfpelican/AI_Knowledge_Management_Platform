@@ -106,3 +106,11 @@
 .auth-form__warning:empty {
   margin: 0;
 }
+
+/* D-137's "Remember me" and its hint: stacked, so the hint sits under its checkbox at
+   any width instead of squeezing beside it. Only the direction and the alignment
+   change; the row's gap and margins stay as they are above. */
+.auth-form__options {
+  flex-direction: column;
+  align-items: flex-start;
+}

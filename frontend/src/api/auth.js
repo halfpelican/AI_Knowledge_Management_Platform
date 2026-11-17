@@ -26,9 +26,15 @@ export function register({ name, email, password }) {
  * FR-03 (D-130): the 403 carries `code` ACCOUNT_LOCKED_CODE and `retry_after`, the
  * whole seconds until the lock ends, and only a request whose password matched gets
  * it. The 401 never carries either, so it is the same for every address.
+ *
+ * D-137's "Remember me": `remember: true` gives the session REMEMBERED_SESSION_DAYS
+ * without use instead of 60 minutes. The contract makes the field optional and `false`
+ * when absent, and calls an unticked sign-in "a sign-in without `remember`", so an
+ * unticked box sends the body as it always was, `{email, password}`; the server then
+ * gives FR-04's 60 minutes, and ends a remembered session this browser already holds.
  */
-export function login({ email, password }) {
-  return post('/auth/login', { email, password })
+export function login({ email, password, remember = false }) {
+  return post('/auth/login', remember === true ? { email, password, remember: true } : { email, password })
 }
 
 /**
