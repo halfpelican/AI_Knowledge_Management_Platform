@@ -141,11 +141,15 @@
     align-items: stretch;
   }
 
+  /* Stacked in a column, the row's flex basis above would set each field's
+     height (12rem and 20rem), so it gives way to the field's own. */
   .dashboard-filters__dates > .field {
+    flex: none;
     width: 100%;
   }
 
   .dashboard-filters__department {
+    flex: none;
     width: 100%;
   }
 
@@ -153,8 +157,11 @@
     width: 100%;
     justify-content: flex-start;
   }
+}
 
-  .dashboard__user {
+/* "Signed in as": at every width. These two rules sat inside the 640px block
+   above, so a wider screen showed the line unstyled. */
+.dashboard__user {
   margin: var(--space-3) 0 var(--space-5);
   color: var(--color-text-muted);
   font-size: var(--text-base);
@@ -162,6 +169,4 @@
 
 .dashboard__user strong {
   color: var(--color-text);
-}
-
 }
