@@ -36,4 +36,21 @@ export const CONTRAST_PAIRS = [
   { label: 'Map: tag node on surface (non-text)', fg: '--color-warning', bg: '--color-surface', minimum: 3 },
   { label: 'Map: contributor node on surface (non-text)', fg: '--color-text-muted', bg: '--color-surface', minimum: 3 },
   { label: 'Map: selected node outline and lines on surface (non-text)', fg: '--color-text', bg: '--color-surface', minimum: 3 },
+  // PR #119's screens (tokens.css, "PR #119's redesign"): a row for each colour
+  // the redesign added, on what it sits on. tests/contrast.test.js holds the same.
+  { label: 'Body text on page background (home, sign-in card)', fg: '--color-text', bg: '--color-background', minimum: 4.5 },
+  { label: 'Heading on page background', fg: '--color-heading', bg: '--color-background', minimum: 4.5 },
+  { label: 'Table title on surface', fg: '--color-heading', bg: '--color-surface', minimum: 4.5 },
+  { label: 'Link on page background (sign-in card)', fg: '--color-link', bg: '--color-background', minimum: 4.5 },
+  { label: 'Link on surface (dashboard panels)', fg: '--color-link', bg: '--color-surface', minimum: 4.5 },
+  { label: 'Info notice text on info surface', fg: '--color-primary-hover', bg: '--color-info-surface', minimum: 4.5 },
+  { label: 'Body text on info surface', fg: '--color-text', bg: '--color-info-surface', minimum: 4.5 },
+  { label: 'Error notice text on danger surface', fg: '--color-danger-text', bg: '--color-danger-surface', minimum: 4.5 },
+  { label: 'Status badge: Indexed', fg: '--color-status-indexed', bg: '--color-status-indexed-surface', minimum: 4.5 },
+  { label: 'Status badge: every other status', fg: '--color-status-not-indexed', bg: '--color-status-not-indexed-surface', minimum: 4.5 },
+  { label: 'Outline button border on page background (non-text)', fg: '--color-border-strong', bg: '--color-background', minimum: 3 },
+  { label: 'Home illustration: device on page (non-text)', fg: '--color-illustration-device', bg: '--color-background', minimum: 3 },
+  { label: 'Home illustration: figure on device (non-text)', fg: '--color-illustration-figure', bg: '--color-illustration-device', minimum: 3 },
+  { label: 'Home illustration: bubble text on its bubble', fg: '--color-illustration-bubble-text', bg: '--color-text-muted', minimum: 4.5 },
+  { label: 'Home illustration: accent shape on page (non-text)', fg: '--color-accent', bg: '--color-background', minimum: 3 },
 ]

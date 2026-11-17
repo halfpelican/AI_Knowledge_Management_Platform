@@ -118,7 +118,8 @@
   align-items: center;
   gap: var(--space-1);
   padding: var(--space-1) var(--space-2);
-  border: var(--border-width) solid var(--color-border);
+  /* A control's boundary: 3:1, never the decorative separator (SC 1.4.11). */
+  border: var(--border-width) solid var(--color-border-strong);
   border-radius: var(--radius-full);
   background-color: var(--color-background);
   font-size: var(--text-sm);
@@ -183,7 +184,7 @@
 }
 
 .active-filter__remove:hover {
-  color: var(--color-danger, #dc2626);
+  color: var(--color-danger);
 }
 
 .active-filter__clear {
@@ -224,7 +225,10 @@
 }
 
 /* Table */
+/* `position: relative` restated from base.css, which says why: it keeps the
+   visually hidden caption and sort words inside the scroller (SC 1.4.10). */
 .table-scroll {
+  position: relative;
   overflow-x: auto;
   border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-lg);
@@ -329,16 +333,17 @@
   margin-bottom: var(--space-4);
 }
 
+/* A notice is not a control, so its border is the decorative separator. */
 .notice--info {
-  background-color: #eff6ff;
-  border: var(--border-width) solid #bfdbfe;
-  color: #1e40af;
+  background-color: var(--color-info-surface);
+  border: var(--border-width) solid var(--color-border);
+  color: var(--color-primary-hover);
 }
 
 .notice--error {
-  background-color: #fef2f2;
-  border: var(--border-width) solid #fecaca;
-  color: #991b1b;
+  background-color: var(--color-danger-surface);
+  border: var(--border-width) solid var(--color-border);
+  color: var(--color-danger-text);
 }
 
 /* Responsive */
@@ -373,8 +378,8 @@
 }
 
 .status--indexed {
-  background-color: #dcfce7;
-  color: #166534;
+  background-color: var(--color-status-indexed-surface);
+  color: var(--color-status-indexed);
 }
 
 .status--processing,
@@ -383,6 +388,6 @@
 .status--indexing-failed,
 .status--too-large-to-index,
 .status--partially-indexed {
-  background-color: #fef3c7;
-  color: #92400e;
+  background-color: var(--color-status-not-indexed-surface);
+  color: var(--color-status-not-indexed);
 }

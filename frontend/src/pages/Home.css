@@ -98,7 +98,7 @@
 .btn--outline {
   background-color: transparent;
   color: var(--color-text);
-  border-color: var(--color-border);
+  border-color: var(--color-border-strong);
 }
 
 .btn--outline:hover {
@@ -184,7 +184,7 @@
 .home-visual__shape--3 {
   width: 160px;
   height: 160px;
-  background: var(--color-success, #10b981);
+  background: var(--color-success);
   top: 40%;
   left: 60%;
   filter: blur(40px);
@@ -204,7 +204,7 @@
   position: relative;
   width: 260px;
   height: 340px;
-  background: #111827;
+  background: var(--color-illustration-device);
   border-radius: var(--radius-xl);
   padding: var(--space-3);
   box-shadow: var(--shadow-lg);
@@ -214,7 +214,7 @@
 
 .home-visual__screen {
   flex: 1;
-  background: #0b0c10;
+  background: var(--color-illustration-device);
   border-radius: var(--radius-md);
   padding: var(--space-4);
   display: flex;
@@ -242,15 +242,15 @@
 }
 
 .home-visual__bubble--left {
-  background: #374151;
-  color: #e5e7eb;
+  background: var(--color-text-muted);
+  color: var(--color-illustration-bubble-text);
   border-bottom-left-radius: 4px;
   align-self: flex-start;
 }
 
 .home-visual__bubble--right {
   background: var(--color-primary);
-  color: #ffffff;
+  color: var(--color-primary-text);
   border-bottom-right-radius: 4px;
   align-self: flex-end;
 }
@@ -273,7 +273,7 @@
 
 .home-visual__keyboard {
   height: 40px;
-  background: #1f2937;
+  background: var(--color-text);
   border-radius: var(--radius-md);
   margin-top: var(--space-2);
 }
@@ -281,7 +281,7 @@
 .home-visual__person {
   width: 120px;
   height: 120px;
-  background: #111827;
+  background: var(--color-illustration-device);
   border-radius: 50%;
   position: relative;
 }
@@ -293,7 +293,7 @@
   left: 25%;
   width: 50%;
   height: 40%;
-  background: #ffffff;
+  background: var(--color-surface);
   border-radius: 50% 50% 0 0;
 }
 
@@ -304,7 +304,7 @@
   left: 15%;
   width: 70%;
   height: 35%;
-  background: #4f46e5;
+  background: var(--color-illustration-figure);
   border-radius: var(--radius-lg);
 }
 
@@ -318,7 +318,7 @@
   width: 44px;
   height: 44px;
   border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--color-surface);
   display: flex;
   align-items: center;
   justify-content: center;

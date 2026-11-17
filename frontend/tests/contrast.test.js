@@ -28,6 +28,13 @@ const SURFACES = [
   '--color-danger-surface',
   '--color-success-surface',
   '--color-warning-surface',
+  // PR #119's surfaces: the page behind its home screen and sign-in card, its
+  // repository's info notice, and its status badges' two fills. Listed here so
+  // body and muted text are held to 4.5:1 on each, as on the five above.
+  '--color-background',
+  '--color-info-surface',
+  '--color-status-indexed-surface',
+  '--color-status-not-indexed-surface',
 ]
 
 /**
@@ -53,6 +60,18 @@ const TEXT_PAIRS = [
   { fg: '--color-success', on: ['--color-surface', '--color-surface-alt', '--color-success-surface'] },
   // The AI-unavailable notice's title (NFR-19).
   { fg: '--color-warning', on: ['--color-surface', '--color-warning-surface'] },
+  // PR #119's screens. Headings on the home page and the document table's
+  // titles; links on the sign-in card and, on hover, in the dashboard's panels;
+  // the repository's info and error notices; the status badge for "Indexed" and
+  // the one for every other status (FR-15); and the home illustration's one line
+  // of text that sits on a fill of its own, the left chat bubble.
+  { fg: '--color-heading', on: ['--color-background', '--color-surface'] },
+  { fg: '--color-link', on: ['--color-background', '--color-surface'] },
+  { fg: '--color-primary-hover', on: ['--color-info-surface'] },
+  { fg: '--color-danger-text', on: ['--color-danger-surface'] },
+  { fg: '--color-status-indexed', on: ['--color-status-indexed-surface'] },
+  { fg: '--color-status-not-indexed', on: ['--color-status-not-indexed-surface'] },
+  { fg: '--color-illustration-bubble-text', on: ['--color-text-muted'] },
 ]
 
 /**
@@ -86,6 +105,13 @@ const BOUNDARY_PAIRS = [
   // filled with --color-text and its passage with --color-primary.
   { fg: '--color-text-muted', on: ['--color-surface'] },
   { fg: '--color-text', on: ['--color-surface'] },
+  // PR #119's screens: the home screen's outline button on the page, and its
+  // illustration, the device on the page and the figure on the device. The
+  // accent is the token behind one of the shapes under the illustration.
+  { fg: '--color-border-strong', on: ['--color-background'] },
+  { fg: '--color-illustration-device', on: ['--color-background'] },
+  { fg: '--color-illustration-figure', on: ['--color-illustration-device'] },
+  { fg: '--color-accent', on: ['--color-background'] },
 ]
 
 describe('SC 1.4.3: text pairs meet 4.5:1, computed from the live token values', () => {
@@ -222,8 +248,9 @@ const EXEMPT = new Set([
 
 /** Selectors whose rules may use --color-border on a border: separators and panels, not controls.
     The last entry is FR-20's node and its reference in a table or the panel, with their
-    modifiers, and not the classes that merely begin the same way (`__node-text`, `__nodes`). */
-const CONTROL_SELECTOR = /^(button|input|select|textarea|a\b|\.btn|\.facet|\.citation(?!-)|\.ask-threads__item|\.password-toggle|\.sort-header__button|\.skip-link|\.knowledge-map__(node|ref)(?![a-z_]|-[a-z]))/
+    modifiers, and not the classes that merely begin the same way (`__node-text`, `__nodes`).
+    `.profile-picture__label` is PR #119's profile picture chooser, a label drawn as a button. */
+const CONTROL_SELECTOR = /^(button|input|select|textarea|a\b|\.btn|\.facet|\.citation(?!-)|\.ask-threads__item|\.password-toggle|\.sort-header__button|\.skip-link|\.profile-picture__label|\.knowledge-map__(node|ref)(?![a-z_]|-[a-z]))/
 
 const PROPERTIES_THAT_TAKE_COLOUR =
   /^(color|background|background-color|border|border-color|border-(top|right|bottom|left)(-color)?|outline|outline-color|box-shadow|caret-color|fill|stroke|text-decoration-color)$/
