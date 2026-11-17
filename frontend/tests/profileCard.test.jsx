@@ -8,10 +8,17 @@
  *   changed both. Each is back, from tokens, and each pair is held to 4.5:1 here and
  *   in tests/contrast.test.js.
  *
+ * - **What the card says (FEA-9).** No test held it, from either role: a regression
+ *   such as the wrong badge for a role, or "Invalid Date", would have passed every
+ *   test. Each role, with a picture and without: the name, the address, the role, the
+ *   picture as decoration (its alt empty, the name being beside it) or the initials,
+ *   and the month the account was made.
+ *
  * jsdom applies no stylesheet, so the colours are read from the rules
- * tests/stylesheets.js finds matching the rendered badge.
+ * tests/stylesheets.js finds matching the rendered badge, and whether anything
+ * hides a part of the card from them too.
  */
-import { screen } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { PROFILE_TEXT, ROLES } from '../src/constants.js'
 import { BOTH_ROLES, primaryNavigationFor, renderApp, serveSignedIn } from './routeWalk.jsx'
@@ -73,5 +80,50 @@ describe('FEA-7: the role badge in #119’s colours, from tokens', () => {
     // drawn in its own fill, so the badge keeps its size and shows no other colour.
     expect(colourFor(shown, 'border-color').token).toBe(fill.token)
     expect(hidingCauses(shown)).toEqual([])
+  })
+})
+
+describe('FEA-9: the card names the signed-in user, from both roles', () => {
+  const CASES = BOTH_ROLES.flatMap((user) => [
+    { who: `an ${user.role} with a picture`, user: { ...user, picture: `/api/users/${user.id}/picture?v=1794823200123456` } },
+    { who: `an ${user.role} with none`, user: { ...user, picture: null } },
+  ])
+
+  it.each(CASES)('shows $who their name, address, role, picture or initials, and when they joined', async ({ user }) => {
+    await openProfile(user)
+    const card = document.querySelector('.profile-card')
+
+    const name = within(card).getByRole('heading', { level: 2 })
+    expect(name.textContent).toBe(user.name)
+    const address = within(card).getByText(user.email)
+    expect(badge().textContent).toBe(user.role)
+
+    const avatar = card.querySelector('.profile-avatar')
+    if (user.picture) {
+      const image = avatar.querySelector('img')
+      expect(image.getAttribute('src')).toBe(user.picture)
+      // Decoration: the name is beside it.
+      expect(image.getAttribute('alt')).toBe('')
+      expect(avatar.querySelector('.avatar--initials')).toBeNull()
+    } else {
+      expect(avatar.querySelector('img')).toBeNull()
+      const initials = user.name
+        .split(' ')
+        .map((word) => word[0])
+        .join('')
+      expect(avatar.querySelector('.avatar--initials').getAttribute('data-initials')).toBe(initials)
+    }
+
+    // The month the account was made, from the contract's created_at, as the page words it.
+    const joined = new Date(user.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })
+    expect(joined).not.toBe('Invalid Date')
+    expect(joined).toContain('2026')
+    const member = card.querySelector('.profile-member')
+    expect(member.textContent).toBe(`Member since ${joined}`)
+
+    // Nothing in the markup or the stylesheets hides any of it.
+    for (const part of [name, address, badge(), member]) {
+      expect(hidingCauses(part), part.textContent).toEqual([])
+    }
   })
 })
