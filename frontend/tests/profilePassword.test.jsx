@@ -25,6 +25,11 @@
  *   until the change has answered, whatever the answer, and then one logout, which
  *   carries the new cookie and destroys that session. Sent at once, it would end only
  *   the old key: "You've been logged out" would show over a browser left signed in.
+ * - **A change the server answers 401 signs the user out cleanly (Benjamin's answer 3,
+ *   18 November 2026).** The server now refuses a change whose session was ended while
+ *   it ran, with a 401 that clears the cookie (apps/api/views.py, PasswordChangeView).
+ *   The client's 401 handling signs the user out, nothing is left saying "Saving…", and
+ *   a Log out waiting on that change goes ahead as soon as it has answered.
  * - **The wait has an upper limit (FEA-11, 18 November 2026): 15 seconds.** A change
  *   that has not answered by then does not hold the logout any longer. If it then
  *   succeeds, its 200 has set a new key's cookie after the logout, so one more logout
@@ -434,4 +439,58 @@ describe('FEA-11: the logout waits for a change in flight for 15 seconds at most
     await aWhile()
     expect(logouts(pressed.answered)).toHaveLength(1)
   })
+})
+
+describe('Benjamin’s answer 3: a change the server answers 401, its session ended while it ran, signs out cleanly', () => {
+  /** The server's 401 for a change whose session a logout deleted while it ran (e515e19). */
+  const SESSION_ENDED = { status: 401, body: { detail: 'Authentication credentials were not provided.' } }
+
+  it.each(BOTH_ROLES)(
+    'as an $role, with no Log out pressed: lands on sign-in with the expired notice, nothing left saying Saving…, and nothing else sent',
+    async (user) => {
+      const held = heldResponse()
+      const { answered, probe } = await openProfile(user, { 'POST /api/auth/change-password': held.route })
+      fillValid()
+      const submit = screen.getByRole('button', { name: PROFILE_TEXT.changePassword })
+      fireEvent.click(submit)
+      await waitFor(() => expect(submit.textContent).toBe(PROFILE_TEXT.changingPassword))
+
+      held.release(SESSION_ENDED)
+
+      expect(await screen.findByRole('heading', { level: 1, name: 'Sign in' })).toBeTruthy()
+      await waitFor(() => expect(probe.location.pathname).toBe('/login'))
+      let notice = null
+      await waitFor(() => {
+        notice = screen.getByText('Session expired').closest('[role="alert"]')
+        expect(notice).not.toBeNull()
+      })
+      expect(notice.textContent).toContain(TEXT.sessionExpired)
+      // Nothing stuck: no "Saving…", no Profile page, and the header signed out.
+      expect(screen.queryByText(PROFILE_TEXT.changingPassword)).toBeNull()
+      expect(screen.queryByRole('heading', { level: 1, name: PROFILE_TEXT.heading })).toBeNull()
+      expect(within(primaryNav()).queryByRole('button', { name: 'Log out' })).toBeNull()
+      expect(document.body.textContent).not.toContain(user.name)
+      // The server's words are never shown, and no logout was sent: none was asked for.
+      expect(document.body.textContent).not.toContain(SESSION_ENDED.body.detail)
+      expect(logouts(answered)).toHaveLength(0)
+      expect(changes(answered)).toHaveLength(1)
+    },
+  )
+
+  it.each(BOTH_ROLES)(
+    'as an $role, with Log out pressed while it ran: the wait ends with the 401, and the user lands signed out, with nothing stuck',
+    async (user) => {
+      // With its session gone, the logout is answered 401 too, which the client takes as
+      // signed out (FR-04).
+      const pressed = await logOutDuringHeldChange(user, { 'POST /api/auth/logout': SESSION_ENDED })
+
+      pressed.held.release(SESSION_ENDED)
+
+      await expectLoggedOut(pressed, user)
+      expect(screen.queryByText('Signing out…')).toBeNull()
+      expect(screen.queryByText(PROFILE_TEXT.changingPassword)).toBeNull()
+      expect(screen.queryByText('Could not sign out')).toBeNull()
+      expect(document.body.textContent).not.toContain(SESSION_ENDED.body.detail)
+    },
+  )
 })
