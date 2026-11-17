@@ -18,17 +18,23 @@ invariant 4). Validation errors are `400 {"field": ["message"], ...}` in DRF's s
 Error messages never disclose whether an email address is registered, except the
 409 on registration, which FR-01 specifies. Every response under `/api/`, whatever its status,
 carries `Cache-Control: max-age=0, no-cache, no-store, must-revalidate, private` and an
-`Expires` header (D-76). The one route that answers with something other than JSON is FR-15's
-download, which returns the stored original (D-75).
+`Expires` header (D-76). Two routes answer with something other than JSON: FR-15's download,
+which returns the stored original (D-75), and since D-137 `GET /api/users/{id}/picture`, which
+returns a profile picture as PNG bytes.
 
 The user object, wherever a user is returned:
 
 ```json
 {"id": "uuid", "name": "Ada Lovelace", "email": "ada@example.com",
- "role": "Employee", "created_at": "2026-09-12T10:00:00+10:00"}
+ "role": "Employee", "created_at": "2026-09-12T10:00:00+10:00",
+ "picture": "/api/users/uuid/picture?v=1794823200123456"}
 ```
 
 Never `password_hash`, `failed_attempts` or `locked_until`.
+
+> **16 November 2026 (D-137).** Every user object carries `picture`: the address of the user's
+> profile picture, `/api/users/{id}/picture?v=<version>`, or `null` while they have none. Never a
+> path under `MEDIA_ROOT`. See "Profile pictures" at the end of this file.
 
 > **13 November 2026 (D-130).** `GET /api/users` adds one field, `lock`, for a requester holding
 > `release_account_locks`, which only Administrators hold. That is FR-03's "An Administrator viewing
@@ -38,21 +44,26 @@ Never `password_hash`, `failed_attempts` or `locked_until`.
 ## Stage 2 — FR-01, FR-02, FR-04, FR-05, FR-06
 
 Every code below is quoted from the FR's own Responses clause unless marked
-*convention*.
+*convention*. A row or a clause marked "Since D-137" quotes D-137, the lead's decision of 16
+November 2026, not an FR.
 
 | Method | Path | Auth | Success | Failures |
 |---|---|---|---|---|
 | POST | `/api/auth/register` | none | `201` user object; role is Employee | `400` a field is missing, the address is not a valid format, or the password fails the complexity rules; `409` the address is already registered |
-| POST | `/api/auth/login` | none | `200` user object; sets the session cookie and the `csrftoken` cookie | `400` a field is missing, or the address is not a valid format (checked before the database lookup); `401 {"detail": "Invalid email or password."}` for an unknown address, a wrong password, or a locked account whose password was also wrong, byte-identical in every case; `403 {"detail": "...", "code": "account_locked"}` only when the account is locked **and** the password matched |
+| POST | `/api/auth/login` | none | `200` user object; sets the session cookie and the `csrftoken` cookie. The body is `{"email", "password"}` and, since D-137, an optional `"remember"` boolean, `false` when absent: `true` gives the session 7 days without use instead of 60 minutes (see "FR-04 — account self-service" at the end of this file) | `400` a field is missing, the address is not a valid format (checked before the database lookup), or `remember` is not a boolean; `401 {"detail": "Invalid email or password."}` for an unknown address, a wrong password, or a locked account whose password was also wrong, byte-identical in every case; `403 {"detail": "...", "code": "account_locked"}` only when the account is locked **and** the password matched |
 | POST | `/api/auth/logout` | session | `200`; the session record is destroyed server-side | `401` no valid session |
 | GET | `/api/auth/me` | session | `200` user object; refreshes the `csrftoken` cookie | `401` |
+| POST | `/api/auth/change-password` | session | Since D-137: `200 {"detail": "Your password has been changed."}`; this session stays signed in and every other session of the user ends (see "FR-04 — account self-service" at the end of this file) | `400` field errors, a wrong current password included, never `401`; `401` no valid session; `403` CSRF; `429` past the `password_change` rate, all as listed there |
+| POST | `/api/auth/password-reset` | none | Since D-137: `200 {"detail": "If an account uses this address, ..."}` for every well-formed address, the same status and body whether or not an account uses it; only an account is emailed a reset link (see "Resetting a forgotten password" at the end of this file) | `400` the address is missing or not a valid format; `429` past the `auth` rate, all as listed there |
+| POST | `/api/auth/password-reset/confirm` | none | Since D-137: `200 {"detail": "Your password has been reset. Sign in with your new password."}`; every session of the account ends, and nobody is signed in (see "Resetting a forgotten password" at the end of this file) | `400` a field is missing, blank or null; `400 {"detail": "This password reset link does not work. ..."}` for every link that does not work, one body for all; `400 {"new_password": [...]}` a password registration would refuse; `429` past the `auth` rate, all as listed there |
 | GET | `/api/roles` | session | `200 [{"role_id": "uuid", "name": "Employee", "description": "...", "permissions": ["..."]}]` | `401` |
 | GET | `/api/users` | Administrator | `200 [user object, ...]` ordered by `created_at` | `401`; `403` Employee |
-| GET | `/api/users/directory` | session | `200 [{"id", "name", "email"}, ...]` ordered by name | `401` |
+| GET | `/api/users/directory` | session | `200 [{"id", "name", "email", "picture"}, ...]` ordered by name; `picture` since D-137, as in the user object | `401` |
 | PATCH | `/api/users/{id}/role` | Administrator | `200` updated user object; writes an audit entry | `400` the body is missing `role_id` or it is not a UUID; `401`; `403` Employee, or an administrator demoting themselves (*convention*: FR-05 enumerates only 200, 403 and 404); `404` the user or the role does not exist |
 
 **The directory is not the user list (D-34).** `GET /api/users/directory` carries a
-name and an address and nothing else — no role, no timestamps, no account state. It
+name and an address and nothing else — no role, no timestamps, no account state. (Since D-137 it
+also carries `picture`, which every signed-in user may see.) It
 exists because FR-09 gives attendee association to *any* user, while `GET /api/users`
 is Administrator-only: it carries the role each person holds and drives role
 management, so an Employee had no way to populate an attendee picker and FR-09's
@@ -69,10 +80,12 @@ and keeps submit disabled until they all pass. Both derive from one policy so th
 cannot drift.
 
 **Rate limiting.** `POST /api/auth/register` and `POST /api/auth/login` are limited
-per client address and answer `429` past the rate (D-26). Since Stage 5 item 5, asks, ingestion
+per client address and answer `429` past the rate (D-26), and since D-137 so are the password
+reset's two routes, on the same budget. Since Stage 5 item 5, asks, ingestion
 and thread creation are limited per user as well, and keyword search and a person applying a tag
-since 10 November 2026, and a recording segment sent for transcription since D-123;
-"Stage 5 item 5" below lists every throttled route (D-79).
+since 10 November 2026, a recording segment sent for transcription since D-123, and a password
+change and a profile picture upload since D-137; "Stage 5 item 5" below lists every throttled route
+(D-79).
 
 **FR-02 login side effects.** A failed attempt increments `failed_attempts`; five
 consecutive failures lock the account for `LOCKOUT_DURATION`. While the lock holds,
@@ -121,7 +134,8 @@ case they return there. Both routes exist; FR-14 replaces what they render in St
 so today the destination differs by role and the content does not.
 
 Session: 60-minute inactivity expiry (D-10). An expired or invalid session cookie is
-`401` on every route that needs one.
+`401` on every route that needs one. Since D-137, a session started with `"remember": true`
+expires after 7 days without use instead, and every other session keeps the 60 minutes.
 
 Response bodies the front end relies on (Stage 2 implementation):
 
@@ -131,8 +145,10 @@ Response bodies the front end relies on (Stage 2 implementation):
 - `403`: `{"detail": "Your role does not hold the 'manage_roles' permission."}`.
 - Unmatched path under `/api/`: JSON `404 {"detail": "Not found."}`. Since Stage 5 item 9 a path
   outside `/api/` is the SPA's (see "Stage 5 item 9" at the end of this file).
-- CSRF: `POST /api/auth/logout` and `PATCH` always require `X-CSRFToken`; so does
-  `POST /api/auth/login` when the browser already holds a session.
+- CSRF: `POST /api/auth/logout`, `POST /api/auth/change-password`, `POST` and `DELETE
+  /api/users/me/picture` (all three since D-137) and `PATCH` always require `X-CSRFToken`; so do
+  `POST /api/auth/login` and, since D-137, `POST /api/auth/password-reset` and
+  `POST /api/auth/password-reset/confirm` when the browser already holds a session.
   - **The token is read from that header only, never from a `csrfmiddlewaretoken` form field
     (D-124).** That is so the check never reads the request body. Every client already sends the
     header.
@@ -323,7 +339,7 @@ an upload may *write* into `visible_to_roles` is unchanged (D-29).
 |---|---|---|---|---|
 | POST | `/api/meetings` | session + `contribute_content` | `201` meeting object, carrying `meeting_id` | `422` the transcript was stored but every chunk failed to embed (*convention*: FR-09 enumerates only 201 and 400, and this mirrors FR-08's code for the same condition); `400` a missing or empty title, a missing date, a date in the future, a transcript below the minimum length, neither text nor file, both text and file, an unreadable file, a PDF file over one of D-81's extraction bounds (`{"file": ["..."]}` with that bound's own message, nothing stored), or an attendee who is not a registered user; `401`; `403` the role lacks `contribute_content`, or `visible_to_roles` excludes the ingester's own role; `413 {"detail": "Transcript exceeds the maximum permitted size of 50 MB."}` a body, pasted or a file, declaring more than 50 MB, refused before it is read, after the 403 and the 429, nothing stored (*convention*, D-124: FR-09 enumerates only 201 and 400, and a body refused unread has no field to report on); `400 {"detail": "Bad request."}` a pasted transcript whose JSON body declares between 2.5 MiB and 50 MB, refused unread by Django's `DATA_UPLOAD_MAX_MEMORY_SIZE`, nothing stored (always so; first written down at D-124); `429` past the ingestion rate (D-79); `429 {"detail": "...", "code": "ingestion_in_flight"}` while another upload, transcript or reprocess of this user's is still being processed, nothing stored (D-85) |
 | GET | `/api/meetings` | session | `200 [meeting object without `transcript_text`, ...]`, newest first, scoped to the caller's role | `401` |
-| GET | `/api/meetings/{id}` | session | `200` meeting object **with** `transcript_text`, and `can_delete` since D-99 (see Meeting deletion, below FR-15) | `401`; `404` no such meeting, or one outside the caller's scope |
+| GET | `/api/meetings/{id}` | session | `200` meeting object **with** `transcript_text`, and `can_delete` since D-99 (see Meeting deletion, below FR-15), and `attendee_people` since D-137 (see "Profile pictures" at the end of this file) | `401`; `404` no such meeting, or one outside the caller's scope |
 | DELETE | `/api/meetings/{id}` | session + `manage_meetings` | `204` no body (D-99; not in the proposal, see Meeting deletion, below FR-15) | `401`; `404` no such meeting, or one outside the caller's scope, checked **before** the permission; `403` the meeting is in scope and the role lacks `manage_meetings` |
 
 The meeting object:
@@ -1035,14 +1051,17 @@ not grant it, and it does not grant `manage_documents`.
 
 | Scope | Routes | Rate |
 |---|---|---|
-| `auth` | `POST /api/auth/register`, `POST /api/auth/login`, per client address (D-26) | 20/min |
+| `auth` | `POST /api/auth/register`, `POST /api/auth/login`, per client address (D-26), and since D-137 `POST /api/auth/password-reset` and `POST /api/auth/password-reset/confirm`, one budget per address across all four | 20/min |
 | `ask` | `POST /api/ask` | 10/min |
 | `ingestion` | `POST /api/documents`, `POST /api/meetings`, `POST /api/documents/{id}/reprocess`, since FR-10 `POST /api/documents/{id}/classify` (D-105), and since FR-16 `POST /api/meetings/{id}/summary` (D-125), one shared budget | 60/hour |
 | `conversation_create` | `POST /api/conversations` | 10/min, its own budget |
 | `search` | `GET /api/search`, since D-79's note of 10 November 2026 | 30/min |
+| `knowledge_map` | `GET /api/knowledge-map` and `GET /api/knowledge-map/evidence`, one budget for the map's two views, since 17 November 2026 (D-138) | 30/min |
 | `tagging` | `POST /api/documents/{id}/tags`, since D-79's note on tagging of the same night; checked before the document is looked up, so past the rate the `429` comes before the `404` and the `403`. Since D-128 also `POST /api/tags`, the Administrator's add, checked after its `401` and `403`; one budget per user across both routes. Since D-129 also `POST /api/departments`, on the same budget | 30/min |
 | `transcription` | `POST /api/transcriptions`, one recording segment per request, and `GET /api/transcriptions/status`, which asks FLM each time (D-123; see "Recording transcription" at the end of this file) | 60/min |
 | `action_items` | FR-16's `POST /api/meetings/{id}/action-items` and `PATCH` and `DELETE /api/meetings/{id}/action-items/{item_id}`, one budget (the security review of 12 November 2026, D-125's third note); checked before the meeting is looked up, so past the rate the `429` comes before the `404` and the `403` | 30/min |
+| `password_change` | `POST /api/auth/change-password` (D-137), per user across all their sessions, wrong current passwords included; checked after the `401` and a CSRF `403`, before the body is read (see "FR-04 — account self-service" at the end of this file) | 10/hour |
+| `picture` | `POST /api/users/me/picture` (D-137), per user, refused uploads included; checked after the `401` and a CSRF `403`, before the body is read. Not its `DELETE`, and not `GET /api/users/{id}/picture` (see "Profile pictures" at the end of this file) | 10/hour |
 
 A request over its rate is answered with DRF's 429, `{"detail": "Request was throttled. Expected
 available in N seconds."}`, and a `Retry-After` header in seconds. The rate is checked before the
@@ -1082,8 +1101,9 @@ user, another from the same user, on any of the three, answers at once:
 - **It is separate from the ask's slot.** A user may have a question and an ingestion in flight
   at once, and since D-123 a recording segment in transcription as well.
 - The client tells the kinds of 429 apart by `code`: none for the rate, `ask_in_flight`,
-  `ingestion_in_flight` and, on the transcription route, `transcription_in_flight` and
-  `transcription_busy` (D-123). It does not parse `detail`.
+  `ingestion_in_flight`, on the transcription route `transcription_in_flight` and
+  `transcription_busy` (D-123), and on the picture upload `picture_busy` (D-137; the review of 17
+  November 2026, PIC-1). It does not parse `detail`.
 
 **The conversation list leaves out empty threads (D-80).** `GET /api/conversations` returns only
 threads with at least one turn, answered or not. It never filters on the title, or on what a turn
@@ -1723,7 +1743,7 @@ Administrators hold it. A requester without it gets the plain user object.
 
 ```json
 {"id": "uuid", "name": "Jane Doe", "email": "jane.doe@company.com", "role": "Employee",
- "created_at": "2026-09-20T10:00:00+10:00",
+ "created_at": "2026-09-20T10:00:00+10:00", "picture": null,
  "lock": {"locked_until": "2026-11-13T10:42:00+11:00",
           "locked_at": "2026-11-13T10:27:00+11:00", "source_ip": "203.0.113.42"}}
 ```
@@ -1771,3 +1791,485 @@ Administrators hold it. A requester without it gets the plain user object.
 **`LoginAttempts`** (`login_attempts`, `docs/schema-v1.md` §1) gets one row for each lockout and one
 for each release, and nothing for an ordinary attempt (D-130 decision 5). No route lists it. Its Read
 is the `lock` object above.
+
+## NIT3004 — FR-20 knowledge map (D-132)
+
+### FR-20 — knowledge map
+
+The documents, meetings, tags and contributors the caller's role may see, and how they relate:
+"Assembles nodes and edges from existing tables (ContentTags for classification links,
+Documents.uploaded_by for authorship, MeetingAttendees for participation) rather than maintaining
+a separate relationship store." Decision: D-132. The route needs a session **and**
+`view_knowledge_map`, which accounts 0011 gives **both** roles: `401` without a session, `403` for a
+role that lacks the code (invariant 4), checked before anything else on the request. Nothing on
+the route is a single scoped object, so the `403` has no `404` to precede. Since 17 November 2026
+it is rate limited in the `knowledge_map` scope, one budget for each user across the map's two
+views (D-138): `429` past it, as every rate limit answers. Until then it was not throttled.
+
+| Method | Path | Auth | Success | Errors |
+|---|---|---|---|---|
+| GET | `/api/knowledge-map` | session + `view_knowledge_map` | `200` the map object (below): the overview. `200` from a permitted session within the rate limit, the empty map included | `401`; `403`; `429` |
+| GET | `/api/knowledge-map?focus_type=<type>&focus_id=<uuid>` | session + `view_knowledge_map` | `200` the map object: the walk from that node. A focus that is not in the caller's own map gets the empty map object, whatever the reason | `401`; `403`; `429`; `400 {"<parameter>": ["..."]}` a `focus_type` outside the vocabulary, a `focus_id` that is not a UUID, or one given without the other, keyed on the missing one (*convention*: FR-20 lists only `200`; D-65) |
+
+`focus_type` is one of `document`, `meeting`, `tag`, `contributor`, matched exactly. `focus_id` is
+a UUID in any spelling a UUID has. **Both or neither**: with neither the request is the overview,
+and an empty value for either is the same as leaving it out. Both are validated for shape only.
+No value is looked up to decide a status code, so an identifier that names nothing and one that
+names something the caller cannot read get the same answer.
+
+```json
+{
+  "focus": {"type": "document", "id": "0b7c..."},
+  "nodes": [
+    {"id": "document:0b7c...", "type": "document", "item_id": "0b7c...", "label": "Employee Leave Policy 2026", "dimension": null, "connection_count": 2},
+    {"id": "tag:9e01...", "type": "tag", "item_id": "9e01...", "label": "people", "dimension": "Topic", "connection_count": 1},
+    {"id": "contributor:77f2...", "type": "contributor", "item_id": "77f2...", "label": "Jane Doe", "dimension": null, "connection_count": 2},
+    {"id": "meeting:51aa...", "type": "meeting", "item_id": "51aa...", "label": "Q3 Planning Sync", "dimension": null, "connection_count": 1}
+  ],
+  "edges": [
+    {"source": "document:0b7c...", "target": "tag:9e01...", "relationship": "tagged"},
+    {"source": "contributor:77f2...", "target": "document:0b7c...", "relationship": "uploaded"},
+    {"source": "contributor:77f2...", "target": "meeting:51aa...", "relationship": "attended"}
+  ],
+  "truncated": true,
+  "truncated_by": "depth",
+  "maximum_node_count": 50,
+  "maximum_traversal_depth": 2
+}
+```
+
+The empty map object, for an empty database, a role with nothing in scope, and a focus that is not
+in the caller's map (UC-11 E1: "an empty map or table rather than an error"):
+
+```json
+{"focus": null, "nodes": [], "edges": [], "truncated": false, "truncated_by": null,
+ "maximum_node_count": 50, "maximum_traversal_depth": 2}
+```
+
+- **The body has exactly these seven keys,** every node the same six and every edge the same
+  three. The same request gives the same bytes.
+- **`focus`** is `null` for the overview and for a focus that is not one of the returned nodes.
+  Otherwise it is that node's `type` and its identifier in canonical form, never the caller's
+  spelling. The page marks the selected node from this, not from its own address. A focus that is
+  unknown, outside the caller's scope, a tag with no applied link on a source in scope, a person
+  with no contribution in scope, or a type that does not match its identifier: each gets the empty
+  map object, which holds nothing the caller sent.
+- **A node's `id`** is its `type`, a colon and its `item_id`, and is what an edge refers to.
+  **`item_id`** is the row's own identifier: a `doc_id`, a `meeting_id`, a `tag_id` or a user's
+  `id`. **`label`** is the document's or meeting's title, the tag's name, or the person's name.
+  **`dimension`** is a tag's dimension (`Project`, `Process` or `Topic`) and `null` for the other
+  three types. A tag's name is unique only within its dimension, so the page shows both.
+- **`type`** is one of `KNOWLEDGE_MAP_NODE_TYPES`. A document or a meeting is a node in every
+  status, as the repository and the meetings list show them. **A tag or a contributor is a node
+  only when a link reaches it from a source in the caller's scope**: a tag through an applied
+  link, a contributor as the uploader of a document or an attendee of a meeting. One known only
+  through material outside the scope is absent, with no placeholder and no zero-count node.
+- **An edge** reads "source, relationship, target", and `relationship` is one of
+  `KNOWLEDGE_MAP_RELATIONSHIPS`:
+
+  | `relationship` | `source` | `target` | From |
+  |---|---|---|---|
+  | `uploaded` | contributor | document | `Documents.uploaded_by` |
+  | `attended` | contributor | meeting | `MeetingAttendees` |
+  | `tagged` | document or meeting | tag | `ContentTags` |
+
+  A `tagged` edge is an applied link, by FR-15's rule: not provisional, not removed, in Project,
+  Process or Topic, matched on the source's type and identifier together. A retired tag still
+  linked is a node. Department is a column, not a tag (D-72), and is neither a node nor an edge.
+  Duplicate link rows are one edge. Both ends of every edge are in `nodes`.
+- **`connection_count`** is the number of returned edges touching the node: the connections shown
+  in this view. It is taken last, so the same node can show a different count in another view. An
+  unconnected meeting is returned with `0`.
+- **`truncated`** is `true` when a returned node has a connection in the caller's scope that was
+  not returned, or, in the overview, when a source in scope was not returned. **`truncated_by`**
+  is one of `KNOWLEDGE_MAP_TRUNCATION_REASONS`: `"node_count"` if and only if a node within reach
+  was left out because `maximum_node_count` was reached, otherwise `"depth"`; `"node_count"` when
+  both apply; `null` when `truncated` is `false`. Within reach means within
+  `maximum_traversal_depth` hops of the focus. In the overview every node is one hop from a
+  source, so every node is within reach and a truncated overview always reports `"node_count"`.
+- **`maximum_node_count`** and **`maximum_traversal_depth`** are `MAXIMUM_NODE_COUNT` (50) and
+  `MAXIMUM_TRAVERSAL_DEPTH` (2), so the page words its notice from the response and holds no copy
+  of either.
+
+**Which nodes a view holds, and in what order** (D-132). Every step below runs over the caller's
+own scoped map and nothing wider, so the caps come after the scope and never before it
+(invariant 1).
+
+1. **The stable orders.** Documents and meetings are one list, newest first by when they were
+   added (`uploaded_at`, `created_at`), then by identifier. Tags by dimension, name, identifier.
+   Contributors by name without regard to case, then identifier.
+2. **The overview** takes each source in turn, newest first, with one hop: the source, then its
+   tags, then its contributors, those not yet included. A source is included only when it and all
+   of those fit under `maximum_node_count`. One that does not fit is skipped and the walk carries
+   on with the next, so a source with as many connections as the cap is never in the overview. A
+   source left out is reached by selecting one of its connections, where the overview shows one.
+   Where it shows none (an older source with no tag and no contributor, or none among those
+   shown) the map gives no way to it: `truncated` says the view is partial, and the source is
+   still in the repository or the meetings list. If no source fits at all, the newest is
+   returned with as many of its neighbours as fit, tags before contributors. The depth cap does
+   not limit the overview: every node is one hop from a source.
+3. **A selection** starts from the focus and takes up to `maximum_traversal_depth` hops, ring by
+   ring. Each ring is the not-yet-included neighbours of the ring before it, ordered as a whole:
+   sources, then tags, then contributors. Nodes are added in that order until
+   `maximum_node_count` is reached. The walk passes only through nodes that are in the caller's
+   scope.
+4. **`nodes` is in walk order.** `edges` holds every edge whose two ends are both returned, in the
+   order of its source's place in `nodes`, then its target's.
+
+**What is never returned.** A source outside the caller's scope; a tag or a person known only
+through one; an email, a role or any other field of a user; `Tag.active` and `Tag.grown`; a link's
+provenance (`applied_by`, `confidence`, `confirmed`); a transcript or extracted text; any total,
+"N of M" or count of what was left out, and any count taken before the scope. Attendance never
+admits a meeting: an attendee of a meeting the caller's role cannot read does not see it, and
+their own node does not count it (invariant 3). The Employee's bytes are the same whether or not
+restricted material exists.
+
+**Read only.** The route's own code runs SELECT statements and nothing else, the same number
+whatever the corpus holds. The session row is still saved on every request by FR-04's sliding
+expiry. It reads `documents`, `meetings`, `content_tags`, `tags`, `users` and `meeting_attendees`,
+and through FR-06 `roles`, `permissions` and `role_permissions`. The scope is the role re-read
+from the users table on each request, and nothing is cached between requests, so a change of role
+takes effect on the next one.
+
+### FR-20 — knowledge map, the second view: claims and passages (D-138)
+
+The same screen's second view, after the proposal's Evidence mock-up (Figure 8.7). A **claim** is
+a verified statement of an answered question; the same statement admitted in several answers is
+one claim. A **passage** is the chunk a statement cites. Behind the first view's permission, and
+in its rate limit: the `knowledge_map` scope, one budget for the two views, `429` past it.
+
+| Method | Path | Auth | Success | Errors |
+|---|---|---|---|---|
+| GET | `/api/knowledge-map/evidence` | session + `view_knowledge_map` | `200` the map object (below): the overview. `200` from a permitted session within the rate limit, the empty map included | `401`; `403`; `429` |
+| GET | `/api/knowledge-map/evidence?focus_type=<type>&focus_id=<id>` | session + `view_knowledge_map` | `200` the map object: the walk from that node. A focus that is not in the caller's own map gets the empty map object, whatever the reason | `401`; `403`; `429`; `400 {"<parameter>": [...]}` |
+
+`focus_type` is `claim` or `passage`, matched exactly. A passage's `focus_id` is its chunk's UUID,
+in any spelling a UUID has. A claim has no row of its own: its `focus_id` is a keyed hash of its
+text (HMAC-SHA-256 under the server's secret), 64 hexadecimal digits in either case. The page
+never computes one; it sends back a node's `item_id`. **Both or neither**, and an empty value is an absent
+one, as in the first view. Both are validated for shape only, so an identifier that names nothing
+and one that names something the caller cannot read get the same answer.
+
+```json
+{
+  "focus": {"type": "claim", "id": "5f2c..."},
+  "nodes": [
+    {"id": "claim:5f2c...", "type": "claim", "item_id": "5f2c...", "label": "Annual leave is twenty days.", "dimension": null, "connection_count": 1,
+     "detail": {"answer_count": 3, "passage_count": 1, "first_admitted_at": "2026-10-01", "last_admitted_at": "2026-10-14"}},
+    {"id": "passage:0b7c...", "type": "passage", "item_id": "0b7c...", "label": "Staff Handbook · passage 2", "dimension": null, "connection_count": 1,
+     "detail": {"source_type": "document", "source_id": "91d0...", "source_title": "Staff Handbook", "position": 2, "ai_generated": false}}
+  ],
+  "edges": [
+    {"source": "claim:5f2c...", "target": "passage:0b7c...", "relationship": "cites", "weight": 3}
+  ],
+  "truncated": false,
+  "truncated_by": null,
+  "maximum_node_count": 50,
+  "maximum_traversal_depth": 2
+}
+```
+
+The seven keys, `focus`, `connection_count`, `truncated`, `truncated_by` and the two maximums mean
+what they mean in the first view, and the empty map object is the same one. What differs:
+
+- **A claim node.** `label` is the statement, with runs of whitespace made one space. `detail`:
+  - `answer_count`: how many answers admitted this claim;
+  - `passage_count`: how many passages it cites. It is of every row the caller may see, so on a
+    capped view it can be more than the passages returned;
+  - `first_admitted_at` and `last_admitted_at`: the calendar day the first and the last of
+    those answers were given, as `YYYY-MM-DD` in the project's time zone. Never a time: every
+    statement of one answer shares its moment, and the moment would tie them back together.
+- **A passage node.** `label` is its source's title and its place in the source, counted from 1.
+  `detail`: `source_type` (`document` or `meeting`), `source_id`, `source_title`, `position`, and
+  `ai_generated`, true for a passage of a meeting's AI-written summary (NFR-15).
+- **An edge** reads "claim, cites, passage". `weight` is how often that pairing was admitted: the
+  number of citation rows that join the two.
+- **`dimension`** is always null.
+
+**Which rows a caller sees.** A citation row is read only when all three hold, and a claim, a
+passage, an edge, a count and a date are made from those rows and nothing else:
+
+1. its cited chunk is one of the passages its answer was generated from. A row whose list of
+   supplied passages is empty, or does not hold its own citation, is not read;
+2. every one of those passages is a chunk in the caller's scope, and so the cited one is. A
+   statement cites one passage, but the model wrote it with every supplied passage in front of
+   it, so a statement from an answer that drew on a restricted passage is not shown to a role
+   that cannot read that passage, whatever it cites. A supplied passage that no longer exists
+   is not in scope;
+3. the cited chunk's own source is in the caller's scope.
+
+**The walk** is the first view's, with a claim in a source's place and a passage in a tag's.
+Without a focus: each claim, newest first by the day it was last admitted and then by
+identifier, with its passages. With a
+focus on a claim: its passages, then the other claims that cite one of them. On a passage: the
+claims that cite it, then their other passages. Passages are ordered by source title and then
+position.
+
+**What is never returned.** The question, who asked it, the whole answer, a query's identifier,
+the time of day an answer was given, and a passage's text. A statement that failed citation verification is never stored, so it is
+never a claim (invariant 6). The caller's bytes are the same whether or not rows outside those
+three rules exist.
+
+**Read only.** Three SELECT statements of the route's own, whatever the log and the corpus hold.
+It reads `answer_citations`, `query_log`, `content_chunks`, `documents` and `meetings`.
+
+## FR-04 — account self-service (D-137)
+
+D-137 records Benjamin's decisions of 16 November 2026, which give PR #119's account screens a
+server. Each part is recorded here as it is built.
+
+### "Remember me" on sign-in
+
+`POST /api/auth/login` takes one more field, `remember`:
+
+```json
+{"email": "ada@example.com", "password": "...", "remember": true}
+```
+
+- **`remember` is optional, and `false` when absent.** It is read as DRF's `BooleanField` reads a
+  value: JSON `true` and `false`, and the strings and numbers that field accepts for them, such as
+  `"true"` and `1`.
+- **Anything else is a `400`,** `null` included: `{"remember": ["Must be a valid boolean."]}`, or
+  `["This field may not be null."]` for `null`. It is checked with `email` and `password`, before
+  any account is read, so like their `400`s it is the same for every address and is not a failed
+  attempt.
+- **`true` gives the session `REMEMBERED_SESSION_DAYS` (7) days without use,** for both roles,
+  instead of FR-04's 60 minutes. The `sessionid` cookie's `Max-Age` is `604800`, and the
+  `django_session` row's `expire_date` is seven days ahead.
+- **The seven days slide.** Every request restarts them, as it restarts the 60 minutes, and the
+  refreshed cookie carries `Max-Age` `604800` again. (Django saves no session and sends no cookie
+  with a `5xx`, for either kind of session.) Seven days without a request end the session, and the
+  next request is `401`.
+- **`false`, or no `remember`, is FR-04's session exactly:** 60 minutes without use, `Max-Age`
+  `3600`.
+- **The latest sign-in decides.** A sign-in without `remember`, from a browser that already holds a
+  remembered session for the same user, ends the seven days. That browser holds a session, so the
+  sign-in carries `X-CSRFToken`.
+- **Logout destroys a remembered session** server-side, as it does any other (D-10).
+- **Nothing else about login changes:** the `200` user object, the `401`, the `403` with
+  `retry_after`, the lockout and the `auth` throttle.
+
+D-137 supersedes FR-04's "Sessions also expire automatically after 60 minutes of inactivity", and
+NFR-06's "User authentication sessions must expire after 60 minutes of inactivity", for a session
+started with "Remember me" ticked, and for no other session. NFR-06 was named on 17 November 2026.
+
+### Changing one's own password
+
+A signed-in user changes their own password, under FR-01's rules. No FR enumerates these codes;
+each is D-137's, or a rule this contract already has.
+
+| Method | Path | Auth | Success | Failures |
+|---|---|---|---|---|
+| POST | `/api/auth/change-password` | session, both roles, no permission code | `200 {"detail": "Your password has been changed."}`. Body `{"current_password": "...", "new_password": "..."}`. Sets a new `sessionid` cookie: the session continues under a new key | `400` with field errors, below; `401` no valid session; `403 {"detail": "CSRF Failed: ..."}` without `X-CSRFToken`; `429` past `PASSWORD_CHANGE_THROTTLE_RATE`, with DRF's body and `Retry-After`, nothing changed |
+
+**The `400`s.** Every refusal is a `400` with field errors, never a `401`, because the front end treats
+every `401` as an expired session and signs the user out (D-137). Nothing is changed by any of them.
+
+- **A wrong current password:** `{"current_password": ["Your current password is incorrect."]}`.
+- **A new password registration would refuse:** `{"new_password": [...]}`, carrying exactly the
+  messages `AUTH_PASSWORD_VALIDATORS` give for it, as registration's `400` carries them for
+  `password`. The validators run against the signed-in user, so a password too like their own name
+  or address is refused.
+- **A new password equal to the current one:**
+  `{"new_password": ["Your new password must be different from your current password."]}`.
+- **A field missing, blank or null:** DRF's own messages, `["This field is required."]`,
+  `["This field may not be blank."]` or `["This field may not be null."]`, for each such field.
+- **Errors in both fields come in one `400`.** A wrong current password and a weak new one are
+  named together. The unchanged-password check is the exception: it runs only once both fields
+  pass, so a new password equal to a wrong current one draws only the `current_password` error.
+- **A current password that stopped being current while the request ran** (the final review of
+  17 November 2026, CHG-1): the same
+  `{"current_password": ["Your current password is incorrect."]}`. The password typed is checked
+  against the account as the request found it. Just before the new one is saved, the account's row
+  is locked and read again, and its stored password must still be the one checked. If a reset or
+  another change was committed in between, the password typed is no longer the account's, and
+  nothing is changed. Two changes at once from two sessions of one account take turns: the first is
+  made, and the second gets this `400`. **One session sending the change twice** gets other
+  answers for the second request, because the first change gives that session a new key and
+  deletes the old one (the final requirements audit of 17 November 2026, CHG-3):
+  - if the second request was read before the first committed, Django's `400
+    {"detail": "Bad request."}`, with no cookie;
+  - if it arrives after, the `401` for no session, with the `sessionid` cookie cleared. A browser
+    that receives this after the first change's `200` has lost the new key, so the page keeps its
+    submit disabled, and sends nothing else, until the change has answered.
+
+**The order** is fixed: `401` for no session, then the CSRF `403`, then the `429`, then the body, and
+last the check that the current password is still the account's.
+
+**What a change does to sessions.**
+
+- **The session that made it stays signed in,** under a new key. The response's `sessionid` cookie
+  carries the key, and the old key names nothing. The session keeps its expiry: `Max-Age` `604800`
+  if it was remembered, `3600` if not.
+- **Every other session of the user ends.** Each still holds the old password's hash, so its next
+  request is `401`, remembered sessions included.
+- **Other users' sessions are not touched.**
+- **The `csrftoken` cookie is not rotated,** so the page's next unsafe request carries the same
+  `X-CSRFToken`.
+
+**What a change does not touch.**
+
+- **A wrong current password is not a failed sign-in.** It never touches `failed_attempts` or
+  `locked_until`, so it can neither lock the account nor count towards a lock. The `password_change`
+  throttle, 10 an hour per user across all their sessions, is the bound on guessing.
+- **A change leaves FR-03's lock and count as they were.** A locked account stays locked, and the
+  new password meets the lock's `403` at sign-in, as D-137 has a completed reset leave the lock.
+- **Only the password column is written.** A role change committed while the request runs is kept.
+
+### Profile pictures
+
+Every signed-in user sees every profile picture, wherever users are listed (D-137). No FR
+enumerates these codes; each is D-137's, or a rule this contract already has.
+
+| Method | Path | Auth | Success | Failures |
+|---|---|---|---|---|
+| POST | `/api/users/me/picture` | session, both roles, no permission code | `200` the user object, its `picture` the new address. Multipart, one file part, `picture`: a PNG, JPEG or WebP of at most 5 MB | `400 {"picture": ["No picture was submitted."]}` with no file part named `picture`; `401` no valid session; `403 {"detail": "CSRF Failed: ..."}` without `X-CSRFToken`; `413 {"detail": "Picture exceeds the maximum permitted size of 5 MB."}` for a body declaring more than 5 MB plus 64 KiB, refused unread, or for a file over 5 MB; `413 {"detail": "This picture's dimensions are too large. Choose a picture of at most 25 megapixels."}` for a header declaring more than 25,000,000 pixels, refused before a pixel is decoded, and for a WebP before it is opened; `415 {"detail": "Choose a PNG, JPEG or WebP picture. This file is not one, or it is damaged."}` for any other format, under any name, for a corrupt or truncated picture, and for a JPEG of more than 100 scans, refused before it is opened, one body for all; `415` with DRF's own body for a request that is not multipart; `429` past the `picture` rate, with DRF's body and `Retry-After`; `429 {"detail": "The server is busy with other pictures. This picture was not saved and nothing was changed; it can be sent again in a few seconds.", "code": "picture_busy"}` with `Retry-After: 5` while `MAXIMUM_PICTURE_DECODES_IN_FLIGHT` (2) pictures are being decoded, anyone's. Nothing is stored for any of them |
+| DELETE | `/api/users/me/picture` | session, both roles, no permission code | `200` the user object, `picture` null. Idempotent: a user with no picture gets the same `200`. No body is read | `401`; `403` CSRF |
+| GET | `/api/users/{id}/picture` | session, both roles, no permission code | `200` the picture as PNG bytes, with `Content-Type: image/png`, `X-Content-Type-Options: nosniff`, `Content-Disposition: inline; filename="picture.png"` and the API's never-cache headers. The `Accept` header is not consulted | `401`; `404 {"detail": "No User matches the given query."}` for an unknown id, a user with no picture, and a stored file gone from disk alike |
+
+**The order on `POST`** is fixed: the `401`, the CSRF `403`, the rate's `429`, the declared-length
+`413` (the body is not read), DRF's `415` for a body that is not multipart, the `400`, the file's
+`413`, the `picture_busy` `429` (Pillow reads
+nothing of the picture). Then, before Pillow opens the file, the pixel `413` for a WebP, read from its
+first 30 bytes, or its first 25 if it is lossless (the final review of 17 November 2026, PIC-1R), and
+the `415` for a JPEG of more than 100 scans. Then the `415` for content that is not a PNG, JPEG or
+WebP, the pixel `413` for a PNG or JPEG, and the `415` for a picture that cannot be decoded.
+
+**How many at once** (the review of 17 November 2026, PIC-1). Decoding a picture at the 25-megapixel
+cap touches hundreds of megabytes, so the server decodes at most `MAXIMUM_PICTURE_DECODES_IN_FLIGHT`
+(2) at once, across every user. An upload past that is answered at once with the `picture_busy`
+`429`, which counts against the `picture` rate as every upload does. The client tells it from the
+rate's `429` by `code`, and waits out its `Retry-After` before sending the picture again.
+
+**How many scans** (the final review of 17 November 2026, JPG-1). A JPEG of more than 100 scans is
+refused with the one `415`, before Pillow opens it. libjpeg decodes every scan over the whole picture,
+however few bytes the scan takes, so a 5 MB file repeating one small scan could hold a decode place
+for most of an hour. The scans are counted as the file's FF DA byte pairs: every scan begins with
+one, and no scan's coded data holds one, so the count is never short. FF DA pairs in a JPEG's
+metadata count too, so a JPEG carrying more than its scans leave room for is refused the same way;
+an ordinary picture comes nowhere near. The progressive JPEGs libjpeg's own scripts write have at
+most 18 scans. A PNG's or a WebP's bytes are not counted.
+
+**What is stored.**
+
+- **The format is read from the content,** never from the filename or the declared type. Pillow
+  tries PNG, JPEG and WebP and nothing else, so no GIF and no SVG.
+- **Only the pixels are kept.** The first frame is decoded and turned upright by its EXIF
+  orientation. It is converted to RGB, or to RGBA when it has transparency, and scaled down to fit
+  512 × 512, keeping its shape and never scaled up. Then it is rebuilt from its pixels alone.
+- **A 16-bit greyscale PNG is scaled to 8 bits,** each sample divided by 257 and rounded, and a
+  16-bit transparency key becomes its alpha (the review's COR-1). Until 17 November 2026 every sample
+  above 255 was stored as white.
+- **It is stored as a PNG under a new random name,** with no text, ICC profile, EXIF or
+  transparency key, so a photo's location is not kept.
+
+**Replacing and removing.**
+
+- **One change at a time per account.** The user's row is locked for the change, so two uploads
+  for one account take turns.
+- **The previous file is deleted once the change has committed,** never before. A file the storage
+  cannot delete is logged, and the request still succeeds.
+- **Nothing serves `MEDIA_ROOT`.** A picture leaves only through the `GET` above.
+
+**`picture` wherever a user is returned:** `/api/users/{id}/picture?v=<version>`, or `null`.
+
+- **`v` is `picture_updated_at` in whole microseconds** since the Unix epoch, so a replaced picture
+  has a new address. The server does not read `v`: any value, or none, gets the current picture.
+- **Where it appears:**
+  - the user object: `/api/auth/me`, login, registration, `GET /api/users`, the role change's and
+    the unlock route's `200`s, and the picture routes' own `200`s;
+  - every `GET /api/users/directory` entry.
+- **A meeting's attendees.** `GET /api/meetings/{id}` gains `attendee_people`,
+  `[{"email", "name", "picture"}]`, in the order of `attendees`, which is unchanged. The meeting
+  list and the dashboard do not carry it.
+
+**Who sees what.** Every signed-in session may fetch every user's picture. The directory already
+lists every user to every session (D-34), and shows which of them have a picture. An unknown id and
+a user with no picture get the same `404`.
+
+### Resetting a forgotten password
+
+D-137 overrules the proposal's §1.9, which listed "Self-service password reset flow" as out of
+scope. FR-03 is unchanged. No FR enumerates these codes; each is D-137's, or a rule this contract
+already has. Both routes are anonymous, as login is.
+
+| Method | Path | Auth | Success | Failures |
+|---|---|---|---|---|
+| POST | `/api/auth/password-reset` | none | `200 {"detail": "If an account uses this address, an email with a link to reset its password is on its way. The link works once, within 60 minutes."}`. Body `{"email": "..."}`. The same status and body for every well-formed address, whether or not an account uses it | `400 {"email": [...]}` with DRF's messages, for an address missing, blank, null, not a valid format or longer than 254 characters, decided from the text alone; `403 {"detail": "CSRF Failed: ..."}` only from a browser holding a session that sends no `X-CSRFToken`, as on login; `429` past the `auth` rate, with DRF's body and `Retry-After` |
+| POST | `/api/auth/password-reset/confirm` | none | `200 {"detail": "Your password has been reset. Sign in with your new password."}`. Body `{"uid": "...", "token": "...", "new_password": "..."}`, the first two copied from the link | `400` for a field missing, blank or null, with DRF's own messages for each such field; `400 {"detail": "This password reset link does not work. It may have expired or been used already; ask for a new one."}` for every link that does not work, below; `400 {"new_password": [...]}` with exactly the messages `AUTH_PASSWORD_VALIDATORS` give for the password and this account, as registration's `400` carries them for `password`; `403` CSRF, as above; `429` past the `auth` rate |
+
+**The order on `confirm`** is fixed: the CSRF `403` (only from a session), the `429`, the field
+errors, the link, then the new password. A link that does not work is refused before the new
+password is judged, because the validators compare the password with the account's own name and
+address.
+
+**Asking for a link.**
+
+- **Nothing in the answer depends on the account (D-25).** Every well-formed address gets the same
+  `200` and the same body, an account's, a retired account's and an unknown one's, inside the
+  cooldown or not, whether the email is sent or fails. The address is trimmed, lower-cased and
+  matched exactly against the stored ones, as login matches it (D-02).
+- **The request does the same work either way.** It looks nothing up. It hands the address to a
+  background thread and answers. The thread finds the account and sends the email, so a registered
+  address takes no longer to answer than an unknown one. A send that fails is logged in the error
+  file and nothing else happens.
+- **Only an account is emailed:** one plain-text email, to its stored address, never to the address
+  as typed:
+
+  ```text
+  Subject: Reset your Organisational Knowledge Platform password
+
+  Someone asked to reset the password of your Organisational Knowledge Platform account.
+
+  To choose a new password, open this link:
+
+  http://127.0.0.1:8000/reset-password?uid=<uid>&token=<token>
+
+  The link works once, within 60 minutes of this email.
+
+  If you did not ask, you can ignore this email: your password is unchanged.
+  ```
+
+  - `uid` is the account's id, URL-safe base64 with no padding; `token` is a Django password reset
+    token whose time is read in UTC (`apps.accounts.password_reset.token_generator`). The page at
+    `/reset-password` posts both, with the new password, to `confirm`.
+  - **The link's address is `PUBLIC_BASE_URL`, never the request's `Host` header** (D-137). A link
+    built from the `Host` header could be mailed to a victim pointing at someone else's site.
+    `PUBLIC_BASE_URL` defaults to the alpha's address, `http://127.0.0.1:8000`.
+- **Not emailed, silently:** an address no account uses; an account retired with an unusable password
+  (D-89), since a reset would bring it back; and an account for which a send was attempted in the
+  last 300 seconds (`PASSWORD_RESET_COOLDOWN_SECONDS`), whether or not that send succeeded. **A locked account is emailed:** FR-03's lock does not stop a
+  reset.
+- **At most 4 emails are worked on at once** in one server process
+  (`MAXIMUM_PASSWORD_RESET_EMAILS_IN_FLIGHT`). A request past that is answered the same, sends
+  nothing, and is logged.
+- **If the server stops before the email is sent,** it is not sent, and nothing retries it. The person
+  can ask again at once, because the cooldown is kept in the server's memory, which a restart
+  clears. An email the mail server had already accepted is delivered.
+- **Delivery.** By default each email is a file in the `outbox/` folder (`EMAIL_FILE_PATH`), and
+  nothing is sent. With `EMAIL_HOST` set it goes by SMTP, on port 587 with STARTTLS by default
+  (`.env.example` lists the variables). `EMAIL_USE_TLS` and `EMAIL_USE_SSL` both true stop the server
+  starting, and so does a `PUBLIC_BASE_URL` that is not an absolute `http://` or `https://` address.
+
+**Using the link.**
+
+- **One answer for every link that does not work:** a `uid` that is not URL-safe base64 of an account
+  id, an id no account has, a retired account, and a token that is wrong, is another account's, has
+  been used, or is more than 60 minutes old.
+- **A link works for 60 minutes and once.** It still works 3,600 seconds after it was made, and not a
+  second later (`PASSWORD_RESET_LINK_MINUTES`). The seconds are counted in UTC, so a daylight-saving
+  change neither lengthens nor shortens a link's life. A completed reset changes the password hash its token
+  was made from, so the link works once, and of two confirms sent with one link at once only the
+  first to commit sets a password. A successful sign-in also ends the link. A failed sign-in and
+  FR-03's lock do not.
+- **A refused new password does not use the link.** It still works.
+- **What a reset does:**
+  - The new password is hashed with bcrypt (FR-01). Only the password column is written, so a role
+    change committed meanwhile is kept.
+  - **Every session of the account ends, remembered ones included.** Each still holds the old
+    password's hash, so its next request is `401`. Other users' sessions are not touched.
+- **What a reset does not do:**
+  - **It signs nobody in.** The `200` sets no session cookie.
+  - **It leaves FR-03's lock and count as they were** (D-137: "No, the lock stays"). A locked account
+    stays locked, and the new password meets the lock's `403` at sign-in until the lock ends or an
+    Administrator releases it.

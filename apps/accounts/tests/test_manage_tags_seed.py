@@ -8,7 +8,8 @@ them", and its CRUD line, Tags "Delete", are performed by ``GET /api/tags`` and
 seeds ``review_knowledge_gaps`` (D-99's pattern).
 
 The reversal is tested two ways, as 0007's is: through the migration's own functions, and through
-the migration executor, migrating ``accounts`` back to 0007 and forward again.
+the migration executor, migrating ``accounts`` back to 0007 and forward again, to the leaf, which
+since FR-20's seed (0011, D-132) is no longer this migration.
 """
 
 import importlib
@@ -30,6 +31,7 @@ from apps.core.constants import (
     MANAGE_TAGS_PERMISSION,
     RELEASE_ACCOUNT_LOCKS_PERMISSION,
     REVIEW_KNOWLEDGE_GAPS_PERMISSION,
+    VIEW_KNOWLEDGE_MAP_PERMISSION,
 )
 
 pytestmark = pytest.mark.django_db
@@ -42,9 +44,10 @@ EARLIER_ADMINISTRATOR_CODES = {
     MANAGE_ROLES_PERMISSION, CONTRIBUTE_CONTENT_PERMISSION, MANAGE_DOCUMENTS_PERMISSION,
     MANAGE_MEETINGS_PERMISSION, REVIEW_KNOWLEDGE_GAPS_PERMISSION,
 }
-# accounts 0010 (FR-03, D-130) seeds release_account_locks after this migration, so unseeding
-# 0008's own code alone leaves it in place.
-LATER_ADMINISTRATOR_CODES = {RELEASE_ACCOUNT_LOCKS_PERMISSION}
+# accounts 0010 (FR-03, D-130) seeds release_account_locks after this migration, and accounts
+# 0011 (FR-20, D-132) seeds view_knowledge_map for both roles, so unseeding 0008's own code alone
+# leaves both in place.
+LATER_ADMINISTRATOR_CODES = {RELEASE_ACCOUNT_LOCKS_PERMISSION, VIEW_KNOWLEDGE_MAP_PERMISSION}
 
 
 def permission_names(role):
@@ -87,10 +90,12 @@ def test_seed_is_reversible(employee_role, administrator_role):
     assert not Permission.objects.filter(permission_name=MANAGE_TAGS_PERMISSION).exists()
     # The rows cascade with the permission (D-12).
     assert not RolePermission.objects.filter(permission__permission_name=MANAGE_TAGS_PERMISSION).exists()
-    # 0003's to 0007's seeds, and 0010's, are untouched: unseeding one migration must not undo
-    # another.
+    # 0003's to 0007's seeds, and 0010's and 0011's, are untouched: unseeding one migration must
+    # not undo another.
     assert permission_names(administrator_role) == EARLIER_ADMINISTRATOR_CODES | LATER_ADMINISTRATOR_CODES
-    assert permission_names(employee_role) == {CONTRIBUTE_CONTENT_PERMISSION}
+    assert permission_names(employee_role) == {
+        CONTRIBUTE_CONTENT_PERMISSION, VIEW_KNOWLEDGE_MAP_PERMISSION,
+    }
     assert Role.objects.count() == 2  # the roles themselves are 0002's
 
     seed.seed_permissions(registry, None)
@@ -109,9 +114,11 @@ def test_the_migration_reverses_through_the_executor(employee_role, administrato
     """Migrating ``accounts`` back to 0007 runs ``unseed_permissions`` as Django would, and forward
     again restores the seed.
 
-    0008 was the leaf of ``accounts`` until 0009 and 0010 (FR-03, D-130) followed it, so the test
-    now checks that 0008 is on the leaf's path and migrates forward to the leaf, which reapplies
-    0009 and 0010 too, as 0007's test does since 0008."""
+    0008 was the leaf of ``accounts`` until 0009 and 0010 (FR-03, D-130), then 0011 (FR-20,
+    D-132) and then 0012 (D-137) followed it, so the test now checks that 0008 is on the leaf's
+    path and migrates forward to the leaf, which reapplies 0009, 0010, 0011 and 0012 too, as
+    0007's test does since 0008. Going back to 0007 unapplies all four as well, since each depends
+    on the one before it, so the Administrator is left with the earlier codes alone."""
     graph = MigrationExecutor(connection).loader.graph
     [leaf] = [key for key in graph.leaf_nodes() if key[0] == "accounts"]
     assert THIS_MIGRATION in graph.forwards_plan(leaf)

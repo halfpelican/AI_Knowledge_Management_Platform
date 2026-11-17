@@ -305,6 +305,42 @@ DOCUMENT_SORT_VALUES = DOCUMENT_SORT_KEYS + tuple(
 # default and the plain list agree (D-72).
 DEFAULT_DOCUMENT_SORT = f"{DESCENDING_SORT_PREFIX}uploaded_at"
 
+# --- Knowledge map (FR-20; docs/decisions.md D-132) -------------------------------------
+# FR-20 Validation: "traversal depth and returned node count are capped, and truncation is
+# reported to the interface so that a partial view is not presented as complete". The proposal's
+# section 7.0 names both settings and marks each "To be tuned". Both are applied by the walk in
+# apps/api/knowledge_map.py AFTER the permission scope, never before it, so neither which nodes
+# survive nor the truncation flag can turn on material the caller cannot read (invariant 1).
+# Each value was chosen by a rule, measured on corpus/objective-02/manifest.json's documents and
+# transcripts with scripts/knowledge_map_reach.py (14 November 2026): the whole map is 34 nodes
+# for an Employee and 41 for an Administrator. The three vocabularies the route returns are
+# under "Fixed vocabularies" below, because the first is built from SOURCE_TYPES.
+#
+# "Maximum number of relationship hops explored from any single node": how far a focused
+# request walks from the selected node. The rule: the shortest walk that joins one item to
+# another through a tag or a person they share. One hop reaches a median of 4 nodes, which is
+# what the item's own page already lists. Two hops reach a median of 20 (Employee) and 11
+# (Administrator). Three reach a median of 31 of 34 and 26 of 41, which is most of the connected
+# map again. The overview takes one hop from each source, so this binds only on a focused request.
+MAXIMUM_TRAVERSAL_DEPTH = 2
+# "Ceiling on nodes returned in one request before truncation is reported". The rule: the
+# smallest multiple of 50 that holds that corpus's whole map (41 nodes), so a demonstration on
+# it is not cut by the cap. On that corpus the cap therefore never binds; node-count truncation
+# is shown by tests. *tune* on any larger corpus.
+# The map's second view (D-138) is capped by the same two values, and neither was measured for
+# it. Its graph grows with every answer given, not with the corpus: one answer adds up to
+# MAXIMUM_STATEMENTS claims and their passages, so its overview reaches this cap after a
+# handful of answers and is then a partial view, which the reply says. *tune* for that view.
+MAXIMUM_NODE_COUNT = 50
+# FR-20's permission code (D-132), checked by GET /api/knowledge-map before anything else on the
+# request. NOT in the proposal, which names no permission for FR-20: added at the lead's decision
+# of 14 November 2026. Held by BOTH roles, seeded by accounts migration 0011, the pattern of
+# contribute_content (0004), so in the shipped seed it refuses nobody: it is the enforcement
+# point, and the test that proves it takes the code away from a role and asserts the 403. What a
+# holder is shown is still only their own scope, so unlike manage_tags and review_knowledge_gaps
+# this code is safe for a role that does not read every source.
+VIEW_KNOWLEDGE_MAP_PERMISSION = "view_knowledge_map"
+
 # --- Ingestion (FR-08, FR-09) -------------------------------------------------------
 # Extracted text shorter than this is marked "Insufficient content" and is not
 # embedded: a fragment produces an unreliable vector that matches unpredictably and
@@ -506,6 +542,12 @@ CONVERSATION_CREATE_THROTTLE_RATE = ASK_THROTTLE_RATE
 # spends no NPU time; the rate bounds how fast one user can fill SearchLog, which FR-19's cycle
 # reads (the security review's L1 and L2). The page sends one request per submitted term.
 SEARCH_THROTTLE_RATE = "30/min"
+# GET /api/knowledge-map and GET /api/knowledge-map/evidence, scope "knowledge_map" (the user's
+# decision of 17 November 2026, D-138, answering the security review's S3). The second view
+# reads every answer the caller may see on each request, so its cost grows with use, and the
+# rate bounds how often one user can ask for either view. One budget for the two views. The
+# figure is search's; a person clicking through the map does not reach it.
+KNOWLEDGE_MAP_THROTTLE_RATE = "30/min"
 # POST /api/documents/{id}/tags, scope "tagging" (the user's decision of 10 November 2026, night;
 # D-79's note on tagging, answering D-105's security review, finding 4). Each new Topic name a
 # person types there becomes a permanent Tag, which joins the scheme that later classification
@@ -527,6 +569,32 @@ TRANSCRIPTION_THROTTLE_RATE = "60/min"
 # rate bounds how fast one account can fill or rewrite a meeting's Action Items panel, which every
 # reader of the meeting loads. The page sends one request per save, addition or deletion.
 ACTION_ITEM_THROTTLE_RATE = "30/min"
+# POST /api/auth/change-password, scope "password_change", a route D-137 (the lead's decision of 16
+# November 2026) asked for. Counted per user, so every session of one account shares it, and
+# counted before the body is read, so a wrong current password counts. That is what bounds guessing
+# from a session left open: ten guesses an hour at the account's password. A wrong guess there never
+# touches FR-02's failed_attempts or locked_until, so the rate is the only bound on it. A person
+# changing their password sends one request. The rate was set by the build, not by D-137; D-137's
+# Built note lists it for Benjamin to confirm.
+PASSWORD_CHANGE_THROTTLE_RATE = "10/hour"
+# POST /api/users/me/picture, scope "picture", a route D-137 (the lead's decision of 16 November
+# 2026) asked for. Each upload is decoded and re-encoded by Pillow, the heaviest work a signed-in
+# user can ask of the server without a provider call, so the rate bounds it. Counted per user, and
+# before the body is read, so a refused upload counts. DELETE and GET /api/users/{id}/picture are
+# not throttled. A person choosing a picture sends one request. The rate was set by the build, not
+# by D-137; D-137's Built note lists it for Benjamin to confirm.
+PICTURE_THROTTLE_RATE = "10/hour"
+
+# How many entries the default cache holds (config/settings.py CACHES; apps/core/cache.py). Every
+# count above lives there, with the in-flight slots (D-79, D-85, D-123) and D-137's reset cooldown,
+# and each bounds something only while its entry is there. Django's own default, 300 entries and
+# then its least recently used third dropped, live or not, let about fifty self-registered accounts
+# push out another user's password_change count, and an account's reset cooldown, from one client
+# address (the review of 17 November 2026, COR-2). The cache now drops expired entries first, so a
+# live entry goes only once more than two thirds of these places hold live ones. Ordinary use keeps
+# at most about a dozen live entries per active user. 100,000 entries measured at 35 to 87 MB, by
+# the length of each throttle's history. Set by the build, not by D-137.
+CACHE_MAX_ENTRIES = 100_000
 
 # How much longer than generation's worst case a user's in-flight ask slot is held before it
 # expires on its own, in seconds. The slot's timeout is GENERATION_TIMEOUT_SECONDS times
@@ -657,6 +725,33 @@ NO_ANSWER_REASONS = ("no_relevant_passage",     # nothing above RELEVANCE_THRESH
 # CLAUDE.md invariant 7 turns on these two staying distinguishable, and a reason
 # misspelt as a literal would collapse the two paths into one unreadable signal.
 (NO_RELEVANT_PASSAGE, NO_STATEMENT_VERIFIED) = NO_ANSWER_REASONS
+# FR-20's knowledge map (D-132; the caps and the permission code are under "Knowledge map"
+# above). What GET /api/knowledge-map calls each kind of node: the two source types, then the
+# two kinds that have no visibility column of their own and are nodes only through a link to a
+# source the caller reads. Built from SOURCE_TYPES so a document or a meeting has one name.
+KNOWLEDGE_MAP_NODE_TYPES = (*SOURCE_TYPES, "tag", "contributor")
+(KNOWLEDGE_MAP_DOCUMENT, KNOWLEDGE_MAP_MEETING, KNOWLEDGE_MAP_TAG,
+ KNOWLEDGE_MAP_CONTRIBUTOR) = KNOWLEDGE_MAP_NODE_TYPES
+# The three relationships FR-20's Server-End clause names, each read "source, relationship,
+# target": a document or meeting is tagged with a tag (ContentTags), a contributor uploaded a
+# document (Documents.uploaded_by), a contributor attended a meeting (MeetingAttendees).
+KNOWLEDGE_MAP_RELATIONSHIPS = ("tagged", "uploaded", "attended")
+(KNOWLEDGE_MAP_TAGGED, KNOWLEDGE_MAP_UPLOADED,
+ KNOWLEDGE_MAP_ATTENDED) = KNOWLEDGE_MAP_RELATIONSHIPS
+# Which cap cut a view short, the response's ``truncated_by``: MAXIMUM_NODE_COUNT or
+# MAXIMUM_TRAVERSAL_DEPTH. "node_count" is reported when both apply.
+KNOWLEDGE_MAP_TRUNCATION_REASONS = ("node_count", "depth")
+(KNOWLEDGE_MAP_TRUNCATED_BY_NODE_COUNT,
+ KNOWLEDGE_MAP_TRUNCATED_BY_DEPTH) = KNOWLEDGE_MAP_TRUNCATION_REASONS
+# The knowledge map's second view (D-138), after the proposal's Evidence mock-up (Figure 8.7):
+# what GET /api/knowledge-map/evidence calls its two kinds of node. A claim is a verified
+# statement of an answered question (AnswerCitations.statement_text), and a passage is the
+# chunk it cites. Its one relationship reads "claim, cites, passage". The two caps, the
+# truncation reasons and the permission code are the first view's.
+EVIDENCE_MAP_NODE_TYPES = ("claim", "passage")
+(EVIDENCE_MAP_CLAIM, EVIDENCE_MAP_PASSAGE) = EVIDENCE_MAP_NODE_TYPES
+EVIDENCE_MAP_RELATIONSHIPS = ("cites",)
+(EVIDENCE_MAP_CITES,) = EVIDENCE_MAP_RELATIONSHIPS
 
 # A new record starts in the first value of its vocabulary.
 DEFAULT_DOCUMENT_STATUS = DOCUMENT_STATUS_VALUES[0]
@@ -683,8 +778,9 @@ EFFECTIVE_ROLES = {
 # Permission codes (FR-05, FR-06; docs/decisions.md D-14). Held against roles in
 # role_permissions, seeded by accounts migrations 0003, 0004, 0005 and 0006, 0007 for
 # REVIEW_KNOWLEDGE_GAPS_PERMISSION (under "Knowledge gaps" below), 0008 for
-# MANAGE_TAGS_PERMISSION and 0010 for RELEASE_ACCOUNT_LOCKS_PERMISSION; a test asserts the
-# constants and the seed agree.
+# MANAGE_TAGS_PERMISSION, 0010 for RELEASE_ACCOUNT_LOCKS_PERMISSION and 0011 for
+# VIEW_KNOWLEDGE_MAP_PERMISSION (under "Knowledge map" above); a test asserts the constants and
+# the seed agree.
 MANAGE_ROLES_PERMISSION = "manage_roles"
 # FR-08's section 7.2 validateUpload() opens with hasContributePermission(), before
 # the signature, size and title checks, because it is the cheapest rejection and the
@@ -815,6 +911,90 @@ ASSIGNMENT_OUTCOMES = ("applied", "provisional", "discarded", "confirmed")
 # --- Sessions (FR-04, docs/decisions.md D-10) -----------------------------------------
 # Inactivity expiry; config/settings.py derives SESSION_COOKIE_AGE from it.
 SESSION_INACTIVITY_MINUTES = 60
+
+# "Remember me" (D-137, the lead's decision of 16 November 2026): a session started with
+# "remember": true on POST /api/auth/login expires after this many days without use, for both
+# roles, instead of SESSION_INACTIVITY_MINUTES. D-137 supersedes FR-04's and NFR-06's 60 minutes
+# for those sessions and for no other (NFR-06 was named on 17 November 2026). LoginView passes it to
+# set_expiry() in whole seconds. Django keeps a whole number of seconds as an inactivity age, which
+# SESSION_SAVE_EVERY_REQUEST restarts on every request, so the seven days slide with use as the 60
+# minutes do.
+REMEMBERED_SESSION_DAYS = 7
+
+# --- Profile pictures (D-137, the lead's decision of 16 November 2026) ----------------------
+# What POST /api/users/me/picture accepts and what it stores. apps/accounts/pictures.py opens every
+# upload with Pillow, reads its format from its content and never from its name or declared type,
+# checks its size, and re-encodes it, so nothing of the upload but its pixels is kept.
+#
+# The formats Pillow may read a picture as, in Pillow's own names. Pillow is told to try no other
+# format, so a GIF, an SVG or an EPS, under any name, never reaches a parser. No GIF and no SVG.
+PICTURE_FORMATS = ("PNG", "JPEG", "WEBP")
+# The largest picture accepted, in bytes: 5 MB, in the MB MAX_UPLOAD_BYTES uses.
+MAX_PICTURE_BYTES = 5 * 1024 * 1024  # 5 MB
+# How much more than MAX_PICTURE_BYTES a request body may declare before it is refused unread, by
+# its declared length (D-124): room for the multipart boundary and the part's headers, which a
+# browser keeps to a few hundred bytes for one file. The file's own size is checked against
+# MAX_PICTURE_BYTES once the body is parsed. Set by the build, not by D-137.
+PICTURE_UPLOAD_ALLOWANCE_BYTES = 64 * 1024  # 64 KiB
+# The most pixels a picture's header may declare. Refused with a 413 before a pixel is decoded:
+# for a WebP, before Pillow even opens it, since libwebp allocates the canvas as it is opened (the
+# review of 17 November 2026, PIC-1). Below Pillow's own DecompressionBombWarning threshold
+# (Image.MAX_IMAGE_PIXELS, 89,478,485), so every picture Pillow would warn about is refused here,
+# without a warnings filter, which is not thread-safe under Waitress's threads. It also bounds a
+# decoded picture at 100 MB (4 bytes a pixel). Set by the build, not by D-137: it narrows D-137's
+# "up to 5 MB", since a picture under 5 MB that declares more pixels is refused.
+MAX_PICTURE_PIXELS = 25_000_000
+# The stored picture's largest side, in pixels. Every upload is scaled down, keeping its shape, to
+# fit a square of this side, never scaled up, and stored as a PNG.
+PICTURE_MAX_DIMENSION = 512
+# The most scans a JPEG picture may have (the final review of 17 November 2026, JPG-1). libjpeg
+# decodes a progressive JPEG scan by scan, each scan a pass over every block of its component however
+# few bytes it takes, and the format sets no limit on how many scans a file has. The review's 5 MB
+# file was a 5000 x 5000 picture repeating one 42-byte refinement scan 121,315 times. Each took about
+# 23.5 ms, which comes to about 47 minutes holding a decode place, extrapolated from the 3,000 it
+# timed. Why 100: libjpeg's own progressive scripts, which Pillow writes, have 6 scans for a
+# greyscale picture, 10 for colour and 18 for CMYK, so 100 is more than five times the most of them.
+# And a 5000 x 5000 JPEG of 100 such scans decoded in 1.6 s on the development machine, against
+# 0.1 s for libjpeg's own 10. A JPEG with more is refused with the 415 before Pillow opens it, its
+# scans counted as an upper bound (apps/accounts/pictures.py says what that costs). Set by the
+# build, not by D-137.
+MAX_PICTURE_JPEG_SCANS = 100
+# The most pictures one server process decodes at once, across every user (PIC-1). A decode of a
+# picture at MAX_PICTURE_PIXELS touched about 400 to 500 MB, and ten at once took a process's peak
+# working set from 53 MB to 4,191 MB. The `picture` throttle bounds how many a user sends in an
+# hour, not how many run at once, and registration is open, so the bound is the server's, as
+# MAXIMUM_TRANSCRIPTIONS_IN_FLIGHT is (D-123). An upload that finds every place taken is answered at
+# once with a 429, `picture_busy`, and a Retry-After of PICTURE_BUSY_RETRY_SECONDS. Set by the build,
+# not by D-137.
+MAXIMUM_PICTURE_DECODES_IN_FLIGHT = 2
+PICTURE_BUSY_RETRY_SECONDS = 5
+
+# --- Self-service password reset (D-137, the lead's decision of 16 November 2026) ------------
+# D-137 takes "Self-service password reset flow" out of the proposal's section 1.9 out-of-scope list.
+# POST /api/auth/password-reset mails a link and POST /api/auth/password-reset/confirm sets the new
+# password from it (apps/accounts/password_reset.py). FR-03 is unchanged: a reset neither sets nor
+# releases a lock.
+#
+# How long a reset link works, in minutes: "1 hour", Benjamin's answer. config/settings.py derives
+# Django's PASSWORD_RESET_TIMEOUT, in seconds, from it, and the email states it.
+PASSWORD_RESET_LINK_MINUTES = 60
+# After a reset email goes to an account, how long until another can, in seconds. Kept with
+# cache.add, so of two requests at once only one sends. A request inside the window gets the same
+# 200 and body as any other and no email, so the cooldown says nothing about whether an address has
+# an account. It bounds how often anyone can fill an inbox from the reset form. Set by the build,
+# not by D-137.
+PASSWORD_RESET_COOLDOWN_SECONDS = 300
+# The most reset emails one server process works on at once, each in a daemon thread with its own
+# database connection. A request past it starts no thread and is logged, and gets the same 200 and
+# body as every other, because the limit is applied before any account is looked up. It bounds the
+# threads and database connections that anonymous requests can hold. Set by the build, not by
+# D-137.
+MAXIMUM_PASSWORD_RESET_EMAILS_IN_FLIGHT = 4
+# How long the SMTP backend waits on the mail server before it gives up, in seconds
+# (config/settings.py, EMAIL_TIMEOUT). Django's own default is no limit, which would let a server
+# that stops answering hold a reset email's thread, and its place under the limit above, for good.
+# Set by the build, not by D-137.
+EMAIL_TIMEOUT_SECONDS = 30
 
 # --- Knowledge gaps (FR-19; docs/decisions.md D-107, D-108, D-109) --------------------------
 # A KnowledgeGap's status (FR-19 Front-End: "the ability to mark an entry as addressed"). Every

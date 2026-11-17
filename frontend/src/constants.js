@@ -243,6 +243,49 @@ export const ACTION_ITEM_ORIGIN = {
 }
 
 /**
+ * FR-20's knowledge map (D-132): the node types, the relationships and the reasons
+ * a view is cut short, as `GET /api/knowledge-map` returns them. Each mirrors a
+ * tuple in apps/core/constants.py (KNOWLEDGE_MAP_NODE_TYPES,
+ * KNOWLEDGE_MAP_RELATIONSHIPS, KNOWLEDGE_MAP_TRUNCATION_REASONS), and
+ * apps/api/tests/test_front_end_constants_agreement.py fails when the two drift.
+ * Vocabularies, not tuned values: the two caps reach the page in the response.
+ */
+export const KNOWLEDGE_MAP_NODE_TYPE = {
+  document: 'document',
+  meeting: 'meeting',
+  tag: 'tag',
+  contributor: 'contributor',
+}
+
+export const KNOWLEDGE_MAP_RELATIONSHIP = {
+  tagged: 'tagged',
+  uploaded: 'uploaded',
+  attended: 'attended',
+}
+
+export const KNOWLEDGE_MAP_TRUNCATION_REASON = {
+  nodeCount: 'node_count',
+  depth: 'depth',
+}
+
+/**
+ * The knowledge map's second view (D-138), claims and the passages they cite: the
+ * node types and the one relationship, as `GET /api/knowledge-map/evidence` returns
+ * them. Each mirrors a tuple in apps/core/constants.py (EVIDENCE_MAP_NODE_TYPES,
+ * EVIDENCE_MAP_RELATIONSHIPS). Vocabularies, not tuned values. The two caps and the
+ * reasons a view is cut short are the first view's, above.
+ * apps/api/tests/test_front_end_constants_agreement.py fails when either drifts.
+ */
+export const EVIDENCE_MAP_NODE_TYPE = {
+  claim: 'claim',
+  passage: 'passage',
+}
+
+export const EVIDENCE_MAP_RELATIONSHIP = {
+  cites: 'cites',
+}
+
+/**
  * How often the meeting page asks `GET /api/meetings/{id}/summary` again while the
  * latest run is "Processing", in milliseconds (FR-16: "202 Accepted while
  * processing"). The page's own value with no counterpart on the server, which leaves
@@ -1465,6 +1508,181 @@ export const TEXT = {
   dashboardUploaded: 'Uploaded',
   dashboardHeld: 'Held',
   dashboardAsked: 'Asked',
+
+  /* ---- FR-20 knowledge map, with NFR-17's table view (NIT3004, D-132) ---- */
+  // FR-20: "A node-link diagram showing documents, meetings, tags, and contributors,
+  // with node type distinguished by colour and shape", and "A tabular equivalent
+  // presents the same relationships as sortable rows". The screen is
+  // src/pages/KnowledgeMap.jsx. Everything it shows arrives already scoped, capped
+  // and counted by the server (CLAUDE.md §6, invariant 1), and no payload says what
+  // was left out or how much, so no sentence here says or implies that anything is
+  // kept from the reader. The page heading and the navigation link, which names the
+  // screen it opens.
+  mapHeading: 'Knowledge map',
+  mapIntro:
+    'How documents, meetings, tags and contributors relate to one another. Select an item to see what it is connected to, and select it again to open it. ' +
+    'The table view under the map holds the same items and relationships as rows.',
+  mapLoading: 'Loading the knowledge map…',
+  mapLoadFailed: 'Could not load the knowledge map',
+  // UC-11 E1: "an empty map or table rather than an error". One sentence, for an
+  // empty knowledge base and for a role with nothing in scope alike: the reply is
+  // the same for both, so the screen cannot tell them apart and must not seem to.
+  mapEmpty: 'There is nothing on the knowledge map yet.',
+  // A selection that names nothing on the reader's map, a selection in the address
+  // that is not a well-formed pair, and the server's 400 for one: the same words
+  // for all three, with the link back to the whole map.
+  mapEmptySelection: 'Nothing is connected to this selection.',
+  mapShowWhole: 'Show the whole map',
+  // The count line: counted from the nodes on screen, never a total (D-132).
+  mapCountDocuments: (count) => (count === 1 ? '1 document' : `${count} documents`),
+  mapCountMeetings: (count) => (count === 1 ? '1 meeting' : `${count} meetings`),
+  mapCountTags: (count) => (count === 1 ? '1 tag' : `${count} tags`),
+  mapCountContributors: (count) => (count === 1 ? '1 contributor' : `${count} contributors`),
+  mapCountLine: (parts) => `${parts.join(' · ')} shown`,
+  // FR-20: "truncation is reported to the interface so that a partial view is not
+  // presented as complete" (UC-11 A2). One sentence per reason and per kind of
+  // view, each worded from the two maximums the reply carries, so the page holds
+  // no copy of either cap. Each says how the view is limited, and none says that
+  // anything is kept from the reader.
+  mapTruncatedOverview: (maximum) =>
+    `The map holds at most ${maximum} items at a time. Select an item to see what is connected to it.`,
+  mapTruncatedSelection: (maximum) => `Only the first ${maximum} items connected to this selection are shown.`,
+  mapTruncatedDepth: (depth) =>
+    depth === 1 ? 'This view stops 1 step from the selected item.' : `This view stops ${depth} steps from the selected item.`,
+  // A truncated reply whose reason is not one of the two the contract names. A
+  // partial view is still said to be partial.
+  mapTruncatedOther: 'This is a partial view of the map.',
+  mapSkipToTables: 'Skip to the table view',
+  mapLegendHeading: 'Legend',
+  // Colour and shape together, and the word beside both (SC 1.4.1).
+  mapLegendTypes: 'Each type of item has its own shape and colour.',
+  mapLegendLine:
+    'A line joins two related items: a contributor to a document they uploaded or a meeting they attended, and a document or a meeting to a tag it carries.',
+  mapLegendSelected: 'The selected item has a heavier outline and heavier lines, and is marked “Selected”.',
+  mapDiagramHeading: 'Map',
+  mapColumnContributors: 'Contributors',
+  mapColumnSources: 'Documents and meetings',
+  mapColumnTags: 'Tags',
+  mapTypeDocument: 'Document',
+  mapTypeMeeting: 'Meeting',
+  mapTypeTag: 'Tag',
+  mapTypeContributor: 'Contributor',
+  // A tag's name is unique only within its dimension, so a tag is always shown with
+  // both: "Topic: people" (D-132, departure 5).
+  mapTagLabel: (dimension, name) => `${dimension}: ${name}`,
+  mapTagType: (dimension) => `Tag, ${dimension}`,
+  // A node's type before its name, where no shape or column says it: "Document: Leave policy".
+  mapTypedLabel: (type, label) => `${type}: ${label}`,
+  // `connection_count` is the number of connections in this view (the contract), so
+  // the count is always called "shown": the same item can read differently elsewhere.
+  mapConnectionsShown: (count) => (count === 1 ? '1 connection shown' : `${count} connections shown`),
+  // The selected node's mark, in a word as well as in its outline (SC 1.4.1), and
+  // what a second selection does (FR-20: "selecting again opens the underlying item").
+  mapSelectedMark: 'Selected',
+  mapSelectAgainDocument: 'Select again to open the document.',
+  mapSelectAgainMeeting: 'Select again to open the meeting.',
+  mapSelectAgainTag: 'Select again to open the documents carrying this tag.',
+  mapSelectedHeading: 'Selected',
+  mapSelectedNone: 'Nothing is selected. Select an item on the map or in the table view to see what it is connected to.',
+  // The Selected panel's groups: the relationship, read from the selected item's end of it.
+  mapGroupTags: 'Tags',
+  mapGroupTagged: 'Carrying this tag',
+  mapGroupUploaded: 'Uploaded',
+  mapGroupUploadedBy: 'Uploaded by',
+  mapGroupAttended: 'Attended',
+  mapGroupAttendedBy: 'Attended by',
+  mapOpenDocument: 'Open the document',
+  mapOpenMeeting: 'Open the meeting',
+  mapOpenTag: (name) => `Open documents tagged ${name}`,
+  // D-132, the user's choice on "selecting again" for a tag and a contributor: a contributor
+  // has no underlying item, and the screen says so.
+  mapContributorNoPage: 'A contributor has no page of their own, so there is nothing to open.',
+  // NFR-17: "a keyboard-navigable, sortable table view conveying the same nodes and
+  // relationships". UC-11 A1: "Selecting a row has the same effect as selecting a node".
+  mapTablesHeading: 'Table view',
+  mapTablesIntro:
+    'The same items and relationships as the map. Selecting a name here has the same effect as selecting it on the map.',
+  mapItemsHeading: 'Items',
+  mapItemsCaption:
+    'Items on the map, one row for each document, meeting, tag and contributor. Every column heading is a button that sorts by that column.',
+  mapItemsColumnName: 'Name',
+  mapItemsColumnType: 'Type',
+  mapItemsColumnConnections: 'Connections shown',
+  mapRelationshipsHeading: 'Relationships',
+  mapRelationshipsCaption:
+    'Relationships on the map, one row for each line. Every column heading is a button that sorts by that column.',
+  mapRelationshipsColumnFrom: 'From',
+  mapRelationshipsColumnRelationship: 'Relationship',
+  mapRelationshipsColumnTo: 'To',
+  // Read "from, relationship, to", each end opening with its type: "Contributor: Jane Doe",
+  // "uploaded", "Document: Leave policy"; "Document: Leave policy", "is tagged", "Tag: Topic: people".
+  mapRelationshipUploaded: 'uploaded',
+  mapRelationshipAttended: 'attended',
+  mapRelationshipTagged: 'is tagged',
+  mapNoRelationships: 'None of these items is joined to another by a line.',
+
+  /* ---- The knowledge map's second view: claims and passages (D-138) ----- */
+  // After the proposal's Figure 8.7, "Evidence": the claims answers have made, each
+  // joined to the passages it cites. The screen is src/pages/KnowledgeMapEvidence.jsx,
+  // at /knowledge-map?view=evidence. It reads `GET /api/knowledge-map/evidence`, whose
+  // claims, passages, counts and dates arrive already scoped to the reader's role
+  // (CLAUDE.md §6, invariant 1), and no payload says what was left out or how much.
+  // Whatever the two views say alike is the first view's entry above, used again: the
+  // heading, the loading and failure words, the truncation sentences, "Selected", the
+  // table view's headings and its three Items columns.
+  // The switch between the two views, a link beside "Skip to the table view": the
+  // first is what the first view offers, the second what this one does.
+  evidenceSwitchToClaims: 'Show claims and passages',
+  evidenceSwitchToMap: 'Show documents, meetings, tags and contributors',
+  evidenceIntro:
+    'How the claims made in answers rest on passages. A claim is a statement an answer made, joined to the passage or passages it cites. ' +
+    'Select a claim to review it, or a passage to see which claims cite it. ' +
+    'The table view under the map holds the same claims, passages and citations as rows.',
+  // The empty state. The same for a knowledge base nobody has asked anything of and
+  // for a role with no claim in its scope: the reply is the same for both, so the
+  // sentence names nothing that is kept from the reader, as the first view's empty
+  // sentence does not (UC-11 E1).
+  evidenceEmpty: 'There are no claims on the map yet. Ask a question, and the statements of its answer appear here.',
+  // The count line: counted from the nodes on screen, never a total, as the first view's is.
+  evidenceCountClaims: (count) => (count === 1 ? '1 claim' : `${count} claims`),
+  evidenceCountPassages: (count) => (count === 1 ? '1 passage' : `${count} passages`),
+  evidenceDiagramHeading: 'Claims and the passages they cite',
+  evidenceColumnClaims: 'Claims',
+  evidenceColumnPassages: 'Passages',
+  evidenceTypeClaim: 'Claim',
+  evidenceTypePassage: 'Passage',
+  // An edge's `weight` is how often that pairing was admitted, and the line is drawn
+  // heavier for it. The same number is the Relationships table's "Times admitted".
+  evidenceLegendLine:
+    'A line joins a claim to a passage it cites. A heavier line means the pairing was admitted more often.',
+  // A line's weight is taken by how often its pairing was admitted, so the selected
+  // item's lines are marked by being darker, not heavier.
+  evidenceLegendSelected: 'The selected item has a heavier outline and darker lines, and is marked “Selected”.',
+  // Read "from, relationship, to": "Claim: …", "cites", "Passage: Staff Handbook · passage 2".
+  evidenceRelationshipCites: 'cites',
+  evidenceSelectedNone: 'Nothing is selected. Select a claim to review it, or a passage to see which claims cite it.',
+  // The right-hand pane for a selected claim (D-138, the user's third decision).
+  evidenceClaimReviewHeading: 'Claim review',
+  // `passage_count` is 1: every answer that made the claim rests on one passage.
+  evidenceSingleSource: 'Single source',
+  // `answer_count`: the answers, of those the reader's role may see, that admitted the claim.
+  evidenceAdmittedIn: (count) => (count === 1 ? 'Admitted in 1 answer.' : `Admitted in ${count} answers.`),
+  // Said after it for a single-source claim admitted more than once.
+  evidenceSameSource: 'Every one of them rests on the same passage.',
+  evidenceSupportedBy: 'Supported by',
+  evidenceCitedBy: 'Cited by',
+  evidenceFirstAdmitted: 'First admitted',
+  evidenceLastAdmitted: 'Last admitted',
+  // A claim is a statement, with no row and no page of its own, and the screen says so,
+  // as the first view does of a contributor.
+  evidenceClaimNoPage: 'A claim has no page of its own, so there is nothing to open.',
+  // A selected passage's source, said as its type and its title: "Document: Staff Handbook".
+  evidenceSource: 'Source',
+  evidenceItemsCaption:
+    'Items on the map, one row for each claim and passage. Every column heading is a button that sorts by that column.',
+  evidenceRelationshipsCaption:
+    'Citations on the map, one row for each line. Every column heading is a button that sorts by that column.',
+  evidenceColumnTimesAdmitted: 'Times admitted',
 
   /* ---- FR-19 knowledge-gap log (NIT3004, Objective 06) ------------------ */
   // FR-19: "A list, visible to Administrators, of questions the system could not

@@ -11,6 +11,7 @@ Variables already set in the process environment take precedence over the file.
 
 from datetime import timedelta
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import environ
 from django.core.exceptions import ImproperlyConfigured
@@ -19,12 +20,18 @@ from apps.core.constants import (
     ACTION_ITEM_THROTTLE_RATE,
     ASK_THROTTLE_RATE,
     AUTHENTICATION_THROTTLE_RATE,
+    CACHE_MAX_ENTRIES,
     CONVERSATION_CREATE_THROTTLE_RATE,
+    EMAIL_TIMEOUT_SECONDS,
     EMBEDDING_DIMENSION_BY_PROVIDER,
     INGESTION_THROTTLE_RATE,
     LOCKOUT_DURATION as DEFAULT_LOCKOUT_DURATION,
     LOCKOUT_DURATION_MAXIMUM,
     LOCKOUT_THRESHOLD as DEFAULT_LOCKOUT_THRESHOLD,
+    KNOWLEDGE_MAP_THROTTLE_RATE,
+    PASSWORD_CHANGE_THROTTLE_RATE,
+    PASSWORD_RESET_LINK_MINUTES,
+    PICTURE_THROTTLE_RATE,
     SEARCH_THROTTLE_RATE,
     TAGGING_THROTTLE_RATE,
     TRANSCRIPTION_THROTTLE_RATE,
@@ -206,8 +213,71 @@ if not _DEFAULT_LOCKOUT_MINUTES <= _lockout_minutes <= _MAXIMUM_LOCKOUT_MINUTES:
     )
 LOCKOUT_DURATION = timedelta(minutes=_lockout_minutes)
 
+# --- The self-service password reset and its email (D-137) -----------------------------------
+# D-137 (Benjamin's decision of 16 November 2026) builds the reset flow the proposal's section 1.9
+# left out of scope. POST /api/auth/password-reset mails a link, and POST
+# /api/auth/password-reset/confirm uses it (apps/accounts/password_reset.py). How the email goes is
+# his answer, "A file outbox, SMTP optional":
+#
+# - **Without EMAIL_HOST, the default: the file outbox.** Each email is written as a file in
+#   EMAIL_FILE_PATH, by default outbox/ under the repository root, which is gitignored. Nothing is
+#   sent. Django makes the folder when it writes the first email.
+# - **With EMAIL_HOST: SMTP,** on EMAIL_PORT (587) with STARTTLS (EMAIL_USE_TLS, on) or with SSL
+#   from the first byte (EMAIL_USE_SSL, off). The two cannot both be on. Django's SMTP backend
+#   would refuse that only when the first email is sent, in the background thread, where every
+#   reset email would then fail unseen, so these settings refuse to load instead. EMAIL_TIMEOUT
+#   bounds each wait on the mail server; Django's own default is no limit.
+# - **A reset link's address comes from PUBLIC_BASE_URL alone,** never from the request or its Host
+#   header. A link built from the Host header is the classic way to have a working reset link
+#   mailed to a victim, pointing at someone else's site (D-137). The default is the alpha's own
+#   address (D-64). A value that is not an absolute http or https address, or that carries a query
+#   or a fragment, would make every link wrong, so it stops the server starting.
+# - **A link works for PASSWORD_RESET_LINK_MINUTES** (60), Django's PASSWORD_RESET_TIMEOUT in
+#   seconds, and once: a completed reset changes the password hash its token was made from.
+
+EMAIL_HOST = env.str("EMAIL_HOST", default="")
+if EMAIL_HOST:
+    EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+    EMAIL_PORT = env.int("EMAIL_PORT", default=587)
+    EMAIL_HOST_USER = env.str("EMAIL_HOST_USER", default="")
+    EMAIL_HOST_PASSWORD = env.str("EMAIL_HOST_PASSWORD", default="")
+    EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=True)
+    EMAIL_USE_SSL = env.bool("EMAIL_USE_SSL", default=False)
+    if EMAIL_USE_TLS and EMAIL_USE_SSL:
+        raise ImproperlyConfigured(
+            "EMAIL_USE_TLS and EMAIL_USE_SSL cannot both be true. For SMTP over SSL, usually on port "
+            "465, set EMAIL_USE_SSL=True and EMAIL_USE_TLS=False; for STARTTLS, usually on port 587, "
+            "leave EMAIL_USE_SSL unset"
+        )
+    EMAIL_TIMEOUT = env.int("EMAIL_TIMEOUT", default=EMAIL_TIMEOUT_SECONDS)
+else:
+    EMAIL_BACKEND = "django.core.mail.backends.filebased.EmailBackend"
+    EMAIL_FILE_PATH = Path(env.str("EMAIL_FILE_PATH", default=str(BASE_DIR / "outbox")))
+DEFAULT_FROM_EMAIL = env.str("DEFAULT_FROM_EMAIL", default="no-reply@localhost")
+
+PUBLIC_BASE_URL = env.str("PUBLIC_BASE_URL", default="http://127.0.0.1:8000").rstrip("/")
+_public_base_url = urlsplit(PUBLIC_BASE_URL)
+if (
+    _public_base_url.scheme not in ("http", "https")
+    or not _public_base_url.netloc
+    or _public_base_url.query
+    or _public_base_url.fragment
+):
+    raise ImproperlyConfigured(
+        "PUBLIC_BASE_URL must be the absolute http:// or https:// address the platform is opened at, "
+        f"with no query or fragment, not {PUBLIC_BASE_URL!r}"
+    )
+
+PASSWORD_RESET_TIMEOUT = PASSWORD_RESET_LINK_MINUTES * 60
+# Where a reset email's work happens: "thread", a daemon thread per request, so the request does the
+# same work whether or not the address has an account (D-25). The suite sets "inline", the caller's
+# thread (conftest.py). Not read from the environment, because inline on a server would make a
+# registered address take longer to answer, the difference the thread exists to remove.
+PASSWORD_RESET_EMAIL_RUNNER = "thread"
+
 # --- REST framework (CLAUDE.md section 6 invariant 4, D-21) -----------------------
-# Every route is protected unless it opts out explicitly (registration and login).
+# Every route is protected unless it opts out explicitly: registration and login (D-21), the
+# lockout policy (D-130) and the two password-reset routes (D-137).
 # apps.api.authentication.SessionAuthentication names its scheme so DRF answers an
 # unauthenticated request with 401 rather than its 403 fallback.
 
@@ -227,32 +297,55 @@ REST_FRAMEWORK = {
     # - "auth": registration and login, per client address. Anonymous and, with FR-02's
     #   lockout enforced, unthrottled they are a denial-of-service primitive: the mandatory
     #   409 on a duplicate address identifies a registered one and five requests then lock
-    #   it (D-26).
+    #   it (D-26). Since D-137 also the password reset's two routes, on the same budget: each
+    #   asking for a link starts a thread, and each setting a password runs the hasher.
     # - "ask", "ingestion" and "conversation_create": per signed-in user (D-79, D-80).
     #   "ingestion" is one budget shared by the three routes that ingest.
     # - "search" and "tagging": per signed-in user too, keyword search and a person applying a
     #   tag (D-79's two notes of 10 November 2026).
     # - "transcription": per signed-in user, one recording segment sent for transcription
     #   (D-123).
+    # - "password_change": per signed-in user, a password change, wrong current passwords
+    #   included (D-137).
+    # - "picture": per signed-in user, a profile picture uploaded, refused ones included (D-137).
+    # - "knowledge_map": per signed-in user, the knowledge map's two views in one budget
+    #   (D-138).
     #
-    # The counters live in the default cache. No CACHES is set, so that is Django's
-    # per-process LocMemCache: the one Waitress process (D-64) shares them, a restart clears
-    # them, and a multi-process server would need a shared cache.
+    # The counters live in the default cache, CACHES below: a per-process LocMemCache, so the one
+    # Waitress process (D-64) shares them, a restart clears them, and a multi-process server would
+    # need a shared cache.
     "DEFAULT_THROTTLE_RATES": {
         "auth": AUTHENTICATION_THROTTLE_RATE,
         "ask": ASK_THROTTLE_RATE,
         "ingestion": INGESTION_THROTTLE_RATE,
         "conversation_create": CONVERSATION_CREATE_THROTTLE_RATE,
         "search": SEARCH_THROTTLE_RATE,
+        "knowledge_map": KNOWLEDGE_MAP_THROTTLE_RATE,
         "tagging": TAGGING_THROTTLE_RATE,
         "transcription": TRANSCRIPTION_THROTTLE_RATE,
         "action_items": ACTION_ITEM_THROTTLE_RATE,
+        "password_change": PASSWORD_CHANGE_THROTTLE_RATE,
+        "picture": PICTURE_THROTTLE_RATE,
     },
     # X-Forwarded-For is not trusted: an anonymous throttle is keyed on REMOTE_ADDR, the
     # connecting address. Unset, DRF keys it on the client-sent header, so the auth limit
     # could be dodged by changing that header on every request (D-79). Nothing sits in front
     # of the server today; if Stage 5 item 9 puts a reverse proxy there, it makes this 1.
     "NUM_PROXIES": 0,
+}
+
+# --- The default cache (the review of 17 November 2026, COR-2) -------------------------------
+# It holds the throttle counts above, the in-flight slots (D-79, D-85, D-123) and D-137's password
+# reset cooldown. Until 17 November no CACHES was set, so it was Django's LocMemCache with 300
+# entries, which then dropped its least recently used third, expired or not: a slot or a cooldown,
+# written once and never read, went first, and any 300 newer entries could push out a count. Still a
+# per-process LocMemCache (apps/core/cache.py), with CACHE_MAX_ENTRIES places, dropping expired
+# entries before live ones. Not read from the environment: it holds no credential or host.
+CACHES = {
+    "default": {
+        "BACKEND": "apps.core.cache.ExpiredFirstLocMemCache",
+        "OPTIONS": {"MAX_ENTRIES": CACHE_MAX_ENTRIES},
+    }
 }
 
 # --- Audit log (FR-05) -------------------------------------------------------------

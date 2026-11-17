@@ -15,7 +15,8 @@
  *    it is paired, so the table cannot rot while the stylesheets move on.
  */
 import { describe, expect, it } from 'vitest'
-import { colourTokensIn, contrast, styleRules, tokenColour } from './stylesheets.js'
+import { EVIDENCE_MAP_NODE_TYPE, KNOWLEDGE_MAP_NODE_TYPE } from '../src/constants.js'
+import { colourTokensIn, contrast, resolve, styleRules, tokenColour } from './stylesheets.js'
 
 const TEXT_MINIMUM = 4.5 // SC 1.4.3, normal text
 const BOUNDARY_MINIMUM = 3 // SC 1.4.11, UI component boundaries and states
@@ -77,6 +78,14 @@ const BOUNDARY_PAIRS = [
   { fg: '--color-success', on: ['--color-surface', '--color-success-surface'] },
   // The unavailable notice's leading edge (NFR-19).
   { fg: '--color-warning', on: ['--color-surface', '--color-warning-surface'] },
+  // FR-20's knowledge map (D-132), which sits on the surface. Its document,
+  // meeting and tag shapes are filled with --color-primary, --color-success and
+  // --color-warning, and its lines are --color-border-strong, all paired above.
+  // These two are the rest: the contributor's fill, and the selected node's
+  // outline and lines. The map's second view (D-138) adds no pair: its claim is
+  // filled with --color-text and its passage with --color-primary.
+  { fg: '--color-text-muted', on: ['--color-surface'] },
+  { fg: '--color-text', on: ['--color-surface'] },
 ]
 
 describe('SC 1.4.3: text pairs meet 4.5:1, computed from the live token values', () => {
@@ -101,6 +110,80 @@ describe('SC 1.4.11: component boundaries and fills meet 3:1 against what they s
       })
     }
   }
+})
+
+describe('FR-20: "node type distinguished by colour and shape", the colour half (D-132)', () => {
+  /** The one colour token a class's rules give `property`, or every token found when it is not one. */
+  function tokensFor(selector, property) {
+    return styleRules()
+      .filter((rule) => rule.selectors.includes(selector))
+      .flatMap((rule) => rule.declarations)
+      .filter((declaration) => declaration.property === property)
+      .flatMap((declaration) => colourTokensIn(declaration.value))
+  }
+
+  /** Whether the boundary table above holds `token` against the surface the map sits on. */
+  function pairedOnSurface(token) {
+    return BOUNDARY_PAIRS.some((pair) => pair.fg === token && pair.on.includes('--color-surface'))
+  }
+
+  const types = Object.values(KNOWLEDGE_MAP_NODE_TYPE)
+
+  it('gives each of the four node classes one fill token, four different ones, each a tested 3:1 pair on the surface', () => {
+    const fills = types.map((type) => tokensFor(`.knowledge-map__glyph--${type}`, 'fill'))
+    for (const [index, tokens] of fills.entries()) {
+      expect(tokens, `.knowledge-map__glyph--${types[index]} declares one fill token`).toHaveLength(1)
+      expect(pairedOnSurface(tokens[0]), `${tokens[0]} is in BOUNDARY_PAIRS on --color-surface`).toBe(true)
+    }
+    // Four types, four colours: two classes sharing a fill would leave the shape
+    // as the only difference between them.
+    expect(new Set(fills.map((tokens) => tokens[0])).size).toBe(types.length)
+    // And the values behind the tokens differ too, not only their names.
+    expect(new Set(fills.map((tokens) => JSON.stringify(tokenColour(tokens[0])))).size).toBe(types.length)
+  })
+
+  it('draws the lines in a tested 3:1 colour, never the decorative border, and the selected node’s in another', () => {
+    const line = tokensFor('.knowledge-map__line', 'stroke')
+    const selected = tokensFor('.knowledge-map__line--selected', 'stroke')
+    expect(line).toHaveLength(1)
+    expect(selected).toHaveLength(1)
+    // A line is needed to read the diagram (SC 1.4.11), so the 1.47:1 separator
+    // colour, which the sweep below exempts, is not allowed here.
+    expect(line[0]).not.toBe('--color-border')
+    expect(pairedOnSurface(line[0])).toBe(true)
+    expect(pairedOnSurface(selected[0])).toBe(true)
+    expect(selected[0]).not.toBe(line[0])
+  })
+
+  // The map's second view, claims and passages (D-138), sits on the same surface.
+  it('the second view (D-138): gives the claim and the passage one fill token each, two different ones, each a tested 3:1 pair on the surface', () => {
+    const evidenceTypes = Object.values(EVIDENCE_MAP_NODE_TYPE)
+    expect(evidenceTypes).toHaveLength(2)
+    const fills = evidenceTypes.map((type) => tokensFor(`.knowledge-map__glyph--${type}`, 'fill'))
+    for (const [index, tokens] of fills.entries()) {
+      expect(tokens, `.knowledge-map__glyph--${evidenceTypes[index]} declares one fill token`).toHaveLength(1)
+      expect(pairedOnSurface(tokens[0]), `${tokens[0]} is in BOUNDARY_PAIRS on --color-surface`).toBe(true)
+    }
+    // Two types, two colours, by name and by value.
+    expect(fills[0][0]).not.toBe(fills[1][0])
+    expect(JSON.stringify(tokenColour(fills[0][0]))).not.toBe(JSON.stringify(tokenColour(fills[1][0])))
+  })
+
+  it('the second view (D-138): a line’s three weights are three widths, each greater than the last, and no colour of their own', () => {
+    const declarationsFor = (selector) =>
+      styleRules()
+        .filter((rule) => rule.selectors.includes(selector))
+        .flatMap((rule) => rule.declarations)
+    const widths = ['light', 'medium', 'heavy'].map((weight) => {
+      const declarations = declarationsFor(`.knowledge-map__line--${weight}`)
+      // The width and nothing else: a weight never changes the line's tested colour.
+      expect(declarations.map((declaration) => declaration.property)).toEqual(['stroke-width'])
+      return parseFloat(resolve(declarations[0].value))
+    })
+    expect(widths[0]).toBeGreaterThan(0)
+    expect(widths[1]).toBeGreaterThan(widths[0])
+    expect(widths[2]).toBeGreaterThan(widths[1])
+  })
 })
 
 describe('the modal scrim backs no text', () => {
@@ -137,8 +220,10 @@ const EXEMPT = new Set([
   '--color-overlay',
 ])
 
-/** Selectors whose rules may use --color-border on a border: separators and panels, not controls. */
-const CONTROL_SELECTOR = /^(button|input|select|textarea|a\b|\.btn|\.facet|\.citation(?!-)|\.ask-threads__item|\.password-toggle|\.sort-header__button|\.skip-link)/
+/** Selectors whose rules may use --color-border on a border: separators and panels, not controls.
+    The last entry is FR-20's node and its reference in a table or the panel, with their
+    modifiers, and not the classes that merely begin the same way (`__node-text`, `__nodes`). */
+const CONTROL_SELECTOR = /^(button|input|select|textarea|a\b|\.btn|\.facet|\.citation(?!-)|\.ask-threads__item|\.password-toggle|\.sort-header__button|\.skip-link|\.knowledge-map__(node|ref)(?![a-z_]|-[a-z]))/
 
 const PROPERTIES_THAT_TAKE_COLOUR =
   /^(color|background|background-color|border|border-color|border-(top|right|bottom|left)(-color)?|outline|outline-color|box-shadow|caret-color|fill|stroke|text-decoration-color)$/

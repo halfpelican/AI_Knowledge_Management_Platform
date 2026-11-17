@@ -185,6 +185,9 @@ def test_registration_is_rate_limited_per_client(api_client, monkeypatch):
 THROTTLED_ROUTES = {
     ("auth-register", "POST"): "auth",
     ("auth-login", "POST"): "auth",
+    # D-137: the password reset's two routes, on login's and registration's per-address budget.
+    ("auth-password-reset", "POST"): "auth",
+    ("auth-password-reset-confirm", "POST"): "auth",
     ("ask", "POST"): "ask",
     ("document-list", "POST"): "ingestion",
     ("meeting-list", "POST"): "ingestion",
@@ -192,6 +195,9 @@ THROTTLED_ROUTES = {
     ("document-classify", "POST"): "ingestion",
     ("conversation-list", "POST"): "conversation_create",
     ("search", "GET"): "search",
+    # D-138: the knowledge map's two views, one budget (the security review's S3).
+    ("knowledge-map", "GET"): "knowledge_map",
+    ("knowledge-map-evidence", "GET"): "knowledge_map",
     ("document-tags", "POST"): "tagging",
     ("tag-list", "POST"): "tagging",  # D-128: an Administrator adds a value
     ("department-list", "POST"): "tagging",  # D-129: an Administrator adds a department
@@ -209,6 +215,12 @@ THROTTLED_ROUTES = {
     ("meeting-action-items", "POST"): "action_items",
     ("meeting-action-item", "PATCH"): "action_items",
     ("meeting-action-item", "DELETE"): "action_items",
+    # D-137: a password change, in a budget of its own, which is the only bound on guessing the
+    # current password from a session left open.
+    ("auth-change-password", "POST"): "password_change",
+    # D-137: a profile picture uploaded, which Pillow decodes and re-encodes. Its POST only: the
+    # DELETE beside it and GET /api/users/{id}/picture are not throttled.
+    ("user-own-picture", "POST"): "picture",
 }
 
 

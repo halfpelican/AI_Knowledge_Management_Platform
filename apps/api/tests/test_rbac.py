@@ -37,6 +37,7 @@ from apps.core.constants import (
     MANAGE_TAGS_PERMISSION,
     RELEASE_ACCOUNT_LOCKS_PERMISSION,
     REVIEW_KNOWLEDGE_GAPS_PERMISSION,
+    VIEW_KNOWLEDGE_MAP_PERMISSION,
 )
 from conftest import PASSWORD
 
@@ -45,14 +46,17 @@ User = get_user_model()
 pytestmark = pytest.mark.django_db
 
 # What docs/api-contract.md says: the routes an anonymous client may reach, the two D-21
-# lets through and, since D-130 decision 7, FR-03's lockout policy, and every protected URL
-# name. The tests below check the URL conf's own permission
-# classes against these names; the dual-role matrix (dual_role_matrix.py) then
+# lets through, since D-130 decision 7 FR-03's lockout policy, and since D-137 the password
+# reset's two routes, and every protected URL name. The tests below check the URL conf's own
+# permission classes against these names; the dual-role matrix (dual_role_matrix.py) then
 # reports, per protected endpoint, whether a passing test reached it from each role.
-OPEN_ROUTES = {"auth-register", "auth-login", "auth-lockout-policy"}
-# What each opt-out answers an anonymous empty request with. Registration and login validate the
-# empty body (400). The policy reads no body and answers every caller alike (200).
-OPEN_ROUTE_STATUS = {"auth-register": 400, "auth-login": 400, "auth-lockout-policy": 200}
+OPEN_ROUTES = {"auth-register", "auth-login", "auth-lockout-policy",
+               "auth-password-reset", "auth-password-reset-confirm"}
+# What each opt-out answers an anonymous empty request with. Registration, login and the two reset
+# routes validate the empty body (400). The policy reads no body and answers every caller alike
+# (200).
+OPEN_ROUTE_STATUS = {"auth-register": 400, "auth-login": 400, "auth-lockout-policy": 200,
+                     "auth-password-reset": 400, "auth-password-reset-confirm": 400}
 PROTECTED_ROUTES = {"api-root", "auth-logout", "auth-me", "role-list", "user-list", "user-role",
                     "user-directory",  # FR-09 attendee selection (D-34)
                     "document-list", "document-reprocess",  # Stage 3: FR-08 (D-32)
@@ -62,6 +66,10 @@ PROTECTED_ROUTES = {"api-root", "auth-logout", "auth-me", "role-list", "user-lis
                     "ask",  # Stage 4: FR-12's answer path, FR-13's turn
                     "conversation-list", "conversation-detail",  # Stage 4: FR-13
                     "dashboard",  # Stage 5 item 3: FR-14
+                    # NIT3004: FR-20's knowledge map, behind view_knowledge_map, which both
+                    # roles hold (D-132)
+                    "knowledge-map",
+                    "knowledge-map-evidence",  # its second view, behind the same code (D-138)
                     "document-browse",  # Stage 5 item 2: FR-15 (D-72); its DELETE is document-detail's
                     "document-download",  # Stage 5 item 2a: FR-15's download link (D-75)
                     # NIT3004: FR-10's classification routes (D-104, D-105). contribute_content is
@@ -95,7 +103,13 @@ PROTECTED_ROUTES = {"api-root", "auth-logout", "auth-me", "role-list", "user-lis
                     "meeting-summary", "meeting-action-items", "meeting-action-item",
                     # NIT3004: FR-03's administrator release, behind release_account_locks
                     # (D-130)
-                    "user-unlock"}
+                    "user-unlock",
+                    # D-137: a signed-in user changes their own password. A session and no
+                    # permission code, for both roles
+                    "auth-change-password",
+                    # D-137: profile pictures. Setting and removing one's own, and viewing
+                    # anyone's: a session and no permission code, for both roles
+                    "user-own-picture", "user-picture"}
 # Routes that need more than a session, with the permission code they check.
 # document-list is absent on purpose: its GET needs only a session, and the
 # contribute permission its POST needs is returned by get_permissions() per method
@@ -131,6 +145,13 @@ PERMISSIONED_ROUTES = {
     # FR-03's release (D-130): release_account_locks, a permission_classes entry, so the 403
     # comes before the lookup and an Employee cannot probe user ids.
     "user-unlock": RELEASE_ACCOUNT_LOCKS_PERMISSION,
+    # FR-20 (D-132): view_knowledge_map, a permission_classes entry. The route returns a
+    # collection and no single scoped object, so the 403 has no 404 to precede.
+    # apps/api/tests/test_knowledge_map.py proves the 403 by revoking the code from each role.
+    "knowledge-map": VIEW_KNOWLEDGE_MAP_PERMISSION,
+    # The map's second view (D-138), behind the same code. A collection, as the first is.
+    # apps/api/tests/test_evidence_map.py proves the 403 by revoking the code from each role.
+    "knowledge-map-evidence": VIEW_KNOWLEDGE_MAP_PERMISSION,
 }
 # Codes checked inside a view rather than declared on it, so the seed test below covers them.
 IN_VIEW_PERMISSION_CODES = {
@@ -410,3 +431,6 @@ def test_every_permission_code_in_use_is_seeded():
     # FR-03's release (D-130): Administrator only, seeded by accounts 0010.
     assert Role.objects.filter(role_name=ADMINISTRATOR_ROLE_NAME, permissions__permission_name=RELEASE_ACCOUNT_LOCKS_PERMISSION).exists()
     assert not Role.objects.filter(role_name=EMPLOYEE_ROLE_NAME, permissions__permission_name=RELEASE_ACCOUNT_LOCKS_PERMISSION).exists()
+    # FR-20's code is held by both roles (accounts 0011, D-132), as contribute_content is.
+    assert Role.objects.filter(role_name=ADMINISTRATOR_ROLE_NAME, permissions__permission_name=VIEW_KNOWLEDGE_MAP_PERMISSION).exists()
+    assert Role.objects.filter(role_name=EMPLOYEE_ROLE_NAME, permissions__permission_name=VIEW_KNOWLEDGE_MAP_PERMISSION).exists()

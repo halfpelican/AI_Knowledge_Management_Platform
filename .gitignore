@@ -25,6 +25,10 @@ media/
 # Audit log (FR-05), path from AUDIT_LOG_PATH
 logs/
 
+# The password reset's file outbox (D-137), path from EMAIL_FILE_PATH. Each file is an email that
+# carries a working reset link.
+outbox/
+
 # Frontend
 node_modules/
 frontend/dist/

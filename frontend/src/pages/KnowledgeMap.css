@@ -1,0 +1,402 @@
+/* FR-20's knowledge map, with NFR-17's table view (NIT3004, D-132). The tables
+   take their style from Repository.css; this is the page frame, the legend, the
+   diagram and the Selected panel.
+
+   Tokens only. Every colour a node, a line or an outline has is set here, by
+   class, and never as an SVG attribute or an inline style, so tests/contrast.test.js
+   and tests/stylesheets.test.js see each one. The diagram, the legend and the
+   panel all sit on --color-surface, the surface each colour below has a tested
+   pair on. */
+
+.knowledge-map {
+  max-width: var(--content-max-width);
+}
+
+.knowledge-map__intro {
+  max-width: var(--measure-text);
+}
+
+/* The count line, and "Loading" before it. Reserves its line so the page does not
+   jump when the reply lands. */
+.knowledge-map__status {
+  min-height: var(--space-5);
+  margin: 0 0 var(--space-3);
+  font-weight: var(--weight-medium);
+}
+
+.knowledge-map__skip {
+  margin: 0 0 var(--space-4);
+}
+
+.knowledge-map__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+/* ---- Legend, diagram, Selected panel -------------------------------------- */
+
+/* Side by side where there is room: the legend, the diagram, the panel. They are
+   in that order in the DOM, so the single column below stacks them without any
+   reordering and the tab order is the same at every width. */
+.knowledge-map__layout {
+  display: grid;
+  grid-template-columns:
+    minmax(0, var(--layout-card-min-width))
+    minmax(0, 1fr)
+    minmax(0, var(--layout-map-panel-width));
+  gap: var(--space-5);
+  align-items: start;
+  margin-bottom: var(--space-6);
+}
+
+@media (max-width: 64rem) {
+  .knowledge-map__layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.knowledge-map__diagram {
+  min-width: 0;
+}
+
+.knowledge-map__legend,
+.knowledge-map__panel {
+  padding: var(--space-4);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  overflow-wrap: anywhere;
+}
+
+.knowledge-map__legend-list,
+.knowledge-map__group-list {
+  list-style: none;
+  margin: 0 0 var(--space-4);
+  padding: 0;
+}
+
+/* A shape, or the sample line, beside its words. */
+.knowledge-map__legend-item,
+.knowledge-map__panel-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-2);
+}
+
+.knowledge-map__legend-note,
+.knowledge-map__panel-count,
+.knowledge-map__panel-type {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.knowledge-map__legend-line {
+  flex: none;
+  width: var(--space-6);
+  height: var(--space-5);
+}
+
+.knowledge-map__group h3 {
+  margin-bottom: var(--space-1);
+  font-size: var(--text-base);
+}
+
+/* The legend's heading where it is a level down, on the component sheet. */
+.knowledge-map__legend h3 {
+  font-size: var(--text-lg);
+}
+
+.knowledge-map__group-list li {
+  margin-bottom: var(--space-1);
+}
+
+/* ---- The four node types: colour and shape -------------------------------- */
+
+/* FR-20: "node type distinguished by colour and shape". The shape is the element
+   (src/pages/KnowledgeMap.jsx); the colour is here. Four different tokens, each at
+   3:1 or better on --color-surface (SC 1.4.11): 6.70, 5.69, 7.52 and 7.56 to 1.
+   tests/contrast.test.js holds each pair and that the four differ. The type is
+   also always a word, so neither colour nor shape is the only cue (SC 1.4.1). */
+.knowledge-map__shape {
+  flex: none;
+  width: var(--space-5);
+  height: var(--space-5);
+}
+
+.knowledge-map__glyph--document {
+  fill: var(--color-primary);
+}
+
+.knowledge-map__glyph--meeting {
+  fill: var(--color-success);
+}
+
+.knowledge-map__glyph--tag {
+  fill: var(--color-warning);
+}
+
+.knowledge-map__glyph--contributor {
+  fill: var(--color-text-muted);
+}
+
+/* ---- The diagram ----------------------------------------------------------- */
+
+/* A labelled, focusable region that scrolls sideways at a narrow width, as a data
+   table's does (base.css, .table-scroll), so the page itself never scrolls
+   sideways (SC 1.4.10). `position: relative` anchors the visually hidden text
+   inside it, for the reason base.css gives. */
+.knowledge-map__scroll {
+  position: relative;
+  overflow-x: auto;
+  padding: var(--space-3);
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+}
+
+/* The column headings and the nodes are two grids on the same tracks, which the
+   layout function sets inline (position only). Neither narrows below the width
+   at which three columns of labels are still readable. */
+.knowledge-map__columns,
+.knowledge-map__canvas {
+  min-width: var(--layout-map-min-width);
+}
+
+.knowledge-map__columns {
+  display: grid;
+}
+
+.knowledge-map__column-heading {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+/* The lines' layer fills the canvas exactly, so a percentage in a line is a
+   percentage of the grid of nodes drawn over it. */
+.knowledge-map__canvas {
+  position: relative;
+}
+
+.knowledge-map__lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/* A line is needed to understand the diagram, so it is held to 3:1 against the
+   surface (SC 1.4.11): --color-border-strong is 4.97:1, where the decorative
+   --color-border would be 1.47:1. */
+.knowledge-map__line {
+  stroke: var(--color-border-strong);
+  stroke-width: var(--border-width);
+}
+
+/* The selected node's lines. --color-text on the surface is 14.76:1.
+   In the first view they are darker and heavier, so the difference is not carried
+   by colour alone (SC 1.4.1).
+   In the second view (D-138) the width set here is replaced by the weight classes
+   further down, so a selected line differs from the others by colour only. There
+   the selection is carried by more than the lines: the selected node has the
+   heavier outline and the word "Selected", and what its lines join is also listed
+   in the pane. */
+.knowledge-map__line--selected {
+  stroke: var(--color-text);
+  stroke-width: var(--border-width-emphasis);
+}
+
+/* One row per node, every row the same height: `1fr` rows in a grid of automatic
+   height all take the height of the tallest. That is what lets a line be drawn to
+   the middle of a row without measuring anything. A long label wraps and makes
+   the rows taller; it is never clipped. There is no row gap, for the same reason:
+   the space between nodes is each cell's own padding. */
+.knowledge-map__nodes {
+  position: relative;
+  display: grid;
+  grid-auto-rows: 1fr;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.knowledge-map__cell {
+  align-self: center;
+  min-width: 0;
+  padding: var(--space-2) 0;
+}
+
+/* A node: a real link, drawn as a box on the surface with its shape, its label
+   and its count. The label and the count are text on the surface, never on a
+   fill. The focus ring is the one global rule in base.css. */
+.knowledge-map__node {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  line-height: var(--leading-tight);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.knowledge-map__node-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+a.knowledge-map__node .knowledge-map__node-label {
+  color: var(--color-primary);
+  font-weight: var(--weight-medium);
+  text-decoration: underline;
+}
+
+a.knowledge-map__node:hover {
+  border-color: var(--color-primary-hover);
+}
+
+a.knowledge-map__node:hover .knowledge-map__node-label {
+  color: var(--color-primary-hover);
+}
+
+.knowledge-map__node-count {
+  color: var(--color-text-muted);
+}
+
+/* The selected node: a heavier, darker outline and the word "Selected", beside
+   `aria-current`. A selected node with no connection has no heavier line to show
+   it, so the mark is on the node itself. */
+.knowledge-map__node--selected {
+  border-width: var(--border-width-emphasis);
+  border-color: var(--color-text);
+}
+
+.knowledge-map__selected-mark {
+  color: var(--color-text);
+  font-weight: var(--weight-semibold);
+}
+
+/* ---- A node named in the panel or in a table ------------------------------- */
+
+/* `position: relative` anchors the visually hidden separators inside it. */
+.knowledge-map__ref {
+  position: relative;
+  overflow-wrap: anywhere;
+}
+
+.knowledge-map__ref--selected {
+  font-weight: var(--weight-semibold);
+}
+
+.knowledge-map__ref .knowledge-map__selected-mark {
+  font-size: var(--text-sm);
+}
+
+/* ---- Table view ------------------------------------------------------------ */
+
+.knowledge-map__tables h3 {
+  margin-top: var(--space-5);
+}
+
+.knowledge-map__figure {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- The two views, and the second: claims and passages (D-138) ------------- */
+
+/* The link that switches between the two views sits beside "Skip to the table
+   view" where there is room and under it where there is not. The two are
+   neighbouring paragraphs, the skip link first, so the tab order is the same
+   either way. The link has the secondary button's look (Button.css). */
+.knowledge-map__skip,
+.knowledge-map__switch {
+  display: inline-block;
+  margin-right: var(--space-4);
+  vertical-align: middle;
+}
+
+/* The second view's two node types: colour and shape, as the first view's four.
+   A claim is a square in --color-text and a passage a circle in --color-primary,
+   14.76 and 6.70 to 1 on --color-surface (SC 1.4.11). tests/contrast.test.js
+   holds each pair and that the two differ. The type is also always a word. */
+.knowledge-map__glyph--claim {
+  fill: var(--color-text);
+}
+
+.knowledge-map__glyph--passage {
+  fill: var(--color-primary);
+}
+
+/* A line's weight is how often its pairing was admitted: once, two to four times,
+   five times or more (src/utils/evidenceMap.js). Three widths, each twice the
+   last. Declared after the selected line's rule above, so in this view a selected
+   node's lines keep the weight of their pairing. They then differ from the other
+   lines by colour only, the darker stroke. That is not the only way the selection
+   is shown: the selected node itself has the heavier outline and the word
+   "Selected", and the nodes its lines join are listed in the pane, under
+   "Supported by" or "Cited by". The number behind a weight is in the Relationships
+   table, so the weight is never the only place it is said. */
+.knowledge-map__line--light {
+  stroke-width: var(--border-width);
+}
+
+.knowledge-map__line--medium {
+  stroke-width: var(--border-width-strong);
+}
+
+.knowledge-map__line--heavy {
+  stroke-width: var(--border-width-emphasis);
+}
+
+/* A passage that is AI-generated content: the dashed boundary such content has
+   everywhere, from the one token (NFR-15, AiMark.css), as a second cue beside the
+   words "Suggested by AI" in the node. */
+.knowledge-map__node--ai {
+  border-style: var(--border-style-ai);
+}
+
+/* The Claim review's "Single source": words in a boundary of their own.
+   --color-warning on --color-warning-surface is 7.21:1. */
+.knowledge-map__flag {
+  display: inline-block;
+  padding: var(--space-1) var(--space-2);
+  border: var(--border-width) solid var(--color-warning);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-warning-surface);
+  color: var(--color-warning);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+/* The pane's facts: a term and its value on a line, the term muted. */
+.knowledge-map__facts {
+  margin: 0 0 var(--space-4);
+}
+
+.knowledge-map__fact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  margin-bottom: var(--space-1);
+}
+
+.knowledge-map__fact dt {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.knowledge-map__fact dd {
+  margin: 0;
+}

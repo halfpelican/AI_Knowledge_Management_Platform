@@ -27,6 +27,7 @@ from apps.core.constants import (
     MANAGE_TAGS_PERMISSION,
     RELEASE_ACCOUNT_LOCKS_PERMISSION,
     REVIEW_KNOWLEDGE_GAPS_PERMISSION,
+    VIEW_KNOWLEDGE_MAP_PERMISSION,
 )
 
 pytestmark = pytest.mark.django_db
@@ -39,10 +40,12 @@ EARLIER_ADMINISTRATOR_CODES = {
     MANAGE_ROLES_PERMISSION, CONTRIBUTE_CONTENT_PERMISSION, MANAGE_DOCUMENTS_PERMISSION,
     MANAGE_MEETINGS_PERMISSION,
 }
-# accounts 0008 (D-119 finding 5) seeds manage_tags after this migration, and accounts 0010
-# (FR-03, D-130) seeds release_account_locks, so unseeding 0007's own code alone leaves both in
-# place.
-LATER_ADMINISTRATOR_CODES = {MANAGE_TAGS_PERMISSION, RELEASE_ACCOUNT_LOCKS_PERMISSION}
+# accounts 0008 (D-119 finding 5) seeds manage_tags after this migration, accounts 0010
+# (FR-03, D-130) seeds release_account_locks, and accounts 0011 (FR-20, D-132) seeds
+# view_knowledge_map for both roles, so unseeding 0007's own code alone leaves all three in place.
+LATER_ADMINISTRATOR_CODES = {
+    MANAGE_TAGS_PERMISSION, RELEASE_ACCOUNT_LOCKS_PERMISSION, VIEW_KNOWLEDGE_MAP_PERMISSION,
+}
 
 
 def permission_names(role):
@@ -87,10 +90,12 @@ def test_seed_is_reversible(employee_role, administrator_role):
     assert not RolePermission.objects.filter(
         permission__permission_name=REVIEW_KNOWLEDGE_GAPS_PERMISSION
     ).exists()
-    # 0003's to 0006's seeds, and 0008's and 0010's, are untouched: unseeding one migration must
-    # not undo another.
+    # 0003's to 0006's seeds, and 0008's, 0010's and 0011's, are untouched: unseeding one
+    # migration must not undo another.
     assert permission_names(administrator_role) == EARLIER_ADMINISTRATOR_CODES | LATER_ADMINISTRATOR_CODES
-    assert permission_names(employee_role) == {CONTRIBUTE_CONTENT_PERMISSION}
+    assert permission_names(employee_role) == {
+        CONTRIBUTE_CONTENT_PERMISSION, VIEW_KNOWLEDGE_MAP_PERMISSION,
+    }
     assert Role.objects.count() == 2  # the roles themselves are 0002's
 
     seed.seed_permissions(registry, None)
@@ -111,7 +116,8 @@ def test_the_migration_reverses_through_the_executor(employee_role, administrato
 
     0007 was the leaf of ``accounts`` until 0008 (D-119 finding 5) followed it, so the test now
     checks that 0007 is on the leaf's path and migrates forward to the leaf, which reapplies 0008
-    too, as 0006's test does since 0007."""
+    and, since D-130, D-132 and D-137, 0009, 0010, 0011 and 0012 too, as 0006's test does since
+    0007."""
     graph = MigrationExecutor(connection).loader.graph
     [leaf] = [key for key in graph.leaf_nodes() if key[0] == "accounts"]
     assert THIS_MIGRATION in graph.forwards_plan(leaf)

@@ -20,12 +20,24 @@ urlpatterns = [
     # Stage 2: FR-04
     path("auth/logout", views.LogoutView.as_view(), name="auth-logout"),
     path("auth/me", views.MeView.as_view(), name="auth-me"),
+    # D-137: a signed-in user changes their own password, under FR-01's rules.
+    path("auth/change-password", views.PasswordChangeView.as_view(), name="auth-change-password"),
+    # D-137: the self-service password reset, both routes anonymous as login is. Ask for an emailed
+    # link; then set the new password from it.
+    path("auth/password-reset", views.PasswordResetRequestView.as_view(), name="auth-password-reset"),
+    path("auth/password-reset/confirm", views.PasswordResetConfirmView.as_view(),
+         name="auth-password-reset-confirm"),
     # Stage 2: FR-05
     path("roles", views.RoleListView.as_view(), name="role-list"),
     path("users", views.UserListView.as_view(), name="user-list"),
     # Before the <uuid:pk> route below; "directory" is not a UUID so the two
     # cannot collide, but reading first is the habit that keeps it true.
     path("users/directory", views.UserDirectoryView.as_view(), name="user-directory"),
+    # D-137: a signed-in user's own profile picture, POST to set it and DELETE to remove it. Before
+    # the <uuid:pk> routes below for the same reading habit; "me" is not a UUID either.
+    path("users/me/picture", views.OwnPictureView.as_view(), name="user-own-picture"),
+    # D-137: any user's profile picture, for any signed-in session.
+    path("users/<uuid:pk>/picture", views.UserPictureView.as_view(), name="user-picture"),
     path("users/<uuid:pk>/role", views.UserRoleView.as_view(), name="user-role"),
     # FR-03's administrator release (D-130), behind release_account_locks.
     path("users/<uuid:pk>/unlock", views.UserUnlockView.as_view(), name="user-unlock"),
@@ -96,6 +108,12 @@ urlpatterns = [
          name="conversation-detail"),
     # Stage 5 item 3: FR-14's one aggregating endpoint, every dashboard panel in one request.
     path("dashboard", views.DashboardView.as_view(), name="dashboard"),
+    # NIT3004: FR-20's knowledge map (D-132), behind view_knowledge_map, which both roles hold.
+    # One GET: the overview, or with focus_type and focus_id the walk from one node.
+    path("knowledge-map", views.KnowledgeMapView.as_view(), name="knowledge-map"),
+    # Its second view (D-138): claims and the passages they cite, behind the same code.
+    path("knowledge-map/evidence", views.EvidenceMapView.as_view(),
+         name="knowledge-map-evidence"),
     # NIT3004, Objective 06: FR-19's knowledge-gap log (D-107), every route behind
     # review_knowledge_gaps. The list, sorted Open first by occurrence count.
     path("knowledge-gaps", views.KnowledgeGapListView.as_view(), name="knowledge-gap-list"),

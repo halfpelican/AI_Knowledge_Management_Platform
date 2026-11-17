@@ -9,18 +9,20 @@ import logging
 import math
 
 from django.conf import settings
-from django.contrib.auth import authenticate, get_user_model
+from django.contrib.auth import authenticate, get_user_model, update_session_auth_hash
 from django.contrib.auth import login as django_login
 from django.contrib.auth import logout as django_logout
 from django.core.exceptions import SuspiciousFileOperation
 from django.db import IntegrityError, transaction
 from django.db.models import Exists, OuterRef, Prefetch
-from django.http import FileResponse, Http404, JsonResponse
+from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.middleware.csrf import get_token
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.utils.http import content_disposition_header
 from django.utils.text import Truncator
 from rest_framework import status
+from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -30,6 +32,20 @@ from rest_framework.views import APIView
 import apps.ai
 from apps.accounts.audit import log_role_change
 from apps.accounts.models import LoginAttempt, Permission, Role
+from apps.accounts.password_reset import (
+    ResetLinkRefused,
+    UnacceptablePassword,
+    request_reset_email,
+    reset_password,
+)
+from apps.accounts.pictures import (
+    PicturesBusy,
+    PictureTooLarge,
+    UnreadablePicture,
+    reencode_picture,
+    remove_picture,
+    replace_picture,
+)
 from apps.ai import attempt_log
 from apps.ai.base import ProviderUnavailable, TranscriptionDisabled
 from apps.core.constants import (
@@ -48,15 +64,22 @@ from apps.core.constants import (
     MANAGE_MEETINGS_PERMISSION,
     MANAGE_ROLES_PERMISSION,
     MANAGE_TAGS_PERMISSION,
+    MAX_PICTURE_BYTES,
+    MAX_PICTURE_PIXELS,
     MAX_UPLOAD_BYTES,
     MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS,
     MEETING_INDEXED,
     MINIMUM_CONTENT_LENGTH,
+    PASSWORD_RESET_LINK_MINUTES,
+    PICTURE_BUSY_RETRY_SECONDS,
+    PICTURE_UPLOAD_ALLOWANCE_BYTES,
     RELEASE_ACCOUNT_LOCKS_PERMISSION,
+    REMEMBERED_SESSION_DAYS,
     REVIEW_KNOWLEDGE_GAPS_PERMISSION,
     ROLE_NAMES,
     TRANSCRIPTION_BUSY_RETRY_SECONDS,
     TRANSCRIPTION_SEGMENT_SECONDS,
+    VIEW_KNOWLEDGE_MAP_PERMISSION,
 )
 from apps.core.models import NAME_MAX_LENGTH
 from apps.documents.classification import (
@@ -128,6 +151,8 @@ from apps.retrieval.search import (
 from .answers import reply_for
 from .ask_slot import release_ask_slot, take_ask_slot
 from .ingestion_slot import release_ingestion_slot, take_ingestion_slot
+from .evidence_map import evidence_map
+from .knowledge_map import knowledge_map
 from .negotiation import IgnoreClientContentNegotiation
 from .transcription_slot import (
     release_server_slot,
@@ -138,6 +163,7 @@ from .transcription_slot import (
 from .permissions import HasRolePermission, role_holds
 from .repository import RepositoryFilters, browse, classification_of, repository_documents
 from .serializers import (
+    CURRENT_PASSWORD_INCORRECT_MESSAGE,
     AnswerSerializer,
     AskSerializer,
     ClassificationConfirmSerializer,
@@ -155,6 +181,8 @@ from .serializers import (
     KnowledgeGapCycleSerializer,
     KnowledgeGapSerializer,
     KnowledgeGapStatusSerializer,
+    EvidenceMapQuerySerializer,
+    KnowledgeMapQuerySerializer,
     LoginSerializer,
     MeetingDetailSerializer,
     MeetingIngestSerializer,
@@ -162,6 +190,9 @@ from .serializers import (
     ActionItemSerializer,
     ActionItemWriteSerializer,
     MeetingSerializer,
+    PasswordChangeSerializer,
+    PasswordResetConfirmSerializer,
+    PasswordResetRequestSerializer,
     ProposedTagRejectSerializer,
     ProposedTagSerializer,
     RecentQuestionSerializer,
@@ -207,6 +238,51 @@ ACCOUNT_LOCKED_MESSAGE = (
 ACCOUNT_LOCKED_CODE = "account_locked"
 # FR-04 Front-End: "a brief confirmation 'You've been logged out'".
 LOGGED_OUT_MESSAGE = "You have been logged out."
+# POST /api/auth/change-password's 200 (D-137). The refusals are PasswordChangeSerializer's.
+PASSWORD_CHANGED_MESSAGE = "Your password has been changed."
+# POST /api/auth/password-reset's one 200 (D-137), the same for every well-formed address, whether
+# or not an account uses it, so it neither says nor implies that an email was sent (D-25).
+PASSWORD_RESET_REQUESTED_MESSAGE = (
+    "If an account uses this address, an email with a link to reset its password is on its way. "
+    f"The link works once, within {PASSWORD_RESET_LINK_MINUTES} minutes."
+)
+# POST /api/auth/password-reset/confirm's one 400 for a link that does not work (D-137): a uid or a
+# token that is wrong, expired or used, and an account that does not exist, alike.
+PASSWORD_RESET_LINK_REFUSED_MESSAGE = (
+    "This password reset link does not work. It may have expired or been used already; ask for a "
+    "new one."
+)
+PASSWORD_RESET_COMPLETE_MESSAGE = "Your password has been reset. Sign in with your new password."
+# POST /api/users/me/picture (D-137). Two 413s with different text under the one code, as FR-08's
+# two size refusals have: the file's bytes, and the pixels its header declares.
+PICTURE_TOO_LARGE_MESSAGE = (
+    f"Picture exceeds the maximum permitted size of {MAX_PICTURE_BYTES // (1024 * 1024)} MB."
+)
+PICTURE_TOO_MANY_PIXELS_MESSAGE = (
+    "This picture's dimensions are too large. Choose a picture of at most "
+    f"{MAX_PICTURE_PIXELS // 1_000_000} megapixels."
+)
+# One 415 for a file that is not a PNG, JPEG or WebP and for one that is but cannot be read,
+# corrupt or cut short (D-137): the person's next step is the same, another file.
+UNSUPPORTED_PICTURE_MESSAGE = (
+    "Choose a PNG, JPEG or WebP picture. This file is not one, or it is damaged."
+)
+NO_PICTURE_SUBMITTED_MESSAGE = "No picture was submitted."
+# Every one of MAXIMUM_PICTURE_DECODES_IN_FLIGHT places is held, by anyone's uploads (the review of
+# 17 November 2026, PIC-1). Not the uploader's doing, and nothing was stored, so it says what
+# happened and that sending the picture again is safe. A 429 with Retry-After and its own code, as
+# D-123's transcription_busy is, so a client tells it from the `picture` rate's 429 by `code`.
+PICTURE_BUSY_MESSAGE = (
+    "The server is busy with other pictures. This picture was not saved and nothing was changed; it "
+    "can be sent again in a few seconds."
+)
+PICTURE_BUSY_CODE = "picture_busy"
+# GET /api/users/{id}/picture's one 404 (D-137): get_object_or_404's own wording, restated as
+# DOCUMENT_NOT_FOUND_MESSAGE restates it, for an unknown id, a user with no picture, and a stored
+# file gone from disk alike.
+USER_NOT_FOUND_MESSAGE = "No %s matches the given query." % User._meta.object_name
+# What the picture route's Content-Disposition names the file, inline (D-137).
+PICTURE_FILENAME = "picture.png"
 # FR-05 Validation: "a user cannot remove their own administrator role, preventing
 # accidental lockout of the last administrator."
 SELF_DEMOTION_MESSAGE = "You cannot remove your own Administrator role."
@@ -464,6 +540,19 @@ def ingestion_in_flight():
     )
 
 
+def declared_body_length(request) -> int:
+    """The body length ``CONTENT_LENGTH`` declares, read without reading the body (D-124).
+
+    0 when the header is absent, blank or malformed, which is what Django reads then: no body.
+    ``declares_a_body_over_the_upload_ceiling`` below says why the declared length can be trusted.
+    The picture upload compares it with its own, smaller ceiling (D-137).
+    """
+    try:
+        return int(request.META.get("CONTENT_LENGTH") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
 def declares_a_body_over_the_upload_ceiling(request) -> bool:
     """Whether the request declares a body longer than ``MAX_UPLOAD_BYTES`` (D-124).
 
@@ -481,18 +570,14 @@ def declares_a_body_over_the_upload_ceiling(request) -> bool:
     sees the request. Waitress's own ``--max-request-body-size`` bounds that
     (``MAX_REQUEST_BODY_BYTES``, D-124).
     """
-    try:
-        declared_length = int(request.META.get("CONTENT_LENGTH") or 0)
-    except (TypeError, ValueError):
-        declared_length = 0
-    return declared_length > MAX_UPLOAD_BYTES
+    return declared_body_length(request) > MAX_UPLOAD_BYTES
 
 
 # --- FR-01 registration --------------------------------------------------------------
 
 
 class RegisterView(APIView):
-    permission_classes = [AllowAny]  # one of the two opt-outs (D-21)
+    permission_classes = [AllowAny]  # an opt-out (D-21); config/settings.py lists all five
     # Anonymous and unthrottled, this endpoint is an unlimited "is this address
     # registered?" oracle, and the answer feeds the lockout below (D-26).
     throttle_classes = [ScopedRateThrottle]
@@ -567,7 +652,9 @@ class SendsCsrfCookieMixin:
 
 
 class LoginView(SendsCsrfCookieMixin, APIView):
-    """FR-02 login, and the lockout FR-02 enforces (D-25, D-26).
+    """FR-02 login, and the lockout FR-02 enforces (D-25, D-26). A sign-in with
+    ``"remember": true`` gets a session of REMEMBERED_SESSION_DAYS without use instead of
+    FR-04's 60 minutes (D-137).
 
     **The order is what makes the lock hold under concurrency (D-130, security finding
     H1).** ``authenticate()`` runs first, outside any transaction, so the account row is
@@ -585,7 +672,7 @@ class LoginView(SendsCsrfCookieMixin, APIView):
     locked account under any circumstance, regardless of the password submitted."
     """
 
-    permission_classes = [AllowAny]  # one of the two opt-outs (D-21)
+    permission_classes = [AllowAny]  # an opt-out (D-21); config/settings.py lists all five
     # Five requests lock any account, so without this anyone could hold every
     # account in the organisation locked indefinitely (D-26).
     throttle_classes = [ScopedRateThrottle]
@@ -599,6 +686,7 @@ class LoginView(SendsCsrfCookieMixin, APIView):
         serializer.is_valid(raise_exception=True)
         email = serializer.validated_data["email"]
         password = serializer.validated_data["password"]
+        remember = serializer.validated_data["remember"]  # "Remember me" (D-137)
         # The password is verified on every path, a locked account's included, because
         # its result only selects the response and can never grant access (FR-03
         # Validation). Django's ModelBackend runs the hasher even when the address is
@@ -691,6 +779,19 @@ class LoginView(SendsCsrfCookieMixin, APIView):
             # (D-130). ``user`` rather than ``account``, because it carries the backend
             # authenticate() recorded; the two are the same row.
             django_login(request, user)
+            # "Remember me" (D-137), set on every sign-in, ticked or not.
+            # - **Ticked:** whole seconds, an int, never a timedelta. Django keeps an int as an
+            #   inactivity age, which SESSION_SAVE_EVERY_REQUEST restarts on every request, so the
+            #   seven days slide with use as FR-04's 60 minutes do. A timedelta or a datetime is
+            #   kept as a fixed end, seven days after this sign-in however much the session is used.
+            # - **Unticked or absent:** set_expiry(None), explicitly, which drops any custom expiry
+            #   and leaves SESSION_COOKIE_AGE, FR-04's 60 minutes. django_login() neither flushes
+            #   nor cycles the session when the same user signs in again on it, so without this an
+            #   unticked sign-in after a remembered one would keep the seven days.
+            if remember:
+                request.session.set_expiry(REMEMBERED_SESSION_DAYS * 24 * 60 * 60)
+            else:
+                request.session.set_expiry(None)
             if account.failed_attempts or account.locked_until:
                 # Both, not just the counter. A success that left locked_until standing
                 # would refuse the user's next login for the rest of the window, which is
@@ -748,6 +849,304 @@ class LogoutView(APIView):
 class MeView(SendsCsrfCookieMixin, APIView):
     def get(self, request):
         return Response(UserSerializer(request.user).data)
+
+
+# --- A signed-in user changes their password (D-137) ------------------------------------
+
+
+class PasswordChangeView(APIView):
+    """``POST /api/auth/change-password`` (D-137): a signed-in user changes their own password.
+
+    **Who:** any session, both roles, under the global ``IsAuthenticated``. No role permission is
+    checked, because a password is its holder's own. No session is a 401. CSRF is checked as on
+    every other unsafe request from a session (``apps/api/authentication.py``), before the throttle
+    and before the body is read.
+
+    **Throttled per user** in ``password_change`` (``PASSWORD_CHANGE_THROTTLE_RATE``), before the
+    body is read, so a wrong current password counts. That rate is the only bound on guessing here:
+    the check is ``check_password()``, never login's path, so a wrong guess touches neither
+    ``failed_attempts`` nor ``locked_until``.
+
+    **The body** is ``PasswordChangeSerializer``'s. Every refusal is a 400 with field errors, a wrong
+    current password included, never a 401: the front end treats every 401 as an expired session
+    and signs the user out (D-137).
+
+    **On success:**
+
+    - ``set_password()`` hashes the new password with bcrypt (FR-01). Only that column is saved.
+    - ``update_session_auth_hash()`` keeps this session, under a new key, with its data. So it keeps
+      a remembered expiry if it has one (D-137's "Remember me").
+    - Every other session of the user ends, because the hash it stores no longer matches the new
+      password's. Django flushes each one on its next request, which is a 401. Other users'
+      sessions are not touched.
+    - FR-03's lock and count stay as they are, as a completed reset leaves them (D-137).
+
+    **The password must still be the one verified when it is changed** (the final review of 17
+    November 2026, CHG-1). The serializer verifies the current password against the row read when
+    the request was authenticated. Before the save, the row is read again and locked, FOR NO KEY
+    UPDATE and of the users row alone, as a reset's confirm locks it. Unless its hash is still the
+    one verified, the change is refused with the 400 a wrong current password gets, since the
+    password typed is no longer the account's, and nothing is changed. Until then a reset completed
+    in that window was undone by the change's save, and the session that made the change was kept on
+    a password the reset had replaced. Two changes racing from two sessions of one account take turns
+    on the lock: the first is made, and the second, whose current password is no longer the current
+    one, gets the 400. One session sending the change twice gets other answers for the second
+    request, because the first gives that session a new key and deletes the old one: Django's 400
+    "Bad request." if it was read before the first committed, the 401 for no session if after
+    (docs/api-contract.md; the final requirements audit of 17 November 2026, CHG-3).
+    The new hash is made before the lock is taken, so the lock is held for a few queries, never for a
+    hash, as a reset's is.
+    """
+
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "password_change"
+
+    def post(self, request):
+        user = request.user
+        serializer = PasswordChangeSerializer(data=request.data, context={"user": user})
+        serializer.is_valid(raise_exception=True)  # 400 in DRF's shape
+        # The hash the current password was just verified against, before set_password replaces it.
+        verified_hash = user.password
+        user.set_password(serializer.validated_data["new_password"])
+        with transaction.atomic():
+            current = (
+                User.objects.select_for_update(no_key=True, of=("self",)).filter(pk=user.pk).first()
+            )
+            if current is None or current.password != verified_hash:
+                # A reset or another change committed since the check, or the account is gone
+                # (CHG-1). Raised inside the transaction, so nothing is written, and answered as the
+                # serializer's own 400.
+                raise ValidationError({"current_password": [CURRENT_PASSWORD_INCORRECT_MESSAGE]})
+            # The password column alone. This row was read when the request was authenticated, so
+            # a full save would write back what it held then, undoing a role change an
+            # Administrator made since, or a lock FR-02 set since.
+            user.save(update_fields=["password"])
+            # Cycles this session's key, keeping its data, its expiry among them, and stores the
+            # new password's hash in it, in the transaction that changes the password.
+            update_session_auth_hash(request, user)
+        return Response({"detail": PASSWORD_CHANGED_MESSAGE}, status=status.HTTP_200_OK)
+
+
+# --- The self-service password reset (D-137) ---------------------------------------------------
+
+
+class PasswordResetRequestView(APIView):
+    """``POST /api/auth/password-reset`` (D-137): ask for a link to reset a forgotten password.
+
+    **Anonymous,** as login and registration are, with their CSRF handling: none for an anonymous
+    request, and DRF's check from ``X-CSRFToken`` for one from a browser holding a session. Throttled
+    in ``auth``, per client address, on the budget login and registration share.
+
+    **A malformed or missing address is a 400,** decided from the text alone
+    (``PasswordResetRequestSerializer``). **Every well-formed address gets the same 200 and the same
+    body** whether or not an account uses it (D-25). ``request_reset_email`` hands the address to a
+    background thread and returns, so this request does the same work either way: only the thread
+    looks the address up, and it alone sends the email, to an account not retired and not in its
+    cooldown. Nothing about the email, sent, skipped or failed, reaches this response.
+    """
+
+    permission_classes = [AllowAny]  # an opt-out as login and registration are (D-21, D-137)
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "auth"
+
+    def post(self, request):
+        serializer = PasswordResetRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)  # 400 in DRF's shape
+        request_reset_email(serializer.validated_data["email"])
+        return Response({"detail": PASSWORD_RESET_REQUESTED_MESSAGE}, status=status.HTTP_200_OK)
+
+
+class PasswordResetConfirmView(APIView):
+    """``POST /api/auth/password-reset/confirm`` (D-137): set a new password from an emailed link.
+
+    **Anonymous,** with the same CSRF handling and the same ``auth`` throttle as the request route.
+
+    **The order of the answers:**
+
+    1. A field missing, blank or null: a 400 with DRF's field errors.
+    2. A link that does not work, whatever the reason: ``{"detail": PASSWORD_RESET_LINK_REFUSED_MESSAGE}``,
+       the one 400 for a bad uid, a wrong, expired or used token and an unknown account.
+    3. A new password registration would refuse for that account (FR-01): a 400 on ``new_password``.
+       The link still works afterwards.
+    4. The new password is set: a 200 with a short ``detail``.
+
+    A reset signs nobody in. Every session of the account ends, remembered ones included, and FR-03's
+    lock and count are left as they were (``apps.accounts.password_reset.reset_password``).
+    """
+
+    permission_classes = [AllowAny]  # an opt-out as login and registration are (D-21, D-137)
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "auth"
+
+    def post(self, request):
+        serializer = PasswordResetConfirmSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)  # 400 in DRF's shape
+        data = serializer.validated_data
+        try:
+            reset_password(data["uid"], data["token"], data["new_password"])
+        except ResetLinkRefused:
+            return Response(
+                {"detail": PASSWORD_RESET_LINK_REFUSED_MESSAGE}, status=status.HTTP_400_BAD_REQUEST
+            )
+        except UnacceptablePassword as refusal:
+            return Response({"new_password": refusal.messages}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"detail": PASSWORD_RESET_COMPLETE_MESSAGE}, status=status.HTTP_200_OK)
+
+
+# --- Profile pictures (D-137) --------------------------------------------------------------
+
+
+class OwnPictureView(ThrottlePostOnlyMixin, APIView):
+    """``POST`` and ``DELETE /api/users/me/picture`` (D-137): a signed-in user sets or removes their
+    own profile picture, which every signed-in user then sees.
+
+    **Who:** any session, both roles, under the global ``IsAuthenticated``, with no permission code:
+    a picture is its holder's own, as a password is. No session is a 401. CSRF is checked on both
+    methods, from the ``X-CSRFToken`` header alone, before anything else reads the body
+    (``apps/api/authentication.py``, D-124).
+
+    **POST**, multipart with one file part, ``picture``. The refusals, in order:
+
+    1. 429 past ``PICTURE_THROTTLE_RATE``, scope ``picture``, per user (``ThrottlePostOnlyMixin``:
+       DELETE is not throttled). Checked in ``initial()``, before the body is read, so a refused
+       upload counts too.
+    2. 413 for a body declaring more than MAX_PICTURE_BYTES plus PICTURE_UPLOAD_ALLOWANCE_BYTES,
+       decided from ``CONTENT_LENGTH`` alone, so the body is never parsed (D-124), as the document
+       upload decides it.
+    3. 415 with DRF's own body for a body that is not multipart, when ``request.data`` is first read
+       (the final requirements audit of 17 November 2026, DOC-4).
+    4. 400 ``{"picture": [...]}`` when no file part named ``picture`` came.
+    5. 413 for a file over MAX_PICTURE_BYTES, against the bytes that arrived.
+    6. 429 ``picture_busy``, with Retry-After, when MAXIMUM_PICTURE_DECODES_IN_FLIGHT pictures are
+       being decoded already, anyone's (the review of 17 November 2026, PIC-1). Pillow has read
+       nothing of the picture.
+    7. 413 for a WebP whose header declares more than MAX_PICTURE_PIXELS, read from its first bytes
+       wherever Pillow reads a size, before Pillow opens it, since opening a WebP allocates its
+       canvas (PIC-1, and the final review's PIC-1R for a lossless WebP of 25 to 29 bytes).
+    8. 415, the same message as 9, for a JPEG of more than MAX_PICTURE_JPEG_SCANS scans, counted
+       from its bytes before Pillow opens it, since libjpeg decodes every scan however small (the
+       final review of 17 November 2026, JPG-1).
+    9. 415 when Pillow cannot open the content as a PNG, JPEG or WebP: a wrong format, under any
+       name or declared type (``apps/accounts/pictures.py``).
+    10. 413 for a header declaring more than MAX_PICTURE_PIXELS, before a pixel is decoded.
+    11. 415, the same message as 9, when the picture cannot be decoded: corrupt or truncated.
+
+    Then the picture is re-encoded, stored under a new random name, and ``picture_updated_at`` set,
+    in one transaction that locks the user's row, and the previous file is deleted once that
+    commits (``replace_picture``). The 200 is the user object as it now stands.
+
+    **DELETE** reads no body. It clears both fields and deletes the stored file once that commits
+    (``remove_picture``). It is idempotent: a user with no picture gets the same 200. The 200 is the
+    user object, its ``picture`` null.
+    """
+
+    # Multipart only, as the document upload is. A session is required, and CSRF with it, so a
+    # cross-site multipart POST is refused for want of the token, as on DocumentsView.
+    parser_classes = [MultiPartParser]
+    throttle_classes = [ScopedRateThrottle]  # POST only, through ThrottlePostOnlyMixin
+    throttle_scope = "picture"
+
+    def post(self, request):
+        # The declared length, before request.data is touched: a body refused here is never parsed.
+        if declared_body_length(request) > MAX_PICTURE_BYTES + PICTURE_UPLOAD_ALLOWANCE_BYTES:
+            return Response(
+                {"detail": PICTURE_TOO_LARGE_MESSAGE},
+                status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            )
+        uploaded = request.data.get("picture")
+        if not hasattr(uploaded, "read"):
+            return Response(
+                {"picture": [NO_PICTURE_SUBMITTED_MESSAGE]}, status=status.HTTP_400_BAD_REQUEST
+            )
+        # Again against what arrived, the file alone: the allowance above was for the multipart
+        # framing, not for a larger picture.
+        if uploaded.size > MAX_PICTURE_BYTES:
+            return Response(
+                {"detail": PICTURE_TOO_LARGE_MESSAGE},
+                status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            )
+        try:
+            png = reencode_picture(uploaded)
+        except PicturesBusy:
+            return Response(
+                {"detail": PICTURE_BUSY_MESSAGE, "code": PICTURE_BUSY_CODE},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+                headers={"Retry-After": str(PICTURE_BUSY_RETRY_SECONDS)},
+            )
+        except PictureTooLarge:
+            return Response(
+                {"detail": PICTURE_TOO_MANY_PIXELS_MESSAGE},
+                status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            )
+        except UnreadablePicture:
+            return Response(
+                {"detail": UNSUPPORTED_PICTURE_MESSAGE},
+                status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            )
+        # The re-encoding is done before the row is locked, so the lock is held for one small
+        # write and one UPDATE, never for a decode.
+        account = replace_picture(request.user, png)
+        return Response(UserSerializer(account).data, status=status.HTTP_200_OK)
+
+    def delete(self, request):
+        account = remove_picture(request.user)
+        return Response(UserSerializer(account).data, status=status.HTTP_200_OK)
+
+
+class UserPictureView(APIView):
+    """``GET /api/users/{id}/picture`` (D-137): a user's profile picture, for any signed-in session.
+
+    **Who:** any session, both roles. D-137 has every signed-in user see every picture, wherever
+    users are listed, and the directory already lists every user to every session (D-34), so
+    nothing here is scoped. No session is a 401, from the global ``IsAuthenticated``.
+
+    **One 404 for every absence.** An unknown id and a user with no picture are the same query,
+    ``get_object_or_404`` over users who have one, with the same body. A stored file gone from
+    disk, or named by a path outside MEDIA_ROOT, is that body too, and is logged (D-75's rule for
+    the download).
+
+    **The PNG is sent as bytes, never a ``FileResponse``.** The file is read whole and closed before
+    the response is built: it is the server's own PNG of at most PICTURE_MAX_DIMENSION a side. A
+    ``FileResponse`` would hold the file open while the response is sent, and on Windows an open
+    handle makes the after-commit delete of a replaced picture fail.
+
+    **Headers.** ``Content-Type: image/png``, ``X-Content-Type-Options: nosniff`` set here as well as
+    by ``SecurityMiddleware``, so the type holds even where that setting is turned off, and
+    ``Content-Disposition: inline``. The cache headers are the API's own, never-cache, from
+    ``NeverCacheApiMiddleware`` (D-76); the user object's ``?v=`` is what changes the address when
+    the picture changes.
+
+    **The request's ``Accept`` header is not consulted** (``IgnoreClientContentNegotiation``), as on
+    the download: a client asking for ``image/png`` would otherwise get DRF's 406, since the API's
+    only renderer is JSON. The 401 and the 404 are still JSON.
+
+    **Nothing serves MEDIA_ROOT.** This route is the only way a picture leaves, and only to a
+    signed-in session.
+    """
+
+    content_negotiation_class = IgnoreClientContentNegotiation
+
+    def get(self, request, pk):
+        account = get_object_or_404(User.objects.exclude(picture="").only("pk", "picture"), pk=pk)
+        stored_name = account.picture.name
+        try:
+            with account.picture.open("rb") as handle:
+                data = handle.read()
+        except (OSError, SuspiciousFileOperation):
+            logger.error(
+                "The profile picture of user %s is missing, unreadable or outside the media folder "
+                "(stored name %r).",
+                account.pk,
+                stored_name,
+                exc_info=True,
+            )
+            raise Http404(USER_NOT_FOUND_MESSAGE)
+        response = HttpResponse(data, content_type="image/png")
+        response["Content-Disposition"] = content_disposition_header(
+            as_attachment=False, filename=PICTURE_FILENAME
+        )
+        response["X-Content-Type-Options"] = "nosniff"
+        return response
 
 
 # --- FR-05 role management ---------------------------------------------------------------
@@ -2906,6 +3305,88 @@ class DashboardView(APIView):
                 "top": KnowledgeGapSerializer(open_gaps[:DASHBOARD_GAP_ITEMS], many=True).data,
             }
         return Response(payload)
+
+
+# --- FR-20 knowledge map (docs/decisions.md D-132) ------------------------------------------
+
+# FR-20's permission (D-132): a permission_classes entry, so the 403 comes before anything else
+# on the request, the arrangement FR-19's and the tag routes use. Nothing on the route is a
+# single scoped object, so there is no 404 for the 403 to precede and nothing for it to disclose.
+# Both seeded roles hold the code (accounts 0011), so it refuses a role only once it is revoked.
+CanViewKnowledgeMap = HasRolePermission.for_code(VIEW_KNOWLEDGE_MAP_PERMISSION)
+
+
+class KnowledgeMapView(APIView):
+    """``GET /api/knowledge-map`` — FR-20: the nodes and edges the caller may see, capped, with
+    a truncation indicator. docs/api-contract.md (FR-20) is its shape.
+
+    ``IsAuthenticated`` and ``view_knowledge_map`` (D-132): 401 without a session, 403 for a
+    role that lacks the code (invariant 4). Throttled in the ``knowledge_map`` scope since 17
+    November 2026 (D-138): one budget for each user across the map's two views. Until then it
+    was not throttled.
+
+    **The request.** No parameters is the overview. ``focus_type`` and ``focus_id`` together are
+    a selection: the walk starts from that node. ``KnowledgeMapQuerySerializer`` checks their
+    shape and nothing else (D-65); a malformed query is a 400 keyed on the parameter.
+
+    **The role is re-read on this request** by ``permission_scope``, never taken from the
+    session, so a role changed since sign-in is the role this map is built for. Everything
+    after that is ``apps/api/knowledge_map.py``: it assembles the graph from that role's scoped
+    documents and meetings, and only then walks and caps it (invariant 1). Meetings are scoped
+    by role, and attendance is read only for a meeting already in scope (invariant 3).
+
+    **200 for every well-formed request within the rate limit,** the empty graph included, and
+    429 past it. A focus that is not in
+    the caller's own graph, whether it names nothing or something the caller may not read, gets
+    the body an empty map gets (UC-11 E1: "an empty map or table rather than an error").
+
+    **Read only.** The route's own code runs SELECT statements and nothing else. The session
+    row is still saved on every request by FR-04's sliding expiry.
+    """
+
+    permission_classes = [IsAuthenticated, CanViewKnowledgeMap]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "knowledge_map"
+
+    def get(self, request):
+        query = KnowledgeMapQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)  # 400 in DRF's shape (D-65, a convention)
+        role_name = permission_scope(request.user)
+        return Response(knowledge_map(role_name=role_name, focus=query.focus))
+
+
+class EvidenceMapView(APIView):
+    """``GET /api/knowledge-map/evidence`` — the knowledge map's second view (D-138): claims and
+    the passages they cite, capped, with a truncation indicator. docs/api-contract.md is its
+    shape.
+
+    Behind the first view's two classes: 401 without a session, 403 for a role that lacks
+    ``view_knowledge_map`` (invariant 4). In the first view's throttle scope, ``knowledge_map``:
+    this view reads every answer the caller may see on each request (the security review, S3).
+
+    **The request** is the first view's, for two other types: no parameters is the overview, and
+    ``focus_type`` with ``focus_id`` is a selection. ``EvidenceMapQuerySerializer`` checks their
+    shape and nothing else (D-65).
+
+    **The role is re-read on this request** by ``permission_scope``. Everything after that is
+    ``apps/api/evidence_map.py``: it reads the citation rows that role may see, and only then
+    walks and caps them (invariant 1). A claim is shown only where the role reads the cited
+    passage, its source, and every passage the answer was generated from.
+
+    **200 for every well-formed request within the rate limit,** the empty graph included, 429
+    past it, and one empty body for
+    every focus that is not in the caller's own graph. **Read only**, as the first view is.
+    """
+
+    permission_classes = [IsAuthenticated, CanViewKnowledgeMap]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "knowledge_map"
+
+    def get(self, request):
+        query = EvidenceMapQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)  # 400 in DRF's shape (D-65, a convention)
+        role_name = permission_scope(request.user)
+        return Response(evidence_map(role_name=role_name, focus=query.focus))
 
 
 # --- FR-19 knowledge-gap log (docs/decisions.md D-107 to D-109) -----------------------------

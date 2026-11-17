@@ -20,7 +20,8 @@ User = get_user_model()
 pytestmark = pytest.mark.django_db
 
 URL = reverse("auth-register")
-USER_OBJECT_KEYS = {"id", "name", "email", "role", "created_at"}
+# "picture" since D-137: the profile picture's address, or null.
+USER_OBJECT_KEYS = {"id", "name", "email", "role", "created_at", "picture"}
 SECRET_COLUMNS = {"password", "password_hash", "failed_attempts", "locked_until", "last_login"}
 
 VALID = {"name": "Ada Lovelace", "email": "Ada@Example.com", "password": PASSWORD}

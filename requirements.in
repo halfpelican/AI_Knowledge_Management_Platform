@@ -26,3 +26,6 @@ waitress==3.0.2
 whitenoise==6.12.0
 pytest==9.1.1
 pytest-django==4.14.0
+# Profile pictures (D-137): every upload is opened, size-checked and re-encoded, which
+# strips its metadata (a photo's GPS location among it) before anyone else sees it.
+pillow==13.0.0
