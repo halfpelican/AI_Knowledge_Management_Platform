@@ -25,9 +25,12 @@ only the five summary columns. The type, the department, the outcomes, the tags,
 
 **Every document, whatever its visibility.** An operator's command, run on the server with the
 database's own credentials: it reads ``Document`` rows directly and never through
-``scoped_documents``, as ``classify_documents`` and ``reindex`` do. It exposes nothing. What it
-writes reaches a reader only through the scoped routes, beside the document it belongs to (CLAUDE.md
+``scoped_documents``, as ``classify_documents`` and ``reindex`` do. What it writes to the database
+reaches a reader only through the scoped routes, beside the document it belongs to (CLAUDE.md
 invariant 1), and each document's prompt is built from that document's own scheme (``tag_scheme``).
+**Its ``--out`` record is another matter:** it holds every document's title, summary and key points,
+whatever the document's visibility. It is an operator's file, to be kept with the server's logs and
+never inside a checkout (the closing security review of D-139, S2).
 
 **One document at a time.** A provider outage (``ProviderUnavailable``, a refusal included) or a
 document the apply layer refuses (``ClassificationError``: no extracted text, or a classification

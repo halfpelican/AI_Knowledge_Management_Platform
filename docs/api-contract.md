@@ -1421,7 +1421,10 @@ and `classified_at` stay exactly as they are, so a person's corrections stand. R
   summary, key points, `summary_truncated`, `summary_model`, `summarised_at` and the unchanged
   `classified_at`, or the error, and the skipped documents with the reason. **A record is never
   overwritten:** an existing path is refused before anything is summarised.
-- It reads every document, whatever its visibility: an operator's command, which exposes nothing.
+- It reads every document, whatever its visibility: an operator's command. What it writes to the
+  database reaches a reader only through the scoped routes. Its `--out` record holds every
+  document's title, summary and key points, an Administrator-only document's included, so it is
+  kept with the server's logs and never inside a checkout.
   It refuses the database `kmp`.
 - **Cost.** One `classify_document` operation per document: one request, or for a document longer
   than `CLASSIFICATION_INPUT_TOKENS` one per section, up to `MAXIMUM_SUMMARY_SECTIONS`, and a final

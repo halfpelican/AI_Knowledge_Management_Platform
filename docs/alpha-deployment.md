@@ -181,8 +181,14 @@ adds the summary columns to every document's classification, empty.
   until the backfill gives it one. In the deployment window, after `migrate`:
 
   ```powershell
-  & $py manage.py summarise_documents --out <a new record path>.json
+  & $py manage.py summarise_documents --out C:\kmp-demo\2026-11-13\logs\summarise-documents-<date>.json
   ```
+
+- **Where the record goes, and why:** the record holds each document's title, summary and key
+  points, whatever its visibility, an Administrator-only document's included. Write it under the
+  deployment folder, with the server's logs, never to a path inside a checkout: the deployment
+  window's working directory is the alpha checkout, so a relative path would leave those summaries
+  as an untracked file in it.
 
 - **What it changes:** the summary and key points of each classified document that has none, and
   nothing else. Every type, department, tag, proposal and confirmation stays as it is.

@@ -287,11 +287,19 @@ describe('FR-10: the type and department are shown with their provenance in word
   })
 })
 
-describe('D-119 finding 6: the notice that only the opening of a long document was read (D-104)', () => {
+describe('D-119 finding 6: the notice that a long document was classified from its opening (D-104, D-139)', () => {
   it('says so when the classification has input_truncated true', async () => {
     await renderDetail(detailOf({ classification: classificationOf({ input_truncated: true }) }))
 
-    expect(within(section()).getByText(TEXT.classificationTruncated)).toBeTruthy()
+    // The words are written out, not read from the constant: since D-139 the final request
+    // also carries summaries of the following sections, so "Only the opening ... was read"
+    // is untrue of a row classified since, and this sentence is true of both kinds of row
+    // (the requirements audit of 21 November 2026, R6).
+    expect(
+      within(section()).getByText(
+        'This document is long. It was classified from its opening, with at most a summary of the rest.',
+      ),
+    ).toBeTruthy()
   })
 
   it('says nothing about it when input_truncated is false', async () => {

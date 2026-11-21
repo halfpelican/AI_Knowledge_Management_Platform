@@ -1141,9 +1141,13 @@ export const TEXT = {
   tagAlreadyOffered: 'A Topic with this name is already offered for this document. Choose it from the tag options.',
   // Said after it only when the tag the 409 named was found and selected.
   tagAlreadyOfferedSelected: 'It is now selected under “Choose an existing tag”, so pressing Add tag applies it.',
-  // `input_truncated`: only the opening of a long document was read (D-104). Said
-  // rather than hidden, which is why the record keeps the flag.
-  classificationTruncated: 'Only the opening of this document was read to classify it.',
+  // `input_truncated`: the document is longer than the classifier reads in full. Said
+  // rather than hidden, which is why the record keeps the flag. Worded to be true of
+  // both kinds of row: one classified before D-139 read only the opening (D-104); one
+  // classified since also saw summaries of the sections that follow, because the final
+  // request carries them (D-139; the requirements audit of 21 November 2026, R6). It
+  // read "Only the opening of this document was read to classify it." until then.
+  classificationTruncated: 'This document is long. It was classified from its opening, with at most a summary of the rest.',
   // FR-10's document summary and key points (D-139), in a search result and on
   // the document page (src/components/DocumentSummary.jsx). FR-10 Front-End: "Each
   // document displays a short summary and a list of key points, shown beneath the
