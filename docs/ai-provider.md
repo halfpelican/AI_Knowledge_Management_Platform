@@ -88,10 +88,10 @@ class DocumentClassification:
     department: Assignment        # as suggested; whether it is in the scheme is apps/documents' call (D-105)
     tags: tuple[TagSuggestion, ...]
     model: str                    # the chat model that answered, for the DocumentAnalysis record
-    input_truncated: bool         # the classifier read only the opening, CLASSIFICATION_INPUT_TOKENS
+    input_truncated: bool         # the classifying request carried the opening, not the whole text (5b, Truncation)
     summary: str = ""             # D-139 — from a provider never empty, at most MAXIMUM_SUMMARY_CHARACTERS
     key_points: tuple[str, ...] = ()  # D-139 — from a provider 1 to MAXIMUM_KEY_POINTS strings
-    summary_truncated: bool = False   # D-139 — more than MAXIMUM_SUMMARY_SECTIONS sections: only the first are summarised
+    summary_truncated: bool = False   # D-139 — some text read by no request: past MAXIMUM_SUMMARY_SECTIONS, or cut from a section
 
 @dataclass(frozen=True)
 class Transcription:              # D-123 — one recording segment's text, a draft
@@ -581,7 +581,8 @@ a person's confirmation, so a steered suggestion can be applied, though only as 
 already holds. A value below its threshold, and a new Topic at any confidence, wait for a person.
 Since D-139 the text that can try to steer the type, the department and the tags is not the
 opening alone but the first `MAXIMUM_SUMMARY_SECTIONS` × `CLASSIFICATION_INPUT_TOKENS` tokens
-(12,000), because a section's summary enters the final request.
+(12,000), as much of each section as `CLASSIFICATION_INPUT_CHARACTERS` lets a request carry,
+because a section's summary enters the final request.
 
 **A summary has fewer bounds than a tag (D-139).** Nobody confirms a summary and nothing holds
 its content to a list, so a body that instructs the model can put its own words beneath the
@@ -596,14 +597,38 @@ only what the document's text says, with nothing from outside it". A test assert
 **That is the whole of the grounding.** No code compares a summary with the text and no second
 model call judges it: invariant 5's limitation, conceded the same way.
 
-**Truncation** (`classification_input`). The model reads the title and the first
-`CLASSIFICATION_INPUT_TOKENS` (1,500) whitespace tokens of the extracted text — D-31's token —
-joined by single spaces. Whether anything was cut is returned as `input_truncated` on the
-`DocumentClassification` and kept on the record rather than hidden. The cut is made by the
-provider and again at the prompt boundary (it is idempotent), so no caller can send more. Since
-D-139 the flag means the type, the department and the tags were chosen from the opening. The
-rest of the text, up to `MAXIMUM_SUMMARY_SECTIONS` sections in all, is summarised in sections;
-past them it is unread, and `summary_truncated` says so.
+**Truncation** (`classification_input`). The request that classifies a document carries its title
+and the first `CLASSIFICATION_INPUT_TOKENS` (1,500) whitespace tokens of the extracted text —
+D-31's token — joined by single spaces, and never more than `CLASSIFICATION_INPUT_CHARACTERS`
+(15,000) characters of them. Whether anything was cut, by either cap, is returned as
+`input_truncated` on the `DocumentClassification` and kept on the record rather than hidden. The
+cut is made by the provider and again at the prompt boundary (it is idempotent), so no caller can
+send more.
+
+**The cap in characters** (the closing security review of D-139, finding S1). A token has no
+length limit, and ingestion's checks count tokens, so a TXT under 50 MB of some 10,500 very long
+"words", eight sections, passed them, and every request D-139 sends it, each section's and the
+final one, carried as much as the provider's window held: nine such requests, each with three
+attempts, where before D-139 that document cost one. FR-16 closed the same gap with
+`SUMMARY_INPUT_CHARACTERS` (D-125's third note), and this cap follows its ratio, ten characters a
+token. One function applies it where the opening's and each section's tokens are joined, so
+section 1 stays the opening byte for byte: whole tokens are kept while the joined text fits, the
+first that would not fit is dropped with every token after it, and a first token longer than the
+cap on its own is cut to it. On the project's own forty documents (the three corpus directories,
+measured 22 November 2026) the longest opening is 9,725 characters and the longest section
+9,780, D04's, so the cap cuts none of them, and a text it does not cut is sent exactly what it was
+sent before the cap. It never changes how many requests a document makes, which is counted in
+tokens.
+
+**What the classifying request reads** (the requirements audit of 21 November 2026, R6).
+`input_truncated` says that request did not carry the whole text; it does not say the opening was
+all it read. For a text of more than one section the final request carries, beside the opening,
+the summary and key points of each section summarised, the opening's own among them, and tells
+the model to choose the type, the department and the tags from the title and the opening and to
+write the summary and key points from the section summaries. The rest of the text, up to
+`MAXIMUM_SUMMARY_SECTIONS` sections in all, is summarised in sections; past them it is unread,
+and `summary_truncated` says so. A text of one section whose opening the character cap cut has no
+section summaries: what the cap dropped is read by no request.
 
 **Long documents** (`summary_sections`, `classify_and_summarise`, D-139). FR-10: "Documents
 exceeding the model's context limit are summarised in sections and consolidated, rather than
@@ -613,8 +638,11 @@ limit as `CLASSIFICATION_INPUT_TOKENS`, which did not change.
 - **Within the cap: one request,** exactly as before D-139, whose reply now holds all five keys.
 - **Past the cap: one request per section, then one final request.** `summary_sections` cuts the
   text into sections of `CLASSIFICATION_INPUT_TOKENS` tokens with no overlap, at most
-  `MAXIMUM_SUMMARY_SECTIONS` (8). Each section goes out in order under
-  `SECTION_SUMMARY_SYSTEM_PROMPT`, with the title and "Section n of m", and returns that
+  `MAXIMUM_SUMMARY_SECTIONS` (8), each joined within `CLASSIFICATION_INPUT_CHARACTERS` by the
+  function that joins the opening. The tokens the character cap drops from a section are read by
+  no request: they do not spill into the next section, so section n always starts at token
+  (n − 1) × 1,500. Each section goes out in order under `SECTION_SUMMARY_SYSTEM_PROMPT`, with
+  the title and "Section n of m", and returns that
   section's summary and key points against `SECTION_SUMMARY_SCHEMA`: the same two keys under
   the same bounds, parsed by `parse_section_summary` with the same three repairs. A section is
   not classified. The final request is the classification prompt again; its user turn carries
@@ -622,7 +650,12 @@ limit as `CLASSIFICATION_INPUT_TOKENS`, which did not change.
   key points in order, and an instruction to choose the type, department and tags from the
   title and the opening and to write the summary and key points from the section summaries.
 - **So n sections are n + 1 requests,** each with its own `MAXIMUM_CLASSIFY_ATTEMPTS`: at most
-  (8 + 1) × 3 = 27 calls for one document, one after another.
+  (8 + 1) × 3 = 27 calls for one document, one after another, each carrying at most
+  `CLASSIFICATION_INPUT_CHARACTERS` of the document's text. The count and the cap together are
+  what bound one document; the count alone bounded nothing until the cap (the closing security
+  review of D-139, finding S1). The final request also carries the section summaries, each held
+  by the parser to `MAXIMUM_SUMMARY_CHARACTERS` and `MAXIMUM_KEY_POINTS` of
+  `MAXIMUM_KEY_POINT_CHARACTERS`.
 - **Past the ceiling the record says so.** A text of more than 8 sections (12,000 tokens) has
   only its first 8 summarised, and `summary_truncated` is True. A text of exactly 8 is
   summarised whole and is not flagged.
@@ -635,6 +668,12 @@ limit as `CLASSIFICATION_INPUT_TOKENS`, which did not change.
   `CONSOLIDATION_INSTRUCTION`: the section summaries cover only the first 8 sections, the rest
   of the document was not read, and the summary must never present that part as the whole. A
   text within the ceiling is sent exactly what it was before, byte for byte.
+- **A section the character cap cut is recorded as cut too,** within the ceiling or past it:
+  `summary_truncated` is True, and `input_truncated` too where the cut section is the opening.
+  Nothing else changes: the requests carry the cut text but are otherwise those of any text of as
+  many tokens, the same count and the same labels, so within the ceiling the final turn still
+  carries `SECTIONED_NOTICE` and `CONSOLIDATION_INSTRUCTION`, which say the section summaries
+  stand for the document's text.
 - **A failure anywhere returns nothing.** No later section is sent and no final request is
   made, and the sections that did succeed are not turned into a result.
 - **Both providers call `classify_and_summarise`,** passing only a function that makes one call
@@ -702,9 +741,11 @@ draw, as every other request of the four draws did. Not measured on either provi
   draws of Objective 05 are a check, not a re-derivation;
 - the schema conformance rate of the five-key reply and of a section's reply, beyond those draws
   and the timing below, and how often a reply is refused over its summary or a key point running
-  past its limit. It has happened once: in Objective 02's timing one final request of the seven a
-  sectioned document has made was refused for a summary of 652 characters, and its retry
-  conformed;
+  past its limit. It has happened once: of the ten final requests a sectioned document has made on
+  claude-haiku-5-5, nine with a committed attempt log (Objective 02's five timed uploads, and D04
+  on each of Objective 05's four draws; the timing's rehearsal upload has none), one, in Objective
+  02's timing, was refused for a summary of 652 characters, and its retry conformed. Until 22
+  November 2026 this said "of the seven", the count before Objective 05's last three draws;
 - a last section of fewer than `MINIMUM_CONTENT_LENGTH` (50) tokens, which a text 1 to 49 tokens
   past a multiple of `CLASSIFICATION_INPUT_TOKENS` sends, and which must still return 1 to 5 key
   points: no measured document has one (D04's last section is 857 tokens);

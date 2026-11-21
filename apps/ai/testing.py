@@ -177,15 +177,16 @@ class StubAIService:
         STUB_OUT_OF_SCHEME_DEPARTMENT (a value no scheme lists) when it has none; one tag per
         dimension that lists a value, that dimension's first, in Project, Process, Topic
         order; every confidence STUB_CONFIDENCE; ``model`` STUB_CHAT_MODEL; and
-        ``input_truncated`` from the real ``classification_input``, so a long text is
-        reported cut exactly as a provider would report it. The same scheme gives the same
-        reply in every process.
+        ``input_truncated`` from the real ``classification_input``, so a long text, or a text
+        whose opening CLASSIFICATION_INPUT_CHARACTERS cuts, is reported cut exactly as a
+        provider would report it. The same scheme gives the same reply in every process.
 
         And the summary (D-139): ``summary`` is ``stub_document_summary(title)``,
         ``key_points`` is STUB_KEY_POINTS, and ``summary_truncated`` comes from the real
-        ``summary_sections``, so a text past MAXIMUM_SUMMARY_SECTIONS sections is reported
-        as a provider would report it. The stub makes no section requests: it is one call
-        whatever the text's length, and ``classify_calls`` records one entry.
+        ``summary_sections``, so a text past MAXIMUM_SUMMARY_SECTIONS sections, or one with a
+        section CLASSIFICATION_INPUT_CHARACTERS cuts, is reported as a provider would report
+        it. The stub makes no section requests: it is one call whatever the text's length,
+        and ``classify_calls`` records one entry.
 
         **Overriding it.** Pass ``classification=`` to the constructor, or set the attribute
         on an instance (the autouse ``stub_ai_service`` fixture's, for example). A

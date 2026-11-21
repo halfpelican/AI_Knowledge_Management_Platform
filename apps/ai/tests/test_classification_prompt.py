@@ -47,6 +47,7 @@ from apps.ai.classification import (
     parse_classification,
 )
 from apps.core.constants import (
+    CLASSIFICATION_INPUT_CHARACTERS,
     CLASSIFICATION_INPUT_TOKENS,
     DOCUMENT_TYPES,
     MAXIMUM_KEY_POINT_CHARACTERS,
@@ -529,6 +530,62 @@ def test_the_cut_collapses_whitespace_and_is_idempotent():
 def test_an_empty_text_is_empty_and_not_cut():
     assert classification_input("") == ("", False)
     assert classification_input("   \n ") == ("", False)
+
+
+# --- The input cut in characters: CLASSIFICATION_INPUT_CHARACTERS --------------------------------
+#
+# A whitespace token has no length limit, so the cut in tokens alone did not bound what one request
+# carries (the closing security review of D-139, finding S1). The opening is held to
+# CLASSIFICATION_INPUT_CHARACTERS as well: whole tokens while the joined text fits, the first that
+# would not fit dropped with every token after it, and a first token longer than the cap on its own
+# cut to it, which is FR-16's rule for SUMMARY_INPUT_CHARACTERS (apps/meetings/summaries.py).
+
+CAP = CLASSIFICATION_INPUT_CHARACTERS
+# Two tokens and the one space between them that make exactly the cap: 7,499 + 1 + 7,500.
+HALF_A, HALF_B = "a" * (CAP // 2 - 1), "b" * (CAP // 2)
+
+
+def test_a_token_exactly_at_the_character_cap_is_kept_whole_and_not_cut():
+    token = "a" * CAP
+    assert classification_input(token) == (token, False)
+
+
+def test_a_token_one_character_over_the_cap_is_cut_at_the_cap_and_the_cut_is_reported():
+    """One token, so the cut in tokens takes nothing: the flag is the character cap's alone."""
+    assert classification_input("a" * (CAP + 1)) == ("a" * CAP, True)
+
+
+def test_a_first_token_over_the_cap_is_cut_and_nothing_after_it_is_added():
+    assert classification_input("a" * (CAP + 5) + " b c") == ("a" * CAP, True)
+
+
+def test_tokens_that_join_to_exactly_the_cap_are_kept_whole_and_not_cut():
+    text = f"{HALF_A} {HALF_B}"
+    assert len(text) == CAP
+    assert classification_input(text) == (text, False)
+
+
+def test_a_token_after_an_opening_of_exactly_the_cap_is_dropped_and_the_opening_kept_whole():
+    """The joined text reaches the cap exactly at the second token: that token is kept, and the
+    third, which would take it over, is not."""
+    assert classification_input(f"{HALF_A} {HALF_B} c") == (f"{HALF_A} {HALF_B}", True)
+
+
+def test_the_token_that_would_cross_the_cap_is_dropped_whole_with_every_token_after_it():
+    """One character more than the cap at the second token: it is left out, never cut into, so the
+    opening ends on a whole token. The third token is left out too, though it alone would fit."""
+    over = HALF_B + "b"
+    assert len(f"{HALF_A} {over}") == CAP + 1
+    assert classification_input(f"{HALF_A} {over} c") == (HALF_A, True)
+
+
+def test_an_opening_the_character_cap_cut_is_not_cut_again():
+    """Idempotent, as the cut in tokens is: the prompt builders cut their text again at the boundary,
+    and must send what the caller cut, unchanged."""
+    for text in ("a" * (CAP + 1), f"{HALF_A} {HALF_B}b c", " ".join(["x" * 39] * 3001)):
+        opening, truncated = classification_input(text)
+        assert truncated is True and len(opening) <= CAP
+        assert classification_input(opening) == (opening, False)
 
 
 # --- The one revision made on the development documents (D-106, 9 November 2026) ----------

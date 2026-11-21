@@ -13,7 +13,8 @@ operation and nothing that is shared with generation is redefined here:
 - ``CLASSIFICATION_SYSTEM_PROMPT`` and the message builders: strict rules, one worked example,
   then the scheme, the title and the (cut) text in the user turn.
 - ``classification_input``: the first CLASSIFICATION_INPUT_TOKENS whitespace tokens of the
-  extracted text (D-31's token) and whether anything was cut.
+  extracted text (D-31's token), within CLASSIFICATION_INPUT_CHARACTERS, and whether anything
+  was cut.
 - ``run_classification_attempts``: the attempt loop, mirroring apps/ai/generation.py's policy
   exactly — MAXIMUM_CLASSIFY_ATTEMPTS in total, then ProviderUnavailable. A transport failure,
   a non-conforming reply and, since D-118, a 429 are each a failed attempt. Any other 4xx is
@@ -22,8 +23,9 @@ operation and nothing that is shared with generation is redefined here:
 **The summary, and a document too long for one request (D-139).** Since D-139 the reply also
 carries a ``summary`` and ``key_points``, and four more names here serve the long document:
 
-- ``summary_sections``: the text's sections of CLASSIFICATION_INPUT_TOKENS tokens, at most
-  MAXIMUM_SUMMARY_SECTIONS, and whether any text was left past them.
+- ``summary_sections``: the text's sections of CLASSIFICATION_INPUT_TOKENS tokens, each within
+  CLASSIFICATION_INPUT_CHARACTERS, at most MAXIMUM_SUMMARY_SECTIONS, and whether any text was
+  left unread: past them, or cut from a section by the character cap.
 - ``SECTION_SUMMARY_SCHEMA``, ``parse_section_summary``, ``SECTION_SUMMARY_SYSTEM_PROMPT`` and
   ``run_section_summary_attempts``: one section's request, which returns that section's summary
   and key points and nothing else, under the same parser tolerance and the same attempt policy.
@@ -81,8 +83,9 @@ the model's own words about untrusted text, so the final request of a long docum
 untrusted text twice removed, under the same residual. And that request chooses the type, the
 department and the tags as well as the summary, so since D-139 the text that can try to steer
 them is not the opening alone: it is the first MAXIMUM_SUMMARY_SECTIONS x
-CLASSIFICATION_INPUT_TOKENS tokens (12,000), because a section's summary enters the final
-request.
+CLASSIFICATION_INPUT_TOKENS tokens (12,000), as much of each section as
+CLASSIFICATION_INPUT_CHARACTERS lets a request carry, because a section's summary enters the
+final request.
 """
 
 from __future__ import annotations
@@ -111,6 +114,7 @@ from apps.ai.schema import (
     strip_code_fences,
 )
 from apps.core.constants import (
+    CLASSIFICATION_INPUT_CHARACTERS,
     CLASSIFICATION_INPUT_TOKENS,
     DOCUMENT_TYPES,
     MAXIMUM_CLASSIFY_ATTEMPTS,
@@ -152,11 +156,19 @@ MAXIMUM_TAG_SUGGESTIONS = 8
 # (D-115). apps/core/tests/test_constants.py holds this under 16,000 for D-133's bound.
 #
 # The timeout is generation's, and every request carries it, a section's and the final one
-# alike. A section request reads what classification always read: CLASSIFICATION_INPUT_TOKENS
-# of text. The final request of a long document reads the opening and at most
-# MAXIMUM_SUMMARY_SECTIONS section summaries with their key points, 8 x 1,600 characters or
-# about 2,300 words more: some 3,800 words, inside the 4,000 (MAXIMUM_CONTEXT_TOKENS) that
-# generation reads under the same 300 seconds. Not measured on the NPU either.
+# alike. What one request carries of the document is held by two caps: CLASSIFICATION_INPUT_TOKENS
+# words, and CLASSIFICATION_INPUT_CHARACTERS (15,000) characters, because a word has no length
+# limit and the cap in words alone bounded nothing (the closing security review of D-139, finding
+# S1). A section request carries one section, as a classification request always carried the
+# opening. The final request of a long document carries the opening and at most
+# MAXIMUM_SUMMARY_SECTIONS section summaries with their key points, 8 x 1,600 = 12,800 characters
+# or about 2,300 words more: some 3,800 words, inside the 4,000 (MAXIMUM_CONTEXT_TOKENS) that
+# generation reads under the same 300 seconds. That sum counts words, so it holds for text of
+# ordinary words: on the project's own documents an opening or a section is at most 9,780
+# characters (apps/core/constants.py records the measurement). A text of very long "words" fills
+# the 15,000 characters with far fewer than 1,500 of them, and how many of the model's tokens
+# 15,000 characters make depends on the characters: nothing here measures that. Not measured on
+# the NPU either.
 CLASSIFICATION_MAX_TOKENS = 1200
 CLASSIFICATION_TIMEOUT_SECONDS = 300
 
@@ -507,50 +519,106 @@ def _key_points(value) -> tuple[str, ...]:
 # --- The input -------------------------------------------------------------------------------
 
 
+def _joined_within_cap(tokens: Sequence[str]) -> tuple[str, bool]:
+    """``tokens`` joined by single spaces, within CLASSIFICATION_INPUT_CHARACTERS, and whether
+    the cap cut them.
+
+    The one place the character cap is applied (the closing security review of D-139, finding
+    S1). ``classification_input`` joins the opening's tokens here and ``summary_sections`` each
+    section's, so both are cut by one rule and section 1 stays byte for byte the opening.
+
+    Whole tokens are kept, in order, while the joined text stays within the cap; the first token
+    that would take it over is dropped, and so is every token after it. The one token ever cut is
+    a FIRST token longer than the cap on its own, kept as its first CLASSIFICATION_INPUT_CHARACTERS
+    characters, so a text of one enormous "word" is read in part rather than not at all. FR-16's
+    SUMMARY_INPUT_CHARACTERS cuts by the same rule, applied to whole passages rather than words
+    (apps/meetings/summaries.py).
+
+    Tokens within the cap are joined exactly as they were before it, ``" ".join(tokens)``, and the
+    flag is False: the project's own text never reaches the cap (apps/core/constants.py records
+    the measurement), so for it nothing changes. The joined length is counted before anything is
+    joined, so a section of long tokens is never built whole only to be measured.
+    """
+    if sum(map(len, tokens)) + max(len(tokens) - 1, 0) <= CLASSIFICATION_INPUT_CHARACTERS:
+        return " ".join(tokens), False
+    kept: list[str] = []
+    length = -1  # the length of " ".join(kept); the first token has no space before it
+    for token in tokens:
+        length += 1 + len(token)
+        if length > CLASSIFICATION_INPUT_CHARACTERS:
+            break
+        kept.append(token)
+    if not kept:  # the first token alone is longer than the cap
+        return tokens[0][:CLASSIFICATION_INPUT_CHARACTERS], True
+    return " ".join(kept), True
+
+
 def classification_input(text: str) -> tuple[str, bool]:
-    """The first CLASSIFICATION_INPUT_TOKENS whitespace tokens of ``text``, and whether any were cut.
+    """The first CLASSIFICATION_INPUT_TOKENS whitespace tokens of ``text``, within
+    CLASSIFICATION_INPUT_CHARACTERS, and whether anything was cut.
 
     D-31's token: a whitespace-delimited word, which is ``str.split()``; the tokens are joined
     back with single spaces, so line breaks and runs of whitespace do not survive into the
     prompt. The opening of a document is where its kind is stated, and the cut keeps the prompt
-    inside the 4B model's window (apps/core/constants.py explains the number). The flag is
-    recorded on the DocumentClassification as ``input_truncated``, so the record says the type,
-    the department and the tags were chosen from the opening rather than the whole. Since D-139
-    the rest of a text cut here is summarised in sections (``summary_sections``), up to
-    MAXIMUM_SUMMARY_SECTIONS sections in all; past them it is unread, and ``summary_truncated``
-    says so. Idempotent: cutting a cut text changes nothing.
+    inside the 4B model's window (apps/core/constants.py explains the number). A word has no
+    length limit, so the joined tokens are held to CLASSIFICATION_INPUT_CHARACTERS too, by
+    ``_joined_within_cap`` (the closing security review of D-139, finding S1): whole tokens while
+    they fit, and a first token longer than the cap on its own cut to it.
+
+    The flag is True when either cap cut something: the text has more than
+    CLASSIFICATION_INPUT_TOKENS tokens, or the character cap cut the opening. It is recorded on
+    the DocumentClassification as ``input_truncated``, so the record says the request that
+    classified the document did not carry its whole text. Since D-139 the opening is not all that
+    request reads: a text of more than one section is classified by a final request that carries
+    the opening and, beside it, the summary and key points of each of its sections
+    (``summary_sections``, the opening's own among them), up to MAXIMUM_SUMMARY_SECTIONS in all;
+    what no request reads, past them or cut from a section by the character cap,
+    ``summary_truncated`` reports. A text of ONE section whose opening the character cap cut has
+    no section summaries, so the tokens the cap dropped are read by no request. Idempotent:
+    cutting a cut text changes nothing.
     """
     tokens = text.split()
-    truncated = len(tokens) > CLASSIFICATION_INPUT_TOKENS
-    return " ".join(tokens[:CLASSIFICATION_INPUT_TOKENS]), truncated
+    opening, cut = _joined_within_cap(tokens[:CLASSIFICATION_INPUT_TOKENS])
+    return opening, cut or len(tokens) > CLASSIFICATION_INPUT_TOKENS
 
 
 def summary_sections(text: str) -> tuple[tuple[str, ...], bool]:
-    """``text``'s sections for summarising, and whether any text was left past them (D-139).
+    """``text``'s sections for summarising, and whether any text was left unread (D-139).
 
     A section is CLASSIFICATION_INPUT_TOKENS whitespace tokens (D-31's token), joined by single
-    spaces exactly as ``classification_input`` joins them; the last may hold fewer. Sections do
-    not overlap, and together they are the text's first MAXIMUM_SUMMARY_SECTIONS x
-    CLASSIFICATION_INPUT_TOKENS tokens in order, so the first section IS
-    ``classification_input(text)[0]``. At most MAXIMUM_SUMMARY_SECTIONS are returned.
+    spaces by ``_joined_within_cap``, the function ``classification_input`` joins the opening
+    with, so each section is within CLASSIFICATION_INPUT_CHARACTERS too; the last may hold fewer
+    tokens. Sections are cut by tokens and do not overlap: section n starts at token
+    (n - 1) x CLASSIFICATION_INPUT_TOKENS, whatever the character cap did to the one before it.
+    So the first section IS ``classification_input(text)[0]``, byte for byte, the number of
+    sections is a count of tokens alone, and at most MAXIMUM_SUMMARY_SECTIONS are returned.
 
-    The flag is True only when the text holds MORE tokens than those sections do: a text of
-    exactly the ceiling is not truncated. It is recorded as ``summary_truncated``, so a summary
-    of the first sections is never presented as a summary of the whole.
+    **The tokens the character cap drops from a section are not read** (the closing security
+    review of D-139, finding S1). They do not spill into the next section, which would move every
+    later section and could add one, and no request reads them.
 
-    An empty text has no sections. A text within the cap has one, and ``classify_and_summarise``
-    sends it no section request: it is the whole document, and the one request reads it.
+    The flag is True when text was left unread: the text holds MORE tokens than its first
+    MAXIMUM_SUMMARY_SECTIONS sections do, or the character cap cut ANY section returned. A text of
+    exactly the ceiling, no section of it cut, is not truncated. It is recorded as
+    ``summary_truncated``, so a summary of part of the text is never presented as a summary of
+    the whole.
+
+    An empty text has no sections. A text within CLASSIFICATION_INPUT_TOKENS has one, and
+    ``classify_and_summarise`` sends it no section request: the one request reads it, as far as
+    the character cap allows.
 
     The range's stop is the smaller of the text's length and the ceiling, and its step is the
     section size with no overlap to step back by, so it ends by construction.
     """
     tokens = text.split()
     ceiling = MAXIMUM_SUMMARY_SECTIONS * CLASSIFICATION_INPUT_TOKENS
-    sections = tuple(
-        " ".join(tokens[start : start + CLASSIFICATION_INPUT_TOKENS])
+    joined = [
+        _joined_within_cap(tokens[start : start + CLASSIFICATION_INPUT_TOKENS])
         for start in range(0, min(len(tokens), ceiling), CLASSIFICATION_INPUT_TOKENS)
-    )
-    return sections, len(tokens) > ceiling
+    ]
+    sections = tuple(section for section, _ in joined)
+    cut = any(section_cut for _, section_cut in joined)
+    return sections, cut or len(tokens) > ceiling
 
 
 # --- The prompt ------------------------------------------------------------------------------
@@ -829,8 +897,9 @@ def build_classification_user_prompt(
     The scheme lists come first, so the model has read the values before it reads the document;
     the title next, because it is the strongest single signal of a document's kind; then the
     text, cut by ``classification_input`` here as well as by the caller — the cut is idempotent,
-    and making it at the boundary means no caller can send more than CLASSIFICATION_INPUT_TOKENS
-    by mistake. The closing instruction is the one sentence after the document.
+    and making it at the boundary means no caller can send more than CLASSIFICATION_INPUT_TOKENS,
+    or more than CLASSIFICATION_INPUT_CHARACTERS, by mistake. The closing instruction is the one
+    sentence after the document.
 
     ``section_summaries`` (D-139) is given only for the FINAL request of a document longer than
     the cap, and is empty otherwise, which leaves the turn exactly as it was before D-139. When
@@ -884,9 +953,9 @@ def build_section_summary_user_prompt(title: str, section: str, number: int, of:
     The title is context only: a middle section seldom says what document it belongs to. The
     section is cut by ``classification_input`` here as well as by ``summary_sections``, for the
     reason ``build_classification_user_prompt`` cuts its text: the cut is idempotent, and no
-    caller can send more than CLASSIFICATION_INPUT_TOKENS by mistake. The title and the section
-    are untrusted and nothing in them is transformed, under the residual the module docstring
-    states.
+    caller can send more than CLASSIFICATION_INPUT_TOKENS, or more than
+    CLASSIFICATION_INPUT_CHARACTERS, by mistake. The title and the section are untrusted and
+    nothing in them is transformed, under the residual the module docstring states.
     """
     body, _ = classification_input(section)
     return _section_block(title, body, number, of) + f"\n\n{REPLY_INSTRUCTION}"
@@ -1133,20 +1202,34 @@ def classify_and_summarise(
       built from the sections that did succeed: a summary of some sections presented as the
       document's would be the fragment FR-10 forbids. The caller leaves the document
       unclassified and unsummarised, and its storage and indexing are untouched (invariant 8).
+    - **Every request carries at most CLASSIFICATION_INPUT_CHARACTERS of the document's text**
+      (the closing security review of D-139, finding S1): the opening and each section are cut
+      to it by ``classification_input`` and ``summary_sections``. The cap changes how much of a
+      request's text is read, never how many requests are made: that is decided by the count of
+      sections, which is a count of tokens. Text the cap does not cut is sent byte for byte as
+      before it. Within the ceiling, a text whose sections the cap cut gets the final turn any
+      other text within it gets, SECTIONED_NOTICE and CONSOLIDATION_INSTRUCTION included: only
+      ``summary_truncated`` records the cut.
 
-    ``input_truncated`` and ``summary_truncated`` on the result come from the same token count:
-    the first is True when the text has more than one section, the second when it has more than
-    MAXIMUM_SUMMARY_SECTIONS.
+    ``input_truncated`` is ``classification_input``'s flag: True when the text has more than one
+    section or the character cap cut the opening. ``summary_truncated`` is ``summary_sections``':
+    True when the text has more than MAXIMUM_SUMMARY_SECTIONS sections or the character cap cut
+    any section. Neither decides the number of requests. On the project's own text, which the cap
+    never cuts, ``input_truncated`` is exactly "more than one section"; on a text of one section
+    whose opening the cap cut it is True, and that text is still one request.
     """
     opening, input_truncated = classification_input(text)
     sections, summary_truncated = summary_sections(text)
-    # The count every label is numbered against: the sections sent, unless the text was cut past
-    # the ceiling, when it is the document's own count, ceil(tokens / section size).
-    of = len(sections)
-    if summary_truncated:
-        of = -(-len(text.split()) // CLASSIFICATION_INPUT_TOKENS)
+    # The count every label is numbered against: the document's own count of sections,
+    # ceil(tokens / section size). Within the ceiling that is the number of sections sent; past
+    # it, more ("Section 8 of 20"). Counted from the tokens, never from ``summary_truncated``,
+    # which the character cap can set within the ceiling.
+    of = -(-len(text.split()) // CLASSIFICATION_INPUT_TOKENS)
     section_summaries: list[SectionSummary] = []
-    if input_truncated:  # more than one section: summarise each, in order, before the final request
+    # More than one section: summarise each, in order, before the final request. The count of
+    # sections decides, not ``input_truncated``: the character cap sets that flag on a text of
+    # one section, which is one request, as it always was.
+    if len(sections) > 1:
         for number, section in enumerate(sections, start=1):
             section_prompt = build_section_summary_user_prompt(title, section, number, of)
             section_summaries.append(

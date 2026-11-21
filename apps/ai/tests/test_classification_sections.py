@@ -52,6 +52,7 @@ from apps.ai.classification import (
 )
 from apps.ai.prompting import SYSTEM_PROMPT
 from apps.core.constants import (
+    CLASSIFICATION_INPUT_CHARACTERS,
     CLASSIFICATION_INPUT_TOKENS,
     DOCUMENT_TYPES,
     MAXIMUM_CLASSIFY_ATTEMPTS,
@@ -63,6 +64,11 @@ from apps.core.constants import (
 
 SECTION = CLASSIFICATION_INPUT_TOKENS  # one section's size, in whitespace tokens
 CEILING = MAXIMUM_SUMMARY_SECTIONS * SECTION  # the most tokens that are summarised
+CAP = CLASSIFICATION_INPUT_CHARACTERS  # the most characters of the text one request carries
+# The longest opening or section of the project's own documents, D04's fourth section (measured on
+# 22 November 2026 over corpus/objective-02/documents, objective-05/dev-documents and demo; the
+# measurement is recorded beside CLASSIFICATION_INPUT_CHARACTERS in apps/core/constants.py).
+MEASURED_LONGEST_SECTION = 9_780
 
 SCHEME = TagScheme(
     doc_types=DOCUMENT_TYPES,
@@ -82,6 +88,23 @@ def words(count: int) -> list[str]:
 
 def text_of(count: int) -> str:
     return " ".join(words(count))
+
+
+def long_words(count: int, length: int) -> list[str]:
+    """``count`` distinct tokens of exactly ``length`` characters, each naming its position."""
+    tokens = [f"t{n}".ljust(length, "x") for n in range(count)]
+    assert all(len(token) == length for token in tokens)
+    return tokens
+
+
+def carried(call: tuple[str, str]) -> str:
+    """The document's own text one recorded request carried: a section's body, or the opening in
+    the final turn. The cut single-spaces both, so neither holds a line break."""
+    system, user = call
+    if system == SECTION_SUMMARY_SYSTEM_PROMPT:
+        pattern = r"Title: [^\n]*\nSection \d+ of \d+:\n([^\n]*)\n\n" + re.escape(REPLY_INSTRUCTION)
+        return re.fullmatch(pattern, user).group(1)
+    return user.split("\nText:\n", 1)[1].split("\n", 1)[0]
 
 
 def flat(text: str) -> str:
@@ -166,9 +189,13 @@ def test_a_text_many_times_the_ceiling_still_has_only_the_maximum_sections():
 
 
 @pytest.mark.parametrize("count", [0, 1, SECTION - 1, SECTION, SECTION + 1, 2 * SECTION, CEILING, CEILING + 1])
-def test_more_than_one_section_is_exactly_what_input_truncated_means(count):
-    """``classify_and_summarise`` branches on ``input_truncated`` and sends ``summary_sections``'
-    sections, so the two must agree at every size: cut means two sections or more."""
+def test_on_ordinary_text_more_than_one_section_is_exactly_what_input_truncated_means(count):
+    """On text the character cap does not cut, the two agree at every size: cut means two sections
+    or more. They are not the same fact, and ``classify_and_summarise`` branches on the count of
+    sections, not on the flag: the cap sets ``input_truncated`` on a text of one section too (the
+    closing security review of D-139, finding S1), which is still one request
+    (``test_a_text_of_a_few_enormous_tokens_is_still_one_request_carrying_at_most_the_cap``).
+    Until that review this test said the flow branched on the flag."""
     text = text_of(count)
     sections, _ = summary_sections(text)
     assert (len(sections) > 1) is classification_input(text)[1]
@@ -178,6 +205,66 @@ def test_the_section_ceiling_is_the_contracts():
     """D-139's value, marked tune. A change is a decision, so this fails until it is recorded."""
     assert MAXIMUM_SUMMARY_SECTIONS == 8
     assert CEILING == 12_000
+
+
+# --- summary_sections: the cap in characters ---------------------------------------------------
+#
+# A whitespace token has no length limit, so sections cut in tokens alone bounded nothing a request
+# carries (the closing security review of D-139, finding S1). Each section is joined within
+# CLASSIFICATION_INPUT_CHARACTERS by the function that joins the opening.
+
+
+def test_the_character_cap_is_the_contracts():
+    """Ten characters a token, FR-16's ratio for SUMMARY_INPUT_CHARACTERS, and above the longest
+    opening or section of every one of the project's own documents. A change is a decision, so
+    this fails until it is recorded; a cap at or below the measured longest section would cut D04."""
+    assert CAP == 15_000 == 10 * CLASSIFICATION_INPUT_TOKENS
+    assert CAP > MEASURED_LONGEST_SECTION
+
+
+def test_a_section_the_character_cap_cuts_sets_summary_truncated_though_nothing_is_past_the_ceiling():
+    """1,501 tokens, two sections: the opening ordinary, the second section one token of CAP + 1
+    characters, which is cut at the cap. No text lies past the ceiling, so the flag is True for the
+    cut alone: the same text with that token exactly at the cap keeps it whole and is not
+    truncated."""
+    opening = text_of(SECTION)
+
+    assert summary_sections(f"{opening} {'L' * (CAP + 1)}") == ((opening, "L" * CAP), True)
+    assert summary_sections(f"{opening} {'L' * CAP}") == ((opening, "L" * CAP), False)
+
+
+def test_the_tokens_the_cap_drops_from_a_section_are_in_no_section_and_the_next_starts_where_it_always_did():
+    """3,001 tokens of 40 characters: a full section would be 61,499 characters, so each keeps its
+    first 365 tokens, 14,964 characters. The 1,135 tokens the cap drops from each are read by no
+    section: they do not spill into the next, which starts at token 1,500 as it would uncut, and
+    the count of sections is the count in tokens, three."""
+    tokens = long_words(2 * SECTION + 1, 40)
+    kept = (CAP + 1) // 41  # whole tokens of 40 characters, with the spaces between them, within the cap
+    assert kept == 365 and len(" ".join(tokens[:kept])) == 14_964
+
+    sections, truncated = summary_sections(" ".join(tokens))
+
+    assert sections == (" ".join(tokens[:kept]), " ".join(tokens[SECTION : SECTION + kept]), tokens[2 * SECTION])
+    assert truncated is True
+    assert not set(tokens[kept:SECTION]) & set(" ".join(sections).split())
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "a" * (CAP + 1),
+        f"{'a' * (CAP // 2 - 1)} {'b' * (CAP // 2 + 1)} c",
+        " ".join(long_words(2 * SECTION + 1, 40)),
+        " ".join(long_words(10, 10_000)),
+    ],
+    ids=["one token over the cap", "the second token crosses it", "three cut sections", "ten enormous tokens"],
+)
+def test_the_first_section_is_the_opening_byte_for_byte_where_the_character_cap_cuts_it(text):
+    """The final request carries "the opening exactly as classification reads it", and section 1 is
+    that text whatever the cap did to it: one function joins both."""
+    opening, truncated = classification_input(text)
+    assert truncated is True
+    assert summary_sections(text)[0][0] == opening
 
 
 # --- The section prompt ----------------------------------------------------------------------
@@ -725,6 +812,151 @@ def test_the_final_reply_is_the_result_and_no_section_summary_is_returned():
 
     assert "Summary of section" not in result.summary
     assert all("Point " not in point for point in result.key_points)
+
+
+# --- The flow: the cap in characters (the closing security review of D-139, finding S1) -----------
+
+
+def test_a_dense_text_makes_as_many_requests_as_before_and_none_carries_more_than_the_cap():
+    """The review's case, scaled down: 10,501 tokens, eight sections, the most a document is
+    summarised in, of 100 characters each, so a full section is 151,499 characters. Until the cap
+    every one of its nine requests carried a whole section or the whole opening. Now each carries at
+    most the cap; the requests are as many, of the same kinds and labels, as an ordinary text of as
+    many tokens gets; and both flags say text was cut. Nothing lies past the ceiling, so
+    ``summary_truncated`` is the cap's alone."""
+    tokens = long_words(7 * SECTION + 1, 100)
+    text = " ".join(tokens)
+    replies = [section_reply(n) for n in range(1, MAXIMUM_SUMMARY_SECTIONS + 1)]
+    script, ordinary = Script(*replies, FINAL), Script(*replies, FINAL)
+
+    result = classify(script, text)
+    classify(ordinary, text_of(len(tokens)))
+
+    assert len(script.calls) == len(ordinary.calls) == MAXIMUM_SUMMARY_SECTIONS + 1
+    assert script.kinds == ordinary.kinds == ["section"] * MAXIMUM_SUMMARY_SECTIONS + ["final"]
+    kept = (CAP + 1) // 101  # whole tokens of 100 characters, with their spaces, within the cap
+    bodies = [carried(call) for call in script.calls]
+    assert all(len(body) <= CAP for body in bodies)
+    for index, body in enumerate(bodies[:-2]):  # the seven full sections, each cut to its first tokens
+        assert body == " ".join(tokens[index * SECTION : index * SECTION + kept])
+        assert f"\nSection {index + 1} of {MAXIMUM_SUMMARY_SECTIONS}:\n" in script.calls[index][1]
+    assert bodies[-2] == tokens[-1]  # the eighth section, one token, whole
+    assert bodies[-1] == bodies[0] == classification_input(text)[0]  # the final request's opening
+    assert (result.input_truncated, result.summary_truncated) == (True, True)
+    # Within the ceiling the final turn is the one any sectioned text within it gets: the flag alone
+    # records the cut (docs/ai-provider.md, section 5b).
+    assert SECTIONED_NOTICE in script.calls[-1][1]
+
+
+def test_a_text_of_a_few_enormous_tokens_is_still_one_request_carrying_at_most_the_cap():
+    """Ten tokens of 10,000 characters: one section by the count in tokens, so one request, as before
+    the cap, and it carries the first token alone, since the second would take the opening over the
+    cap. ``input_truncated`` is True on a text of one section, which no ordinary text is, and no
+    section request is sent: the count of sections decides, not the flag."""
+    tokens = long_words(10, 10_000)
+    script = Script(FINAL)
+
+    result = classify(script, " ".join(tokens))
+
+    assert script.kinds == ["final"]
+    assert carried(script.calls[0]) == tokens[0]
+    assert (result.input_truncated, result.summary_truncated) == (True, True)
+
+
+def test_a_section_cut_by_the_cap_is_sent_cut_and_reported_though_the_opening_was_not():
+    """The opening ordinary, the second section one token of CAP + 1 characters: three requests, as
+    any text of 1,501 tokens makes; the second section's request carries the token's first CAP
+    characters; and the result says the summary covers only part of the text."""
+    opening = text_of(SECTION)
+    script = Script(section_reply(1), section_reply(2), FINAL)
+
+    result = classify(script, f"{opening} {'L' * (CAP + 1)}")
+
+    assert script.kinds == ["section", "section", "final"]
+    assert [carried(call) for call in script.calls] == [opening, "L" * CAP, opening]
+    assert (result.input_truncated, result.summary_truncated) == (True, True)
+
+
+def test_the_prompt_builders_hold_an_uncut_text_to_the_character_cap_themselves():
+    """The cut is made at the boundary as well as by the caller, so no caller can send more than the
+    cap by mistake: a text nobody cut reaches neither turn whole."""
+    enormous = "x" * (CAP + 10)
+
+    section_turn = build_section_summary_user_prompt(TITLE, enormous, 1, 2)
+    final_turn = build_classification_user_prompt(TITLE, enormous, SCHEME)
+
+    assert carried((SECTION_SUMMARY_SYSTEM_PROMPT, section_turn)) == "x" * CAP
+    assert carried((CLASSIFICATION_SYSTEM_PROMPT, final_turn)) == "x" * CAP
+
+
+def nine_letter_words(count: int) -> list[str]:
+    """Distinct words of nine characters: a full section of them is 14,999 characters, one under the cap."""
+    return [f"n{n:08d}" for n in range(count)]
+
+
+def words_to_the_cap(count: int) -> list[str]:
+    """Nine-character words but the last of each full section, of ten: a full section is 15,000
+    characters, the cap exactly."""
+    return [f"e{n:09d}" if n % SECTION == SECTION - 1 else f"e{n:08d}" for n in range(count)]
+
+
+# The scheme's lines, the title and "Text:", as every final turn here begins; the opening follows.
+TURN_HEAD = (
+    "Document types (choose one): Policy; Procedure; Report; Meeting Paper\n"
+    "Departments (choose one): Finance; Human Resources\n"
+    "Project tags: atlas\n"
+    "Process tags: onboarding\n"
+    "Topic tags: safety\n"
+    "\n"
+    f"Title: {TITLE}\n"
+    "Text:\n"
+)
+
+
+@pytest.mark.parametrize(
+    ("make", "length"), [(nine_letter_words, CAP - 1), (words_to_the_cap, CAP)], ids=["one under the cap", "the cap"]
+)
+def test_a_full_section_of_words_up_to_the_cap_is_one_request_byte_for_byte_as_before(make, length):
+    """The densest text the cap leaves whole, written out from literals: one request, its opening
+    every token joined by single spaces, and neither flag set."""
+    tokens = make(SECTION)
+    opening = " ".join(tokens)
+    assert len(opening) == length
+    script = Script(FINAL)
+
+    result = classify(script, opening)
+
+    assert script.calls == [(CLASSIFICATION_SYSTEM_PROMPT, f"{TURN_HEAD}{opening}\n\nReply with the JSON object only.")]
+    assert (result.input_truncated, result.summary_truncated) == (False, False)
+
+
+@pytest.mark.parametrize(
+    ("make", "length"), [(nine_letter_words, CAP - 1), (words_to_the_cap, CAP)], ids=["one under the cap", "the cap"]
+)
+def test_sections_of_words_up_to_the_cap_are_sent_byte_for_byte_as_before(make, length):
+    """Three sections, two full ones at 14,999 or 15,000 characters: every request written out from
+    literals as it was before the cap, the final turn with the notice and the instruction Objective
+    05 was measured on, and ``summary_truncated`` False, since nothing was cut."""
+    tokens = make(2 * SECTION + 7)
+    sections = [" ".join(tokens[start : start + SECTION]) for start in (0, SECTION, 2 * SECTION)]
+    assert [len(section) for section in sections[:2]] == [length, length]
+    script = Script(section_reply(1), section_reply(2), section_reply(3), FINAL)
+
+    result = classify(script, " ".join(tokens))
+
+    assert script.calls[:3] == [
+        (SECTION_SUMMARY_SYSTEM_PROMPT, f"Title: {TITLE}\nSection {n} of 3:\n{section}\n\nReply with the JSON object only.")
+        for n, section in enumerate(sections, start=1)
+    ]
+    summaries = "\n\n".join(
+        f"Section {n} of 3\nSummary: Summary of section {n}.\nKey points:\n- Point {n}a.\n- Point {n}b." for n in (1, 2, 3)
+    )
+    assert script.calls[3] == (
+        CLASSIFICATION_SYSTEM_PROMPT,
+        f"{TURN_HEAD}{sections[0]}\n\n{SECTIONED_NOTICE_AT_186BE70}\n\n{summaries}\n\n"
+        f"{CONSOLIDATION_INSTRUCTION_AT_186BE70}\n\nReply with the JSON object only.",
+    )
+    assert (result.input_truncated, result.summary_truncated) == (True, False)
 
 
 # --- The flow: failures -----------------------------------------------------------------------

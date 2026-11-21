@@ -13,7 +13,7 @@ import pytest
 
 import apps.ai
 from apps.ai.base import Assignment, DocumentClassification, ProviderUnavailable, TagScheme, TagSuggestion
-from apps.ai.classification import parse_section_summary, summary_sections
+from apps.ai.classification import classification_input, parse_section_summary, summary_sections
 from apps.ai.testing import (
     STUB_CHAT_MODEL,
     STUB_CONFIDENCE,
@@ -135,6 +135,22 @@ def test_summary_truncated_is_the_real_flag():
     assert (summary_sections(at)[1], summary_sections(past)[1]) == (False, True)
     two_sections = stub.classify_document("T", " ".join(["w"] * (CLASSIFICATION_INPUT_TOKENS + 1)), SCHEME)
     assert (two_sections.input_truncated, two_sections.summary_truncated) == (True, False)
+
+
+def test_the_stubs_flags_are_the_real_functions_for_a_dense_text():
+    """A text of very long tokens is cut by CLASSIFICATION_INPUT_CHARACTERS (the closing security
+    review of D-139, finding S1), and the stub reports it as a provider would: its two flags are
+    ``classification_input``'s and ``summary_sections``' own. Both are True for a text of one
+    section whose opening the cap cut, where the count in tokens cuts nothing, and for a text of
+    three sections each cut by the cap, which is not past the ceiling."""
+    stub = StubAIService()
+    one_section = " ".join(["x" * 9_999] * 10)
+    three_sections = " ".join(["y" * 39] * (2 * CLASSIFICATION_INPUT_TOKENS + 1))
+
+    for text in (one_section, three_sections):
+        result = stub.classify_document("T", text, SCHEME)
+        assert result.input_truncated is classification_input(text)[1] is True
+        assert result.summary_truncated is summary_sections(text)[1] is True
 
 
 def test_the_stub_is_one_call_however_long_the_text():
