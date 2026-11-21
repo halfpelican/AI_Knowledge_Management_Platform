@@ -16,11 +16,21 @@ and a test that needs a particular reply sets the stub's ``classification``.
 import uuid
 
 import pytest
+from django.conf import settings
+from django.core.cache import cache
+from django.utils import timezone
+from rest_framework.test import APIClient
 
 from apps.accounts.models import RolePermission
 from apps.ai.base import ProviderUnavailable
 from apps.ai.testing import STUB_CHAT_MODEL, STUB_CONFIDENCE
-from apps.api.views import CLASSIFICATION_UNAVAILABLE_MESSAGE, INSUFFICIENT_TEXT_MESSAGE
+from apps.api.ingestion_slot import ingestion_slot_key, take_ingestion_slot
+from apps.api.views import (
+    CLASSIFICATION_UNAVAILABLE_MESSAGE,
+    INGESTION_IN_FLIGHT_CODE,
+    INGESTION_IN_FLIGHT_MESSAGE,
+    INSUFFICIENT_TEXT_MESSAGE,
+)
 from apps.core.constants import (
     ADMINISTRATOR_ROLE_NAME,
     AI_APPLIED,
@@ -41,7 +51,10 @@ from apps.core.constants import (
     TOPIC_DIMENSION,
 )
 from apps.core.models import NAME_MAX_LENGTH
+from apps.documents.classification import classify_document_now
+from apps.documents.deletion import delete_document
 from apps.documents.models import (
+    ContentChunk,
     ContentTag,
     Department,
     Document,
@@ -74,9 +87,18 @@ CLASSIFICATION_KEYS = {
     "user_edited", "proposed_tags", "classified_at", "model", "input_truncated",
     # D-119 finding 10: whose department it is ("user", "ai" or null).
     "department_applied_by",
+    # D-139: FR-10's document summary. ``summary_model`` and ``summarised_at`` are not exposed.
+    "summary", "key_points", "summary_truncated",
 }
 TAG_DETAIL_KEYS = {
     "content_tag_id", "dimension", "name", "applied_by", "confirmed", "provisional", "confidence",
+}
+# D-85's in-flight 429, which the classify route answers since D-139's further choices.
+IN_FLIGHT_BODY = {"detail": INGESTION_IN_FLIGHT_MESSAGE, "code": INGESTION_IN_FLIGHT_CODE}
+# What ``left_behind`` reports for a document of which no row is left.
+NOTHING_LEFT = {
+    "document": False, "extracted content": False, "analysis": False, "chunks": False,
+    "tag links": False,
 }
 
 
@@ -139,6 +161,55 @@ def links_of(document):
 
 def outage(title, text, scheme):
     raise ProviderUnavailable("stub outage")
+
+
+def another_tab(user):
+    """A second session for the same user: what a second browser tab or a script would hold."""
+    client = APIClient()
+    client.force_login(user)
+    return client
+
+
+def slot_is_free(user):
+    """Whether ``user``'s in-flight ingestion slot (D-85) is free."""
+    return cache.get(ingestion_slot_key(user)) is None
+
+
+def give_chunk(document):
+    """One embedded passage of ``document``, so a deletion has a chunk to remove."""
+    return ContentChunk.objects.create(
+        source_type=DOCUMENT_SOURCE_TYPE, source_id=document.pk, chunk_index=0, chunk_text=TEXT,
+        embedding=[0.0] * settings.EMBEDDING_DIMENSION, embedding_model="stub-embed",
+        embedding_dimension=settings.EMBEDDING_DIMENSION,
+    )
+
+
+def left_behind(doc_id):
+    """Which rows of document ``doc_id`` still exist: the document, what cascades from it, and the
+    chunks and tag links that name it by ``source_id`` with no foreign key (D-07)."""
+    return {
+        "document": Document.objects.filter(pk=doc_id).exists(),
+        "extracted content": ExtractedContent.objects.filter(document_id=doc_id).exists(),
+        "analysis": DocumentAnalysis.objects.filter(document_id=doc_id).exists(),
+        "chunks": ContentChunk.objects.filter(
+            source_type=DOCUMENT_SOURCE_TYPE, source_id=doc_id
+        ).exists(),
+        "tag links": ContentTag.objects.filter(
+            source_type=DOCUMENT_SOURCE_TYPE, source_id=doc_id
+        ).exists(),
+    }
+
+
+def deleted_while_classifying(document, reply):
+    """A stub classification callable: FR-15's own delete path (``delete_document``) removes
+    ``document`` while its classification runs, as a concurrent delete would while the provider
+    requests are in flight, and only then does ``reply`` arrive."""
+
+    def classify(title, text, scheme):
+        delete_document(document)
+        return reply
+
+    return classify
 
 
 # Every route, sent the cheapest request it accepts, for the tests that only need to reach it.
@@ -273,6 +344,201 @@ def test_classify_is_throttled_in_the_ingestion_scope(session_client):
         assert classify(client, uuid.uuid4()).status_code == 404
     assert classify(client, uuid.uuid4()).status_code == 429
     assert client.post(DOCUMENTS_URL, {"title": "No file"}, format="multipart").status_code == 429
+
+
+# --- A document deleted while it is classified (the review of 21 November 2026, item 1) -----------
+
+
+def test_a_document_deleted_while_its_classification_runs_is_the_scoped_404_and_leaves_nothing(
+    session_client, stub_ai_service
+):
+    """FR-15's delete runs while the provider requests are in flight (the stub's callable stands in
+    for them), and then a reply arrives that would link an in-scheme tag. ``apply_classification``
+    finds no document and raises ``NotOnThisDocument``; the route answers the scoped lookup's 404,
+    word for word, where it answered an unhandled 500. Nothing of the document is left behind, and
+    the slot the route took is free again."""
+    user = session_client.user
+    document = make_document(user)
+    give_chunk(document)
+    Tag.objects.create(tag_name="bridge maintenance", dimension=PROJECT_DIMENSION)
+    # A first classification, so the document has an analysis row and an AI link to lose.
+    assert classify(session_client.client, document.id).status_code == 200
+    assert set(left_behind(document.pk).values()) == {True}  # each row is there to be removed
+    stub_ai_service.classification = deleted_while_classifying(
+        document,
+        classification(
+            department="People", tags=[(PROJECT_DIMENSION, "bridge maintenance", ABOVE_THRESHOLD)]
+        ),
+    )
+
+    response = classify(session_client.client, document.id)
+
+    assert response.status_code == 404, response.content
+    assert response.json() == NOT_FOUND_BODY
+    assert len(stub_ai_service.classify_calls) == 2  # the deletion happened inside the second run
+    assert left_behind(document.pk) == NOTHING_LEFT
+    assert slot_is_free(user)
+
+
+def test_a_document_deleted_after_its_classification_and_before_the_reply_is_the_same_404(
+    session_client, monkeypatch
+):
+    """The other window: the classification has committed, and the document is deleted before the
+    route re-reads its department. The same 404, word for word, and nothing left behind."""
+    user = session_client.user
+    document = make_document(user)
+    give_chunk(document)
+    seen = {}
+
+    def classify_then_delete(target):
+        analysis = classify_document_now(target)
+        seen["classified"] = DocumentAnalysis.objects.filter(document_id=target.pk).exists()
+        delete_document(target)
+        return analysis
+
+    monkeypatch.setattr("apps.api.views.classify_document_now", classify_then_delete)
+
+    response = classify(session_client.client, document.id)
+
+    assert seen["classified"] is True  # the run had written its analysis before the deletion
+    assert response.status_code == 404, response.content
+    assert response.json() == NOT_FOUND_BODY
+    assert left_behind(document.pk) == NOTHING_LEFT
+    assert slot_is_free(user)
+
+
+# --- The in-flight ingestion slot (D-85; D-139's further choices, 21 November 2026) ---------------
+#
+# Benjamin's decision of 21 November 2026 reverses D-105's "no in-flight slot" for the classify
+# route: it takes the slot upload, meeting ingest and reprocess take, after its 404 and its 403, as
+# reprocess does, and releases it in ``finally``. apps/api/tests/test_ingestion_in_flight.py tests
+# the three ingestion routes; these test the fourth.
+
+
+def test_a_classify_while_the_users_slot_is_held_is_429_at_once_and_calls_no_provider(
+    session_client, stub_ai_service
+):
+    """The slot is held as an upload, a meeting ingest or a reprocess of this user's holds it. A
+    classify is answered at once with the in-flight 429: no ``Retry-After``, no provider call,
+    nothing written, and the holder's slot untouched. A document with no text gets that 429 too,
+    because the 422 is decided inside the slot."""
+    user = session_client.user
+    document = make_document(user)
+    no_text = make_document(user, title="Scanned form", text=None)
+    token = take_ingestion_slot(user)
+    assert token is not None
+
+    responses = [classify(session_client.client, doc.id) for doc in (document, no_text)]
+
+    for response in responses:
+        assert response.status_code == 429, response.content
+        assert response.json() == IN_FLIGHT_BODY
+        assert "Retry-After" not in response
+    assert stub_ai_service.classify_calls == []
+    assert not DocumentAnalysis.objects.exists()
+    assert cache.get(ingestion_slot_key(user)) == token
+
+
+def test_a_classify_refused_with_404_or_403_is_so_refused_while_the_slot_is_held(
+    session_client, stub_ai_service
+):
+    """The slot is taken after the scoped lookup and the permission check, so while it is held an
+    unknown id is still the 404 and a role without ``contribute_content`` still the 403, never the
+    429."""
+    user = session_client.user
+    document = make_document(user)
+    take_ingestion_slot(user)
+
+    unknown = classify(session_client.client, uuid.uuid4())
+    revoke_contribute(user)
+    forbidden = classify(session_client.client, document.id)
+
+    assert (unknown.status_code, unknown.json()) == (404, NOT_FOUND_BODY)
+    assert (forbidden.status_code, forbidden.json()) == (403, FORBIDDEN_BODY)
+    assert stub_ai_service.classify_calls == []
+
+
+def test_a_classify_holds_the_slot_while_its_provider_requests_run(
+    session_client, stub_ai_service, upload
+):
+    """Taken before the provider is called and released only after it answers. While a classify of
+    this user's waits on the provider, a second classify and an upload from another tab of the same
+    user are each the in-flight 429, and neither reaches the provider or stores anything."""
+    user = session_client.user
+    first = make_document(user, title="First policy")
+    second = make_document(user, title="Second policy")
+    second_tab = another_tab(user)
+    seen = {}
+
+    def while_classifying(title, text, scheme):
+        if title == "First policy":
+            seen["held"] = not slot_is_free(user)
+            seen["classify"] = classify(second_tab, second.id)
+            seen["upload"] = second_tab.post(
+                DOCUMENTS_URL, {"file": upload("sample.docx"), "title": "Sent meanwhile"},
+                format="multipart",
+            )
+            seen["calls"] = len(stub_ai_service.classify_calls)
+        return classification(department="People")
+
+    stub_ai_service.classification = while_classifying
+
+    response = classify(session_client.client, first.id)
+
+    assert response.status_code == 200, response.content
+    assert seen["held"] is True
+    for name in ("classify", "upload"):
+        assert seen[name].status_code == 429, (name, seen[name].content)
+        assert seen[name].json() == IN_FLIGHT_BODY
+    assert seen["calls"] == 1  # the first classify's own call: neither refusal reached the provider
+    assert len(stub_ai_service.classify_calls) == 1
+    assert not DocumentAnalysis.objects.filter(document=second).exists()
+    assert not Document.objects.filter(title="Sent meanwhile").exists()
+    assert slot_is_free(user)
+
+
+@pytest.mark.parametrize("answer", [200, 422, 503, 404], ids=["200", "422", "503", "404"])
+def test_the_slot_is_free_again_after_each_answer_the_classification_gives(
+    session_client, stub_ai_service, answer
+):
+    """Released in ``finally``: after a classification, after no extracted text, after the provider
+    failing, and after the 404 of a document deleted while it was classified. Then this user's next
+    classify is answered on its merits, not with the in-flight 429."""
+    user = session_client.user
+    document = make_document(user, text=None if answer == 422 else TEXT)
+    if answer == 503:
+        stub_ai_service.classification = outage
+    elif answer == 404:
+        stub_ai_service.classification = deleted_while_classifying(
+            document, classification(department="People")
+        )
+
+    response = classify(session_client.client, document.id)
+
+    assert response.status_code == answer, response.content
+    assert slot_is_free(user)
+    stub_ai_service.classification = None
+    another = make_document(user, title="Purchasing policy")
+    assert classify(session_client.client, another.id).status_code == 200
+
+
+def test_this_users_slot_does_not_hold_another_users_classify(
+    session_client, employee, administrator, stub_ai_service
+):
+    """The slot is per user (D-85): while this user's is held, the other role's user classifies a
+    document they can see and is answered 200, and this user's slot is left as it was."""
+    user = session_client.user
+    other = administrator if user == employee else employee
+    document = make_document(user)  # both roles read it
+    mine = take_ingestion_slot(user)
+    assert mine is not None
+
+    response = classify(another_tab(other), document.id)
+
+    assert response.status_code == 200, response.content
+    assert len(stub_ai_service.classify_calls) == 1
+    assert cache.get(ingestion_slot_key(user)) == mine
+    assert slot_is_free(other)
 
 
 # --- 404 before 403, on every route -----------------------------------------------------------
@@ -610,6 +876,97 @@ def test_a_discarded_department_is_reported_as_such(session_client, stub_ai_serv
     result = classify(session_client.client, document.id).json()["classification"]
     assert (result["machine_department"], result["department_outcome"]) == ("Marketing", ASSIGNMENT_DISCARDED)
     assert detail(session_client.client, document.id).json()["department"] == "People"
+
+
+# --- The classification object's summary (D-139) -----------------------------------------------
+#
+# FR-10: "Each document displays a short summary and a list of key points". The analysis rows are
+# written straight through the ORM here: these tests are about what the object shows of a stored
+# summary, whatever wrote it.
+
+SUMMARY = "How annual leave is requested, approved and carried over."
+KEY_POINTS = ["Leave is requested in writing.", "A manager approves it."]
+SUMMARY_MODEL = "summarising-model"
+
+
+def analysed(document, **fields):
+    return DocumentAnalysis.objects.create(document=document, classified_at=timezone.now(), **fields)
+
+
+def test_the_detail_carries_the_stored_summary_its_key_points_and_whether_it_is_partial(session_client):
+    document = make_document(session_client.user)
+    analysed(document, summary=SUMMARY, key_points=KEY_POINTS, summary_truncated=True,
+             summary_model=SUMMARY_MODEL, summarised_at=timezone.now())
+
+    response = detail(session_client.client, document.id)
+
+    assert response.status_code == 200, response.content
+    result = response.json()["classification"]
+    assert set(result) == CLASSIFICATION_KEYS
+    assert result["summary"] == SUMMARY
+    assert result["key_points"] == KEY_POINTS  # a list of strings, in the stored order
+    # The summary's own flag, not the classifier's: the two differ on this row.
+    assert (result["summary_truncated"], result["input_truncated"]) == (True, False)
+    # Which model wrote the summary and when is a record, and no part of the body (D-139).
+    raw = response.content.decode()
+    for withheld in ("summary_model", "summarised_at", SUMMARY_MODEL):
+        assert withheld not in raw
+
+
+def test_the_detail_carries_an_empty_summary_for_an_analysis_without_one(session_client):
+    """``""``, ``[]`` and ``false``, with the keys present: a document classified before
+    ``documents 0016``, or one whose run wrote no summary."""
+    document = make_document(session_client.user)
+    analysed(document, input_truncated=True)  # the classifier's flag is not the summary's
+
+    response = detail(session_client.client, document.id)
+
+    assert response.status_code == 200, response.content
+    result = response.json()["classification"]
+    assert set(result) == CLASSIFICATION_KEYS
+    assert (result["summary"], result["key_points"]) == ("", [])
+    assert (result["summary_truncated"], result["input_truncated"]) == (False, True)
+    raw = response.content.decode()
+    assert "summary_model" not in raw and "summarised_at" not in raw
+
+
+def test_an_employee_naming_an_administrator_only_document_gets_404_and_none_of_its_summary(
+    employee_client, administrator_client, administrator
+):
+    """The summary is on the classification object, and that object travels only on a document the
+    caller's scope resolved (D-46): out of scope is the same 404, with no word of the summary."""
+    restricted = make_document(administrator, title="Board pack", roles=[ADMINISTRATOR_ROLE_NAME])
+    analysed(restricted, summary="The directors' bonus pool is four per cent of profit.",
+             key_points=["The pool is capped at two million."])
+
+    refused = detail(employee_client, restricted.id)
+
+    assert refused.status_code == 404
+    assert refused.json() == NOT_FOUND_BODY
+    for trace in (b"bonus pool", b"two million", b"summary", b"key_points"):
+        assert trace not in refused.content
+
+    # The mirror: the Administrator, whom the document admits, reads it.
+    admitted = detail(administrator_client, restricted.id).json()["classification"]
+    assert admitted["summary"] == "The directors' bonus pool is four per cent of profit."
+    assert admitted["key_points"] == ["The pool is capped at two million."]
+
+
+@pytest.mark.parametrize("url", [DOCUMENTS_URL, f"{DOCUMENTS_URL}/browse", "/api/dashboard"])
+def test_no_list_of_documents_carries_the_summary(session_client, url):
+    """The repository list, browse and the dashboard's recent documents return the document
+    object, which has no ``classification``, so a stored summary rides on none of them. Only the
+    detail, FR-10's own replies and a search result's three keys show it (D-139)."""
+    document = make_document(session_client.user)
+    analysed(document, summary=SUMMARY, key_points=KEY_POINTS, summary_truncated=True)
+
+    response = session_client.client.get(url)
+
+    assert response.status_code == 200, response.content
+    raw = response.content.decode()
+    assert str(document.id) in raw  # the document is in the list
+    for trace in (SUMMARY, *KEY_POINTS, "key_points", "summary_truncated", "classification"):
+        assert trace not in raw
 
 
 # --- The 201 bodies of the upload and the reprocess ---------------------------------------------

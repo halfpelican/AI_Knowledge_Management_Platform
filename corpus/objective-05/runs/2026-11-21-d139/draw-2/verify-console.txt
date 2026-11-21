@@ -1,0 +1,7 @@
+[run_obj05] database: kmp_obj05_d139_20261121
+database: kmp_obj05_d139_20261121
+
+**Clause 1:** 18 of 20 types match the reference (90.0%); 75% MET. Misses: [{'id': 'D04', 'reference': 'Procedure', 'suggested': 'Policy', 'fit': 'fair'}, {'id': 'D09', 'reference': 'Meeting Paper', 'suggested': 'Report', 'fit': 'weak'}]
+**Clause 2:** 34 of 34 below-threshold assignments held as provisional; 48 of 51 at or above applied and 3 held to keep a department the document already had; violations: none.
+**Clause 3:** MET. Departments discarded 0, Project/Process suggestions discarded 0, Topic values proposed 0, Project/Process values proposed 0 and values created by the classifier 0 (both D-128's departures from the clause), out-of-scheme links 0; violations: none.
+Tags against the manifest, for information: precision 66.7%, recall 62.5%.

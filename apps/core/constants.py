@@ -533,7 +533,13 @@ AUTHENTICATION_THROTTLE_RATE = "20/min"
 # POST /api/ask, scope "ask".
 ASK_THROTTLE_RATE = "10/min"
 # Scope "ingestion": one budget shared by POST /api/documents, POST /api/meetings and
-# POST /api/documents/{id}/reprocess. A full Objective 02 run, about 31 requests, fits in an hour.
+# POST /api/documents/{id}/reprocess, by FR-10's POST /api/documents/{id}/classify since 10
+# November 2026 (D-105), and by FR-16's POST /api/meetings/{id}/summary since 11 November (D-125).
+# Since D-139 one classify is up to MAXIMUM_SUMMARY_SECTIONS + 1 provider requests, and since
+# D-139's further choices (21 November 2026) it also holds the per-user in-flight slot that upload,
+# meeting ingest and reprocess hold (D-85, apps/api/ingestion_slot.py); the summary route holds
+# none. Until the closing security review of D-139 (finding S4) this comment named only the first
+# three routes. A full Objective 02 run, about 31 requests, fits in an hour.
 INGESTION_THROTTLE_RATE = "60/hour"
 # POST /api/conversations, scope "conversation_create": the ask rate in a budget of its own, so
 # creating a thread does not spend the ask budget (D-80).
@@ -830,12 +836,84 @@ DOCUMENT_TYPES = ("Policy", "Procedure", "Report", "Meeting Paper")
 
 # How much of a document the classification call reads: its title and this many whitespace
 # tokens (D-31's token) from the START of the extracted text. The opening of a document is
-# where its kind is stated; FR-10's sectioned summarising of long documents is deferred, and
-# this is said in the DocumentAnalysis record rather than hidden. 1,500 is about five pages,
-# well inside the 4B model's window beside the prompt, and larger than every corpus document
-# but D04 (8,357 words), whose first chapter already says it holds procedures.
+# where its kind is stated, and the DocumentAnalysis record says when the request that
+# classified it carried the opening rather than the whole text (``input_truncated``); since
+# D-139 that request also carries summaries of the document's sections beside the opening
+# (apps/ai/base.py says exactly what it reads). 1,500 is about five pages, well inside the 4B
+# model's window beside the prompt, and larger than every corpus document but D04 (8,357
+# words), whose first chapter already says it holds procedures.
+#
+# Since D-139 it is also the size of one SECTION of a longer document. FR-10: "Documents
+# exceeding the model's context limit are summarised in sections and consolidated". D-139 reads
+# "the model's context limit" as this cap, which does not change: a document within it gets one
+# request, and a longer one is summarised a section of this many tokens at a time and
+# consolidated in a final request (apps/ai/classification.py). Until D-139 that clause was
+# deferred (D-104) and a long document had no summary at all.
 CLASSIFICATION_INPUT_TOKENS = 1500
+# The same cap in characters, beside the one in tokens: the most characters of document text one
+# classification request carries, the opening and a section alike. A token here is a
+# whitespace-separated word, and a word has no length limit. Ingestion's checks count the same
+# tokens, so a text of very long "words" passed them, and every request D-139 sends it, each
+# section's and the final one, could carry as much as the provider's context window holds (the
+# closing security review of D-139, finding S1). FR-16's SUMMARY_INPUT_CHARACTERS closed the same
+# gap (D-125's third note), and this follows its ratio: ten characters a token.
+#
+# It is applied in one place (apps/ai/classification.py), where the opening's and each section's
+# tokens are joined. Whole tokens are kept while the joined text fits, and a first token longer
+# than the cap on its own is cut to it. The tokens it drops from a section are read by no request:
+# they do not spill into the next section. A text it cuts is recorded as cut: input_truncated for
+# the opening, summary_truncated for any section. It never changes how many requests are made,
+# which is counted in tokens.
+#
+# Measured on 22 November 2026, so that it never binds on the project's own text: every document
+# under corpus/objective-02/documents, corpus/objective-05/dev-documents and corpus/demo, 40 files
+# with the demo's meeting transcript T06 among them, its text extracted by apps/ingestion's own
+# signature check and parsers and cut as the code stood before this cap. The longest opening is
+# 9,725 characters and the longest section 9,780, D04's fourth, each about 65% of the cap. The most
+# characters a token, spaces counted, is 6.52 (that section), and the longest single token is 27
+# characters (D12). No opening or section reaches the cap, and on all 40 the cut with the cap is
+# identical to the cut without it.
+CLASSIFICATION_INPUT_CHARACTERS = 15_000
 
+# Document summaries (D-139). FR-10 Front-End: "Each document displays a short summary and a list
+# of key points". The four below bound what one classification reply may give and how much of a
+# long document is summarised. The first three are schema limits, held by the parser in
+# apps/ai/classification.py: a reply over one is a schema violation, retried and never trimmed to
+# fit (invariant 10).
+#
+# The most key points one reply may give (D-139, decision 5: a search result shows at most five).
+MAXIMUM_KEY_POINTS = 5
+# The longest summary one reply may give, in characters, counted after surrounding whitespace is
+# stripped (D-139). About a hundred words: FR-10's "short summary", shown beneath a title.
+MAXIMUM_SUMMARY_CHARACTERS = 600
+# The longest single key point, in characters, counted the same way (D-139): one sentence.
+MAXIMUM_KEY_POINT_CHARACTERS = 200
+# The most sections of a long document that are summarised (D-139). TUNE: set by D-139, not
+# measured. A document longer than this many sections of CLASSIFICATION_INPUT_TOKENS (12,000
+# tokens, about forty pages) has only its first ones summarised, and the record says so
+# (``DocumentClassification.summary_truncated``) rather than presenting a summary of a fragment
+# as a summary of the whole.
+#
+# This bounds how many requests one upload makes, not how big each one is. What bounds one
+# upload is this and CLASSIFICATION_INPUT_CHARACTERS together: at most MAXIMUM_SUMMARY_SECTIONS + 1
+# requests, this many sections and the final one, each carrying at most
+# CLASSIFICATION_INPUT_CHARACTERS of the document's text, each with MAXIMUM_CLASSIFY_ATTEMPTS
+# attempts. The final request also carries the section summaries, each held by the parser to
+# MAXIMUM_SUMMARY_CHARACTERS and MAXIMUM_KEY_POINTS of MAXIMUM_KEY_POINT_CHARACTERS. Until the
+# closing security review of D-139 (finding S1) this comment said the constant bounded the spend,
+# and no character cap existed: a text of very long "words" made each request as large as the
+# provider's window.
+MAXIMUM_SUMMARY_SECTIONS = 8
+
+# Dated, 21 November 2026 (D-139). The three thresholds below,
+# CLASSIFICATION_CONFIDENCE_THRESHOLD, CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL and
+# CLASSIFICATION_DEPARTMENT_CONFIDENCE_THRESHOLD_BY_MODEL, were each derived on the classification
+# prompt as it stood before D-139. Objective 05 was run on D-139's prompt that day, four times on
+# claude-haiku-5-5 (corpus/objective-05/runs/2026-11-21-d139/): once at 186be70, and three times
+# after its worked example's summary was reworded. All three clauses were met on every draw, and
+# nothing was re-tuned. On one draw, one wrong type scored 0.8 and was applied (D04, the one
+# reference document summarised in sections). The 0.95 that gemma3:4b uses was not in any run.
+#
 # An assignment whose confidence is below this is marked provisional and held for confirmation
 # rather than applied (FR-10 Business logic, confidence; compared with ``<`` in one place,
 # apps/documents/classification.py). Chosen on the development documents under
@@ -886,7 +964,7 @@ CLASSIFICATION_DEPARTMENT_CONFIDENCE_THRESHOLD_BY_MODEL = {"claude-haiku-5-5": 0
 # (100,000 / 16,000), not measured, and it is a ratio for prose, not a ceiling: a run of punctuation
 # can be one token of many characters, and at 10 characters a token, the ratio D-133's 4,000 option
 # was priced at, the ceiling would be 160,000 characters. FLM's ceiling, CLASSIFICATION_MAX_TOKENS
-# (400 tokens), is far inside either. So a proposal longer than this is possible, and would still be
+# (400 tokens then; 1,200 since D-139), is far inside either. So a proposal longer than this is possible, and would still be
 # refused 400: a residual, since nothing bounds a tag value in the reply, but far from anything
 # measured (the longest Topic in the recorded Objective 05 runs is 21 characters). D-133 names it, and
 # the reviews' notes on it, under "Not covered". apps/core/tests/test_constants.py fails if either

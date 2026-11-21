@@ -585,6 +585,14 @@ def test_the_repairs_are_the_statement_parsers_own_code():
     assert not hasattr(summarisation, "TRAILING_COMMA_PATTERN")
 
 
+def test_a_repeated_key_is_read_as_json_s_last_value_here_as_it_always_was():
+    """Only the classification parsers refuse an object that repeats a key (``loads_reply``'s
+    ``unique_keys``, 21 November 2026, the review of D-139). This parser decodes as it did."""
+    raw = VALID[:-1] + ', "action_items": []}'
+
+    assert parse_summary(raw).action_items == ()
+
+
 # --- Non-object and non-JSON replies ------------------------------------------------------------------
 
 

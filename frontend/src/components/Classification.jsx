@@ -12,6 +12,7 @@ import {
   rejectProposedTag,
   removeTag,
 } from '../api/documents.js'
+import { INGESTION_IN_FLIGHT_CODE } from '../api/ingestion.js'
 import { TAG_NAME_MAXIMUM_LENGTH, TEXT } from '../constants.js'
 import { extractFieldErrors } from '../utils/fieldErrors.js'
 import { whenToRetry } from '../utils/retryAfter.js'
@@ -535,10 +536,18 @@ export default function Classification({ docId, classification, tagDetails, tagO
           })
           return
         }
+        // Classify's 429 comes in two kinds since D-139, which gave the route D-85's
+        // per-user ingestion slot. Told apart by `code` alone, never by `detail` and
+        // never by whether a Retry-After came: the in-flight one, while another
+        // ingestion of this user's is still being processed, names no time because
+        // the reply carries none; otherwise the limit, with when it lifts.
         setFailure({
           variant: 'error',
           title: TEXT.classifyFailedTitle,
-          text: TEXT.classifyLimitReached(whenToRetry(error.retryAfter)),
+          text:
+            error.code === INGESTION_IN_FLIGHT_CODE
+              ? TEXT.classifyInFlight
+              : TEXT.classifyLimitReached(whenToRetry(error.retryAfter)),
         })
         return
       case 400:

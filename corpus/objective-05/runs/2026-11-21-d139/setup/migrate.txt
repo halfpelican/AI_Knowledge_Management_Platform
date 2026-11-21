@@ -1,0 +1,15 @@
+[run_obj05] database: kmp_obj05_d139_20261121
+Operations to perform:
+  Apply all migrations: accounts, auth, contenttypes, core, documents, meetings, retrieval, sessions
+Running migrations:
+  Applying accounts.0009_login_attempts... OK
+  Applying accounts.0010_seed_release_account_locks... OK
+  Applying accounts.0011_seed_view_knowledge_map... OK
+  Applying accounts.0012_user_picture... OK
+  Applying documents.0012_proposed_tags... OK
+  Applying documents.0013_rejected_tags... OK
+  Applying documents.0012_content_chunk_ai_generated... OK
+  Applying documents.0014_merge_fr16_and_d128... OK
+  Applying documents.0015_departments... OK
+  Applying documents.0016_document_summary... OK
+  Applying meetings.0003_fr16_meeting_summaries... OK

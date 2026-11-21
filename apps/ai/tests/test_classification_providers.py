@@ -7,6 +7,12 @@ test_anthropic.py does (D-35: no external AI spend). What is asserted is that bo
 loop in apps/ai/classification.py with the shared prompt, carry the classification parameters
 (max_tokens, timeout, temperature 0.0), map transport failures the way generation does, and name
 the model that answered.
+
+Since D-139 (21 November 2026) both call ``classify_and_summarise``, which decides how many
+requests a document takes: one within CLASSIFICATION_INPUT_TOKENS, and a request per section then
+a final one past it. Each provider is driven down both paths here, against its own fake, and the
+two are compared request for request on a long document. The flow's own counts and failure paths
+are in test_classification_sections.py, against a scripted ``call_once``.
 """
 
 import json
@@ -26,13 +32,22 @@ from apps.ai.classification import (
     CLASSIFICATION_MAX_TOKENS,
     CLASSIFICATION_SYSTEM_PROMPT,
     CLASSIFICATION_TIMEOUT_SECONDS,
+    SECTION_SUMMARY_SYSTEM_PROMPT,
     build_classification_user_prompt,
+    build_section_summary_user_prompt,
     classification_input,
+    parse_section_summary,
+    summary_sections,
 )
 from apps.ai.flm import FLMService
 from apps.ai.generation import GENERATION_MAX_TOKENS, GENERATION_TIMEOUT_SECONDS
 from apps.ai.prompting import SYSTEM_PROMPT
-from apps.core.constants import CLASSIFICATION_INPUT_TOKENS, DOCUMENT_TYPES, MAXIMUM_CLASSIFY_ATTEMPTS
+from apps.core.constants import (
+    CLASSIFICATION_INPUT_TOKENS,
+    DOCUMENT_TYPES,
+    MAXIMUM_CLASSIFY_ATTEMPTS,
+    MAXIMUM_SUMMARY_SECTIONS,
+)
 
 BASE_URL = "http://flm.test/v1"
 CHAT_MODEL = "gemma3:4b"
@@ -43,13 +58,49 @@ SCHEME = TagScheme(
 )
 TITLE = "Travel and expense policy"
 TEXT = "Staff travelling on business book through the approved agent."
+# Five keys since D-139: the summary and the key points are part of every conforming reply.
+SUMMARY = "Staff book business travel through the approved agent."
+KEY_POINTS = ("Meals are reimbursed at the daily rate.", "Receipts are kept for a year.")
 CONFORMING = json.dumps(
     {
         "doc_type": {"value": "Policy", "confidence": 0.93},
         "department": {"value": "Finance", "confidence": 0.7},
         "tags": [{"dimension": "Topic", "value": "safety", "confidence": 0.4}],
+        "summary": SUMMARY,
+        "key_points": list(KEY_POINTS),
     }
 )
+
+
+def section_reply(number: int) -> str:
+    """Section ``number``'s conforming reply (D-139), its words naming the section they came from."""
+    return json.dumps({"summary": f"Summary of section {number}.", "key_points": [f"Point {number}."]})
+
+
+def long_text(sections: int, extra: int = 3) -> tuple[str, list[str]]:
+    """A text of ``sections`` sections, the last holding ``extra`` tokens, and its tokens."""
+    tokens = [f"w{n}" for n in range((sections - 1) * CLASSIFICATION_INPUT_TOKENS + extra)]
+    return " ".join(tokens), tokens
+
+
+# A document of three sections, and what a provider should be sent for it, request by request:
+# the section prompt with each section's turn, then the classification prompt with the final turn.
+LONG_TEXT, LONG_TOKENS = long_text(3)
+LONG_SECTIONS = summary_sections(LONG_TEXT)[0]
+LONG_REPLIES = (section_reply(1), section_reply(2), section_reply(3), CONFORMING)
+LONG_REQUESTS = [
+    *[
+        (SECTION_SUMMARY_SYSTEM_PROMPT, build_section_summary_user_prompt(TITLE, section, number, 3))
+        for number, section in enumerate(LONG_SECTIONS, start=1)
+    ],
+    (
+        CLASSIFICATION_SYSTEM_PROMPT,
+        build_classification_user_prompt(
+            TITLE, LONG_TEXT, SCHEME,
+            section_summaries=[parse_section_summary(section_reply(n)) for n in (1, 2, 3)],
+        ),
+    ),
+]
 
 
 @pytest.fixture(autouse=True)
@@ -118,6 +169,9 @@ def test_flm_classifies_through_the_chat_endpoint_and_names_its_model():
     assert [(t.dimension, t.value) for t in result.tags] == [("Topic", "safety")]
     assert result.model == CHAT_MODEL  # settings.FLM_CHAT_MODEL, the model that answered
     assert result.input_truncated is False
+    # D-139: the same one request returns the summary and the key points with the classification.
+    assert result.summary == SUMMARY and result.key_points == KEY_POINTS
+    assert result.summary_truncated is False
     assert len(handler.seen) == 1
     assert str(handler.seen[0].url) == f"{BASE_URL}/chat/completions"
 
@@ -133,7 +187,9 @@ def test_flm_sends_the_classification_prompt_and_parameters():
     sent = json.loads(request.content)
     assert sent["model"] == CHAT_MODEL
     assert sent["temperature"] == 0.0
-    assert sent["max_tokens"] == CLASSIFICATION_MAX_TOKENS == 400
+    # 400 until D-139; 1,200 since, sized for a reply that carries a summary and key points
+    # (apps/ai/classification.py has the arithmetic, which is not a measurement).
+    assert sent["max_tokens"] == CLASSIFICATION_MAX_TOKENS == 1200
     assert sent["max_tokens"] != GENERATION_MAX_TOKENS
     assert sent["stream"] is False
     assert [message["role"] for message in sent["messages"]] == ["system", "user"]
@@ -148,16 +204,130 @@ def test_flm_sends_the_classification_prompt_and_parameters():
 
 
 def test_flm_cuts_a_long_text_and_reports_it():
+    """One token over the cap. Until D-139 that was one request reading the opening; now the
+    text is two sections, each summarised, and the FINAL request is the one that reads the
+    opening as text. ``input_truncated`` still says the classification read the opening only."""
     tokens = [f"w{n}" for n in range(CLASSIFICATION_INPUT_TOKENS + 1)]
-    handler = scripted(CONFORMING)
+    handler = scripted(section_reply(1), section_reply(2), CONFORMING)
 
     result = make_service(handler).classify_document(TITLE, " ".join(tokens), SCHEME)
 
     assert result.input_truncated is True
-    user = json.loads(handler.seen[0].content)["messages"][1]["content"]
-    assert tokens[CLASSIFICATION_INPUT_TOKENS - 1] in user
-    assert tokens[CLASSIFICATION_INPUT_TOKENS] not in user
+    assert result.summary_truncated is False
+    assert len(handler.seen) == 3
+    user = json.loads(handler.seen[-1].content)["messages"][1]["content"]
+    assert tokens[CLASSIFICATION_INPUT_TOKENS - 1] in user.split()
+    assert tokens[CLASSIFICATION_INPUT_TOKENS] not in user.split()
     assert classification_input(" ".join(tokens))[1] is True
+
+
+def sent_prompts(handler) -> list[tuple[str, str]]:
+    """The (system, user) pair of every request FLM was sent, in order."""
+    pairs = []
+    for request in handler.seen:
+        messages = json.loads(request.content)["messages"]
+        assert [message["role"] for message in messages] == ["system", "user"]
+        pairs.append((messages[0]["content"], messages[1]["content"]))
+    return pairs
+
+
+def test_flm_summarises_a_long_document_in_sections_then_classifies_it_in_one_final_request():
+    """D-139, the sectioned path over the wire: three sections are four requests to the chat
+    endpoint, the sections in order under the section prompt and then the classification prompt
+    with the opening and every section summary. EVERY request carries the classification
+    ceiling, temperature 0.0, no streaming and the classification timeout."""
+    handler = scripted(*LONG_REPLIES)
+
+    result = make_service(handler).classify_document(TITLE, LONG_TEXT, SCHEME)
+
+    assert len(handler.seen) == 4
+    assert sent_prompts(handler) == LONG_REQUESTS
+    for request in handler.seen:
+        sent = json.loads(request.content)
+        assert str(request.url) == f"{BASE_URL}/chat/completions"
+        assert sent["model"] == CHAT_MODEL
+        assert sent["max_tokens"] == CLASSIFICATION_MAX_TOKENS
+        assert sent["temperature"] == 0.0
+        assert sent["stream"] is False
+        assert request.extensions["timeout"]["read"] == CLASSIFICATION_TIMEOUT_SECONDS
+    assert result.doc_type.value == "Policy"
+    assert result.summary == SUMMARY and result.key_points == KEY_POINTS  # the final reply's
+    assert result.model == CHAT_MODEL
+    assert result.input_truncated is True
+    assert result.summary_truncated is False
+
+
+def test_flm_summarises_only_the_first_sections_of_a_document_past_the_ceiling_and_says_so():
+    text, tokens = long_text(MAXIMUM_SUMMARY_SECTIONS + 1, extra=1)  # one token past the ceiling
+    handler = scripted(*[section_reply(n) for n in range(1, MAXIMUM_SUMMARY_SECTIONS + 1)], CONFORMING)
+
+    result = make_service(handler).classify_document(TITLE, text, SCHEME)
+
+    assert len(handler.seen) == MAXIMUM_SUMMARY_SECTIONS + 1
+    assert result.summary_truncated is True
+    assert all(tokens[-1] not in user.split() for _, user in sent_prompts(handler))
+
+
+def test_flm_gives_up_on_a_section_after_exactly_three_calls_and_sends_no_final_request():
+    """A section's transport failures, over the real SDK: three requests, all the first
+    section's, then ProviderUnavailable. The classification prompt is never sent."""
+    handler = scripted(*[httpx2.ConnectError("connection refused")] * 3)
+
+    with pytest.raises(ProviderUnavailable, match="for section 1 of 3") as excinfo:
+        make_service(handler).classify_document(TITLE, LONG_TEXT, SCHEME)
+
+    assert len(handler.seen) == MAXIMUM_CLASSIFY_ATTEMPTS == 3
+    assert sent_prompts(handler) == [LONG_REQUESTS[0]] * 3
+    # The provider's own label, "FLM at <base url>", opens the message. Not just the URL anywhere
+    # in it: the transport error's text carries the URL too, in "last failure: call failed: ...",
+    # so that would pass with the endpoint dropped from the label.
+    assert str(excinfo.value).startswith(
+        f"FLM at {BASE_URL} returned no response conforming to SECTION_SUMMARY_SCHEMA "
+        f"for section 1 of 3 in {MAXIMUM_CLASSIFY_ATTEMPTS} attempts; last failure: call failed: "
+    )
+    assert not isinstance(excinfo.value, ProviderRefused)
+
+
+def test_flm_retries_a_malformed_section_reply():
+    handler = scripted("A summary, in prose.", *LONG_REPLIES)
+
+    result = make_service(handler).classify_document(TITLE, LONG_TEXT, SCHEME)
+
+    assert len(handler.seen) == 5
+    assert sent_prompts(handler) == [LONG_REQUESTS[0], *LONG_REQUESTS]
+    assert result.summary == SUMMARY
+
+
+def test_flm_stops_at_once_when_a_section_is_refused():
+    """D-118 on the sectioned path: a 401 for the first section is ProviderRefused after one
+    request, and nothing else is sent."""
+    handler = scripted(httpx2.Response(401, json={"error": {"message": "nope"}}))
+
+    with pytest.raises(ProviderRefused):
+        make_service(handler).classify_document(TITLE, LONG_TEXT, SCHEME)
+
+    assert len(handler.seen) == 1
+
+
+def test_flm_section_attempts_reach_the_attempt_log(caplog):
+    handler = scripted(httpx2.ReadTimeout("timed out"), *LONG_REPLIES)
+
+    with caplog.at_level(logging.INFO, logger=attempt_log.ATTEMPT_LOGGER_NAME):
+        make_service(handler).classify_document(TITLE, LONG_TEXT, SCHEME)
+
+    lines = [r.getMessage() for r in caplog.records if r.name == attempt_log.ATTEMPT_LOGGER_NAME]
+    assert [line.split(" after ")[0] for line in lines] == [
+        f"section summary attempt 1 of {MAXIMUM_CLASSIFY_ATTEMPTS} failed",
+        f"section summary attempt 2 of {MAXIMUM_CLASSIFY_ATTEMPTS} parsed",
+        f"section summary attempt 1 of {MAXIMUM_CLASSIFY_ATTEMPTS} parsed",
+        f"section summary attempt 1 of {MAXIMUM_CLASSIFY_ATTEMPTS} parsed",
+        f"classification attempt 1 of {MAXIMUM_CLASSIFY_ATTEMPTS} parsed",
+    ]
+    assert ": APITimeoutError: section 1 of 3: " in lines[0]
+    assert all(f"max_tokens={CLASSIFICATION_MAX_TOKENS} " in line for line in lines)
+    assert [line.rsplit(": ", 1)[1] for line in lines[1:4]] == [
+        "section 1 of 3, 1 key point(s)", "section 2 of 3, 1 key point(s)", "section 3 of 3, 1 key point(s)",
+    ]
 
 
 def test_flm_retries_a_malformed_reply_and_returns_the_conforming_one():
@@ -340,11 +510,15 @@ def test_claude_classifies_with_the_shared_prompt_and_the_classification_paramet
     assert result.doc_type.value == "Policy"
     assert result.model == "claude-opus-5"  # settings.ANTHROPIC_MODEL, the model that answered
     assert result.input_truncated is False
+    # D-139: the same one request returns the summary and the key points with the classification.
+    assert result.summary == SUMMARY and result.key_points == KEY_POINTS
+    assert result.summary_truncated is False
     (call,) = client.messages.calls
     assert call["model"] == "claude-opus-5"
     # Main's Claude request shape (#67, D-115): no sampling parameter, which current Claude
     # models refuse, the effort setting instead, and Claude's own ceiling, because thinking
-    # counts against max_tokens and FLM's 400 would cut the reply off before its JSON.
+    # counts against max_tokens and FLM's ceiling (400 then, 1,200 since D-139) could cut the
+    # reply off before its JSON.
     assert "temperature" not in call
     assert call["output_config"] == {"effort": CLAUDE_EFFORT}
     assert call["max_tokens"] == CLAUDE_MAX_TOKENS
@@ -369,13 +543,110 @@ def test_claude_and_flm_send_the_same_prompt_for_the_same_document():
 
 
 def test_claude_cuts_a_long_text_and_reports_it():
+    """One token over the cap: two sections and the final request since D-139, as for FLM. The
+    final request is the one that reads the opening as text, and it stops at the cap."""
     tokens = [f"w{n}" for n in range(CLASSIFICATION_INPUT_TOKENS + 1)]
-    client = FakeClaude(CONFORMING)
+    client = FakeClaude(section_reply(1), section_reply(2), CONFORMING)
 
     result = AnthropicService(anthropic_client=client).classify_document(TITLE, " ".join(tokens), SCHEME)
 
     assert result.input_truncated is True
-    assert tokens[-1] not in client.messages.calls[0]["messages"][0]["content"]
+    assert result.summary_truncated is False
+    assert len(client.messages.calls) == 3
+    final = client.messages.calls[-1]["messages"][0]["content"]
+    assert tokens[CLASSIFICATION_INPUT_TOKENS - 1] in final.split()
+    assert tokens[-1] not in final.split()
+
+
+def claude_prompts(client) -> list[tuple[str, str]]:
+    """The (system, user) pair of every request Claude was sent, in order."""
+    pairs = []
+    for call in client.messages.calls:
+        (message,) = call["messages"]
+        assert message["role"] == "user"
+        pairs.append((call["system"], message["content"]))
+    return pairs
+
+
+def test_claude_summarises_a_long_document_in_sections_then_classifies_it_in_one_final_request():
+    """D-139, the sectioned path through the SDK: three sections are four ``messages.create``
+    calls, the sections in order with the section prompt in the SDK's ``system`` parameter, then
+    the classification prompt with the opening and every section summary. EVERY call carries
+    Claude's ceiling, the effort setting, the classification timeout and no sampling parameter."""
+    client = FakeClaude(*LONG_REPLIES)
+
+    result = AnthropicService(anthropic_client=client).classify_document(TITLE, LONG_TEXT, SCHEME)
+
+    assert len(client.messages.calls) == 4
+    assert claude_prompts(client) == LONG_REQUESTS
+    for call in client.messages.calls:
+        assert call["model"] == "claude-opus-5"
+        assert call["max_tokens"] == CLAUDE_MAX_TOKENS
+        assert call["output_config"] == {"effort": CLAUDE_EFFORT}
+        assert call["timeout"] == CLASSIFICATION_TIMEOUT_SECONDS
+        assert "temperature" not in call
+    assert result.doc_type.value == "Policy"
+    assert result.summary == SUMMARY and result.key_points == KEY_POINTS  # the final reply's
+    assert result.model == "claude-opus-5"
+    assert result.input_truncated is True
+    assert result.summary_truncated is False
+
+
+def test_claude_and_flm_send_the_same_requests_for_the_same_long_document():
+    """Provider independence on the sectioned path: the same four pairs of strings, in the same
+    order, reach either model. Both providers call the one flow, so they cannot differ."""
+    claude = FakeClaude(*LONG_REPLIES)
+    flm = scripted(*LONG_REPLIES)
+
+    AnthropicService(anthropic_client=claude).classify_document(TITLE, LONG_TEXT, SCHEME)
+    make_service(flm).classify_document(TITLE, LONG_TEXT, SCHEME)
+
+    assert claude_prompts(claude) == sent_prompts(flm) == LONG_REQUESTS
+
+
+def test_claude_summarises_only_the_first_sections_of_a_document_past_the_ceiling_and_says_so():
+    text, tokens = long_text(MAXIMUM_SUMMARY_SECTIONS + 1, extra=1)  # one token past the ceiling
+    client = FakeClaude(*[section_reply(n) for n in range(1, MAXIMUM_SUMMARY_SECTIONS + 1)], CONFORMING)
+
+    result = AnthropicService(anthropic_client=client).classify_document(TITLE, text, SCHEME)
+
+    assert len(client.messages.calls) == MAXIMUM_SUMMARY_SECTIONS + 1
+    assert result.summary_truncated is True
+    assert all(tokens[-1] not in user.split() for _, user in claude_prompts(client))
+
+
+def test_claude_gives_up_on_a_section_after_exactly_three_calls_and_sends_no_final_request():
+    failure = anthropic_sdk.APIConnectionError(request=httpx2.Request("POST", "https://api.test"))
+    client = FakeClaude(failure, failure, failure)
+
+    with pytest.raises(ProviderUnavailable, match="for section 1 of 3") as excinfo:
+        AnthropicService(anthropic_client=client).classify_document(TITLE, LONG_TEXT, SCHEME)
+
+    assert len(client.messages.calls) == MAXIMUM_CLASSIFY_ATTEMPTS == 3
+    assert claude_prompts(client) == [LONG_REQUESTS[0]] * 3
+    assert "Claude (claude-opus-5)" in str(excinfo.value)
+    assert not isinstance(excinfo.value, ProviderRefused)
+
+
+def test_claude_retries_a_malformed_section_reply():
+    client = FakeClaude("A summary, in prose.", *LONG_REPLIES)
+
+    result = AnthropicService(anthropic_client=client).classify_document(TITLE, LONG_TEXT, SCHEME)
+
+    assert len(client.messages.calls) == 5
+    assert claude_prompts(client) == [LONG_REQUESTS[0], *LONG_REQUESTS]
+    assert result.summary == SUMMARY
+
+
+def test_claude_stops_at_once_when_a_section_is_refused():
+    """D-118 on the sectioned path: the 400 Anthropic sends once the credit has run out is
+    ProviderRefused after one call, and no other section and no final request is sent."""
+    client = FakeClaude(status_error(400))
+
+    with pytest.raises(ProviderRefused):
+        AnthropicService(anthropic_client=client).classify_document(TITLE, LONG_TEXT, SCHEME)
+
+    assert len(client.messages.calls) == 1
 
 
 def test_claude_joins_only_the_text_blocks_of_the_reply():

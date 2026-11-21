@@ -215,7 +215,13 @@ export function reprocessDocument(docId, options = {}) {
  *   person accepts the suggestion, D-105's note), `discarded` (the department
  *   only: outside the known departments, nothing written) or `confirmed` (a person
  *   confirmed or edited it). `doc_type` is the effective type; the effective
- *   department is the document's own `department` field (D-72).
+ *   department is the document's own `department` field (D-72). Since D-139 the
+ *   object also carries `summary`, `key_points` and `summary_truncated`, wherever
+ *   it appears: the machine's short summary of the document, `""` where it has
+ *   none; its key points, a list of strings, `[]` likewise; and whether the summary
+ *   covers only the first part of a long document. They are display only, shown by
+ *   src/components/DocumentSummary.jsx, and a classification from before the fields
+ *   carries none of the three.
  * - `tag_details` — every tag link, `[{content_tag_id, dimension, name,
  *   applied_by, confirmed, provisional, confidence}]`, `applied_by` "ai" or
  *   "user". A link with `provisional: true` is a held suggestion and is not among
@@ -249,7 +255,10 @@ export function reprocessDocument(docId, options = {}) {
  * text was extracted, so there is nothing to classify (FR-10's own code); 503
  * NFR-19's notice, after `MAXIMUM_CLASSIFY_ATTEMPTS`; 429 past the ingestion
  * rate it shares with upload, meeting ingestion and reprocess (D-79), with a
- * `Retry-After` in seconds.
+ * `Retry-After` in seconds. Since D-139 the route also takes D-85's per-user
+ * ingestion slot, so a second 429, `code` `ingestion_in_flight` (`error.code`,
+ * src/api/ingestion.js) and no `Retry-After`, while another ingestion of this
+ * user's is still being processed; it classifies nothing.
  */
 export function classifyDocument(docId, options = {}) {
   return post(`/documents/${encodeURIComponent(docId)}/classify`, {}, options)

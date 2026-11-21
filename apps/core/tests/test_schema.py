@@ -125,7 +125,11 @@ SCHEMA_V1 = {
          "department_applied_by",
          # documents 0013, 13 November 2026 (FR-10; the requirements audit of D-128, finding A5):
          # the proposals a person rejected, which no later run proposes, creates or links.
-         "rejected_tags"},
+         "rejected_tags",
+         # documents 0016, 21 November 2026 (FR-10, D-139): the document's summary, its key points,
+         # whether it covers only the first sections, and the model that wrote it and when
+         # (docs/schema-v1.md §1).
+         "summary", "key_points", "summary_truncated", "summary_model", "summarised_at"},
     ),
     # Schema v2, 9 November 2026 (FR-19, D-107): out of section 2's deferred table and into
     # section 1 by retrieval 0004, with its membership and cycle tables. The columns are
@@ -328,6 +332,9 @@ SECTION_5_PLAN = [
     # FR-10's department list (D-129), 13 November 2026: Departments, seeded from the departments
     # documents carry, immediately after 0014, where its dependency puts it.
     ("documents", "0015_departments"),
+    # FR-10's document summary (D-139), 21 November 2026: five columns on DocumentAnalysis,
+    # immediately after 0015, where its dependency puts it.
+    ("documents", "0016_document_summary"),
     ("meetings", "0003_fr16_meeting_summaries"),
     # Stage 4 item 8: the fabrication signal invariant 7 needs, which no_answer_reason
     # cannot carry on its own (docs/schema-v1.md §1 QueryLog).

@@ -39,7 +39,7 @@ from apps.ai.base import (
     TagSuggestion,
     Transcription,
 )
-from apps.ai.classification import classification_input
+from apps.ai.classification import classification_input, summary_sections
 from apps.core.constants import REPOSITORY_TAG_DIMENSIONS
 
 STUB_EMBEDDING_MODEL = "stub-embed"
@@ -57,6 +57,18 @@ STUB_EMBEDDING_MODEL = "stub-embed"
 STUB_CHAT_MODEL = "stub-chat"
 STUB_CONFIDENCE = 1.0
 STUB_OUT_OF_SCHEME_DEPARTMENT = "stub department"
+
+
+# What the stub's classify_document reports for the summary (FR-10, D-139): one sentence naming
+# the title, so a test with two documents can tell their summaries apart, and two fixed key
+# points, inside the parser's bounds as a provider's would be.
+def stub_document_summary(title: str) -> str:
+    """The stub's summary of the document titled ``title``."""
+    return f"Stub summary of the document {title!r}."
+
+
+STUB_KEY_POINTS = ("Stub key point one.", "Stub key point two.")
+
 # What the stub's transcribe reports (D-123): a model name no provider has, and a fixed
 # text per segment, numbered by call so a test that sends several segments can see each one's
 # text land in order.
@@ -165,9 +177,16 @@ class StubAIService:
         STUB_OUT_OF_SCHEME_DEPARTMENT (a value no scheme lists) when it has none; one tag per
         dimension that lists a value, that dimension's first, in Project, Process, Topic
         order; every confidence STUB_CONFIDENCE; ``model`` STUB_CHAT_MODEL; and
-        ``input_truncated`` from the real ``classification_input``, so a long text is
-        reported cut exactly as a provider would report it. The same scheme gives the same
-        reply in every process.
+        ``input_truncated`` from the real ``classification_input``, so a long text, or a text
+        whose opening CLASSIFICATION_INPUT_CHARACTERS cuts, is reported cut exactly as a
+        provider would report it. The same scheme gives the same reply in every process.
+
+        And the summary (D-139): ``summary`` is ``stub_document_summary(title)``,
+        ``key_points`` is STUB_KEY_POINTS, and ``summary_truncated`` comes from the real
+        ``summary_sections``, so a text past MAXIMUM_SUMMARY_SECTIONS sections, or one with a
+        section CLASSIFICATION_INPUT_CHARACTERS cuts, is reported as a provider would report
+        it. The stub makes no section requests: it is one call whatever the text's length,
+        and ``classify_calls`` records one entry.
 
         **Overriding it.** Pass ``classification=`` to the constructor, or set the attribute
         on an instance (the autouse ``stub_ai_service`` fixture's, for example). A
@@ -196,6 +215,9 @@ class StubAIService:
             ),
             model=STUB_CHAT_MODEL,
             input_truncated=classification_input(text)[1],
+            summary=stub_document_summary(title),
+            key_points=STUB_KEY_POINTS,
+            summary_truncated=summary_sections(text)[1],
         )
 
     def transcribe(self, audio: bytes, *, filename: str = "segment.wav") -> Transcription:

@@ -287,11 +287,19 @@ describe('FR-10: the type and department are shown with their provenance in word
   })
 })
 
-describe('D-119 finding 6: the notice that only the opening of a long document was read (D-104)', () => {
+describe('D-119 finding 6: the notice that a long document was classified from its opening (D-104, D-139)', () => {
   it('says so when the classification has input_truncated true', async () => {
     await renderDetail(detailOf({ classification: classificationOf({ input_truncated: true }) }))
 
-    expect(within(section()).getByText(TEXT.classificationTruncated)).toBeTruthy()
+    // The words are written out, not read from the constant: since D-139 the final request
+    // also carries summaries of the following sections, so "Only the opening ... was read"
+    // is untrue of a row classified since, and this sentence is true of both kinds of row
+    // (the requirements audit of 21 November 2026, R6).
+    expect(
+      within(section()).getByText(
+        'This document is long. It was classified from its opening, with at most a summary of the rest.',
+      ),
+    ).toBeTruthy()
   })
 
   it('says nothing about it when input_truncated is false', async () => {
@@ -682,6 +690,27 @@ describe('FR-10: tags applied automatically are distinguished from those applied
 
 /* ---- Classify now -------------------------------------------------------- */
 
+/**
+ * D-85's in-flight body, word for word from the contract, which the classify route
+ * sends since D-139 gave it the per-user ingestion slot, with no `Retry-After`.
+ */
+const IN_FLIGHT = { detail: 'Your previous upload is still being processed.', code: 'ingestion_in_flight' }
+
+/**
+ * The opening words of the limit's sentence, which the in-flight 429 must never be
+ * shown with. Checked against the sentence itself, so it cannot quietly stop
+ * matching if the sentence is reworded (as tests/ingestionLimits.test.jsx does).
+ */
+const LIMIT_WORDS = 'The upload limit has been reached'
+if (!TEXT.classifyLimitReached(TEXT.retryLater).startsWith(LIMIT_WORDS)) {
+  throw new Error(`classifyLimitReached no longer opens with "${LIMIT_WORDS}"; update LIMIT_WORDS`)
+}
+
+/** A time a sentence could promise: "in 30 seconds", "in 1 minute", "later", "now". */
+function namesATime(text) {
+  return /\d+ (second|minute)|\blater\b|\bnow\b/.test(text)
+}
+
 describe('FR-10: a document that has never been classified', () => {
   it('says so, and "Classify now" shows a busy state until the reply, then the result', async () => {
     const classify = heldResponse()
@@ -792,7 +821,62 @@ describe('FR-10: a document that has never been classified', () => {
 
     const alert = await screen.findByRole('alert')
     expect(alert.textContent).toContain(TEXT.classifyLimitReached(TEXT.retryInMinutes(2)))
+    // The limit's sentence alone: not the in-flight one beside it.
+    expect(alert.textContent).not.toContain(TEXT.classifyInFlight)
     expect(document.body.textContent).not.toContain('Request was throttled.')
+  })
+
+  it('says on the in-flight 429 that the previous upload is still being processed, in its own sentence and not the limit’s, naming no time', async () => {
+    // D-139: classify takes D-85's per-user slot, so a press while another ingestion of
+    // the user's is still being processed answers at once, with no Retry-After.
+    await renderDetail(detailOf(), { [`POST ${DOC}/classify`]: { status: 429, body: IN_FLIGHT } })
+
+    fireEvent.click(screen.getByRole('button', { name: TEXT.classifyNow }))
+
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain(TEXT.classifyFailedTitle)
+    // Written out, not read from the constant: a break run showed that a sentence reworded to
+    // drop its reason ("This document was not classified. Please try again.") passed every test.
+    expect(alert.textContent).toContain(
+      'Your previous upload is still being processed, so this document was not classified. ' +
+        'You can try again once the previous upload has finished.',
+    )
+    expect(alert.textContent).not.toContain(LIMIT_WORDS)
+    expect(namesATime(alert.textContent)).toBe(false)
+    // The client's own sentence, never the reply's `detail`.
+    expect(document.body.textContent).not.toContain(IN_FLIGHT.detail)
+    // Nothing was classified, and the action is still there to press again.
+    expect(screen.getByText(TEXT.classificationNone)).toBeTruthy()
+    expect(screen.getByRole('button', { name: TEXT.classifyNow })).toBeTruthy()
+  })
+
+  it('tells the in-flight 429 from the limit’s by `code` alone, not by `detail` or by Retry-After', async () => {
+    // Both replies carry the in-flight `detail` word for word, so a screen reading
+    // `detail` would say the same thing twice. And here the in-flight reply carries a
+    // Retry-After while the limit's carries none, the reverse of what the server sends,
+    // so a screen keying on the header would give each the other's sentence. Only
+    // `code` tells them apart the right way round, as on the upload screens.
+    let sent = 0
+    await renderDetail(detailOf(), {
+      [`POST ${DOC}/classify`]: () => {
+        sent += 1
+        return sent === 1
+          ? { status: 429, body: IN_FLIGHT, headers: { 'Retry-After': '30' } }
+          : { status: 429, body: { detail: IN_FLIGHT.detail } }
+      },
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: TEXT.classifyNow }))
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain(TEXT.classifyInFlight))
+    expect(screen.getByRole('alert').textContent).not.toContain(LIMIT_WORDS)
+    expect(namesATime(screen.getByRole('alert').textContent)).toBe(false)
+
+    fireEvent.click(screen.getByRole('button', { name: TEXT.classifyNow }))
+    await waitFor(() =>
+      expect(screen.getByRole('alert').textContent).toContain(TEXT.classifyLimitReached(TEXT.retryLater)),
+    )
+    expect(screen.getByRole('alert').textContent).not.toContain(TEXT.classifyInFlight)
+    expect(sent).toBe(2)
   })
 })
 

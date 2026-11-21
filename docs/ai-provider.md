@@ -88,7 +88,10 @@ class DocumentClassification:
     department: Assignment        # as suggested; whether it is in the scheme is apps/documents' call (D-105)
     tags: tuple[TagSuggestion, ...]
     model: str                    # the chat model that answered, for the DocumentAnalysis record
-    input_truncated: bool         # the text was cut at CLASSIFICATION_INPUT_TOKENS before it was sent
+    input_truncated: bool         # the classifying request carried the opening, not the whole text (5b, Truncation)
+    summary: str = ""             # D-139 — from a provider never empty, at most MAXIMUM_SUMMARY_CHARACTERS
+    key_points: tuple[str, ...] = ()  # D-139 — from a provider 1 to MAXIMUM_KEY_POINTS strings
+    summary_truncated: bool = False   # D-139 — some text read by no request: past MAXIMUM_SUMMARY_SECTIONS, or cut from a section
 
 @dataclass(frozen=True)
 class Transcription:              # D-123 — one recording segment's text, a draft
@@ -159,6 +162,14 @@ conform to `CLASSIFICATION_SCHEMA`, including a type outside the fixed list, cou
 attempt, not as a classification. A 4xx is handled as for generation (D-118), because
 classification makes its calls through the same `_chat_once` and `_claude_once`: a 429 is a
 failed attempt, and any other 4xx ends the attempts at once.
+
+Since D-139 (21 November 2026) the same operation returns the document's summary and key points,
+and it is one operation that may make several requests. A text within
+`CLASSIFICATION_INPUT_TOKENS` is one request. A longer text is one request per section and then
+a final request, each with `MAXIMUM_CLASSIFY_ATTEMPTS` of its own. If any request uses its
+attempts up, the operation raises `ProviderUnavailable` and returns nothing; a `ProviderRefused`
+from any request is re-raised at once. No operation was added and the signature did not change
+(section 5b).
 
 `transcribe` raises `TranscriptionDisabled` before any call when `TRANSCRIPTION_PROVIDER` is
 `none`, and otherwise `ProviderUnavailable` after `MAXIMUM_TRANSCRIBE_ATTEMPTS`, with a 4xx handled
@@ -428,6 +439,9 @@ When either happened, the ask and classify routes answered 500 instead of NFR-19
 meeting summary's run ended as "error" in the background runner, or stopped
 `retry_meeting_summaries` or `summarise_meetings` outright.
 
+Since 21 November 2026 the classification and section parsers also pass `unique_keys`, which
+refuses an object that repeats a key (§5b). The statement and meeting-summary parsers do not.
+
 **What the repairs leave alone (16 November 2026, D-136).** No repair touches text inside a JSON
 string. Three backticks inside a string are not a code fence, and a comma before a closing bracket
 or brace inside a string is not a trailing comma. A string is read as the object extraction reads
@@ -473,6 +487,12 @@ returns a document's type, department and tags against the scheme the caller pas
 (`TagScheme`, built by `apps/documents/classification.py` for the document's own audience). The
 same approach as section 5, because it is the same risk: a small local model and free-form JSON.
 
+Since 21 November 2026 (D-139) the same reply carries the document's **summary and key points**,
+FR-10's "single structured request issued at upload returns the classification, the summary and
+key points, and the tag assignments together, at the cost of one call rather than three". D-104
+had deferred them. A document too long for one request is summarised in sections first; see
+"Long documents" below.
+
 **Required schema** (`CLASSIFICATION_SCHEMA`)
 
 ```json
@@ -481,11 +501,13 @@ same approach as section 5, because it is the same risk: a small local model and
   "department": {"value": "Lantern Room", "confidence": 0.88},
   "tags": [
     {"dimension": "Process", "value": "wick trimming", "confidence": 0.9}
-  ]
+  ],
+  "summary": "Each evening before the lamp is lit, the keeper trims both wicks and wipes the lens.",
+  "key_points": ["The lens is wiped with a dry cloth."]
 }
 ```
 
-- Exactly three keys. `doc_type.value` **must be one of the scheme's `doc_types`** (DOCUMENT_TYPES:
+- Exactly five keys, three until D-139. `doc_type.value` **must be one of the scheme's `doc_types`** (DOCUMENT_TYPES:
   Policy, Procedure, Report, Meeting Paper), or the reply is a `SchemaViolation` — a type outside
   the fixed list is not a classification (invariant 10; FR-10: "selected from a fixed list rather
   than generated freely"). `department.value` is any non-empty string that decoding admits (§5:
@@ -499,6 +521,20 @@ same approach as section 5, because it is the same risk: a small local model and
 - A tag with the same dimension and name as an earlier one, after `normalise_tag_name` (lower
   case, single spaces), is dropped and the first kept. That is a shape tolerance — two spellings of
   one tag are one suggestion — not a repair of content.
+- `summary` (D-139) is a string of 1 to `MAXIMUM_SUMMARY_CHARACTERS` (600) characters, and
+  `key_points` an array of 1 to `MAXIMUM_KEY_POINTS` (5) strings of 1 to
+  `MAXIMUM_KEY_POINT_CHARACTERS` (200) characters each. Lengths are counted after surrounding
+  whitespace is stripped. A missing key, an empty value, a value of the wrong type, an empty
+  array, a sixth key point or one character too many is a violation. **Nothing is trimmed or
+  repaired into shape:** an over-long summary is not cut and a sixth key point is not dropped.
+  A summary or key point holding a NUL or an unpaired surrogate is refused at the decode step
+  (§5), since neither can be stored.
+- No violation's message quotes a summary or a key point: it gives a length or a position.
+- An object that repeats a key, at the top level or nested, is a violation (21 November 2026,
+  the review of D-139). json keeps the last of two equal keys, so a reply carrying an over-long
+  `summary` and then a short one used to conform: a silent fourth repair. The refusal is
+  `loads_reply`'s `unique_keys`, which only this parser and the section parser pass; its message
+  is fixed and quotes nothing. The statement and meeting-summary parsers keep json's rule.
 
 **Prompt strategy, in order** (`CLASSIFICATION_SYSTEM_PROMPT`, `build_classification_messages`)
 
@@ -506,6 +542,13 @@ same approach as section 5, because it is the same risk: a small local model and
    from the listed departments; tags only from the values listed per dimension, except that a NEW
    Topic value may be proposed when no listed one fits — never a new Project, Process or
    department; at most eight tags; confidence as the model's honest estimate; no explanation.
+   D-139 changed rule 2's count of keys, from three to five, and added rules 9 to 11 after rule
+   8: the summary as one string of one to three sentences, the key points as one to five short
+   sentences, and the grounding sentence. The header, rule 1, rules 3 to 8 and the example's
+   declaration are word for word what they were, and
+   `apps/ai/tests/test_classification_prompt.py` holds them to a copy of the earlier text. The
+   reply's keys keep their order, the summary last, so the type, the department and the tags are
+   written before a word of it.
 2. One worked example whose subject (lighthouse keeping) and whose departments and tag values are
    alien to any organisation, for the reason the comment above `SYSTEM_PROMPT` in
    `apps/ai/prompting.py` records: a worked example is training data for the response, and this
@@ -513,7 +556,12 @@ same approach as section 5, because it is the same risk: a small local model and
    listed values only and proposes no new Topic — a demonstrated invention would be copied onto
    every document. The only values it shares with a real prompt are the four fixed types.
    `apps/ai/tests/test_classification_prompt.py` asserts the example's values appear in no real
-   scheme (the corpus manifest) and in no real user turn.
+   scheme (the corpus manifest) and in no real user turn. Since D-139 the example's reply also
+   holds a summary and three key points about its lighthouse text: one sentence, well under the
+   limits, and fewer key points than the cap, because a demonstrated count is copied too. Every
+   word of them is a word of the example's text, but for three the test lists. The summary sets
+   the text's statements side by side, as the text does, and gives no cause: until 21 November
+   2026 it joined them with "because", a cause the text never states (the review of D-139).
 3. The user turn carries the scheme's lists (document types, departments, Project, Process and
    Topic tags — `(none listed)` where a dimension is empty), then the title, then the text, then
    the instruction to reply with the JSON object only.
@@ -526,14 +574,111 @@ same approach as section 5, because it is the same risk: a small local model and
 this prompt cites no identifier, so unlike the generation prompt (D-45) it has no delimiter whose
 forgery converts into an accepted citation, and no neutralisation is applied. The residual is a
 body that steers the model in prose or forges a scheme line; shape validation cannot detect it.
-What bounds it: the type is held to the fixed list by the parser, the department and tag values
-are held to the scheme by the application (D-105), and a person confirms the suggestions.
+What bounds it: the type is held to the fixed list by the parser, and the department and tag
+values are held to the scheme by the application (D-105). A person does not confirm every
+suggestion: a value in the scheme at or above its threshold (D-122, D-129) is applied **without**
+a person's confirmation, so a steered suggestion can be applied, though only as a value the scheme
+already holds. A value below its threshold, and a new Topic at any confidence, wait for a person.
+Since D-139 the text that can try to steer the type, the department and the tags is not the
+opening alone but the first `MAXIMUM_SUMMARY_SECTIONS` × `CLASSIFICATION_INPUT_TOKENS` tokens
+(12,000), as much of each section as `CLASSIFICATION_INPUT_CHARACTERS` lets a request carry,
+because a section's summary enters the final request.
 
-**Truncation** (`classification_input`). The model reads the title and the first
-`CLASSIFICATION_INPUT_TOKENS` (1,500) whitespace tokens of the extracted text — D-31's token —
-joined by single spaces. Whether anything was cut is returned as `input_truncated` on the
-`DocumentClassification` and kept on the record rather than hidden. The cut is made by the
-provider and again at the prompt boundary (it is idempotent), so no caller can send more.
+**A summary has fewer bounds than a tag (D-139).** Nobody confirms a summary and nothing holds
+its content to a list, so a body that instructs the model can put its own words beneath the
+title. What bounds it: its length; that it is text; that it is display only, never embedded,
+retrieved or matched by search, so it cannot reach an answer; that it is shown only where the
+document itself is in scope; and the AI mark (NFR-15).
+
+**Grounding** (`GROUNDING_SENTENCE`, D-139). FR-10: "the summarisation prompt constrains output
+to content present in the document." One sentence, in both prompts, as rule 11 of the
+classification prompt and rule 5 of the section prompt: "The summary and the key points state
+only what the document's text says, with nothing from outside it". A test asserts it is in each.
+**That is the whole of the grounding.** No code compares a summary with the text and no second
+model call judges it: invariant 5's limitation, conceded the same way.
+
+**Truncation** (`classification_input`). The request that classifies a document carries its title
+and the first `CLASSIFICATION_INPUT_TOKENS` (1,500) whitespace tokens of the extracted text —
+D-31's token — joined by single spaces, and never more than `CLASSIFICATION_INPUT_CHARACTERS`
+(15,000) characters of them. Whether anything was cut, by either cap, is returned as
+`input_truncated` on the `DocumentClassification` and kept on the record rather than hidden. The
+cut is made by the provider and again at the prompt boundary (it is idempotent), so no caller can
+send more.
+
+**The cap in characters** (the closing security review of D-139, finding S1). A token has no
+length limit, and ingestion's checks count tokens, so a TXT under 50 MB of some 10,500 very long
+"words", eight sections, passed them, and every request D-139 sends it, each section's and the
+final one, carried as much as the provider's window held: nine such requests, each with three
+attempts, where before D-139 that document cost one. FR-16 closed the same gap with
+`SUMMARY_INPUT_CHARACTERS` (D-125's third note), and this cap follows its ratio, ten characters a
+token. One function applies it where the opening's and each section's tokens are joined, so
+section 1 stays the opening byte for byte: whole tokens are kept while the joined text fits, the
+first that would not fit is dropped with every token after it, and a first token longer than the
+cap on its own is cut to it. On the project's own forty documents (the three corpus directories,
+measured 22 November 2026) the longest opening is 9,725 characters and the longest section
+9,780, D04's, so the cap cuts none of them, and a text it does not cut is sent exactly what it was
+sent before the cap. It never changes how many requests a document makes, which is counted in
+tokens.
+
+**What the classifying request reads** (the requirements audit of 21 November 2026, R6).
+`input_truncated` says that request did not carry the whole text; it does not say the opening was
+all it read. For a text of more than one section the final request carries, beside the opening,
+the summary and key points of each section summarised, the opening's own among them, and tells
+the model to choose the type, the department and the tags from the title and the opening and to
+write the summary and key points from the section summaries. The rest of the text, up to
+`MAXIMUM_SUMMARY_SECTIONS` sections in all, is summarised in sections; past them it is unread,
+and `summary_truncated` says so. A text of one section whose opening the character cap cut has no
+section summaries: what the cap dropped is read by no request.
+
+**Long documents** (`summary_sections`, `classify_and_summarise`, D-139). FR-10: "Documents
+exceeding the model's context limit are summarised in sections and consolidated, rather than
+being truncated and summarised from a fragment without the user being told." D-139 reads the
+limit as `CLASSIFICATION_INPUT_TOKENS`, which did not change.
+
+- **Within the cap: one request,** exactly as before D-139, whose reply now holds all five keys.
+- **Past the cap: one request per section, then one final request.** `summary_sections` cuts the
+  text into sections of `CLASSIFICATION_INPUT_TOKENS` tokens with no overlap, at most
+  `MAXIMUM_SUMMARY_SECTIONS` (8), each joined within `CLASSIFICATION_INPUT_CHARACTERS` by the
+  function that joins the opening. The tokens the character cap drops from a section are read by
+  no request: they do not spill into the next section, so section n always starts at token
+  (n − 1) × 1,500. Each section goes out in order under `SECTION_SUMMARY_SYSTEM_PROMPT`, with
+  the title and "Section n of m", and returns that
+  section's summary and key points against `SECTION_SUMMARY_SCHEMA`: the same two keys under
+  the same bounds, parsed by `parse_section_summary` with the same three repairs. A section is
+  not classified. The final request is the classification prompt again; its user turn carries
+  the title, the opening exactly as `classification_input` cuts it, each section's summary and
+  key points in order, and an instruction to choose the type, department and tags from the
+  title and the opening and to write the summary and key points from the section summaries.
+- **So n sections are n + 1 requests,** each with its own `MAXIMUM_CLASSIFY_ATTEMPTS`: at most
+  (8 + 1) × 3 = 27 calls for one document, one after another, each carrying at most
+  `CLASSIFICATION_INPUT_CHARACTERS` of the document's text. The count and the cap together are
+  what bound one document; the count alone bounded nothing until the cap (the closing security
+  review of D-139, finding S1). The final request also carries the section summaries, each held
+  by the parser to `MAXIMUM_SUMMARY_CHARACTERS` and `MAXIMUM_KEY_POINTS` of
+  `MAXIMUM_KEY_POINT_CHARACTERS`.
+- **Past the ceiling the record says so.** A text of more than 8 sections (12,000 tokens) has
+  only its first 8 summarised, and `summary_truncated` is True. A text of exactly 8 is
+  summarised whole and is not flagged.
+- **And so do the requests** (21 November 2026, the review of D-139). Until then the last
+  section of a cut text was labelled "Section 8 of 8" and the final request asked for the
+  document "as a whole". Now every "Section n of m", in a section's turn, in the final turn and
+  in the attempt log, counts the document's real sections, ceil(tokens / 1,500): "Section 8 of
+  20". The final turn carries `TRUNCATED_SECTIONED_NOTICE` and
+  `TRUNCATED_CONSOLIDATION_INSTRUCTION` in place of `SECTIONED_NOTICE` and
+  `CONSOLIDATION_INSTRUCTION`: the section summaries cover only the first 8 sections, the rest
+  of the document was not read, and the summary must never present that part as the whole. A
+  text within the ceiling is sent exactly what it was before, byte for byte.
+- **A section the character cap cut is recorded as cut too,** within the ceiling or past it:
+  `summary_truncated` is True, and `input_truncated` too where the cut section is the opening.
+  Nothing else changes: the requests carry the cut text but are otherwise those of any text of as
+  many tokens, the same count and the same labels, so within the ceiling the final turn still
+  carries `SECTIONED_NOTICE` and `CONSOLIDATION_INSTRUCTION`, which say the section summaries
+  stand for the document's text.
+- **A failure anywhere returns nothing.** No later section is sent and no final request is
+  made, and the sections that did succeed are not turned into a result.
+- **Both providers call `classify_and_summarise`,** passing only a function that makes one call
+  with a system prompt and a user turn. They cannot differ in what they ask or how often, and
+  `apps/ai/tests/test_classification_providers.py` compares them request for request.
 
 **Retry policy** (`run_classification_attempts`): `run_generation_attempts`' exactly, with
 `MAXIMUM_CLASSIFY_ATTEMPTS` (3) as the total — 1 initial call + 2 retries. A transport failure
@@ -541,17 +686,24 @@ or a 5xx is a failed attempt; a non-conforming reply is a failed attempt; a 4xx 
 one call and consumes no retry; after the last attempt, `ProviderUnavailable` naming the
 provider and the last failure. Every attempt is recorded through `apps/ai/attempt_log.py` under
 the step `classification`, at WARNING when it failed and INFO when it parsed, quoting nothing of
-the reply. On FLM, `temperature` is 0.0 and `max_tokens` is `CLASSIFICATION_MAX_TOKENS` (400).
-On Claude there is no sampling parameter, which current models refuse, and `max_tokens` is
-`CLAUDE_MAX_TOKENS`, generation's Claude ceiling, because thinking counts against it and 400 would
-cut the reply off before its JSON (#67, D-115). Every call carries
-`CLASSIFICATION_TIMEOUT_SECONDS` (300). Both providers call the one loop; `model` on
+the reply. A section's request has the same policy through the same loop
+(`run_section_summary_attempts`), recorded under the step `section summary` with the section
+named. On FLM, `temperature` is 0.0 and `max_tokens` is `CLASSIFICATION_MAX_TOKENS`: 1,200 since
+D-139, 400 before. The longest conforming reply, every limit filled, is about 920 tokens by
+arithmetic (`apps/ai/classification.py` shows it); **no reply to this prompt has been counted on
+gemma3:4b.** On Claude there is no sampling parameter, which current models refuse, and
+`max_tokens` is `CLAUDE_MAX_TOKENS`, generation's Claude ceiling, because thinking counts against
+it and FLM's ceiling could cut the reply off before its JSON (#67, D-115). Every call, a
+section's and the final one, carries `CLASSIFICATION_TIMEOUT_SECONDS` (300). `model` on
 the result is `FLM_CHAT_MODEL` or `ANTHROPIC_MODEL`, whichever answered.
 
 **The stub** (`StubAIService.classify_document`). Deterministic and derived from the scheme: the
 first document type, the first department (or `STUB_OUT_OF_SCHEME_DEPARTMENT` when the scheme
 lists none), one tag per dimension that lists a value, every confidence `STUB_CONFIDENCE`,
-`model` `STUB_CHAT_MODEL`, and the real `input_truncated`. Every call is recorded in
+`model` `STUB_CHAT_MODEL`, and the real `input_truncated`. Since D-139 also
+`summary=stub_document_summary(title)`, `key_points=STUB_KEY_POINTS` (two strings) and the real
+`summary_truncated`, from `summary_sections`; both names are importable from `apps.ai.testing`.
+The stub is one call whatever the text's length. Every call is recorded in
 `classify_calls`. A test overrides it with `StubAIService(classification=...)` or by setting the
 `classification` attribute on the suite's stub: a `DocumentClassification` is returned as-is, a
 callable is called with `(title, text, scheme)` and may raise `ProviderUnavailable` to stand in
@@ -568,6 +720,49 @@ the development documents and Objective 05's runs:
 *Dated note, 13 November 2026:* D-128 revised rules 6 and 7 for one day, and D-106's sweep ran on
 that revision (`corpus/objective-05/runs/2026-11-12/dev-sweep-haiku-d127/`). D-129 reversed it,
 so the prompt above is the one those measurements describe.
+
+*Dated note, 21 November 2026 (D-139):* **every measurement above describes the prompt before
+D-139.** Rule 2 changed, rules 9 to 11 and two reply keys were added, and FLM's reply ceiling rose
+from 400 to 1,200. Rules 3 to 8 were kept word for word and the summary comes last in the reply,
+to disturb the classification as little as a prompt change can; that is a precaution, not
+evidence. Objective 05's check has been run on D-139's prompt four times, on 21 November 2026, on
+claude-haiku-5-5 (`corpus/objective-05/runs/2026-11-21-d139/`): once at `186be70`, and three times
+after the worked example's summary was reworded that day (the review of D-139), which is the
+prompt that ships. All three clauses were met on every draw and nothing was re-tuned. On one of
+the three, one wrong type scored 0.8 and was applied: D04's, the one reference document that takes
+the sectioned path. No earlier draw on Haiku had applied a wrong type. With Objective 02's timing
+below, these are the only runs in which a model has answered a section's request, or a final
+request carrying section summaries: D04's seven requests conformed at their first attempt on each
+draw, as every other request of the four draws did. Not measured on either provider:
+
+- whether the types, departments, tags and confidences come out as they did, which the
+  thresholds depend on (0.95 on gemma3:4b; 0.72, and 0.30 for departments, on claude-haiku-5-5):
+  D-106's sweep has not been run on D-139's prompt, nothing has been run on it on FLM, and four
+  draws of Objective 05 are a check, not a re-derivation;
+- the schema conformance rate of the five-key reply and of a section's reply, beyond those draws
+  and the timing below, and how often a reply is refused over its summary or a key point running
+  past its limit. It has happened once: of the ten final requests a sectioned document has made on
+  claude-haiku-5-5, nine with a committed attempt log (Objective 02's five timed uploads, and D04
+  on each of Objective 05's four draws; the timing's rehearsal upload has none), one, in Objective
+  02's timing, was refused for a summary of 652 characters, and its retry conformed. Until 22
+  November 2026 this said "of the seven", the count before Objective 05's last three draws;
+- a last section of fewer than `MINIMUM_CONTENT_LENGTH` (50) tokens, which a text 1 to 49 tokens
+  past a multiple of `CLASSIFICATION_INPUT_TOKENS` sends, and which must still return 1 to 5 key
+  points: no measured document has one (D04's last section is 857 tokens);
+- on FLM, where `temperature` is 0.0 and a retry repeats the same request, whether a reply that
+  breaks a limit recovers at all;
+- how long a sectioned document takes: Objective 02's bound, a document of twenty pages or fewer
+  processed within sixty seconds, and NFR-13's two minutes from upload to visible confirmation,
+  each under sectioning. On anthropic the twenty-page upload was timed once, on 21 November 2026,
+  with D-139's code: 23.4 to 32.1 s on five uploads of six requests each
+  (`corpus/objective-02/runs/2026-11-21-d139-twenty-pages/`). NFR-13 was not re-run. On FLM
+  neither is measured and both are expected to be exceeded, so Objective 02 stands verified on
+  anthropic only (the user's choice, D-139). Whether the final request's longer prompt fits
+  `CLASSIFICATION_TIMEOUT_SECONDS` on the NPU is not known.
+
+`scripts/classification_dev_sweep.py` measures nothing of a long document. Its development
+documents are each within one request, at most 344 words, so it sends no section request, and it
+records each document's result rather than each request's attempts.
 
 ---
 

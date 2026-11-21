@@ -1,0 +1,65 @@
+/* FR-10's document summary and key points (D-139), in a search result and on the
+   document page. Tokens only. The dashed boundary and the words of the AI mark are
+   AiMark.css's (NFR-15), so no rule here sets a border. */
+
+/* One block, bounded as AI content is. Sized as the search result's AI snippet
+   is, which it sits above. */
+.document-summary {
+  max-width: var(--measure-text);
+  margin: 0 0 var(--space-2);
+  padding: var(--space-2) var(--space-3);
+}
+
+.document-summary > :last-child {
+  margin-bottom: 0;
+}
+
+/* The mark and the sentence saying what the block is, and the sentence saying a
+   summary covers only part of the document: muted, at the mark's own size (muted
+   on surface 7.56:1). */
+.document-summary__provenance,
+.document-summary__note {
+  margin: 0 0 var(--space-1);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+/* The model's words, which can hold a long unbroken string. */
+.document-summary__text {
+  margin: 0 0 var(--space-2);
+  word-break: break-word;
+}
+
+/* The list's visible name. Words, not a heading: a search page would otherwise
+   gain one heading per result. */
+.document-summary__points-label {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+/* The bullet is set here rather than left to the browser, which draws a list
+   inside a list (a search result) differently from one that is not (the document
+   page). */
+.document-summary__points {
+  margin: 0 0 var(--space-2);
+  padding-left: var(--space-5);
+  list-style: disc;
+}
+
+.document-summary__points > li {
+  margin-bottom: var(--space-1);
+  word-break: break-word;
+}
+
+.document-summary__points > li:last-child {
+  margin-bottom: 0;
+}
+
+/* The line in the summary's place where a document has none: an ordinary state,
+   said plainly (muted on surface 7.56:1). */
+.document-summary__none {
+  max-width: var(--measure-text);
+  margin: 0 0 var(--space-2);
+  color: var(--color-text-muted);
+}

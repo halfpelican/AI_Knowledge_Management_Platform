@@ -999,6 +999,14 @@ export const TEXT = {
   // name it, so the one limit is recognisably one.
   classifyLimitReached: (when) =>
     `The upload limit has been reached, so this document was not classified. You can try again ${when}.`,
+  // D-85's in-flight 429 (`code` "ingestion_in_flight"), which classify meets since
+  // D-139 because the route takes the per-user slot upload and reprocess hold.
+  // Worded as `reprocessInFlight` is, "upload" naming the one slot as "the upload
+  // limit" names the one budget. Not the limit, so it does not say "limit", and it
+  // promises no time, because the reply carries none.
+  classifyInFlight:
+    'Your previous upload is still being processed, so this document was not classified. ' +
+    'You can try again once the previous upload has finished.',
   classificationFieldType: 'Document type',
   classificationFieldDepartment: 'Department',
   // The document's type while the only suggestion is provisional: `doc_type` is
@@ -1133,9 +1141,33 @@ export const TEXT = {
   tagAlreadyOffered: 'A Topic with this name is already offered for this document. Choose it from the tag options.',
   // Said after it only when the tag the 409 named was found and selected.
   tagAlreadyOfferedSelected: 'It is now selected under “Choose an existing tag”, so pressing Add tag applies it.',
-  // `input_truncated`: only the opening of a long document was read (D-104). Said
-  // rather than hidden, which is why the record keeps the flag.
-  classificationTruncated: 'Only the opening of this document was read to classify it.',
+  // `input_truncated`: the document is longer than the classifier reads in full. Said
+  // rather than hidden, which is why the record keeps the flag. Worded to be true of
+  // both kinds of row: one classified before D-139 read only the opening (D-104); one
+  // classified since also saw summaries of the sections that follow, because the final
+  // request carries them (D-139; the requirements audit of 21 November 2026, R6). It
+  // read "Only the opening of this document was read to classify it." until then.
+  classificationTruncated: 'This document is long. It was classified from its opening, with at most a summary of the rest.',
+  // FR-10's document summary and key points (D-139), in a search result and on
+  // the document page (src/components/DocumentSummary.jsx). FR-10 Front-End: "Each
+  // document displays a short summary and a list of key points, shown beneath the
+  // title in search results so users can judge relevance before opening the file."
+  // Said after NFR-15's mark: what the block is, and that these are not the
+  // document's words, since a search result shows the document's own passage
+  // straight after it.
+  documentSummaryProvenance: 'This is a summary of the document, not its own text.',
+  // The key points' visible name, which also names the list to a screen reader.
+  documentKeyPoints: 'Key points',
+  // `summary_truncated`: the summary does not cover the whole document. Either the
+  // document is longer than the sections a summary is made from, or a section was
+  // cut at the character cap (D-139, the closing security review's S1). FR-10: never
+  // "summarised from a fragment without the user being told". It names no number
+  // of sections, so no tuned value is restated here. It read "covers only the first
+  // part" until the cap, which can cut a section that is not the last.
+  documentSummaryTruncated: 'This summary covers only part of the document.',
+  // The document page, where `summary` is "" or the document was never
+  // classified. An ordinary state, said in one line.
+  documentSummaryNone: 'No summary has been generated for this document.',
   // The meeting delete, which is not in the proposal and mirrors the document
   // delete above (src/pages/MeetingDetail.jsx). The control shows only when the
   // meeting detail says `can_delete`; the server checks `manage_meetings` on

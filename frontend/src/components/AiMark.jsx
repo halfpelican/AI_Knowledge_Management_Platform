@@ -10,8 +10,10 @@ import './AiMark.css'
  * department and tags first (src/components/Classification.jsx). This component is
  * that mark on: FR-12's answer (src/components/Answer.jsx, live and reopened), FR-16's
  * summary, its extracted action items and the sentence recording that a meeting
- * raised none, and a passage of a meeting's summary where FR-12 shows a source passage
- * or a search snippet. **One AI surface does not carry it:** the draft transcript a
+ * raised none, a passage of a meeting's summary where FR-12 shows a source passage
+ * or a search snippet, and FR-10's summary of a document with its key points, in a
+ * search result and on the document page (src/components/DocumentSummary.jsx, D-139).
+ * **One AI surface does not carry it:** the draft transcript a
  * recording produces (D-123) carries that feature's own machine-transcript notice in
  * the field a person is correcting, and whether it should carry this mark as well is
  * recorded as open in D-125. It has two parts, and each is defined once:

@@ -19,6 +19,12 @@ import { get } from './client.js'
  * as they arrive: no total in this reply describes anything the caller may not
  * see (CLAUDE.md §6, invariant 1).
  *
+ * Since D-139 each result also carries `summary`, `key_points` and
+ * `summary_truncated`: FR-10's summary of a document, its key points, and whether
+ * the summary covers only the first part of a long document. A document with no
+ * summary and every meeting carry `""`, `[]` and `false`. The summary is shown
+ * with the result and is never what the term was matched against.
+ *
  * **The term is sent exactly as typed.** The server stores and matches it
  * character for character with no trimming and no sanitiser, so this function
  * does not trim either — a client that trimmed would search for something other

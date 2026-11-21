@@ -2,19 +2,34 @@
 
 apps/documents' tests drive the apply rules (D-105) through this stub without a live model, so
 what it returns by default, and how a test replaces that, are pinned here.
+
+Since D-139 the default carries a summary and key points: ``stub_document_summary(title)`` and
+STUB_KEY_POINTS, with ``summary_truncated`` from the real ``summary_sections``.
 """
+
+import json
 
 import pytest
 
 import apps.ai
 from apps.ai.base import Assignment, DocumentClassification, ProviderUnavailable, TagScheme, TagSuggestion
+from apps.ai.classification import classification_input, parse_section_summary, summary_sections
 from apps.ai.testing import (
     STUB_CHAT_MODEL,
     STUB_CONFIDENCE,
+    STUB_KEY_POINTS,
     STUB_OUT_OF_SCHEME_DEPARTMENT,
     StubAIService,
+    stub_document_summary,
 )
-from apps.core.constants import CLASSIFICATION_INPUT_TOKENS, DOCUMENT_TYPES
+from apps.core.constants import (
+    CLASSIFICATION_INPUT_TOKENS,
+    DOCUMENT_TYPES,
+    MAXIMUM_KEY_POINT_CHARACTERS,
+    MAXIMUM_KEY_POINTS,
+    MAXIMUM_SUMMARY_CHARACTERS,
+    MAXIMUM_SUMMARY_SECTIONS,
+)
 
 SCHEME = TagScheme(
     doc_types=DOCUMENT_TYPES,
@@ -72,6 +87,86 @@ def test_input_truncated_is_the_real_flag():
     stub = StubAIService()
     assert stub.classify_document("T", " ".join(["w"] * CLASSIFICATION_INPUT_TOKENS), SCHEME).input_truncated is False
     assert stub.classify_document("T", " ".join(["w"] * (CLASSIFICATION_INPUT_TOKENS + 1)), SCHEME).input_truncated is True
+
+
+# --- The summary (D-139) ----------------------------------------------------------------------
+
+
+def test_the_default_carries_a_summary_naming_the_title_and_the_two_stub_key_points():
+    result = StubAIService().classify_document("Leave policy", "Some text.", SCHEME)
+
+    assert result.summary == stub_document_summary("Leave policy") == "Stub summary of the document 'Leave policy'."
+    assert result.key_points == STUB_KEY_POINTS == ("Stub key point one.", "Stub key point two.")
+    assert result.summary_truncated is False
+
+
+def test_the_stubs_summary_tells_two_documents_apart():
+    stub = StubAIService()
+    first = stub.classify_document("Leave policy", "x", SCHEME)
+    second = stub.classify_document("Travel policy", "x", SCHEME)
+    assert first.summary != second.summary
+    assert "Leave policy" in first.summary and "Travel policy" in second.summary
+
+
+def test_the_stubs_summary_is_one_a_provider_could_return():
+    """The stub stands in for the contract, so its default is inside the parser's bounds: a
+    non-empty summary within the limit, and between 1 and MAXIMUM_KEY_POINTS key points, each
+    within its own. A reply built from the default parses."""
+    result = StubAIService().classify_document("T" * 255, "x", SCHEME)
+
+    assert 0 < len(result.summary) <= MAXIMUM_SUMMARY_CHARACTERS
+    assert isinstance(result.key_points, tuple) and len(result.key_points) == 2
+    assert 1 <= len(result.key_points) <= MAXIMUM_KEY_POINTS
+    assert all(0 < len(point) <= MAXIMUM_KEY_POINT_CHARACTERS for point in result.key_points)
+    parsed = parse_section_summary(json.dumps({"summary": result.summary, "key_points": list(result.key_points)}))
+    assert (parsed.summary, parsed.key_points) == (result.summary, result.key_points)
+
+
+def test_summary_truncated_is_the_real_flag():
+    """From ``summary_sections``, as ``input_truncated`` is from ``classification_input``: False
+    at exactly MAXIMUM_SUMMARY_SECTIONS sections, True one token past them. And the two flags
+    are different facts: a text of two sections is cut for classification and summarised whole."""
+    stub = StubAIService()
+    ceiling = MAXIMUM_SUMMARY_SECTIONS * CLASSIFICATION_INPUT_TOKENS
+    at, past = " ".join(["w"] * ceiling), " ".join(["w"] * (ceiling + 1))
+
+    assert stub.classify_document("T", at, SCHEME).summary_truncated is False
+    assert stub.classify_document("T", past, SCHEME).summary_truncated is True
+    assert (summary_sections(at)[1], summary_sections(past)[1]) == (False, True)
+    two_sections = stub.classify_document("T", " ".join(["w"] * (CLASSIFICATION_INPUT_TOKENS + 1)), SCHEME)
+    assert (two_sections.input_truncated, two_sections.summary_truncated) == (True, False)
+
+
+def test_the_stubs_flags_are_the_real_functions_for_a_dense_text():
+    """A text of very long tokens is cut by CLASSIFICATION_INPUT_CHARACTERS (the closing security
+    review of D-139, finding S1), and the stub reports it as a provider would: its two flags are
+    ``classification_input``'s and ``summary_sections``' own. Both are True for a text of one
+    section whose opening the cap cut, where the count in tokens cuts nothing, and for a text of
+    three sections each cut by the cap, which is not past the ceiling."""
+    stub = StubAIService()
+    one_section = " ".join(["x" * 9_999] * 10)
+    three_sections = " ".join(["y" * 39] * (2 * CLASSIFICATION_INPUT_TOKENS + 1))
+
+    for text in (one_section, three_sections):
+        result = stub.classify_document("T", text, SCHEME)
+        assert result.input_truncated is classification_input(text)[1] is True
+        assert result.summary_truncated is summary_sections(text)[1] is True
+
+
+def test_the_stub_is_one_call_however_long_the_text():
+    """A provider makes a request per section of a long text; the stub makes none. One entry in
+    ``classify_calls`` whatever the length, so a test counting calls counts operations."""
+    stub = StubAIService()
+    stub.classify_document("T", " ".join(["w"] * (3 * CLASSIFICATION_INPUT_TOKENS)), SCHEME)
+    assert len(stub.classify_calls) == 1
+
+
+def test_an_override_is_returned_as_given_with_no_summary_added():
+    """The dataclass's defaults, not the stub's: an override built without a summary has none,
+    which is how a test of a document with no summary gets one."""
+    result = StubAIService(classification=OVERRIDE).classify_document("T", "x", SCHEME)
+    assert result is OVERRIDE
+    assert (result.summary, result.key_points, result.summary_truncated) == ("", (), False)
 
 
 def test_every_call_is_recorded_with_its_arguments():

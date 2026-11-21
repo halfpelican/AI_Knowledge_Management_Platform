@@ -1,0 +1,22 @@
+{
+  "database": "kmp_obj05_d139_20261121",
+  "configuration": {
+    "ai_provider": "anthropic",
+    "chat_model": "claude-haiku-5-5",
+    "embedding_model": "voyage-4",
+    "embedding_dimension": 1024
+  },
+  "started": "2026-11-21T23:05:41+11:00",
+  "finished": "2026-11-21T23:07:00+11:00",
+  "prices_usd_per_million": {
+    "input": 0.1,
+    "output": 0.5
+  },
+  "claude_usage": {
+    "calls": 26,
+    "input_tokens": 66007,
+    "output_tokens": 12856,
+    "replies_without_usage": 0,
+    "estimated_usd": 0.013
+  }
+}

@@ -383,13 +383,18 @@ by nothing else.
 | `doc_type_outcome` | text, nullable | `ASSIGNMENT_OUTCOMES` — see §3 |
 | `department_outcome` | text, nullable | `ASSIGNMENT_OUTCOMES` |
 | `department_applied_by` | text, nullable | **`documents 0009`** — whose value `Documents.department` holds, in `TAG_APPLIED_BY_VALUES`: `user` a person gave it (typed at upload, or written through the confirm route); `ai` a run wrote its suggestion into a blank department and no person has written it since; null for no department, or a row classified before 0009 and not set since (D-119 finding 10) |
-| `user_edited` | boolean | true once a person confirmed or edited the type or department; a re-run then updates only the `machine_*` columns, `model`, `input_truncated` and `classified_at` |
+| `user_edited` | boolean | true once a person confirmed or edited the type or department. Once it is set, a re-run writes the `machine_*` columns, `model`, `input_truncated`, `classified_at` and, since D-139, the five summary columns, and leaves `doc_type`, both outcomes, `department_applied_by` and `Documents.department` as a person left them. It does not guard the tags: rule 4 runs as on any row, so the run replaces `proposed_tags` and `discarded_suggestions` and creates or refreshes the unconfirmed AI link of each in-scheme value it suggests, leaving the document's other links alone; a link a person applied, confirmed or removed stays as it is, and a value a person rejected (`rejected_tags`, which no run replaces) is neither linked nor proposed, on this row as on any other (`apply_classification`, in `apps/documents/classification.py`). Until the review of 21 November 2026 this cell named only the first four, leaving out rule 4's two lists and the summary |
 | `proposed_topics` (model field `proposed_tags`) | jsonb | **`documents 0012_proposed_tags`, D-128:** out-of-scheme Topic suggestions held for a person, at any confidence, `[{"dimension", "value", "confidence"}]` with `dimension` "Topic", deduplicated by normalised value; replaced by each run. Since D-134 none is longer than a tag name (255 characters); a longer entry was stored before D-134. The column keeps its first name (`db_column`) so that 0012 changes no column. 0012 stamped the earlier entries `"dimension": "Topic"`. For one day (D-128) it also held Project and Process values below the threshold; D-129 reversed that |
 | `discarded_suggestions` | jsonb | suggestions that do not become a tag or a proposal, `[{"dimension", "value", "confidence"}]`; never shown; replaced by each run. The out-of-scheme Project and Process suggestions (Objective 05's clause 3), since D-128 a value that cannot be stored (U+0000 or a lone surrogate), recorded with U+FFFD so that the column accepts it (D-129), and since D-134 an out-of-scheme Topic longer than a tag name (255 characters once normalised), recorded as written |
 | `rejected_tags` | jsonb | **`documents 0013_rejected_tags`, D-128 (the audit of 13 November):** proposals a person rejected on this document, `[{"dimension", "value", "confidence"}]`, one entry per dimension and value. The confidence is the machine's, kept beside the person's decision. Later runs neither propose, create nor link that value for this document, in any dimension, even after it enters the scheme. A person may still apply it. Never shown; never replaced by a run. A rejection made before 0013 was never recorded, so it is not honoured: existing rows start at `[]`, and none is guessed |
 | `model` | text | the chat model that produced the run |
-| `input_truncated` | boolean | the text was cut at `CLASSIFICATION_INPUT_TOKENS` before it was sent |
+| `input_truncated` | boolean | the text was longer than `CLASSIFICATION_INPUT_TOKENS`, so the classifier read only its opening `CLASSIFICATION_INPUT_TOKENS` tokens to choose the type, the department and the tags (since D-139 the final request carries the section summaries beside that opening). The summary reads up to `MAXIMUM_SUMMARY_SECTIONS` sections, and `summary_truncated` says when text was left past them. Until D-139 the text was cut there before it was sent, and nothing past the opening was read |
 | `classified_at` | timestamp | set by each run, not `auto_now`: a confirmation edits the row without reclassifying it |
+| `summary` | text | **`documents 0016_document_summary`, D-139:** the machine's short summary of the document; `""` when it has none |
+| `key_points` | jsonb | **`documents 0016`, D-139:** the machine's key points, a list of strings in the reply's order; `[]` when it has none |
+| `summary_truncated` | boolean | **`documents 0016`, D-139:** the summary does not cover the whole document, and the interface says so: text lay past the first `MAXIMUM_SUMMARY_SECTIONS` sections, or a section was cut at `CLASSIFICATION_INPUT_CHARACTERS`. Not `input_truncated`, which is about the text the classifier read |
+| `summary_model` | text | **`documents 0016`, D-139:** the chat model that wrote the summary; blank when there is none. Never shown |
+| `summarised_at` | timestamp, nullable | **`documents 0016`, D-139:** when the summary was written; null when there is none. Never shown |
 
 **Departures from the proposal's field table**, which gives `doc_type`, `department`, one
 `confidence` and `user_edited`:
@@ -419,10 +424,29 @@ by nothing else.
     proposal a person rejected, with the machine's confidence. Later runs skip that value for that
     document: FR-10's correction clause, "retained and is not overwritten by later reprocessing,
     and the machine assignment is retained alongside it".
-
-No column holds a summary or key points: FR-10's front-end clause names them, and a *document's*
-summary is still not built (D-104's note of 10 November 2026). FR-16's `summarise_meeting`
-(D-125) summarises meetings, into `MeetingSummaries` above, and is not that.
+- **The summary and the key points, five columns** (`documents 0016_document_summary`; D-139,
+  21 November 2026). FR-10's front-end clause: "Each document displays a short summary and a list
+  of key points". No column held either until 0016: D-104's note of 10 November 2026 deferred a
+  *document's* summary, and D-139 reverses that.
+  - **The machine's values, and no person's.** FR-10 makes the type, the department and the tags
+    editable and says nothing of the kind about the summary. So D-139 has every run overwrite the
+    five, on a `user_edited` row too.
+  - **A model and a timestamp of their own.** D-139's backfill writes a summary without applying
+    a classification, and `classified_at` must keep saying when the classification on record was
+    made.
+  - **Display only.** A summary is never a `ContentChunks` row, is never embedded, and keyword
+    search does not match on it. The API shows `summary`, `key_points` and `summary_truncated` in
+    two places: on the classification object, which travels only with a document the caller's
+    scope resolved, and on each document result of `GET /api/search`, where the scoped document
+    query itself selects them (invariant 1). It does not show the other two.
+  - **Who writes them.** Every classification run writes all five with the classification
+    (`apply_classification` rule 1): the upload, a reprocess, the classify route and
+    `manage.py classify_documents`. `manage.py summarise_documents`, D-139's backfill, writes these
+    five and no other column, on a row classified before 0016 (`apply_summary`). A reply with an
+    empty summary resets all five to their defaults, so a row never claims a summary it does not
+    hold. A row neither has reached holds the defaults.
+  - **Not FR-16's.** `summarise_meeting` (D-125) summarises meetings, into `MeetingSummaries`
+    above.
 
 ### KnowledgeGaps — FR-19, FR-14
 
@@ -559,6 +583,10 @@ now for work that may be descoped.
 > they were deferred with the rest of NIT3004. `meetings 0003_fr16_meeting_summaries` creates both
 > and `documents 0012_content_chunk_ai_generated` adds `ContentChunks.ai_generated` (D-125). The
 > summary of a *document* that FR-10's front-end clause names is still not built (D-104's note).
+
+> **21 November 2026.** The summary `DocumentAnalysis` was deferred with now has its columns:
+> `documents 0016_document_summary` adds `summary`, `key_points`, `summary_truncated`,
+> `summary_model` and `summarised_at` (D-139, which reverses D-104's deferral). See the §1 entry.
 
 ---
 
@@ -752,7 +780,8 @@ is the other, and `documents 0013_rejected_tags` (`DocumentAnalysis.rejected_tag
 `documents 0014_merge_fr16_and_d128` joins the two branches. It has no operations; it only gives
 the app one leaf again, so neither pushed migration was renumbered or edited. The executor plans
 0012_proposed_tags, 0013, 0012_content_chunk_ai_generated, 0014, `documents 0015_departments` (the
-department list, D-129), then `meetings 0003_fr16_meeting_summaries`.
+department list, D-129), `documents 0016_document_summary` (`DocumentAnalysis`'s five summary
+columns, D-139), then `meetings 0003_fr16_meeting_summaries`.
 `KnowledgeGaps`, `KnowledgeGapCycles` and `KnowledgeGapItems` (v2, `retrieval 0004`) follow
 QueryLog and SearchLogs; the executor plans them immediately after `retrieval 0003`, and
 `accounts 0007` (the `review_knowledge_gaps` seed) immediately after `accounts 0006`, and

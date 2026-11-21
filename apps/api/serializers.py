@@ -478,6 +478,13 @@ class ClassificationSerializer(serializers.Serializer):
     for a person to confirm or reject through the proposed-tags routes. A Project or Process value
     outside the scheme is discarded and never shown. A Project or Process entry here is one a run
     made while D-128 was in force, and the routes take it as they take a Topic.
+
+    ``summary``, ``key_points`` and ``summary_truncated`` (D-139) are FR-10's "short summary and a
+    list of key points", the machine's words, which the interface marks as AI content (NFR-15).
+    ``summary`` is ``""`` and ``key_points`` is ``[]`` for an analysis with no summary.
+    ``summary_truncated`` is true where the summary covers only the first sections of a long
+    document, which the page must say. ``summary_model`` and ``summarised_at`` are not exposed:
+    they are the record of which model wrote the summary and when, and no screen shows either.
     """
 
     doc_type = serializers.CharField(read_only=True, allow_null=True)
@@ -493,6 +500,11 @@ class ClassificationSerializer(serializers.Serializer):
     classified_at = serializers.DateTimeField(read_only=True)
     model = serializers.CharField(read_only=True, allow_blank=True)
     input_truncated = serializers.BooleanField(read_only=True)
+    # FR-10's document summary (D-139). Named one by one, as every field here is, so the two
+    # columns beside them (``summary_model``, ``summarised_at``) cannot ride along.
+    summary = serializers.CharField(read_only=True, allow_blank=True)
+    key_points = serializers.ListField(child=serializers.CharField(), read_only=True)
+    summary_truncated = serializers.BooleanField(read_only=True)
 
 
 class TagDetailSerializer(serializers.ModelSerializer):
@@ -1019,6 +1031,13 @@ class SearchResultSerializer(serializers.Serializer):
     title alone that holds no chunk has no passage to show, and a meeting has no department
     to carry (see ``SearchResult``'s own docstring for why that is an empty string rather
     than an invented value).
+
+    **And, since D-139, a document's FR-10 summary:** ``summary``, ``key_points`` and
+    ``summary_truncated``, "shown beneath the title in search results so users can judge relevance
+    before opening the file". They are read off the dataclass like every other field here, so
+    they are what the scoped document query selected and nothing else. ``""``, ``[]`` and
+    ``false`` for a document with no summary and for every meeting. The summary is AI content
+    whenever it is not empty, and the interface marks it (NFR-15).
     """
 
     source_type = serializers.CharField(read_only=True)
@@ -1030,6 +1049,10 @@ class SearchResultSerializer(serializers.Serializer):
     snippet_ai_generated = serializers.BooleanField(read_only=True)
     department = serializers.CharField(read_only=True, allow_blank=True)
     date = serializers.SerializerMethodField()
+    # FR-10's document summary (D-139). Empty for a meeting, always.
+    summary = serializers.CharField(read_only=True, allow_blank=True)
+    key_points = serializers.ListField(child=serializers.CharField(), read_only=True)
+    summary_truncated = serializers.BooleanField(read_only=True)
 
     def get_date(self, result):
         return _rendered_date(result.date)

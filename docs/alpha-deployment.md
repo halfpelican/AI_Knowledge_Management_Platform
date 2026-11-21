@@ -170,7 +170,35 @@ reprocessing or deleting is not (D-40).
   - `classify_documents --all` would mark 9 department suggestions applied rather than awaiting
     confirmation, because they matched the typed department below the old 0.72.
   - It would also replace the one unanswered proposal, and re-score the 15 held tags.
-  - It costs a model call per document, and it is the user's call.
+  - It costs a model call per document (since D-139 more for a document longer than about five
+    pages, which is summarised in sections), and it is the user's call.
+
+**The first `migrate` after FR-10's document summaries (D-139)** applies `documents` 0016, which
+adds the summary columns to every document's classification, empty.
+- **From then on** each upload, reprocess and classify writes the document's summary and key points
+  with its classification, from the same request.
+- **A document classified before it has no summary,** and its page says none has been generated,
+  until the backfill gives it one. In the deployment window, after `migrate`:
+
+  ```powershell
+  & $py manage.py summarise_documents --out C:\kmp-demo\2026-11-13\logs\summarise-documents-<date>.json
+  ```
+
+- **Where the record goes, and why:** the record holds each document's title, summary and key
+  points, whatever its visibility, an Administrator-only document's included. Write it under the
+  deployment folder, with the server's logs, never to a path inside a checkout: the deployment
+  window's working directory is the alpha checkout, so a relative path would leave those summaries
+  as an untracked file in it.
+
+- **What it changes:** the summary and key points of each classified document that has none, and
+  nothing else. Every type, department, tag, proposal and confirmation stays as it is.
+  `classify_documents --all` would write the summaries too, but it applies every classification
+  again, with the consequences the paragraph above lists.
+- **What it costs:** a model call per document (more for a document longer than about five pages,
+  which is summarised in sections). It is the user's call, as reclassifying is.
+- **A document with no classification is skipped and listed,** with a line pointing at
+  `classify_documents`. `--id <uuid>` summarises chosen documents, and `--force` summarises again
+  documents that already have a summary. The record is never written over an existing file.
 
 **The first `migrate` after D-137** applies `accounts` 0012, which adds `picture` and
 `picture_updated_at` to `users` for profile pictures. It needs no data step: every existing
@@ -458,6 +486,8 @@ attendees and the applied tags are what it draws.
 1. Ctrl+C in the server window, and close it.
 2. In the deployment window, repeat step 1's every-time block. It moves the worktree, detached, to
    the new `origin/main`. Then do steps 2, 3's sync, 4's `migrate` and `check --deploy`, and 5.
+   On the first redeploy after FR-10's document summaries (D-139), run step 4's
+   `summarise_documents` after `migrate`, so the documents classified before it get a summary.
 3. Start the server in a **new** window (step 6), then do steps 7 and 8. Step 7 appends a new line,
    so the record keeps every deployment in order.
 
@@ -478,11 +508,13 @@ and accounts, so do that only before the demonstration threads are built (D-40).
 4. `scripts/seed_objective02_tags.py`, which adds item 6's tags (D-74) and marks `atlas` grown.
    It finds each document by title, so it runs after the ingestion.
 5. `manage.py classify_documents --all`, so FR-10 classifies every document against those tags.
-   The ingestion classified them at upload, before any tag existed. A `--scheme-only` seed before
-   the ingestion would let the upload's classification see the vocabulary instead. That order was
-   not tried, and it is not a safe substitute as written: `--scheme-only` marks nothing grown, so
-   `atlas` would be offered to Employees, and a held AI link on a document every role reads would
-   keep the full seed from marking it grown later.
+   The ingestion classified them at upload, before any tag existed. Since D-139 each upload and
+   this step also write every document's summary, so a database built this way needs no
+   `summarise_documents` run. A `--scheme-only` seed before the ingestion would let the upload's
+   classification see the vocabulary instead. That order was not tried, and it is not a safe
+   substitute as written: `--scheme-only` marks nothing grown, so `atlas` would be offered to
+   Employees, and a held AI link on a document every role reads would keep the full seed from
+   marking it grown later.
 
 **Building it again after FR-10's department list (#102, D-129).** `documents` 0015 seeds the
 department list when it runs, from the documents present at that moment. Step 1's `migrate` runs

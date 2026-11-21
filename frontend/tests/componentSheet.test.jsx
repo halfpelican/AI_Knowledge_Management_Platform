@@ -112,6 +112,32 @@ describe('the sheet shows every shared component in its states', () => {
     expect(globalThis.fetch).not.toHaveBeenCalled()
   })
 
+  it('shows FR-10’s document summary in its states: marked with its key points, cut short, absent, and beneath a search result’s title (D-139)', () => {
+    renderSheet()
+    const section = screen.getByRole('region', { name: 'Document summary and key points (FR-10)' })
+
+    // The component on its own, and in a search result: each marked, each with its list.
+    const blocks = Array.from(section.querySelectorAll('.document-summary'))
+    expect(blocks).toHaveLength(2)
+    for (const block of blocks) {
+      expect(block.classList.contains('ai-content')).toBe(true)
+      expect(within(block).getByText(TEXT.aiSuggested)).toBeTruthy()
+      expect(within(block).getByRole('list', { name: TEXT.documentKeyPoints }).querySelectorAll('li').length).toBeGreaterThan(0)
+    }
+    // A summary of part of a long document says so: the first sample is one, the second is not.
+    expect(within(blocks[0]).getByText(TEXT.documentSummaryTruncated)).toBeTruthy()
+    expect(within(blocks[1]).queryByText(TEXT.documentSummaryTruncated)).toBeNull()
+    // No summary: the document page's one line, which is not AI content.
+    expect(within(section).getByText(TEXT.documentSummaryNone).closest('.ai-content')).toBeNull()
+    // In a search result the block follows the title and comes before the snippet.
+    const result = within(section).getByRole('article')
+    expect(result.contains(blocks[1])).toBe(true)
+    const title = within(result).getByRole('heading', { level: 4 })
+    const snippet = result.querySelector('.search-result__snippet')
+    expect(title.compareDocumentPosition(blocks[1])).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
+    expect(blocks[1].compareDocumentPosition(snippet)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
+  })
+
   it('documents contrast pairs that pass their bars, one rendered row per pair', () => {
     // In the browser the sheet computes ratios from the live custom
     // properties; jsdom applies no stylesheet, so here each documented pair is

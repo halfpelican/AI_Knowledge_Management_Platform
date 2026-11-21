@@ -1,0 +1,3 @@
+[run_obj05] database: kmp_obj05_d139_20261121
+database kmp_obj05_d139_20261121: {'analyses': 20, 'ai_links': 49, 'other_links': 0, 'tags': 14}
+deleted 20 analysis row(s) and 49 AI link row(s); after: {'analyses': 0, 'ai_links': 0, 'other_links': 0, 'tags': 14}

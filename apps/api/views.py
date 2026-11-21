@@ -429,11 +429,13 @@ KNOWLEDGE_SERVICE_UNAVAILABLE_MESSAGE = (
 # because the answer in flight can take many minutes.
 ASK_IN_FLIGHT_MESSAGE = "Your previous question is still being answered."
 ASK_IN_FLIGHT_CODE = "ask_in_flight"
-# D-85: a POST to any of the three ingestion routes from a user whose previous upload, transcript
-# or reprocess is still being processed (apps/api/ingestion_slot.py). Its own code, so the client
-# tells it from the ingestion rate's 429, whose body is DRF's and carries none, and from the ask's.
-# "Upload" covers all three, as the client's "upload limit" already does. No Retry-After, because
-# an ingestion's length depends on the file.
+# D-85: a POST to any of the four routes that hold the ingestion slot, the three ingestion routes
+# and, since D-139's further choices of 21 November 2026, FR-10's classify, from a user whose
+# previous upload, transcript, reprocess or classify is still being processed
+# (apps/api/ingestion_slot.py). Its own code, so the client tells it from the ingestion rate's 429,
+# whose body is DRF's and carries none, and from the ask's. "Upload" covers all four, as the
+# client's "upload limit" already does. No Retry-After, because an ingestion's length depends on
+# the file.
 INGESTION_IN_FLIGHT_MESSAGE = "Your previous upload is still being processed."
 INGESTION_IN_FLIGHT_CODE = "ingestion_in_flight"
 # A thread needs a legible title from the moment it exists, since its address reads it (D-77),
@@ -1412,8 +1414,9 @@ class DocumentsView(ThrottlePostOnlyMixin, APIView):
     method, so a rejected upload counts against it too. GET is not throttled.
 
     **One ingestion in flight per user** (D-85, ``apps/api/ingestion_slot.py``), shared with
-    meeting ingest and reprocess. Taken after the last rejection and right before ingestion, so
-    only a request that would otherwise be stored can meet it, and released in ``finally``.
+    meeting ingest, reprocess and, since D-139, FR-10's classify. Taken after the last rejection
+    and right before ingestion, so only a request that would otherwise be stored can meet it, and
+    released in ``finally``.
     While it is held, another upload is answered at once with ``INGESTION_IN_FLIGHT_CODE``.
     The body has been parsed and hashed by then: the slot bounds the extraction and the
     embedding, not the reading of the request.
@@ -2147,8 +2150,8 @@ class MeetingSummaryView(ThrottlePostOnlyMixin, APIView):
     **POST** needs ``contribute_content``, checked after the scoped 404. It starts a run and
     answers at once; the run happens after the response (apps/meetings/summary_runner.py). Where
     a run is already in flight for the meeting, it starts nothing and reports that one. Throttled
-    per user in the "ingestion" scope (D-79), one provider call like FR-10's classify; GET is not
-    throttled, because the page polls it while a run is in flight.
+    per user in the "ingestion" scope (D-79), one provider call, in the budget FR-10's classify
+    spends too; GET is not throttled, because the page polls it while a run is in flight.
 
     A summary's failure is not an error of either route: the run is marked Unavailable and queued
     (NFR-20), and the body says so. There is no 503 here, because no provider call is made while
@@ -2546,12 +2549,27 @@ class DocumentReprocessView(APIView):
 class DocumentClassifyView(APIView):
     """``POST /api/documents/{id}/classify`` — classify now (FR-10, D-105).
 
-    One provider call through ``classify_document_now``, then the apply rules, in one transaction.
-    422 where the document has no extracted text (FR-10 Responses: "where insufficient text was
-    extracted"), before any provider call; 503 with NFR-19's notice when the provider failed after
-    MAXIMUM_CLASSIFY_ATTEMPTS, nothing written. Throttled in the "ingestion" scope (D-79): it is
-    one provider call, like a reprocess. No in-flight slot (D-85): the slot bounds extraction and
-    embedding, and this does neither.
+    One ``classify_document`` operation through ``classify_document_now``, then the apply rules,
+    in one transaction. Since D-139 that operation is one provider request for a text within
+    CLASSIFICATION_INPUT_TOKENS, and otherwise one request per section, at most
+    MAXIMUM_SUMMARY_SECTIONS, then a final one, each with MAXIMUM_CLASSIFY_ATTEMPTS attempts. 422
+    where the document has no extracted text (FR-10 Responses: "where insufficient text was
+    extracted"), before any provider call; 503 with NFR-19's notice when any one of those requests
+    failed after its own attempts, nothing written. **A document deleted meanwhile is the scoped
+    lookup's 404, word for word**: deleted while the classification runs (``apply_classification``
+    then raises ``NotOnThisDocument``, as the sibling routes below map it), or after it and before
+    this route re-reads the department. D-139 makes the first window up to
+    MAXIMUM_SUMMARY_SECTIONS + 1 provider requests long; until the review of 21 November 2026 both
+    answered an unhandled 500.
+
+    Throttled in the "ingestion" scope (D-79), the budget upload, meeting ingest and reprocess
+    spend. **It holds the same per-user in-flight slot they hold** (D-85), as reprocess takes it:
+    after the 404 and the 403, released in ``finally``. Benjamin's decision of 21 November 2026
+    (D-139's further choices) reverses D-105's "no in-flight slot" for this route, which assumed
+    one provider call. While the slot is held, by an upload, a meeting ingest, a reprocess or
+    another classify of the same user, this route answers ``ingestion_in_flight()`` at once and
+    calls no provider. The 422 is decided inside the slot, because ``classify_document_now`` reads
+    the text, so a classify of a document with no text is that 429 too while the slot is held.
 
     200 ``{classification, tag_details, department}``. ``department`` is the document's
     ``department`` column as it stands after the classification, re-read from the row as the
@@ -2568,6 +2586,11 @@ class DocumentClassifyView(APIView):
     def post(self, request, pk):
         document = scoped_document_or_404(request, pk)
         require_contribute_content(request, self)
+        # D-85's slot, as reprocess takes it, after the 404 and the 403 above (D-139's further
+        # choices, reversing D-105's "no in-flight slot" for this route).
+        token = take_ingestion_slot(request.user)
+        if token is None:
+            return ingestion_in_flight()
         try:
             analysis = classify_document_now(document)
         except InsufficientText:
@@ -2583,7 +2606,16 @@ class DocumentClassifyView(APIView):
                 {"detail": CLASSIFICATION_UNAVAILABLE_MESSAGE},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
-        document.refresh_from_db(fields=["department"])
+        except NotOnThisDocument:
+            # Deleted while the classification ran: the scoped lookup's own 404, word for word.
+            raise Http404(DOCUMENT_NOT_FOUND_MESSAGE)
+        finally:
+            release_ingestion_slot(request.user, token)
+        try:
+            document.refresh_from_db(fields=["department"])
+        except Document.DoesNotExist:
+            # Deleted after the classification committed and before this read: the same 404.
+            raise Http404(DOCUMENT_NOT_FOUND_MESSAGE)
         return Response(
             {
                 "classification": classification_payload(analysis),

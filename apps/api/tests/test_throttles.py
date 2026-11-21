@@ -5,8 +5,9 @@ The per-user scopes, each a DRF ``ScopedRateThrottle`` rate from ``apps/core/con
 - ``ask`` on ``POST /api/ask``;
 - ``ingestion``, one budget shared by ``POST /api/documents``, ``POST /api/meetings``,
   ``POST /api/documents/{id}/reprocess`` and, since FR-10, ``POST /api/documents/{id}/classify``
-  (D-105: one provider call, like a reprocess), and since FR-16 ``POST /api/meetings/{id}/summary``
-  (D-125: Generate or Regenerate is one provider call too);
+  (D-105; since D-139 up to MAXIMUM_SUMMARY_SECTIONS + 1 provider requests, and since D-139's
+  further choices holding the in-flight ingestion slot as a reprocess does, D-85), and since FR-16
+  ``POST /api/meetings/{id}/summary`` (D-125: Generate or Regenerate is one provider call);
 - ``conversation_create`` on ``POST /api/conversations``, at the ask rate in its own budget;
 - ``search`` on ``GET /api/search``, since D-79's note of 10 November 2026;
 - ``knowledge_map`` on ``GET /api/knowledge-map`` and ``GET /api/knowledge-map/evidence``, one

@@ -3,12 +3,21 @@ import { TEXT } from '../constants.js'
 import { formatDate } from '../utils/dates.js'
 import { sourceLinkFor, sourceTypeLabel } from '../utils/sources.js'
 import AiMark from './AiMark.jsx'
+import DocumentSummary from './DocumentSummary.jsx'
 import './SearchResults.css'
 
 /**
  * One FR-12 search result: "its title, the matching passage as a snippet, its
- * department, and its date". Those four and nothing else, plus the link the type
- * and identifier make possible.
+ * department, and its date". Those four, the link the type and identifier make
+ * possible, and FR-10's summary where the result carries one.
+ *
+ * **A document's summary and key points sit beneath its title and above the
+ * snippet** (FR-10: "shown beneath the title in search results so users can judge
+ * relevance before opening the file"; D-139), bounded and marked as AI content by
+ * the one component the document page also uses (DocumentSummary.jsx). Only a
+ * non-empty `summary` puts them there. A document never summarised and every
+ * meeting carry `""`, and a reply from before the field carries none, and each
+ * of those renders exactly as it did before the field existed.
  *
  * No score, no rank number and no "relevance": this path does not compute one.
  * Results arrive ordered by recency and are rendered in the order they arrived,
@@ -34,6 +43,12 @@ export function SearchResultItem({ result }) {
       <h4 className="search-result__title">
         {link ? <Link to={link.to}>{result.title}</Link> : result.title}
       </h4>
+      {/* Nothing at all where the result has no summary. */}
+      <DocumentSummary
+        summary={result.summary}
+        keyPoints={result.key_points}
+        truncated={result.summary_truncated}
+      />
       {aiSnippet ? (
         // The mark first, so it is read before the words it is about.
         <div className="search-result__ai ai-content">

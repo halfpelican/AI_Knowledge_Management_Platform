@@ -4,8 +4,15 @@
 extract, chunk and embed synchronously, holding a Waitress thread until the last chunk is
 stored. D-79 rate-limits them, which bounds how many a user sends in an hour but not how many
 run at once: one user firing uploads concurrently could hold every thread (D-85, "What this
-decision does not cover"). This slot bounds that to one thread per user, shared by the three
-routes, as the ``ingestion`` throttle scope is.
+decision does not cover"). This slot bounds that to one thread per user, shared by the four
+routes that take it, as the ``ingestion`` throttle scope is shared.
+
+The fourth is FR-10's ``POST /api/documents/{id}/classify``, since Benjamin's decision of 21
+November 2026 (D-139's further choices), which reverses D-105's "no in-flight slot" for that
+route. It extracts and embeds nothing, but since D-139 one classification of a long document is
+up to MAXIMUM_SUMMARY_SECTIONS + 1 provider requests, each with MAXIMUM_CLASSIFY_ATTEMPTS
+attempts, holding the thread throughout. It takes the slot as reprocess does: after its 404 and
+its 403, released in ``finally``.
 
 **The mechanism is the ask slot's** (``apps/api/ask_slot.py``): ``cache.add`` on the default
 cache, which is atomic because it is a per-process ``LocMemCache`` (``CACHES``) and Waitress runs

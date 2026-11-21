@@ -7,6 +7,12 @@ is taken after every rejection a route can make and right before ingestion, and 
 user, on any of the three routes, is answered at once with a 429 that carries ``code``, stores
 nothing and reaches no provider.
 
+**A fourth route holds the slot** since Benjamin's decision of 21 November 2026 (D-139's further
+choices, reversing D-105's "no in-flight slot" for it): FR-10's
+``POST /api/documents/{id}/classify``. apps/api/tests/test_document_classification.py tests it,
+an upload refused while a classify holds the slot included. The tests here keep to the three
+ingestion routes.
+
 **How "while it is held" is made real**, as ``test_ask_in_flight.py`` does it for asks. The test
 client is synchronous, so ``HoldingProbe`` runs a hook inside the first ``embed`` call, which is
 inside ingestion and so inside the slot, and the hook sends the second request from there,

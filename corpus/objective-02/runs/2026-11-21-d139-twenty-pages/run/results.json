@@ -1,0 +1,192 @@
+{
+ "what": "Objective 02's bound at twenty pages: the first 20 pages of D04, uploaded 5 times through POST /api/documents, with D-139's classification and summary at upload, on anthropic",
+ "bound_seconds": 60,
+ "page_bound": 20,
+ "source": {
+  "file": "corpus/objective-02/documents/D04_records_management_handbook.pdf",
+  "sha256": "67456517c0cea1166f65ff0c511248eb22f1ae55cf48e51f51850f0a4368719b",
+  "pages": 26
+ },
+ "how_cut": "pypdf 6.19.0: pages 1-20 of the source, one copy each with its own /Title metadata, so each has its own content hash",
+ "cut_whitespace_tokens": 6539,
+ "sections_expected": 5,
+ "copies": [
+  {
+   "copy": 1,
+   "file": "D04_first_20_pages_run_copy1.pdf",
+   "bytes": 29237,
+   "sha256": "edb19c38c0ade7dcacb99d7889350792aefa0372219b573db1b7a764cdabd913",
+   "pages": 20
+  },
+  {
+   "copy": 2,
+   "file": "D04_first_20_pages_run_copy2.pdf",
+   "bytes": 29237,
+   "sha256": "f7a65f80d0544e1f8880b6ba3718c600bf0e1cd208220e3c7770844552facfac",
+   "pages": 20
+  },
+  {
+   "copy": 3,
+   "file": "D04_first_20_pages_run_copy3.pdf",
+   "bytes": 29237,
+   "sha256": "aaf8a3f8c502da9ef2eb3a54b4a9b72e82c738e3fbc45a024d490fefb523cf5c",
+   "pages": 20
+  },
+  {
+   "copy": 4,
+   "file": "D04_first_20_pages_run_copy4.pdf",
+   "bytes": 29237,
+   "sha256": "4bccfaed159bb412652f5d66ac69b414d9c7f3cdb207e8e198e3a5487189a196",
+   "pages": 20
+  },
+  {
+   "copy": 5,
+   "file": "D04_first_20_pages_run_copy5.pdf",
+   "bytes": 29237,
+   "sha256": "94ac56139e6a2f7bae9a30f86c7394e4c2ef58e5847ad87c13411008a3fd7d68",
+   "pages": 20
+  }
+ ],
+ "runs": [
+  {
+   "copy": 1,
+   "started_utc": "2026-11-21T12:01:41+00:00",
+   "http": 201,
+   "status": "Indexed",
+   "chunks": 15,
+   "total_seconds": 32.1,
+   "classification_requests": 6,
+   "classification_attempts_not_first": 0,
+   "classification_outcomes": [
+    "parsed"
+   ],
+   "classification_steps": [
+    "classification",
+    "section summary"
+   ],
+   "classification_seconds": 17.1,
+   "classified": true,
+   "summary_characters": 502,
+   "key_points": 5,
+   "summary_truncated": false,
+   "transport_note": null,
+   "the_rest_seconds": 15.0,
+   "within_bound": true
+  },
+  {
+   "copy": 2,
+   "started_utc": "2026-11-21T12:02:13+00:00",
+   "http": 201,
+   "status": "Indexed",
+   "chunks": 15,
+   "total_seconds": 23.4,
+   "classification_requests": 6,
+   "classification_attempts_not_first": 0,
+   "classification_outcomes": [
+    "parsed"
+   ],
+   "classification_steps": [
+    "classification",
+    "section summary"
+   ],
+   "classification_seconds": 14.6,
+   "classified": true,
+   "summary_characters": 285,
+   "key_points": 5,
+   "summary_truncated": false,
+   "transport_note": null,
+   "the_rest_seconds": 8.8,
+   "within_bound": true
+  },
+  {
+   "copy": 3,
+   "started_utc": "2026-11-21T12:02:37+00:00",
+   "http": 201,
+   "status": "Indexed",
+   "chunks": 15,
+   "total_seconds": 24.0,
+   "classification_requests": 6,
+   "classification_attempts_not_first": 0,
+   "classification_outcomes": [
+    "parsed"
+   ],
+   "classification_steps": [
+    "classification",
+    "section summary"
+   ],
+   "classification_seconds": 16.1,
+   "classified": true,
+   "summary_characters": 313,
+   "key_points": 5,
+   "summary_truncated": false,
+   "transport_note": null,
+   "the_rest_seconds": 7.9,
+   "within_bound": true
+  },
+  {
+   "copy": 4,
+   "started_utc": "2026-11-21T12:03:01+00:00",
+   "http": 201,
+   "status": "Indexed",
+   "chunks": 15,
+   "total_seconds": 24.3,
+   "classification_requests": 6,
+   "classification_attempts_not_first": 0,
+   "classification_outcomes": [
+    "parsed"
+   ],
+   "classification_steps": [
+    "classification",
+    "section summary"
+   ],
+   "classification_seconds": 14.7,
+   "classified": true,
+   "summary_characters": 362,
+   "key_points": 5,
+   "summary_truncated": false,
+   "transport_note": null,
+   "the_rest_seconds": 9.6,
+   "within_bound": true
+  },
+  {
+   "copy": 5,
+   "started_utc": "2026-11-21T12:03:25+00:00",
+   "http": 201,
+   "status": "Indexed",
+   "chunks": 15,
+   "total_seconds": 28.2,
+   "classification_requests": 7,
+   "classification_attempts_not_first": 1,
+   "classification_outcomes": [
+    "failed",
+    "parsed"
+   ],
+   "classification_steps": [
+    "classification",
+    "section summary"
+   ],
+   "classification_seconds": 19.7,
+   "classified": true,
+   "summary_characters": 372,
+   "key_points": 5,
+   "summary_truncated": false,
+   "transport_note": null,
+   "the_rest_seconds": 8.5,
+   "within_bound": true
+  }
+ ],
+ "all_within_bound": true,
+ "slowest_seconds": 32.1,
+ "fastest_seconds": 23.4,
+ "base_url": "http://127.0.0.1:8011",
+ "database": "kmp_obj02_d139_20261121",
+ "configuration": {
+  "AI_PROVIDER": "anthropic",
+  "ANTHROPIC_MODEL": "claude-haiku-5-5",
+  "VOYAGE_MODEL": "voyage-4",
+  "EMBEDDING_DIMENSION": 1024
+ },
+ "commit": "789c05a2674eca6d20e403788eec1e39dd356748",
+ "uncommitted_tracked_files": [],
+ "server": "waitress"
+}
