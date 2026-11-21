@@ -835,7 +835,12 @@ describe('FR-10: a document that has never been classified', () => {
 
     const alert = await screen.findByRole('alert')
     expect(alert.textContent).toContain(TEXT.classifyFailedTitle)
-    expect(alert.textContent).toContain(TEXT.classifyInFlight)
+    // Written out, not read from the constant: a break run showed that a sentence reworded to
+    // drop its reason ("This document was not classified. Please try again.") passed every test.
+    expect(alert.textContent).toContain(
+      'Your previous upload is still being processed, so this document was not classified. ' +
+        'You can try again once the previous upload has finished.',
+    )
     expect(alert.textContent).not.toContain(LIMIT_WORDS)
     expect(namesATime(alert.textContent)).toBe(false)
     // The client's own sentence, never the reply's `detail`.

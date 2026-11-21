@@ -562,6 +562,15 @@ document." in one line, which is the page's own sentence and carries no mark. `s
 no summary block, mark or list, when …`, which also holds that no stylesheet rule hides the line.
 A summary of only white space is no summary, on both screens: a case of each of those tests.
 
+**What "no stylesheet rule hides" means in this section, and what it does not.** Each of these
+checks reads the stylesheets on disk for the kinds of hiding rule section 6 lists: `display`,
+`visibility`, a zero opacity, a size of zero or one pixel, `clip`, transparent text, a far offset
+and a zero scale. None of them lays the page out. A rule that clips a list to a height above one
+pixel, an overlap, or a transform that moves an element off the screen passes every one of them.
+A deliberate break showed it: clamping a search result's key points to 24 pixels with the overflow
+hidden, which hides every key point after the first, failed no test (D-139). That kind of defect is
+for the browser checks listed below as owed.
+
 **Tab order (SC 2.1.1).** The block holds no control and is not focusable itself, so it adds no
 tab stop to either screen. Both "marks … as AI content" tests assert that nothing in the block,
 itself included, can take focus. `tabOrder.test.jsx` does not walk a search page with results or
