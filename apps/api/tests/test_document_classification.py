@@ -16,6 +16,7 @@ and a test that needs a particular reply sets the stub's ``classification``.
 import uuid
 
 import pytest
+from django.utils import timezone
 
 from apps.accounts.models import RolePermission
 from apps.ai.base import ProviderUnavailable
@@ -74,6 +75,8 @@ CLASSIFICATION_KEYS = {
     "user_edited", "proposed_tags", "classified_at", "model", "input_truncated",
     # D-119 finding 10: whose department it is ("user", "ai" or null).
     "department_applied_by",
+    # D-139: FR-10's document summary. ``summary_model`` and ``summarised_at`` are not exposed.
+    "summary", "key_points", "summary_truncated",
 }
 TAG_DETAIL_KEYS = {
     "content_tag_id", "dimension", "name", "applied_by", "confirmed", "provisional", "confidence",
@@ -610,6 +613,97 @@ def test_a_discarded_department_is_reported_as_such(session_client, stub_ai_serv
     result = classify(session_client.client, document.id).json()["classification"]
     assert (result["machine_department"], result["department_outcome"]) == ("Marketing", ASSIGNMENT_DISCARDED)
     assert detail(session_client.client, document.id).json()["department"] == "People"
+
+
+# --- The classification object's summary (D-139) -----------------------------------------------
+#
+# FR-10: "Each document displays a short summary and a list of key points". The analysis rows are
+# written straight through the ORM here: these tests are about what the object shows of a stored
+# summary, whatever wrote it.
+
+SUMMARY = "How annual leave is requested, approved and carried over."
+KEY_POINTS = ["Leave is requested in writing.", "A manager approves it."]
+SUMMARY_MODEL = "summarising-model"
+
+
+def analysed(document, **fields):
+    return DocumentAnalysis.objects.create(document=document, classified_at=timezone.now(), **fields)
+
+
+def test_the_detail_carries_the_stored_summary_its_key_points_and_whether_it_is_partial(session_client):
+    document = make_document(session_client.user)
+    analysed(document, summary=SUMMARY, key_points=KEY_POINTS, summary_truncated=True,
+             summary_model=SUMMARY_MODEL, summarised_at=timezone.now())
+
+    response = detail(session_client.client, document.id)
+
+    assert response.status_code == 200, response.content
+    result = response.json()["classification"]
+    assert set(result) == CLASSIFICATION_KEYS
+    assert result["summary"] == SUMMARY
+    assert result["key_points"] == KEY_POINTS  # a list of strings, in the stored order
+    # The summary's own flag, not the classifier's: the two differ on this row.
+    assert (result["summary_truncated"], result["input_truncated"]) == (True, False)
+    # Which model wrote the summary and when is a record, and no part of the body (D-139).
+    raw = response.content.decode()
+    for withheld in ("summary_model", "summarised_at", SUMMARY_MODEL):
+        assert withheld not in raw
+
+
+def test_the_detail_carries_an_empty_summary_for_an_analysis_without_one(session_client):
+    """``""``, ``[]`` and ``false``, with the keys present: a document classified before
+    ``documents 0016``, or one whose run wrote no summary."""
+    document = make_document(session_client.user)
+    analysed(document, input_truncated=True)  # the classifier's flag is not the summary's
+
+    response = detail(session_client.client, document.id)
+
+    assert response.status_code == 200, response.content
+    result = response.json()["classification"]
+    assert set(result) == CLASSIFICATION_KEYS
+    assert (result["summary"], result["key_points"]) == ("", [])
+    assert (result["summary_truncated"], result["input_truncated"]) == (False, True)
+    raw = response.content.decode()
+    assert "summary_model" not in raw and "summarised_at" not in raw
+
+
+def test_an_employee_naming_an_administrator_only_document_gets_404_and_none_of_its_summary(
+    employee_client, administrator_client, administrator
+):
+    """The summary is on the classification object, and that object travels only on a document the
+    caller's scope resolved (D-46): out of scope is the same 404, with no word of the summary."""
+    restricted = make_document(administrator, title="Board pack", roles=[ADMINISTRATOR_ROLE_NAME])
+    analysed(restricted, summary="The directors' bonus pool is four per cent of profit.",
+             key_points=["The pool is capped at two million."])
+
+    refused = detail(employee_client, restricted.id)
+
+    assert refused.status_code == 404
+    assert refused.json() == NOT_FOUND_BODY
+    for trace in (b"bonus pool", b"two million", b"summary", b"key_points"):
+        assert trace not in refused.content
+
+    # The mirror: the Administrator, whom the document admits, reads it.
+    admitted = detail(administrator_client, restricted.id).json()["classification"]
+    assert admitted["summary"] == "The directors' bonus pool is four per cent of profit."
+    assert admitted["key_points"] == ["The pool is capped at two million."]
+
+
+@pytest.mark.parametrize("url", [DOCUMENTS_URL, f"{DOCUMENTS_URL}/browse", "/api/dashboard"])
+def test_no_list_of_documents_carries_the_summary(session_client, url):
+    """The repository list, browse and the dashboard's recent documents return the document
+    object, which has no ``classification``, so a stored summary rides on none of them. Only the
+    detail, FR-10's own replies and a search result's three keys show it (D-139)."""
+    document = make_document(session_client.user)
+    analysed(document, summary=SUMMARY, key_points=KEY_POINTS, summary_truncated=True)
+
+    response = session_client.client.get(url)
+
+    assert response.status_code == 200, response.content
+    raw = response.content.decode()
+    assert str(document.id) in raw  # the document is in the list
+    for trace in (SUMMARY, *KEY_POINTS, "key_points", "summary_truncated", "classification"):
+        assert trace not in raw
 
 
 # --- The 201 bodies of the upload and the reprocess ---------------------------------------------

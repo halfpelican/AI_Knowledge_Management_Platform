@@ -291,7 +291,7 @@ class DocumentAnalysis(models.Model):
     """FR-10's record of one document's classification: one row per document (D-105).
 
     The proposal's field table gives DocumentAnalysis ``doc_type``, ``department``, one
-    ``confidence`` and ``user_edited``. This departs from it in five places, each for a clause
+    ``confidence`` and ``user_edited``. This departs from it in six places, each for a clause
     of FR-10's own text (docs/schema-v1.md section 1 records the same list):
 
     - **Two machine assignments, each with its own confidence.** "A confidence value is
@@ -338,6 +338,19 @@ class DocumentAnalysis(models.Model):
     - **Whose department it is** (``department_applied_by``, ``documents 0009``): FR-10's
       provenance clause tells a machine's value from a person's, and the outcome alone cannot
       when the machine's suggestion equals the department a person typed (D-119 finding 10).
+    - **The summary and the key points** (``documents 0016``; D-139): FR-10's "short summary and a
+      list of key points", in five columns, ``summary``, ``key_points``, ``summary_truncated``,
+      ``summary_model`` and ``summarised_at``.
+      - They are the machine's values and no person's. FR-10 makes the type, the department and
+        the tags editable and says nothing of the kind about the summary, so D-139 has every run
+        overwrite the five, on a ``user_edited`` row too.
+      - ``summary_model`` and ``summarised_at`` stand apart from ``model`` and ``classified_at``
+        because a summary can be written without applying a classification (D-139's backfill),
+        and ``classified_at`` must keep saying when the classification on record was made.
+      - Display only. A summary is never a ``ContentChunk``, is never embedded, and no search
+        matches on it. The API shows the first three and neither of the last two.
+      - ``documents 0016`` adds the columns and nothing writes them yet, so every row holds the
+        defaults until the apply layer and the backfill command do.
 
     ``user_edited`` protects a person's decision from reprocessing ("any value a user edits
     [is] retained and is not overwritten by later reprocessing"): once set, a re-run writes the
@@ -398,6 +411,21 @@ class DocumentAnalysis(models.Model):
     # Set explicitly by each run, never auto_now: a confirmation edits the row without
     # reclassifying it, and the timestamp must keep saying when the machine last ran.
     classified_at = models.DateTimeField()
+    # FR-10's document summary (``documents 0016``; D-139). The machine's values, shown beneath the
+    # title in search results and on the document page, and marked as AI content there (NFR-15).
+    # The machine's short paragraph about the document; "" when it has none.
+    summary = models.TextField(blank=True, default="")
+    # The machine's key points, a list of strings in the reply's order; [] when it has none.
+    key_points = models.JSONField(default=list, blank=True)
+    # True where the document had more sections than MAXIMUM_SUMMARY_SECTIONS, so the summary
+    # covers only the first of them and the interface says so (FR-10: never "summarised from a
+    # fragment without the user being told"). Not ``input_truncated``, which is about the text the
+    # classifier read.
+    summary_truncated = models.BooleanField(default=False)
+    # The chat model that wrote the summary, and when. Apart from ``model`` and ``classified_at``:
+    # see the docstring. Blank and null while there is no summary. Not exposed by the API.
+    summary_model = models.CharField(max_length=NAME_MAX_LENGTH, blank=True)
+    summarised_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         db_table = "document_analysis"

@@ -22,6 +22,8 @@ from pathlib import Path
 
 import pytest
 from django.conf import settings
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 
@@ -31,9 +33,10 @@ from apps.core.constants import (
     EMPLOYEE_ROLE_NAME,
     MINIMUM_SEARCH_LENGTH,
     SOURCE_TYPES,
+    SUMMARY_READY,
 )
-from apps.documents.models import ContentChunk, Document
-from apps.meetings.models import Meeting
+from apps.documents.models import ContentChunk, Document, DocumentAnalysis
+from apps.meetings.models import Meeting, MeetingSummary
 from apps.retrieval.models import SearchLog
 from apps.retrieval.scoping import UnscopedRequestError
 from apps.retrieval.search import (
@@ -41,6 +44,7 @@ from apps.retrieval.search import (
     SearchQueryContainsNullCharacter,
     SearchQueryTooShort,
     search,
+    search_total,
     snippet_for,
 )
 
@@ -763,3 +767,189 @@ def test_an_ordinary_query_is_unaffected_by_the_null_check(employee):
 
     assert results.documents.count == 1
     assert SearchLog.objects.get().query_text == r"\x00"
+
+
+# --- FR-10's document summary on a result (D-139) -----------------------------------------
+#
+# FR-10: "a short summary and a list of key points, shown beneath the title in search results".
+# A document result carries the three values of its ``DocumentAnalysis`` row, read by the scoped
+# document query itself; a meeting result never does; and nothing matches on a summary. The
+# analysis rows are written straight through the ORM. apps/api/tests/test_search.py holds the
+# route's tests of the same clauses.
+
+SUMMARY = "How leave is requested, approved and carried over."
+KEY_POINTS = ["Requests are made in writing.", "A manager approves each one."]
+
+# The restricted document's summary. None of its words is in a title or a passage here.
+RESTRICTED_SUMMARY = "The committee set the bonus pool at four per cent of profit."
+RESTRICTED_KEY_POINT = "The pool is capped at two million."
+
+# In a summary and its key points and nowhere else: no title and no passage holds it.
+SUMMARY_ONLY_TERM = "zeppelin"
+
+NO_SUMMARY = ("", (), False)
+
+
+def summarise(document, **fields):
+    return DocumentAnalysis.objects.create(document=document, classified_at=timezone.now(), **fields)
+
+
+def summary_of(result):
+    return (result.summary, result.key_points, result.summary_truncated)
+
+
+def test_a_document_result_carries_its_summary_its_key_points_and_whether_it_is_partial(session_client):
+    """From both roles. The key points are a tuple, in the stored order: the result is frozen."""
+    document = make_document(
+        session_client.user, title=SHARED_TITLE, roles=list(ROLE_PAIR), texts=[SHARED_TEXT]
+    )
+    summarise(document, summary=SUMMARY, key_points=KEY_POINTS, summary_truncated=True)
+
+    [result] = search(query_text=TERM, user=session_client.user).documents.results
+
+    # ``summary_truncated`` is the summary's own flag: ``input_truncated`` is false on this row.
+    assert summary_of(result) == (SUMMARY, tuple(KEY_POINTS), True)
+    # The snippet is still the passage: the summary is beside it, not instead of it.
+    assert (result.snippet, result.snippet_ai_generated) == (SHARED_TEXT, False)
+    hash(result)  # frozen and hashable, as it was before the three fields
+
+
+def test_a_document_found_by_its_title_alone_carries_its_summary_too(employee):
+    """The summary comes with the document row, however the row was matched: here by title, with
+    no passage at all, so the snippet is empty and the summary is not."""
+    document = make_document(employee, title="Employee Handbook", roles=[EMPLOYEE_ROLE_NAME], texts=[])
+    summarise(document, summary=SUMMARY, key_points=KEY_POINTS)
+
+    [result] = search(query_text="Handbook", user=employee).documents.results
+
+    assert result.snippet == ""
+    assert summary_of(result) == (SUMMARY, tuple(KEY_POINTS), False)
+
+
+def test_a_document_never_classified_and_one_classified_without_a_summary_carry_the_empty_values(
+    session_client,
+):
+    """From both roles. ``""``, ``()`` and ``False``, never ``None``. A document with no analysis
+    row is still a result: the join that reads the summary must not be the reason a row is
+    dropped."""
+    user = session_client.user
+    never_classified = make_document(user, title="Leave policy", roles=list(ROLE_PAIR), texts=[SHARED_TEXT])
+    classified = make_document(user, title="Leave calendar", roles=list(ROLE_PAIR), texts=[SHARED_TEXT])
+    summarise(classified, input_truncated=True)  # the classifier's flag is not the summary's
+
+    results = search(query_text=TERM, user=user)
+
+    assert results.documents.count == 2 == results.total_count
+    assert {result.source_id for result in results.documents.results} == {
+        str(never_classified.id), str(classified.id)
+    }
+    for result in results.documents.results:
+        assert summary_of(result) == NO_SUMMARY
+    assert SearchLog.objects.get().result_count == 2
+
+
+def test_a_meeting_result_carries_no_summary_whatever_summary_the_meeting_has(session_client):
+    """From both roles. FR-10 summarises documents; a meeting's FR-16 summary is found through its
+    AI-generated passage (D-125) and shown as a marked snippet, and is never put in the three
+    fields, whether the meeting was found by its transcript or by its summary."""
+    meeting = make_meeting(
+        title="Quarterly planning", roles=list(ROLE_PAIR), texts=["We discussed the annual leave backlog."]
+    )
+    sentence = f"The group agreed to hire a {SUMMARY_ONLY_TERM} for the launch."
+    MeetingSummary.objects.create(
+        meeting=meeting, status=SUMMARY_READY, summary_text=sentence, generated_at=timezone.now(),
+        narrative=[{"text": sentence, "passages": [1]}],
+    )
+    summary_chunk = make_chunk(
+        source_type=MEETING_SOURCE_TYPE, source_id=meeting.id, index=0, text=sentence, roles=list(ROLE_PAIR)
+    )
+    ContentChunk.objects.filter(pk=summary_chunk.pk).update(ai_generated=True)
+
+    for term, found_through_its_summary in ((TERM, False), (SUMMARY_ONLY_TERM, True)):
+        [result] = search(query_text=term, user=session_client.user).meetings.results
+        assert result.source_id == str(meeting.id)
+        assert result.snippet_ai_generated is found_through_its_summary
+        assert summary_of(result) == NO_SUMMARY
+
+
+def test_nothing_of_a_restricted_documents_summary_reaches_an_employee(
+    two_matching_documents, employee, administrator
+):
+    """Invariant 1, for the summary. The whole reply is rendered and searched, as
+    ``test_nothing_about_a_restricted_source_reaches_an_employee`` does, for a search that matches
+    the restricted document by its passage and for one that matches it by its title."""
+    summarise(two_matching_documents["shared"], summary=SUMMARY, key_points=KEY_POINTS)
+    restricted = two_matching_documents["restricted"]
+    summarise(restricted, summary=RESTRICTED_SUMMARY, key_points=[RESTRICTED_KEY_POINT])
+
+    by_passage = search(query_text=TERM, user=employee)
+    by_title = search(query_text="remuneration", user=employee)
+
+    # The Employee is shown the summary of the document they may read, and only that one.
+    assert [summary_of(result) for result in by_passage.documents.results] == [
+        (SUMMARY, tuple(KEY_POINTS), False)
+    ]
+    assert by_title.total_count == 0
+    for results in (by_passage, by_title):
+        rendered = repr(results)
+        for trace in (RESTRICTED_SUMMARY, "bonus pool", RESTRICTED_KEY_POINT, "two million", str(restricted.id)):
+            assert trace not in rendered
+
+    # The mirror: the same search by title, as an Administrator, returns it with its summary.
+    [admitted] = search(query_text="remuneration", user=administrator).documents.results
+    assert admitted.source_id == str(restricted.id)
+    assert summary_of(admitted) == (RESTRICTED_SUMMARY, (RESTRICTED_KEY_POINT,), False)
+
+
+def test_a_term_found_only_in_a_summary_matches_nothing_and_counts_nothing(session_client):
+    """D-139: display only. From both roles, ``search`` finds nothing for a word that only a
+    summary and its key points hold, and records the search as it records any that found nothing.
+    ``search_total``, FR-19's recount as the Administrator, counts nothing either, so such a search
+    is still read as a gap and not as something a role withheld."""
+    document = make_document(
+        session_client.user, title=SHARED_TITLE, roles=list(ROLE_PAIR), texts=[SHARED_TEXT]
+    )
+    summarise(document, summary=f"The team hired a {SUMMARY_ONLY_TERM} for the launch.",
+              key_points=[f"The {SUMMARY_ONLY_TERM} is moored at the depot."])
+
+    results = search(query_text=SUMMARY_ONLY_TERM, user=session_client.user)
+
+    assert results.documents.results == () and results.meetings.results == ()
+    assert results.total_count == 0
+    row = SearchLog.objects.get()
+    assert (row.user, row.query_text, row.result_count) == (session_client.user, SUMMARY_ONLY_TERM, 0)
+    for role_name in ROLE_PAIR:
+        assert search_total(role_name=role_name, query_text=SUMMARY_ONLY_TERM) == 0
+    # The summary is there to be shown: the passage's own term finds the document with it.
+    [found] = search(query_text=TERM, user=session_client.user).documents.results
+    assert SUMMARY_ONLY_TERM in found.summary
+
+
+def test_two_document_results_cost_no_more_queries_than_one_and_the_summary_rides_the_scoped_query(
+    employee,
+):
+    """No query per result: the summaries are selected by the document query that carries the role
+    predicate, through a LEFT JOIN, so there is one query naming ``document_analysis`` however
+    many documents match, and it is the scoped one (invariant 1).
+
+    Both documents match by a passage, so neither costs the title-only match's opening-snippet
+    query, which is per result by design and is not what this counts.
+    """
+    first = make_document(employee, title="Leave policy", roles=[EMPLOYEE_ROLE_NAME], texts=[SHARED_TEXT])
+    summarise(first, summary=SUMMARY, key_points=KEY_POINTS)
+    with CaptureQueriesContext(connection) as one_result:
+        assert search(query_text=TERM, user=employee).documents.count == 1
+
+    second = make_document(employee, title="Leave calendar", roles=[EMPLOYEE_ROLE_NAME], texts=[SHARED_TEXT])
+    summarise(second, summary="When leave may be taken.", key_points=["Not in December."])
+    with CaptureQueriesContext(connection) as two_results:
+        results = search(query_text=TERM, user=employee)
+
+    assert results.documents.count == 2
+    assert {result.summary for result in results.documents.results} == {SUMMARY, "When leave may be taken."}
+    assert len(two_results) == len(one_result)
+    reading_the_analysis = [query["sql"] for query in two_results if "document_analysis" in query["sql"]]
+    assert len(reading_the_analysis) == 1
+    [sql] = reading_the_analysis
+    assert 'FROM "documents" LEFT OUTER JOIN "document_analysis"' in sql
+    assert '"documents"."visible_to_roles" &&' in sql

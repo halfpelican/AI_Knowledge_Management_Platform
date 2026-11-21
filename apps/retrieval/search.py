@@ -104,6 +104,16 @@ narrow after a change of embedding model, in a path with no no-answer message to
 visible. So keyword search over a corpus awaiting ``manage.py reindex`` still works. That
 is a feature, and it is the only place in retrieval where the two predicates come apart.
 
+**A document result carries its FR-10 summary, which is shown and never searched (D-139).**
+FR-10: "a short summary and a list of key points, shown beneath the title in search results so
+users can judge relevance before opening the file". The summary, the key points and the
+truncation flag are three columns of the document's ``DocumentAnalysis`` row, selected by the
+scoped document query itself (``_with_summary``), so a summary reaches a caller only on a row
+the role predicate admitted, and there is no second lookup to scope. No predicate in this
+module reads the summary: a term that occurs only in a summary finds nothing. A meeting result
+carries the empty values, always; a meeting's FR-16 summary is a different thing, reached
+through its ``ai_generated`` passages as before.
+
 **Where the constants live.** ``MINIMUM_SEARCH_LENGTH`` is in ``apps/core/constants.py``
 beside ``MINIMUM_QUESTION_LENGTH``, because CLAUDE.md section 5 says the tuned constants
 live there and nowhere else and FR-12's two-character rule is the same family. The two
@@ -259,6 +269,13 @@ class SearchResult:
     where the group heading already says it; and a new column would be a migration for a
     requirement nobody wrote. A document may also have a blank department, so the front-end
     must already render an absent one — a meeting is that same case, permanently.
+
+    ``summary``, ``key_points`` and ``summary_truncated`` are a document's FR-10 summary (D-139),
+    as the scoped document query selected them (``_with_summary``). ``""``, ``()`` and ``False``
+    for a document with no summary and for every meeting: FR-10 summarises documents, and a
+    meeting's FR-16 summary is not carried here. A summary that is not empty is AI content, and
+    the interface marks it (NFR-15). ``key_points`` is a tuple because the dataclass is frozen;
+    the serializer renders it as a list.
     """
 
     source_type: str
@@ -272,6 +289,10 @@ class SearchResult:
     # Only ever True for a meeting whose transcript does not contain the term but whose summary
     # does: where both match, the transcript's own words are shown.
     snippet_ai_generated: bool = False
+    # FR-10's document summary (D-139): see the docstring. The defaults are a meeting's values.
+    summary: str = ""
+    key_points: tuple[str, ...] = ()
+    summary_truncated: bool = False
 
 
 @dataclass(frozen=True)
@@ -407,6 +428,45 @@ def _opening_snippet(*, source_type: str, source_id: str, role_name: str) -> str
     return snippet_for(collapse_whitespace(first), "")
 
 
+def _with_summary(documents):
+    """``documents`` with each row's FR-10 summary selected by the same query (D-139).
+
+    Three columns of the document's ``DocumentAnalysis`` row, through a LEFT JOIN on the queryset
+    ``_match`` built from ``scoped_documents``. So a summary reaches a caller only on a row the
+    role predicate admitted (invariant 1): there is no second query to scope, no lookup by an
+    identifier, and no count or flag about a summary anywhere. A document with no analysis row
+    stays in the result with nulls, which ``_document_summary`` reads as no summary. One query,
+    whatever the number of results.
+
+    Applied by ``search`` to the matched queryset and never inside ``_match``: the summary is
+    shown, not searched. Nothing in this module filters on it, so a term that occurs only in a
+    summary finds nothing, and ``search_total`` counts exactly what it counted before.
+    """
+    return documents.annotate(
+        analysis_summary=F("analysis__summary"),
+        analysis_key_points=F("analysis__key_points"),
+        analysis_summary_truncated=F("analysis__summary_truncated"),
+    )
+
+
+def _document_summary(document) -> tuple[str, tuple[str, ...], bool]:
+    """The summary, key points and truncation flag ``_with_summary`` selected for ``document``.
+
+    All three are null for a document with no analysis row, and that is no summary: ``""``,
+    ``()`` and ``False``, the values an analysis without a summary holds.
+    """
+    return (
+        document.analysis_summary or "",
+        tuple(document.analysis_key_points or ()),
+        bool(document.analysis_summary_truncated),
+    )
+
+
+def _no_summary(meeting) -> tuple[str, tuple[str, ...], bool]:
+    """A meeting carries no FR-10 summary, whatever FR-16 summary it has (D-139)."""
+    return "", (), False
+
+
 def _group(
     *,
     source_type: str,
@@ -416,6 +476,7 @@ def _group(
     title_of,
     department_of,
     date_of,
+    summary_of,
 ) -> SearchGroup:
     """Turn an already-scoped, already-ordered queryset of sources into one group.
 
@@ -433,6 +494,7 @@ def _group(
             ), False
         else:
             snippet, ai_generated = found
+        summary, key_points, summary_truncated = summary_of(source)
         results.append(
             SearchResult(
                 source_type=source_type,
@@ -442,6 +504,9 @@ def _group(
                 department=department_of(source),
                 date=date_of(source),
                 snippet_ai_generated=ai_generated,
+                summary=summary,
+                key_points=key_points,
+                summary_truncated=summary_truncated,
             )
         )
     return SearchGroup(source_type=source_type, results=tuple(results))
@@ -529,13 +594,16 @@ def search(*, query_text: str, user) -> SearchResults:
         query_text=query_text,
         documents=_group(
             source_type=DOCUMENT_SOURCE_TYPE,
-            sources=match.documents,
+            # The matched, scoped queryset itself, with each document's FR-10 summary selected
+            # beside it (D-139): the same query, so the same role predicate.
+            sources=_with_summary(match.documents),
             snippets=match.snippets,
             role_name=role_name,
             title_of=lambda source: source.title,
             # D-09: a document's department may be blank, and blank is "" already.
             department_of=lambda source: source.department,
             date_of=lambda source: source.uploaded_at,
+            summary_of=_document_summary,
         ),
         meetings=_group(
             source_type=MEETING_SOURCE_TYPE,
@@ -547,6 +615,7 @@ def search(*, query_text: str, user) -> SearchResults:
             # an empty string and not an invented value.
             department_of=lambda source: "",
             date_of=lambda source: source.meeting_date,
+            summary_of=_no_summary,
         ),
     )
 

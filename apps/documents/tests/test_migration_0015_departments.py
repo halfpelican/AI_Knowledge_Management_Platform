@@ -81,8 +81,11 @@ def make(employee):
     return document
 
 
-def test_0015_is_the_leaf_of_documents():
-    assert documents_leaf() == AFTER
+def test_0015_is_on_the_path_to_the_leaf_of_documents():
+    # The leaf itself until documents 0016 (D-139) followed it; on the path to it since, as the
+    # 0013 test asks of 0013.
+    graph = MigrationExecutor(connection).loader.graph
+    assert AFTER in graph.forwards_plan(documents_leaf())
 
 
 def test_0015_seeds_one_department_per_name_ignoring_case_and_hides_one_no_role_but_some_can_read(make):

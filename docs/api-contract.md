@@ -413,16 +413,42 @@ Each result in either group:
 ```json
 {"source_type": "document", "source_id": "uuid", "title": "Leave policy",
  "snippet": "...may take annual leave once probation has ended...",
- "department": "People", "date": "2026-09-21T10:00:00+10:00"}
+ "snippet_ai_generated": false,
+ "department": "People", "date": "2026-09-21T10:00:00+10:00",
+ "summary": "A short paragraph.", "key_points": ["First point.", "Second point."],
+ "summary_truncated": false}
 ```
 
 Those are the four things FR-12's Front-End clause says a result shows — "its title, the
 matching passage as a snippet, its department, and its date" — plus the type and
-identifier the front end links with. `source_type` is `"document"` or `"meeting"`, from
+identifier the front end links with, `snippet_ai_generated` (FR-16, D-125; see "The summary as
+source material" in the FR-16 section), and since D-139 the document's FR-10 summary (below).
+`source_type` is `"document"` or `"meeting"`, from
 the same fixed vocabulary the chunks use. Never `file_path` and never `content_hash`,
 for the two reasons the document object gives above; a search result is built from the
 scoped query's own output and not from the `Document`, `Meeting` or `ContentChunk` row,
 so neither column is reachable from it at all.
+
+**`summary`, `key_points` and `summary_truncated` are the document's FR-10 summary (D-139,
+21 November 2026).** FR-10: "Each document displays a short summary and a list of key points,
+shown beneath the title in search results so users can judge relevance before opening the file."
+
+- **What they hold.** `summary` is a short paragraph, `key_points` a list of strings in the
+  model's order, and `summary_truncated` is `true` where the summary covers only the first
+  sections of a long document, which the interface says. A summary that is not empty is AI
+  content, and the interface marks it (NFR-15).
+- **A document with no summary, and every meeting, carries `""`, `[]` and `false`.** The keys
+  are always present. A meeting's FR-16 summary is not put here: it is reached through
+  `snippet_ai_generated`, as before.
+- **The summary is read through the same scoped query that admitted the result** (invariant 1).
+  It is never looked up by an identifier outside the caller's scope, and no count or flag about
+  it exists. A search that would match a document outside the caller's scope returns nothing of
+  that document, its summary included.
+- **Search does not match on summary text.** A summary is shown, not searched: it is never a
+  passage, never embedded and never retrievable. A term that occurs only in a summary finds
+  nothing, and is recorded in `SearchLog` as any search that found nothing is.
+- **`summary_model` and `summarised_at` are not exposed,** here or in the classification object:
+  they record which model wrote the summary and when.
 
 **No route of this endpoint adds a role permission.** A session is the whole
 authorisation, exactly as on `GET /api/documents`: what a search may find is decided by
@@ -1216,8 +1242,28 @@ The classification object (`null` for a document never classified):
  "user_edited": false,
  "proposed_tags": [{"dimension": "Topic", "value": "budget planning", "confidence": 0.6},
                    {"dimension": "Project", "value": "harbour upgrade", "confidence": 0.5}],
- "classified_at": "2026-11-09T10:00:00+11:00", "model": "gemma3:4b", "input_truncated": false}
+ "classified_at": "2026-11-09T10:00:00+11:00", "model": "gemma3:4b", "input_truncated": false,
+ "summary": "A short paragraph.", "key_points": ["First point.", "Second point."],
+ "summary_truncated": false}
 ```
+
+- **`summary`, `key_points` and `summary_truncated`** (D-139, 21 November 2026) are FR-10's "short
+  summary and a list of key points", the machine's words, which the interface marks as AI content
+  (NFR-15).
+  - `summary` is `""` and `key_points` is `[]` for an analysis with no summary: a document
+    classified before `documents 0016`, until a run or the backfill writes one.
+  - `summary_truncated` is `true` where the summary covers only the first sections of a long
+    document. It is not `input_truncated`, which says the classifier read only the opening of the
+    text.
+  - `summary_model` and `summarised_at`, the model that wrote the summary and when, are not
+    exposed.
+  - The three keys are in the object wherever the object is, as `department_applied_by` is. They
+    travel only with a document the caller's scope resolved, like the rest of the object.
+  - `GET /api/search` carries the same three on each document result (FR-12 — keyword search,
+    above).
+  - **No route writes a summary yet.** `documents 0016` and the two reads landed first. Until the
+    upload, the classify route and the backfill command write one, every analysis reads as having
+    none.
 
 - **The effective department is the document object's `department`** (D-72); `department_outcome`
   says how the machine's suggestion was disposed of. `doc_type` is `null` while the type is

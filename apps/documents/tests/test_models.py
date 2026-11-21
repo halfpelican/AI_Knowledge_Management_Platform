@@ -1,15 +1,18 @@
-"""Documents, ExtractedContent, ContentChunks, Tags, ContentTags and Departments.
+"""Documents, ExtractedContent, ContentChunks, Tags, ContentTags, Departments, and DocumentAnalysis's
+summary columns.
 
-FR-08, FR-10, FR-11, FR-15 and docs/decisions.md D-07, D-08, D-11, D-12, D-129.
+FR-08, FR-10, FR-11, FR-15 and docs/decisions.md D-07, D-08, D-11, D-12, D-129, D-139.
 """
 
 import uuid
+from datetime import datetime, timezone as datetime_timezone
 
 import pytest
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import DataError, IntegrityError, transaction
 from django.db.models import ProtectedError
+from django.utils import timezone
 
 from apps.core.constants import (
     ACCEPTED_FORMATS,
@@ -20,7 +23,16 @@ from apps.core.constants import (
     SOURCE_TYPES,
     TAG_APPLIED_BY_VALUES,
 )
-from apps.documents.models import ContentChunk, ContentTag, Department, Document, ExtractedContent, Tag
+from apps.core.models import NAME_MAX_LENGTH
+from apps.documents.models import (
+    ContentChunk,
+    ContentTag,
+    Department,
+    Document,
+    DocumentAnalysis,
+    ExtractedContent,
+    Tag,
+)
 
 pytestmark = pytest.mark.django_db
 
@@ -191,3 +203,58 @@ def test_department_names_are_unique_ignoring_case_after_normalisation():
     with pytest.raises(IntegrityError), transaction.atomic():
         Department.objects.create(name="  HUMAN   resources ")
     assert list(Department.objects.values_list("name", flat=True)) == ["Human Resources"]
+
+
+# --- DocumentAnalysis: the summary columns (documents 0016, D-139) ----------------------------
+
+
+def test_a_new_analysis_has_no_summary(document):
+    """The five defaults, read back from the database: an analysis written by code that knows
+    nothing of summaries (every row before the apply layer writes one) says "no summary"."""
+    analysis = DocumentAnalysis.objects.create(document=document, classified_at=timezone.now())
+
+    analysis = DocumentAnalysis.objects.get(pk=analysis.pk)
+
+    assert analysis.summary == ""
+    assert analysis.key_points == []
+    assert analysis.summary_truncated is False
+    assert analysis.summary_model == ""
+    assert analysis.summarised_at is None
+    analysis.full_clean()  # every one of the five may be left empty
+
+
+def test_an_analysis_stores_a_summary_its_key_points_in_order_and_who_wrote_it_when(document):
+    """``summarised_at`` is its own column, apart from ``classified_at`` (D-139): the two hold
+    different instants here and each reads back as written."""
+    classified_at = datetime(2026, 11, 9, 10, 0, tzinfo=datetime_timezone.utc)
+    summarised_at = datetime(2026, 11, 21, 9, 30, tzinfo=datetime_timezone.utc)
+    points = ["Leave is requested in writing.", "A manager approves it.", "Carry-over is capped."]
+    analysis = DocumentAnalysis.objects.create(
+        document=document, classified_at=classified_at, model="classifying-model",
+        summary="How annual leave is requested and approved.", key_points=points,
+        summary_truncated=True, summary_model="summarising-model", summarised_at=summarised_at,
+    )
+
+    stored = DocumentAnalysis.objects.get(pk=analysis.pk)
+
+    assert stored.summary == "How annual leave is requested and approved."
+    assert stored.key_points == points  # a list of strings, in the order given
+    assert stored.summary_truncated is True
+    assert (stored.summary_model, stored.summarised_at) == ("summarising-model", summarised_at)
+    assert (stored.model, stored.classified_at) == ("classifying-model", classified_at)
+
+
+def test_each_analysis_has_its_own_key_points_list_and_the_model_name_fits_a_name_column(document, employee):
+    """``default=list``, the callable, so two rows never share one list; and ``summary_model`` is
+    as wide as ``model``, which holds the same kind of name."""
+    other = Document.objects.create(
+        title="Another document", file_type="txt", uploaded_by=employee, visible_to_roles=[EMPLOYEE_ROLE_NAME]
+    )
+    first = DocumentAnalysis(document=document, classified_at=timezone.now())
+    second = DocumentAnalysis(document=other, classified_at=timezone.now())
+
+    first.key_points.append("Only the first row's point.")
+
+    assert second.key_points == []
+    assert DocumentAnalysis._meta.get_field("summary_model").max_length == NAME_MAX_LENGTH
+    assert DocumentAnalysis._meta.get_field("model").max_length == NAME_MAX_LENGTH
