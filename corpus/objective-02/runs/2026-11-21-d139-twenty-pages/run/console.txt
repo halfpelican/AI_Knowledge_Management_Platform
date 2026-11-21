@@ -1,0 +1,11 @@
+[run_measure] database: kmp_obj02_d139_20261121
+database kmp_obj02_d139_20261121; provider anthropic, claude-haiku-5-5, voyage-4 at 1024
+twenty.pages.admin@example.com was here from an earlier run of this driver; given a new password
+the server signed in twenty.pages.admin@example.com (200, Administrator): it serves kmp_obj02_d139_20261121
+copy 1: HTTP 201, Indexed, 15 chunks, 32.1 s total, 6 classification request(s) in 17.1 s, summary 502 characters, 5 key point(s)
+copy 2: HTTP 201, Indexed, 15 chunks, 23.4 s total, 6 classification request(s) in 14.6 s, summary 285 characters, 5 key point(s)
+copy 3: HTTP 201, Indexed, 15 chunks, 24.0 s total, 6 classification request(s) in 16.1 s, summary 313 characters, 5 key point(s)
+copy 4: HTTP 201, Indexed, 15 chunks, 24.3 s total, 6 classification request(s) in 14.7 s, summary 362 characters, 5 key point(s)
+copy 5: HTTP 201, Indexed, 15 chunks, 28.2 s total, 7 classification request(s) in 19.7 s, summary 372 characters, 5 key point(s)
+twenty.pages.admin@example.com: password made unusable, row kept
+within the bound on every upload: 23.4 to 32.1 s. Record: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr10-document-summaries\corpus\objective-02\runs\2026-11-21-d139-twenty-pages\run\results.json

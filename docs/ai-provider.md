@@ -686,21 +686,25 @@ so the prompt above is the one those measurements describe.
 D-139.** Rule 2 changed, rules 9 to 11 and two reply keys were added, and FLM's reply ceiling rose
 from 400 to 1,200. Rules 3 to 8 were kept word for word and the summary comes last in the reply,
 to disturb the classification as little as a prompt change can; that is a precaution, not
-evidence. One run has been made on D-139's prompt: Objective 05's check of 21 November 2026
-(`corpus/objective-05/runs/2026-11-21-d139/`), one draw on claude-haiku-5-5, with all three
-clauses met and nothing re-tuned. It is also the only run in which a model has answered a
-section's request, or a final request carrying section summaries: one document of six sections
-(D04), whose seven requests conformed at their first attempt, as every other request of that draw
-did. It ran at `186be70`, before the worked example's summary was reworded that day (the review of
-D-139), so it describes the prompt as it stood then. Not measured on either provider:
+evidence. Objective 05's check has been run on D-139's prompt twice, on 21 November 2026, on
+claude-haiku-5-5 (`corpus/objective-05/runs/2026-11-21-d139/`): at `186be70`, and at `789c05a`
+after the worked example's summary was reworded that day (the review of D-139), which is the
+prompt that ships. All three clauses were met on both draws and nothing was re-tuned. On the
+second, one wrong type scored 0.8 and was applied: D04's, the one reference document that takes
+the sectioned path. No earlier draw on Haiku had applied a wrong type. With Objective 02's timing
+below, these are the only runs in which a model has answered a section's request, or a final
+request carrying section summaries: D04's seven requests conformed at their first attempt on each
+draw, as every other request of both draws did. Not measured on either provider:
 
 - whether the types, departments, tags and confidences come out as they did, which the
   thresholds depend on (0.95 on gemma3:4b; 0.72, and 0.30 for departments, on claude-haiku-5-5):
-  D-106's sweep has not been run on D-139's prompt, nothing has been run on it on FLM, and one
-  draw of Objective 05 is a check, not a re-derivation;
-- the schema conformance rate of the five-key reply and of a section's reply, beyond that one
-  draw's twenty and six requests, and how often a reply is refused over its summary or a key
-  point running past its limit;
+  D-106's sweep has not been run on D-139's prompt, nothing has been run on it on FLM, and two
+  draws of Objective 05 are a check, not a re-derivation;
+- the schema conformance rate of the five-key reply and of a section's reply, beyond those draws
+  and the timing below, and how often a reply is refused over its summary or a key point running
+  past its limit. It has happened once: in Objective 02's timing one final request of the seven a
+  sectioned document has made was refused for a summary of 652 characters, and its retry
+  conformed;
 - a last section of fewer than `MINIMUM_CONTENT_LENGTH` (50) tokens, which a text 1 to 49 tokens
   past a multiple of `CLASSIFICATION_INPUT_TOKENS` sends, and which must still return 1 to 5 key
   points: no measured document has one (D04's last section is 857 tokens);
@@ -708,9 +712,12 @@ D-139), so it describes the prompt as it stood then. Not measured on either prov
   breaks a limit recovers at all;
 - how long a sectioned document takes: Objective 02's bound, a document of twenty pages or fewer
   processed within sixty seconds, and NFR-13's two minutes from upload to visible confirmation,
-  each under sectioning. Both are being re-timed on anthropic; on FLM both are expected to be
-  exceeded, and whether the final request's longer prompt fits `CLASSIFICATION_TIMEOUT_SECONDS`
-  on the NPU is not known.
+  each under sectioning. On anthropic the twenty-page upload was timed once, on 21 November 2026,
+  with D-139's code: 23.4 to 32.1 s on five uploads of six requests each
+  (`corpus/objective-02/runs/2026-11-21-d139-twenty-pages/`). NFR-13 was not re-run. On FLM
+  neither is measured and both are expected to be exceeded, so Objective 02 stands verified on
+  anthropic only (the user's choice, D-139). Whether the final request's longer prompt fits
+  `CLASSIFICATION_TIMEOUT_SECONDS` on the NPU is not known.
 
 `scripts/classification_dev_sweep.py` measures nothing of a long document. Its development
 documents are each within one request, at most 344 words, so it sends no section request, and it
