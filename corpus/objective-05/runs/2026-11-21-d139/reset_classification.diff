@@ -1,0 +1,45 @@
+--- corpus/objective-05/runs/2026-11-10-anthropic/reset_classification.py	2026-11-21 11:13:19.177843100 +1100
++++ corpus/objective-05/runs/2026-11-21-d139/reset_classification.py	2026-11-21 11:41:32.546611300 +1100
+@@ -1,23 +1,23 @@
+-"""Objective 05's repeated draws (11 November 2026): clear one draw's classification rows before the next.
++"""Objective 05's check on D-139's prompt (21 November 2026): clear the classification rows already there.
+ 
+-The user asked on 11 November for repeated draws on anthropic, as D-106's note on the FLM
+-configuration asks. Each draw classifies the twenty again with the shipped command, so the
+-previous draw's rows are cleared first, as FLM's re-run did
+-(corpus/objective-05/runs/2026-11-10/rerun/rerun.md):
++A copy of corpus/objective-05/runs/2026-11-10-anthropic/reset_classification.py with the database
++name changed, and nothing else (reset_classification.diff beside it). The check's database is a copy
++of the anthropic snapshot, whose twenty documents were classified at upload, before any tag or
++department existed. Those rows are cleared before the measured run, as each repeated draw's were
++on 11 November (corpus/objective-05/runs/2026-11-10/rerun/rerun.md):
+ 
+ - the DocumentAnalysis rows, one per classified document;
+ - the AI tag links on documents (ContentTag, applied_by "ai").
+ 
+-Their counts are checked first against the counts the caller gives from the previous draw's
+-record. The fourteen seeded tag values (Tag rows, which no seeded link uses) are kept, so every draw
+-is classified against the same scheme. A person-applied link would be kept too; there are none.
++Their counts are checked first against the counts the caller gives, read from this script's own
++first line on a run that refuses. Tag rows are kept. A person-applied link would be kept too.
+ Everything is deleted in one transaction.
+ 
+-It refuses unless the database is kmp_obj0506_anthropic_20261110 and both counts match.
++It refuses unless the database is kmp_obj05_d139_20261121 and both counts match.
+ 
+ Usage, in PowerShell, with the run's DATABASE_URL set::
+ 
+-    & $py corpus\\objective-05\\runs\\2026-11-10-anthropic\\reset_classification.py --expect-analyses 20 --expect-ai-links 49
++    & $py corpus\\objective-05\\runs\\2026-11-21-d139\\reset_classification.py --expect-analyses 20 --expect-ai-links 0
+ """
+ 
+ from __future__ import annotations
+@@ -31,7 +31,7 @@
+ if str(REPOSITORY_ROOT) not in sys.path:
+     sys.path.insert(0, str(REPOSITORY_ROOT))
+ 
+-EXPECTED_DATABASE = "kmp_obj0506_anthropic_20261110"
++EXPECTED_DATABASE = "kmp_obj05_d139_20261121"
+ 
+ 
+ def main() -> int:
