@@ -434,8 +434,9 @@ so neither column is reachable from it at all.
 shown beneath the title in search results so users can judge relevance before opening the file."
 
 - **What they hold.** `summary` is a short paragraph, `key_points` a list of strings in the
-  model's order, and `summary_truncated` is `true` where the summary covers only the first
-  sections of a long document, which the interface says. A summary that is not empty is AI
+  model's order, and `summary_truncated` is `true` where the summary covers only part of
+  the document, which the interface says: text lay past the first `MAXIMUM_SUMMARY_SECTIONS`
+  sections, or a section was cut at `CLASSIFICATION_INPUT_CHARACTERS`. A summary that is not empty is AI
   content, and the interface marks it (NFR-15).
 - **A document with no summary, and every meeting, carries `""`, `[]` and `false`.** The keys
   are always present. A meeting's FR-16 summary is not put here: it is reached through
@@ -1258,8 +1259,9 @@ The classification object (`null` for a document never classified):
   (NFR-15).
   - `summary` is `""` and `key_points` is `[]` for an analysis with no summary: a document
     classified before `documents 0016`, until a run or the backfill writes one.
-  - `summary_truncated` is `true` where the summary covers only the first sections of a long
-    document. It is not `input_truncated`, which says the classifier read only the opening of the
+  - `summary_truncated` is `true` where the summary covers only part of the document: text lay
+    past the first `MAXIMUM_SUMMARY_SECTIONS` sections, or a section was cut at
+    `CLASSIFICATION_INPUT_CHARACTERS`. It is not `input_truncated`, which says the classifier read only the opening of the
     text.
   - `summary_model` and `summarised_at`, the model that wrote the summary and when, are not
     exposed.

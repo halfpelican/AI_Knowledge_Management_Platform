@@ -427,9 +427,10 @@ class DocumentAnalysis(models.Model):
     summary = models.TextField(blank=True, default="")
     # The machine's key points, a list of strings in the reply's order; [] when it has none.
     key_points = models.JSONField(default=list, blank=True)
-    # True where the document had more sections than MAXIMUM_SUMMARY_SECTIONS, so the summary
-    # covers only the first of them and the interface says so (FR-10: never "summarised from a
-    # fragment without the user being told"). Not ``input_truncated``, which is about the text the
+    # True where the summary does not cover the whole document, and the interface says so (FR-10:
+    # never "summarised from a fragment without the user being told"): the document had more
+    # sections than MAXIMUM_SUMMARY_SECTIONS, or a section was cut at
+    # CLASSIFICATION_INPUT_CHARACTERS (D-139). Not ``input_truncated``, which is about the text the
     # classifier read.
     summary_truncated = models.BooleanField(default=False)
     # The chat model that wrote the summary, and when. Apart from ``model`` and ``classified_at``:

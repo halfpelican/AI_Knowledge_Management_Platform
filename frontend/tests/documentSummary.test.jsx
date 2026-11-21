@@ -35,7 +35,7 @@ const SUMMARY_PROVENANCE = 'This is a summary of the document, not its own text.
 const NO_SUMMARY = 'No summary has been generated for this document.'
 
 /** FR-10's sentence for a summary that covers only part of a long document. */
-const SUMMARY_TRUNCATED = 'This summary covers only the first part of the document.'
+const SUMMARY_TRUNCATED = 'This summary covers only part of the document.'
 
 /** The key points' visible name, which is also the list's accessible name. */
 const KEY_POINTS_NAME = 'Key points'

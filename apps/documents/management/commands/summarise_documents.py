@@ -291,7 +291,7 @@ class Command(BaseCommand):
         title = entry["title"][:40]
         if "error" in entry:
             return f"{entry['id']}  {title!r:<42}  ERROR {entry['error']}: {entry['detail']}"
-        truncated = ", first sections only" if entry["summary_truncated"] else ""
+        truncated = ", part of the document only" if entry["summary_truncated"] else ""
         return (
             f"{entry['id']}  {title!r:<42}  summary of {len(entry['summary'])} characters, "
             f"{len(entry['key_points'])} key point(s){truncated}  {entry['seconds']}s"

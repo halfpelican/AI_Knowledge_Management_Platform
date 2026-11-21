@@ -284,7 +284,7 @@ describe('FR-12: results grouped by type, with a count per group', () => {
 const SUGGESTED_BY_AI = 'Suggested by AI'
 
 /** FR-10's sentence for a summary of part of a document, written out likewise. */
-const SUMMARY_TRUNCATED = 'This summary covers only the first part of the document.'
+const SUMMARY_TRUNCATED = 'This summary covers only part of the document.'
 
 /** The key points' visible name, which is also the list's accessible name. */
 const KEY_POINTS_NAME = 'Key points'

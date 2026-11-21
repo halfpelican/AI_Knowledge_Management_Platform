@@ -548,8 +548,8 @@ nothing is left out. The block has no heading of its own: a search page would ga
 result. `:: renders five key points as five list items, in the order they were sent` in both
 files; `search.test.jsx :: shows a summary that came with … without an empty list`.
 
-**A summary of part of a long document says so**, in a sentence inside the block: "This summary
-covers only the first part of the document." (FR-10: never "summarised from a fragment without
+**A summary of part of a document says so**, in a sentence inside the block: "This summary
+covers only part of the document." (FR-10: never "summarised from a fragment without
 the user being told"). `:: says so when summary_truncated is true` in both files. In a search
 result, `search.test.jsx :: draws a summary cut short where a reader can see it…` holds that no
 stylesheet rule hides that sentence, the key points' name or a key point, the result's own rules

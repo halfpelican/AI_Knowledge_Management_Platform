@@ -392,7 +392,7 @@ by nothing else.
 | `classified_at` | timestamp | set by each run, not `auto_now`: a confirmation edits the row without reclassifying it |
 | `summary` | text | **`documents 0016_document_summary`, D-139:** the machine's short summary of the document; `""` when it has none |
 | `key_points` | jsonb | **`documents 0016`, D-139:** the machine's key points, a list of strings in the reply's order; `[]` when it has none |
-| `summary_truncated` | boolean | **`documents 0016`, D-139:** the summary covers only the first `MAXIMUM_SUMMARY_SECTIONS` sections of a long document, and the interface says so. Not `input_truncated`, which is about the text the classifier read |
+| `summary_truncated` | boolean | **`documents 0016`, D-139:** the summary does not cover the whole document, and the interface says so: text lay past the first `MAXIMUM_SUMMARY_SECTIONS` sections, or a section was cut at `CLASSIFICATION_INPUT_CHARACTERS`. Not `input_truncated`, which is about the text the classifier read |
 | `summary_model` | text | **`documents 0016`, D-139:** the chat model that wrote the summary; blank when there is none. Never shown |
 | `summarised_at` | timestamp, nullable | **`documents 0016`, D-139:** when the summary was written; null when there is none. Never shown |
 

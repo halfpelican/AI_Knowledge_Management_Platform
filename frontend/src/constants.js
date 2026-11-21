@@ -1158,11 +1158,13 @@ export const TEXT = {
   documentSummaryProvenance: 'This is a summary of the document, not its own text.',
   // The key points' visible name, which also names the list to a screen reader.
   documentKeyPoints: 'Key points',
-  // `summary_truncated`: the document is longer than the sections a summary is
-  // made from, so the summary covers only the first of them. FR-10: never
+  // `summary_truncated`: the summary does not cover the whole document. Either the
+  // document is longer than the sections a summary is made from, or a section was
+  // cut at the character cap (D-139, the closing security review's S1). FR-10: never
   // "summarised from a fragment without the user being told". It names no number
-  // of sections, so no tuned value is restated here.
-  documentSummaryTruncated: 'This summary covers only the first part of the document.',
+  // of sections, so no tuned value is restated here. It read "covers only the first
+  // part" until the cap, which can cut a section that is not the last.
+  documentSummaryTruncated: 'This summary covers only part of the document.',
   // The document page, where `summary` is "" or the document was never
   // classified. An ordinary state, said in one line.
   documentSummaryNone: 'No summary has been generated for this document.',
