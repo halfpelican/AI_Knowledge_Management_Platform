@@ -19,7 +19,8 @@ only the five summary columns. The type, the department, the outcomes, the tags,
   is passed. A malformed or unknown id is an error entry, as in ``classify_documents``.
 - A document with no analysis row is never summarised: there is no classification for the summary
   to sit beside, and ``apply_summary`` creates none. It is skipped and listed, with a line pointing
-  at ``classify_documents``, which classifies it and writes its summary in one call. By default
+  at ``classify_documents``, which classifies it and writes its summary in one ``classify_document``
+  operation. By default
   every such document is listed, whatever its status, and its status is shown.
 
 **Every document, whatever its visibility.** An operator's command, run on the server with the

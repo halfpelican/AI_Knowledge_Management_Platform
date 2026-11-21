@@ -170,7 +170,8 @@ reprocessing or deleting is not (D-40).
   - `classify_documents --all` would mark 9 department suggestions applied rather than awaiting
     confirmation, because they matched the typed department below the old 0.72.
   - It would also replace the one unanswered proposal, and re-score the 15 held tags.
-  - It costs a model call per document, and it is the user's call.
+  - It costs a model call per document (since D-139 more for a document longer than about five
+    pages, which is summarised in sections), and it is the user's call.
 
 **The first `migrate` after FR-10's document summaries (D-139)** applies `documents` 0016, which
 adds the summary columns to every document's classification, empty.
@@ -479,6 +480,8 @@ attendees and the applied tags are what it draws.
 1. Ctrl+C in the server window, and close it.
 2. In the deployment window, repeat step 1's every-time block. It moves the worktree, detached, to
    the new `origin/main`. Then do steps 2, 3's sync, 4's `migrate` and `check --deploy`, and 5.
+   On the first redeploy after FR-10's document summaries (D-139), run step 4's
+   `summarise_documents` after `migrate`, so the documents classified before it get a summary.
 3. Start the server in a **new** window (step 6), then do steps 7 and 8. Step 7 appends a new line,
    so the record keeps every deployment in order.
 

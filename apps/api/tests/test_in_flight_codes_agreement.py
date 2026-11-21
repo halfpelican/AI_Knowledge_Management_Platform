@@ -1,7 +1,8 @@
 """The client's copies of the in-flight codes must equal the server's (D-79, D-85).
 
-``POST /api/ask`` can answer two kinds of 429, and so can the three ingestion routes: the
-rate limit's, which carries no ``code`` and a ``Retry-After``, and the in-flight refusal's,
+``POST /api/ask`` can answer two kinds of 429, and so can the three ingestion routes and, since
+D-139's further choices (21 November 2026), FR-10's classify, which holds the ingestion slot too:
+the rate limit's, which carries no ``code`` and a ``Retry-After``, and the in-flight refusal's,
 which carries ``ASK_IN_FLIGHT_CODE`` or ``INGESTION_IN_FLIGHT_CODE`` and no ``Retry-After``.
 The client tells them apart by ``code`` alone and never parses ``detail``
 (docs/api-contract.md). Each screen compares the reply's ``code`` with a copy of the server's

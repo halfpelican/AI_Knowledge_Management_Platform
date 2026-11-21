@@ -355,9 +355,17 @@ class DocumentAnalysis(models.Model):
         ``documents 0016`` (``apply_summary``). A row neither has reached holds the defaults.
 
     ``user_edited`` protects a person's decision from reprocessing ("any value a user edits
-    [is] retained and is not overwritten by later reprocessing"): once set, a re-run writes the
-    ``machine_*`` columns, ``model``, ``input_truncated``, ``classified_at`` and, since D-139, the
-    five summary columns, and nothing else on this row or on ``Documents.department``.
+    [is] retained and is not overwritten by later reprocessing"). Once it is set, a re-run writes
+    the ``machine_*`` columns, ``model``, ``input_truncated``, ``classified_at`` and, since D-139,
+    the five summary columns, and leaves ``doc_type``, both outcomes, ``department_applied_by`` and
+    ``Documents.department`` as a person left them. It does not guard the tags: rule 4 runs as on
+    any row, so the run replaces ``proposed_tags`` and ``discarded_suggestions`` and creates or
+    refreshes the unconfirmed AI link of each in-scheme value it suggests, leaving the document's
+    other links alone; a link a person applied, confirmed or removed stays as it is, and a value a
+    person rejected (``rejected_tags``, which no run replaces) is neither linked nor proposed, on
+    this row as on any other (apps/documents/classification.py, ``apply_classification``).
+    Until the review of 21 November 2026 this sentence ended "and nothing else on this row or on
+    ``Documents.department``", which rule 4's two lists made untrue.
     """
 
     id = uuid_primary_key("analysis_id")

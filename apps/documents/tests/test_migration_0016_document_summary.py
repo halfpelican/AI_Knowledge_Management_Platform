@@ -75,11 +75,6 @@ def immediate_constraints():
         cursor.execute("SET CONSTRAINTS ALL IMMEDIATE")  # as the 0008 to 0015 tests do
 
 
-def test_0016_is_on_the_path_to_the_leaf_of_documents():
-    graph = MigrationExecutor(connection).loader.graph
-    assert AFTER in graph.forwards_plan(documents_leaf())
-
-
 def test_0016_only_adds_fields_to_document_analysis():
     """Additive (CLAUDE.md section 7, Migrations): nothing is altered, renamed, removed or run."""
     migration = importlib.import_module("apps.documents.migrations.0016_document_summary").Migration

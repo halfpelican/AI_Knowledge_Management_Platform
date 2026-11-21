@@ -293,7 +293,10 @@ def tag_scheme(document: Document) -> TagScheme:
     direct row edits.
 
     **The scheme is built for the audience at classification time.** A document later widened to
-    more roles keeps the values it was classified against; widening should reclassify.
+    more roles keeps the values it was classified against; widening should reclassify. The summary
+    and key points are written from the same prompt (D-139), so widening should reclassify for the
+    summary's sake too, and reclassifying rewrites them, as ``summarise_documents --force`` does,
+    whose prompt is built for the audience at the time it runs (``summarise_document_now``).
 
     **A role name scoping does not know** (one missing from EFFECTIVE_ROLES) reads nothing, so
     every grown tag and every grown department is withheld from a document it is in the audience
@@ -590,6 +593,17 @@ def apply_classification(
        does not mention are left alone. From 12 to 13 November 2026, D-128 created and linked a value
        outside the scheme at or above the threshold, and proposed one in any of the three dimensions
        below it. D-129 reverses that.
+
+    **On a ``user_edited`` row.** Once it is set, a re-run writes the ``machine_*`` columns,
+    ``model``, ``input_truncated``, ``classified_at`` and, since D-139, the five summary columns,
+    and leaves ``doc_type``, both outcomes, ``department_applied_by`` and ``Documents.department``
+    as a person left them. It does not guard the tags: rule 4 runs as on any row, so the run
+    replaces ``proposed_tags`` and ``discarded_suggestions`` and creates or refreshes the
+    unconfirmed AI link of each in-scheme value it suggests, leaving the document's other links
+    alone; a link a person applied, confirmed or removed stays as it is, and a value a person
+    rejected (``rejected_tags``, which no run replaces) is neither linked nor proposed, on this row
+    as on any other. The same sentence is in ``DocumentAnalysis``'s docstring and
+    docs/schema-v1.md.
 
     **Why every value outside the scheme gets the same treatment (CLAUDE.md invariant 1).** Seen
     from a reader of this document, such a value is one of three things, and the reader must not be

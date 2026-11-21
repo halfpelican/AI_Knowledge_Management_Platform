@@ -19,14 +19,17 @@ import apps.ai
 from apps.ai.base import ProviderUnavailable
 from apps.ai.testing import STUB_CHAT_MODEL, STUB_KEY_POINTS, stub_document_summary
 from apps.core.constants import (
+    ADMINISTRATOR_ROLE_NAME,
     ASSIGNMENT_APPLIED,
     ASSIGNMENT_CONFIRMED,
     CLASSIFICATION_INPUT_TOKENS,
+    EMPLOYEE_ROLE_NAME,
     MAXIMUM_SUMMARY_SECTIONS,
     PROCESS_DIMENSION,
     PROJECT_DIMENSION,
     SOURCE_TYPES,
     TOPIC_DIMENSION,
+    USER_APPLIED,
 )
 from apps.core.models import NAME_MAX_LENGTH
 from apps.documents.classification import (
@@ -69,6 +72,12 @@ SUMMARY = "How annual leave is requested, approved and carried over."
 KEY_POINTS = ("Leave is requested in writing.", "A manager approves it.")
 OTHER_SUMMARY = "When purchase orders need a second approval."
 OTHER_KEY_POINTS = ("Orders above ten thousand dollars need two approvals.",)
+
+# A text one word past the last section, so the stub reports it summarised from its first sections
+# only, as a provider would (apps/ai/testing.py).
+PAST_THE_LAST_SECTION = "word " * (MAXIMUM_SUMMARY_SECTIONS * CLASSIFICATION_INPUT_TOKENS + 1)
+# A grown Project that only an Administrator-only document carries (``tag_scheme``'s rule).
+GROWN_PROJECT = "succession planning"
 
 NUL = chr(0)
 LONE_SURROGATE = "\ud800"  # what json.loads makes of a \ud800 escape in a reply
@@ -285,6 +294,36 @@ def test_summary_truncated_is_stored_as_the_reply_reports_it_for_the_text(docume
     assert analysis.summary_model == STUB_CHAT_MODEL
 
 
+@pytest.mark.parametrize(
+    "later_run", [classify_document_now, summarise_document_now],
+    ids=["classification run", "backfill"],
+)
+def test_a_later_run_on_a_short_text_sets_summary_truncated_back_to_false(document, later_run):
+    """``summary_truncated`` is each run's own, never carried over, in both writers:
+    ``apply_classification`` (through ``classify_document_now``) and ``apply_summary`` (through
+    ``summarise_document_now``, the backfill). A document first summarised from a text past the last
+    section, whose latest text is then short, is stored as summarised whole, so a stale flag cannot
+    go on telling a reader that a summary of the whole document covers only its first part."""
+    long_text = ExtractedContent.objects.create(
+        document=document, extracted_text=PAST_THE_LAST_SECTION
+    )
+    first = classify_document_now(document)
+    first.refresh_from_db()
+    assert first.summary_truncated is True  # the flag is there to be cleared
+    ExtractedContent.objects.create(document=document, extracted_text=TEXT)
+    # The short text is the latest by an explicit timestamp, not by creation order (Windows ticks).
+    ExtractedContent.objects.filter(pk=long_text.pk).update(
+        extracted_at=long_text.extracted_at - datetime.timedelta(days=1)
+    )
+
+    analysis = later_run(document)
+
+    analysis.refresh_from_db()
+    assert analysis.summary_truncated is False
+    assert analysis.summary == stub_document_summary(document.title)
+    assert DocumentAnalysis.objects.filter(document=document).count() == 1
+
+
 # --- apply_summary: the backfill writes the five and nothing else -------------------------------
 
 
@@ -454,6 +493,45 @@ def test_summarise_now_calls_the_service_once_and_stores_only_the_summary(docume
     assert returned.model != "second-model"
     assert returned.classified_at == classified_at
     assert links_of(document) == []
+
+
+def test_summarise_now_builds_its_prompt_for_the_documents_own_audience(
+    employee, administrator, stub_ai_service
+):
+    """The backfill's scheme is ``tag_scheme(document)``, for the audience the document has when the
+    backfill runs, exactly as ``classify_document_now`` builds it (CLAUDE.md invariant 1). A grown
+    Project that only an Administrator-only document carries is in that document's scheme and must
+    not be in the scheme of a document every role reads, so a scheme built for any other audience,
+    or the full scheme an empty audience gets, fails one of the two. The test above sends an
+    Employee-only document carrying vocabulary alone, where either would pass."""
+    restricted = Document.objects.create(
+        title="Board pack", file_type="txt", uploaded_by=administrator,
+        visible_to_roles=[ADMINISTRATOR_ROLE_NAME],
+    )
+    shared = Document.objects.create(
+        title="Staff handbook", file_type="txt", uploaded_by=employee,
+        visible_to_roles=[EMPLOYEE_ROLE_NAME, ADMINISTRATOR_ROLE_NAME],
+    )
+    grown = Tag.objects.create(tag_name=GROWN_PROJECT, dimension=PROJECT_DIMENSION, grown=True)
+    ContentTag.objects.create(
+        tag=grown, source_type=DOCUMENT_SOURCE_TYPE, source_id=restricted.pk,
+        applied_by=USER_APPLIED, confirmed=True,
+    )
+    for each in (restricted, shared):
+        ExtractedContent.objects.create(document=each, extracted_text=TEXT)
+        classified_without_a_summary(each)  # by hand: no provider call
+
+    summarise_document_now(restricted)
+    sent_for_restricted = stub_ai_service.classify_calls[-1][2]
+    summarise_document_now(shared)
+    sent_for_shared = stub_ai_service.classify_calls[-1][2]
+
+    titles = [title for title, _, _ in stub_ai_service.classify_calls]
+    assert titles == ["Board pack", "Staff handbook"]  # one call each, in order
+    assert sent_for_restricted == tag_scheme(restricted)
+    assert GROWN_PROJECT in sent_for_restricted.tags[PROJECT_DIMENSION]
+    assert sent_for_shared == tag_scheme(shared)
+    assert GROWN_PROJECT not in sent_for_shared.tags[PROJECT_DIMENSION]
 
 
 def test_summarise_now_during_a_provider_outage_propagates_and_writes_nothing(document, monkeypatch):
