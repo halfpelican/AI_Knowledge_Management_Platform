@@ -1136,6 +1136,24 @@ export const TEXT = {
   // `input_truncated`: only the opening of a long document was read (D-104). Said
   // rather than hidden, which is why the record keeps the flag.
   classificationTruncated: 'Only the opening of this document was read to classify it.',
+  // FR-10's document summary and key points (D-139), in a search result and on
+  // the document page (src/components/DocumentSummary.jsx). FR-10 Front-End: "Each
+  // document displays a short summary and a list of key points, shown beneath the
+  // title in search results so users can judge relevance before opening the file."
+  // Said after NFR-15's mark: what the block is, and that these are not the
+  // document's words, since a search result shows the document's own passage
+  // straight after it.
+  documentSummaryProvenance: 'This is a summary of the document, not its own text.',
+  // The key points' visible name, which also names the list to a screen reader.
+  documentKeyPoints: 'Key points',
+  // `summary_truncated`: the document is longer than the sections a summary is
+  // made from, so the summary covers only the first of them. FR-10: never
+  // "summarised from a fragment without the user being told". It names no number
+  // of sections, so no tuned value is restated here.
+  documentSummaryTruncated: 'This summary covers only the first part of the document.',
+  // The document page, where `summary` is "" or the document was never
+  // classified. An ordinary state, said in one line.
+  documentSummaryNone: 'No summary has been generated for this document.',
   // The meeting delete, which is not in the proposal and mirrors the document
   // delete above (src/pages/MeetingDetail.jsx). The control shows only when the
   // meeting detail says `can_delete`; the server checks `manage_meetings` on

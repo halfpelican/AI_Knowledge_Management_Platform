@@ -215,7 +215,13 @@ export function reprocessDocument(docId, options = {}) {
  *   person accepts the suggestion, D-105's note), `discarded` (the department
  *   only: outside the known departments, nothing written) or `confirmed` (a person
  *   confirmed or edited it). `doc_type` is the effective type; the effective
- *   department is the document's own `department` field (D-72).
+ *   department is the document's own `department` field (D-72). Since D-139 the
+ *   object also carries `summary`, `key_points` and `summary_truncated`, wherever
+ *   it appears: the machine's short summary of the document, `""` where it has
+ *   none; its key points, a list of strings, `[]` likewise; and whether the summary
+ *   covers only the first part of a long document. They are display only, shown by
+ *   src/components/DocumentSummary.jsx, and a classification from before the fields
+ *   carries none of the three.
  * - `tag_details` — every tag link, `[{content_tag_id, dimension, name,
  *   applied_by, confirmed, provisional, confidence}]`, `applied_by` "ai" or
  *   "user". A link with `provisional: true` is a held suggestion and is not among

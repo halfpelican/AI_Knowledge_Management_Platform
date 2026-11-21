@@ -5,6 +5,7 @@ import { deleteDocument, documentDownloadUrl, fetchDocument } from '../api/docum
 import Button from '../components/Button.jsx'
 import Classification from '../components/Classification.jsx'
 import Dialog from '../components/Dialog.jsx'
+import DocumentSummary from '../components/DocumentSummary.jsx'
 import Notice from '../components/Notice.jsx'
 import { TEXT } from '../constants.js'
 import useApiResource from '../hooks/useApiResource.js'
@@ -90,6 +91,11 @@ function tagsFrom(tagDetails) {
  * A document outside the caller's scope answers 404, exactly as an id that names
  * nothing does, and both render the same message. The screen never distinguishes
  * "no such document" from "not yours to read" (CLAUDE.md §6, invariant 1).
+ *
+ * **FR-10's summary and key points sit beneath the title** (D-139), above the
+ * metadata, the classification and the extracted text, in the component a search
+ * result shows them in (src/components/DocumentSummary.jsx). They are AI content
+ * and are marked as it; like the extracted text they are rendered as text.
  */
 export default function DocumentDetail() {
   const { docId } = useParams()
@@ -207,6 +213,18 @@ export default function DocumentDetail() {
           {deleteError}
         </Notice>
       ) : null}
+
+      {/* FR-10's summary and key points (D-139): beneath the title and above the
+          classification and the text, bounded and marked as AI content. They are
+          the classification object's, so a classify run from this page replaces
+          them when its reply does (`applyClassificationChange`). A document never
+          classified, or one with no summary, says so in one line. */}
+      <DocumentSummary
+        summary={record.classification?.summary}
+        keyPoints={record.classification?.key_points}
+        truncated={record.classification?.summary_truncated}
+        emptyMessage={TEXT.documentSummaryNone}
+      />
 
       <dl className="record-meta">
         <dt>{TEXT.documentFieldType}</dt>

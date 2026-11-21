@@ -15,6 +15,7 @@ import { ActiveFilterList, FacetGroup, SortHeader } from './Browse.jsx'
 import Button from './Button.jsx'
 import DashboardPanel from './DashboardPanel.jsx'
 import Dialog from './Dialog.jsx'
+import DocumentSummary from './DocumentSummary.jsx'
 import FileDropZone from './FileDropZone.jsx'
 import { SummaryContent } from './MeetingSummary.jsx'
 import NotPermitted from './NotPermitted.jsx'
@@ -394,6 +395,38 @@ const SAMPLE_AI_SEARCH_GROUP = {
       snippet_ai_generated: true,
       department: '',
       date: '2026-11-03',
+    },
+  ],
+}
+
+/* Fixtures for the FR-10 summary section below, in the shape D-139 gives a search
+   result and a classification object: `summary`, `key_points`, `summary_truncated`.
+   Invented text. The first is of a long document, so the sentence saying the
+   summary covers only its first part is shown. */
+const SAMPLE_DOCUMENT_SUMMARY = {
+  summary:
+    'Sets out how staff accrue and take annual leave. Leave is requested through a manager and cannot be taken during probation.',
+  key_points: [
+    'Staff accrue twenty days of annual leave a year, pro rata.',
+    'Leave is approved by the employee’s manager.',
+    'No annual leave is taken before probation has ended.',
+  ],
+  summary_truncated: true,
+}
+
+const SAMPLE_SUMMARY_SEARCH_GROUP = {
+  count: 1,
+  results: [
+    {
+      source_type: SOURCE_TYPE.document,
+      source_id: 'sample-document',
+      title: 'Leave policy 2026',
+      snippet: '…staff may take annual leave once probation has ended, with their manager’s approval…',
+      snippet_ai_generated: false,
+      department: 'People',
+      date: '2026-09-21T10:00:00+10:00',
+      ...SAMPLE_DOCUMENT_SUMMARY,
+      summary_truncated: false,
     },
   ],
 }
@@ -1021,9 +1054,9 @@ export default function ComponentSheet() {
       <section aria-labelledby="sheet-ai-mark">
         <h2 id="sheet-ai-mark">AI-generated content (NFR-15)</h2>
         <p>
-          One convention marks everything the AI wrote, on every screen: FR-10&rsquo;s type, department and tags,
-          FR-16&rsquo;s summary and extracted action items, and a passage of a meeting&rsquo;s summary wherever
-          FR-12 shows it. The mark is words beside the content, because a colour or a border is not a mark to a
+          One convention marks everything the AI wrote, on every screen: FR-10&rsquo;s type, department and tags
+          and its summary of a document, FR-16&rsquo;s summary and extracted action items, and a passage of a
+          meeting&rsquo;s summary wherever FR-12 shows it. The mark is words beside the content, because a colour or a border is not a mark to a
           screen reader. Once a person has changed an extracted item the mark says so, as a confirmed tag&rsquo;s
           does, and what a person wrote carries no AI mark at all. The three forms:
         </p>
@@ -1064,6 +1097,35 @@ export default function ComponentSheet() {
           headingId="sheet-ai-search-group"
           group={SAMPLE_AI_SEARCH_GROUP}
           emptyMessage={TEXT.searchGroupEmptyMeetings}
+        />
+      </section>
+
+      <section aria-labelledby="sheet-document-summary">
+        <h2 id="sheet-document-summary">Document summary and key points (FR-10)</h2>
+        <p>
+          A document&rsquo;s short summary and its key points, in one block inside the AI boundary: the mark and
+          a sentence saying this is a summary and not the document&rsquo;s own text, then the summary, then the
+          key points as a list named &ldquo;{TEXT.documentKeyPoints}&rdquo;. The same component is shown
+          beneath the title on the document page and beneath the title of a search result, above its snippet. It
+          holds no control, so it adds no tab stop. A summary of a document too long to be summarised whole says
+          it covers only the first part, as this one does:
+        </p>
+        <DocumentSummary
+          summary={SAMPLE_DOCUMENT_SUMMARY.summary}
+          keyPoints={SAMPLE_DOCUMENT_SUMMARY.key_points}
+          truncated={SAMPLE_DOCUMENT_SUMMARY.summary_truncated}
+        />
+        <p>
+          A document with no summary shows nothing in a search result, which then looks as it did before
+          summaries existed, and one line on the document page:
+        </p>
+        <DocumentSummary summary="" keyPoints={[]} emptyMessage={TEXT.documentSummaryNone} />
+        <p>In a search result:</p>
+        <SearchResultGroup
+          heading={TEXT.searchDocumentsHeading}
+          headingId="sheet-summary-search-group"
+          group={SAMPLE_SUMMARY_SEARCH_GROUP}
+          emptyMessage={TEXT.searchGroupEmptyDocuments}
         />
       </section>
 

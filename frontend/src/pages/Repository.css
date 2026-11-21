@@ -467,6 +467,14 @@
   margin: 0 0 var(--space-5);
 }
 
+/* FR-10's summary on the document page (D-139), or the line in its place: set
+   apart from the metadata beneath it as the metadata is from the actions. Two
+   classes, so it outranks DocumentSummary.css's own margin whichever loads last. */
+.document-detail > .document-summary,
+.document-detail > .document-summary__none {
+  margin-bottom: var(--space-5);
+}
+
 /* Key/value list for a record's metadata. */
 .record-meta {
   display: grid;

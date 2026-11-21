@@ -515,3 +515,72 @@ after the skip link, claims before passages, and a selected claim not a stop.
 **Owed in a browser, by a person,** as for section 8's view: a screen-reader run (NVDA or
 VoiceOver) through both tables; reflow at 320 CSS pixels; an axe run; and that the two shapes,
 the three line widths and the switch beside the skip link paint as the stylesheet says.
+
+## 10. A document's summary and key points (FR-10; D-139, 21 November 2026)
+
+FR-10's summary of a document and its key points are one block, drawn by one component
+(`components/DocumentSummary.jsx`) in two places: beneath the title of a search result, above its
+snippet, and beneath the title of the document page, above its metadata, classification and
+text. Every claim below names the test that holds it. `search.test.jsx` renders the search
+screen and `documentSummary.test.jsx` the document page.
+
+**AI-generated content says so in words (NFR-15, SC 1.4.1).** The block opens with the app's
+"Suggested by AI" mark and the sentence "This is a summary of the document, not its own text.",
+ahead of the summary they are about. The dashed boundary is the second cue, never the only one,
+and it is `ai-content`'s: no rule that matches the block draws another border. The snippet under
+it in a search result, and the extracted text on the document page, are the document's own words
+and are outside the boundary. `search.test.jsx :: marks the summary and its key points as AI
+content…`; `documentSummary.test.jsx :: marks them as AI content…` and `:: draws them where a
+reader can see them…`, which also holds that no stylesheet rule hides the mark, the summary, the
+sentence below or a key point.
+
+**Contrast.** No new colour and no new pair. The mark, the sentence beside it, the sentence about
+a summary cut short and the line for a document with no summary are `--color-text-muted` on the
+page (7.56:1); the summary and the key points are body text (14.76:1); the boundary is
+`--color-border-strong` (4.97:1). `contrast.test.js`'s sweep reads `DocumentSummary.css` with
+every other stylesheet.
+
+**The key points are a list (SC 1.3.1).** A `ul` of `li`, named "Key points" by the visible
+words above it. A summary that came with no key points has no list, and a key point that says
+nothing is left out. The block has no heading of its own: a search page would gain one for each
+result. `:: renders five key points as five list items, in the order they were sent` in both
+files; `search.test.jsx :: shows a summary that came with … without an empty list`.
+
+**A summary of part of a long document says so**, in a sentence inside the block: "This summary
+covers only the first part of the document." (FR-10: never "summarised from a fragment without
+the user being told"). `:: says so when summary_truncated is true` in both files.
+
+**No summary.** A search result with none shows nothing in its place, and is the result it was
+before summaries existed. The document page says "No summary has been generated for this
+document." in one line, which is the page's own sentence and carries no mark. `search.test.jsx
+:: renders a result with … as it always has`; `documentSummary.test.jsx :: shows the line, and
+no summary block, mark or list, when …`.
+
+**Tab order (SC 2.1.1).** The block holds no control and is not focusable itself, so it adds no
+tab stop to either screen. Both "marks … as AI content" tests assert that nothing in the block,
+itself included, can take focus. `tabOrder.test.jsx` does not walk a search page with results or
+the document page, so those two assertions are what holds this.
+
+**Text only.** The summary and key points are the model's words about a file anyone may have
+uploaded. They are rendered as text, never as HTML. `search.test.jsx :: renders a summary and a
+key point holding markup as the characters they are`.
+
+**Reflow (SC 1.4.10), measured for the block and not for the pages.** In headless Edge 158 on
+21 November 2026: the block's markup as each screen renders it, with the built stylesheet,
+inside a 320-CSS-px iframe. The summary was 600 characters and each of five key points 200,
+each holding a 135-character string with nowhere to break. `documentElement.clientWidth` and
+`scrollWidth` were both 305, and each block's own were both 271, so nothing scrolled sideways.
+The boundary computed as 1px dashed in both places and the bullet as a disc in both. With the
+summary's `word-break` switched off the same page was 1102 wide, and with the key points'
+switched off, 1126, so those two rules are what holds it. `documentSummary.test.jsx :: lets a
+long unbroken string in the summary or a key point wrap inside the block…` holds both rules
+from the stylesheet. This was a static page, not the running application: no header, no router
+and no API.
+
+**The component sheet** shows the block cut short, the line for no summary, and a search result
+carrying a summary. `componentSheet.test.jsx :: shows FR-10’s document summary in its states…`.
+
+**Owed in a browser, by a person:** the search page and the document page themselves at 320 CSS
+pixels, with real summaries; a screen-reader run (NVDA or VoiceOver) through a result and the
+document page, to hear the mark before the summary and the list announced by its name; and an
+axe run, with the rest of the deployed alpha.
