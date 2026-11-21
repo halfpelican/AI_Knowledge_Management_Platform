@@ -868,11 +868,11 @@ MAXIMUM_SUMMARY_SECTIONS = 8
 # Dated, 21 November 2026 (D-139). The three thresholds below,
 # CLASSIFICATION_CONFIDENCE_THRESHOLD, CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL and
 # CLASSIFICATION_DEPARTMENT_CONFIDENCE_THRESHOLD_BY_MODEL, were each derived on the classification
-# prompt as it stood before D-139. Objective 05 was run on D-139's prompt that day, twice on
-# claude-haiku-5-5 (corpus/objective-05/runs/2026-11-21-d139/): at 186be70, and at 789c05a after
-# its worked example's summary was reworded. All three clauses were met on both draws, and nothing
-# was re-tuned. On the second, one wrong type scored 0.8 and was applied (D04, the one reference
-# document summarised in sections). The 0.95 that gemma3:4b uses was not in either run.
+# prompt as it stood before D-139. Objective 05 was run on D-139's prompt that day, four times on
+# claude-haiku-5-5 (corpus/objective-05/runs/2026-11-21-d139/): once at 186be70, and three times
+# after its worked example's summary was reworded. All three clauses were met on every draw, and
+# nothing was re-tuned. On one draw, one wrong type scored 0.8 and was applied (D04, the one
+# reference document summarised in sections). The 0.95 that gemma3:4b uses was not in any run.
 #
 # An assignment whose confidence is below this is marked provisional and held for confirmation
 # rather than applied (FR-10 Business logic, confidence; compared with ``<`` in one place,

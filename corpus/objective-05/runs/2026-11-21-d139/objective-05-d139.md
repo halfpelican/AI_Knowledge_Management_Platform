@@ -1,8 +1,8 @@
 # Objective 05 on D-139's prompt, 21 November 2026: Claude Haiku 5.5 on the frozen reference set
 
-**The result: all three clauses are met, on two draws. Clause 1 is 18 of 20 types (90%) against 75%
-on each.** On the second draw one wrong type scored above the threshold and was applied, which no
-earlier draw on Haiku had shown: see "Second draw" below.
+**The result: all three clauses are met, on four draws. Clause 1 is 18 of 20 types (90%) against 75%
+on each.** On one of the four, one wrong type scored above the threshold and was applied, which no
+earlier draw on Haiku had shown: see "Draws 2 to 4" below.
 
 **Why it was run.** D-139 makes the classification request also return a summary and key points, so
 the prompt Haiku's thresholds were measured on (0.72 for the type and the tags, D-122; 0.30 for the
@@ -70,45 +70,49 @@ draws that is not a matter of degree, and one draw does not say whether the new 
   to 64.6%).
 - Types held as provisional: 3, one right and two wrong (earlier draws: 4, 4 and 3).
 
-## Second draw, on the final prompt, 21 November 2026 (`draw-2/`)
+## Draws 2 to 4, on the final prompt, 21 November 2026 (`draw-2/`, `draw-3/`, `draw-4/`)
 
-**Why a second draw.** After the first, a review of the AI layer had the worked example's summary
+**Why more draws.** After the first, a review of the AI layer had the worked example's summary
 reworded: it joined two statements with "because", a cause its text does not state (`f3227f1`).
 That changes one line of each system prompt. Every user turn for these twenty documents is byte for
 byte what the first draw sent. So the first draw no longer described the prompt that ships, and
-the measurement was repeated on it.
+the measurement was repeated on it. The second draw applied a wrong type, which no draw on Haiku had
+done, so two more were made the same evening to see whether it repeats.
 
-**How it ran:** commit `789c05a`, a clean checkout; the same database, scheme, thresholds, command
-and verifier. The first draw's 20 analysis rows and 49 AI links were cleared first
-(`draw-2/reset.txt`). 26 requests again, every one parsed at its first attempt
-(`draw-2/classify/attempts.log`), about $0.013. At this commit the apply layer stores the summary.
+**How they ran:** a clean checkout at `789c05a` (draw 2) and `2ea4f55` (draws 3 and 4, which adds
+only records and documents to `789c05a`); the same database, scheme, thresholds, command and
+verifier. Before each, the previous draw's analysis rows and AI links were cleared
+(`draw-N/reset.txt`). 26 requests each time, every one parsed at its first attempt
+(`draw-N/classify/attempts.log`). At these commits the apply layer stores the summary.
 
-| | Draw 1 (`186be70`) | Draw 2 (`789c05a`) |
-|---|---|---|
-| **clause 1, types matching the reference** | **18 of 20 (90%)** | **18 of 20 (90%)** |
-| the misses, with confidence | D04 Policy 0.6, D09 Report 0.55 | D04 Policy **0.8**, D09 Report 0.6 |
-| wrong types applied | none | **one: D04** |
-| types held as provisional (right / wrong) | 3 (1 / 2) | 4 (3 / 1) |
-| clause 2: below threshold held; at or above applied (+ held to keep a department) | 34/34; 52/55 (+3) | 34/34; 48/51 (+3) |
-| clause 3: discarded / Topics proposed / out-of-scheme links | 0 / 0 / 0 | 0 / 0 / 0 |
-| tags against the manifest: precision, recall (information) | 69.4%, 70.8% | 66.7%, 62.5% |
-| Claude | 26 requests, $0.0125 | 26 requests, $0.013 |
+| | Draw 1 (`186be70`) | Draw 2 | Draw 3 | Draw 4 |
+|---|---|---|---|---|
+| **clause 1, types matching the reference** | **18 of 20** | **18 of 20** | **18 of 20** | **18 of 20** |
+| D04 (reference Procedure) | Policy 0.6, held | Policy **0.8, applied** | Policy 0.6, held | Policy 0.6, held |
+| D09 (reference Meeting Paper) | Report 0.55, held | Report 0.6, held | Report 0.6, held | Report 0.6, held |
+| wrong types applied | none | **one: D04** | none | none |
+| right types held as provisional | D20 | D07, D10, D20 | D07, D20 | D07, D20 |
+| clause 2: below threshold held | 34 of 34 | 34 of 34 | 32 of 32 | 33 of 33 |
+| clause 2: at or above applied (+ held to keep a department) | 52 of 55 (+3) | 48 of 51 (+3) | 50 of 54 (+4) | 49 of 53 (+4) |
+| clause 3: discarded / Topics proposed / out-of-scheme links | 0 / 0 / 0 | 0 / 0 / 0 | 0 / 0 / 0 | 0 / 1 / 0 |
+| tags against the manifest: precision, recall (information) | 69.4%, 70.8% | 66.7%, 62.5% | 65.2%, 62.5% | 63.0%, 60.4% |
+| Claude | 26 requests, $0.0125 | 26, $0.013 | 26, $0.0125 | 26, $0.0129 |
 
-- **All three clauses are met on both draws.** The two misses are the same two documents as on every
-  draw since 10 November, each with the alternative the reference itself records.
-- **A wrong type was applied, for the first time on Haiku.** D04's Policy scored 0.8, above 0.72, so
-  it was applied and not held. On the four draws before this one where D04 was missed or right
-  (three on the old prompt, one on the new), its type scored 0.6 or 0.7 and was held, and the
-  10 November record says "No wrong type was ever applied."
+- **All three clauses are met on all four draws,** at 18 of 20 each time. The two misses are the
+  same two documents as on every draw since 10 November, each with the alternative the reference
+  itself records. Every other document was typed right on every draw.
+- **A wrong type was applied once, for the first time on Haiku.** On draw 2, D04's Policy scored
+  0.8, above 0.72, so it was applied and not held. On the other three draws here, and on the three
+  old-prompt draws, D04's type scored 0.6 or 0.7 and was held. The 10 November record says "No wrong
+  type was ever applied."
   - No clause is broken by it: clause 2 is about assignments below the threshold, and clause 1 is
     met.
   - **D04 is the one document that takes the sectioned path.** Its final request shows the six
     section summaries beside the opening, which the old prompt never did. That is a plausible cause
-    of the higher confidence, and one draw cannot establish it.
+    of the one higher confidence. One case in three draws cannot establish it, or give a rate.
   - A person can still change an applied type on the document page, and that edit is kept.
   - Nothing was tuned on it. Whether 0.72 still separates right from wrong on a sectioned document is
-    now an open question, on one case.
-- **No Topic was proposed on either draw,** where each of the three old-prompt draws proposed one
-  ("customer complaints", D06). Two draws make it likely the new prompt is the cause. Clause 3 is
-  met either way; its Topic half was not exercised.
-- **The right types held** on the second draw are D07 and D10 at 0.7 and D20 at 0.6.
+    an open question.
+- **The Topic proposal still happens, less often on these draws.** Each of the three old-prompt
+  draws proposed "customer complaints" on D06. Here it was proposed on draw 4 and not on draws 1 to
+  3. Clause 3 is met on every draw; its Topic half was exercised once.

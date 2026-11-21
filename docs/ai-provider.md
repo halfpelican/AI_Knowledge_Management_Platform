@@ -686,19 +686,19 @@ so the prompt above is the one those measurements describe.
 D-139.** Rule 2 changed, rules 9 to 11 and two reply keys were added, and FLM's reply ceiling rose
 from 400 to 1,200. Rules 3 to 8 were kept word for word and the summary comes last in the reply,
 to disturb the classification as little as a prompt change can; that is a precaution, not
-evidence. Objective 05's check has been run on D-139's prompt twice, on 21 November 2026, on
-claude-haiku-5-5 (`corpus/objective-05/runs/2026-11-21-d139/`): at `186be70`, and at `789c05a`
+evidence. Objective 05's check has been run on D-139's prompt four times, on 21 November 2026, on
+claude-haiku-5-5 (`corpus/objective-05/runs/2026-11-21-d139/`): once at `186be70`, and three times
 after the worked example's summary was reworded that day (the review of D-139), which is the
-prompt that ships. All three clauses were met on both draws and nothing was re-tuned. On the
-second, one wrong type scored 0.8 and was applied: D04's, the one reference document that takes
+prompt that ships. All three clauses were met on every draw and nothing was re-tuned. On one of
+the three, one wrong type scored 0.8 and was applied: D04's, the one reference document that takes
 the sectioned path. No earlier draw on Haiku had applied a wrong type. With Objective 02's timing
 below, these are the only runs in which a model has answered a section's request, or a final
 request carrying section summaries: D04's seven requests conformed at their first attempt on each
-draw, as every other request of both draws did. Not measured on either provider:
+draw, as every other request of the four draws did. Not measured on either provider:
 
 - whether the types, departments, tags and confidences come out as they did, which the
   thresholds depend on (0.95 on gemma3:4b; 0.72, and 0.30 for departments, on claude-haiku-5-5):
-  D-106's sweep has not been run on D-139's prompt, nothing has been run on it on FLM, and two
+  D-106's sweep has not been run on D-139's prompt, nothing has been run on it on FLM, and four
   draws of Objective 05 are a check, not a re-derivation;
 - the schema conformance rate of the five-key reply and of a section's reply, beyond those draws
   and the timing below, and how often a reply is refused over its summary or a key point running

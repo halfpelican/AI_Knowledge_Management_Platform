@@ -21175,7 +21175,7 @@ note below.
 | "Classify now" on a long document can make up to nine requests, and the classify route had no in-flight limit: D-105 left it out as "one provider call" | **The route takes the per-user in-flight slot** that upload and reprocess use (D-85). This reverses D-105's "no in-flight slot" for this route | Leave it exempt and record the worst case |
 | Sectioning adds requests to the upload of any document over 1,500 words, and Objective 02's bound (twenty pages or fewer within sixty seconds) was last timed with one request | **Re-time the twenty-page upload once on `anthropic`** with this entry's code, on a new scratch database, **and record that on FLM the bound is expected to be exceeded:** Objective 02 stands verified on `anthropic` only | Record both as unmeasured; on FLM, summarise from the opening only |
 
-### Objective 05 on the new prompt: all three clauses met on two draws, and one wrong type applied
+### Objective 05 on the new prompt: all three clauses met on four draws, and one wrong type applied once
 
 Choice 2's stated cost, and nothing was tuned on it. The record is
 `corpus/objective-05/runs/2026-11-21-d139/objective-05-d139.md`.
@@ -21183,27 +21183,28 @@ Choice 2's stated cost, and nothing was tuned on it. The record is
 - **How:** the frozen twenty on a new database, `kmp_obj05_d139_20261121`, restored from the
   anthropic snapshot of 10 November (dump `6e514170…e6fc`). The route of 10 November, an FLM snapshot
   converted, is refused since D-131. Claude Haiku 5.5, thresholds 0.72 and 0.30.
-- **Two draws, because the prompt changed between them.** The first ran at `186be70`. The review
-  then had the worked example's summary reworded (below), which changes one line of each system
-  prompt, so the measurement was repeated at `789c05a`, the code that ships. Every user turn for the
-  twenty is byte for byte the same on both.
-- **Clause 1:** 18 of 20 types (90%) against 75%, on each draw. The misses are D04 (Policy) and D09
+- **Four draws.** The first ran at `186be70`. The review then had the worked example's summary
+  reworded (below), which changes one line of each system prompt, so the measurement was repeated
+  at `789c05a`, the code that ships. That draw applied a wrong type, so two more were made the same
+  evening, at `2ea4f55`, which adds only records and documents. Every user turn for the twenty is
+  byte for byte the same on all four.
+- **Clause 1:** 18 of 20 types (90%) against 75%, on every draw. The misses are D04 (Policy) and D09
   (Report), the two the old prompt missed on its draws of 10 and 11 November (19, 18 and 18 of 20).
-- **A wrong type was applied on the second draw, for the first time on Haiku.** D04's Policy scored
-  0.8, above 0.72, and was applied. On the four earlier draws its type scored 0.6 or 0.7 and was
-  held, and the 10 November record says "No wrong type was ever applied."
+- **A wrong type was applied once, for the first time on Haiku.** On the second draw D04's Policy
+  scored 0.8, above 0.72, and was applied. On the other two draws on the final prompt, on the first
+  draw, and on the three old-prompt draws, its type scored 0.6 or 0.7 and was held. The 10 November
+  record says "No wrong type was ever applied."
   - No clause is broken: clause 2 concerns assignments below the threshold.
   - D04 is the one reference document that takes the sectioned path, so its final request shows six
-    section summaries the old prompt never showed. That is a plausible cause, and one draw cannot
-    establish it. It is cost (g) above in a measured case.
-  - Whether 0.72 still separates right from wrong on a sectioned document is open, on one case. A
-    person can still change an applied type on the page, and that edit is kept.
-- **Clause 2:** no violation on either draw. 34 of 34 below their threshold held on each; 52 of 55
-  and 48 of 51 at or above applied, with 3 held each time to keep a department the document already
-  had.
-- **Clause 3:** no violation, and nothing exercised it. Each old-prompt draw proposed one Topic
-  ("customer complaints", D06); neither new-prompt draw proposed any, so the new prompt is the
-  likely cause.
+    section summaries the old prompt never showed. That is a plausible cause. One case in three
+    draws cannot establish it or give a rate. It is cost (g) above in a measured case.
+  - Whether 0.72 still separates right from wrong on a sectioned document is open. A person can
+    still change an applied type on the page, and that edit is kept.
+- **Clause 2:** no violation on any draw. Every assignment below its threshold was held (34 of 34,
+  34 of 34, 32 of 32, 33 of 33). At or above: 52 of 55, 48 of 51, 50 of 54 and 49 of 53 applied,
+  the rest held to keep a department the document already had.
+- **Clause 3:** no violation. Each old-prompt draw proposed one Topic ("customer complaints", D06).
+  Of these four, only the fourth did.
 - **The calls:** 26 requests on each draw, every one parsed at its first attempt, about $0.013 a
   draw. Nineteen documents took one request. D04, 8,357 words, took seven: six sections and the
   final request.
