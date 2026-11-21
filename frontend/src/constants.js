@@ -999,6 +999,14 @@ export const TEXT = {
   // name it, so the one limit is recognisably one.
   classifyLimitReached: (when) =>
     `The upload limit has been reached, so this document was not classified. You can try again ${when}.`,
+  // D-85's in-flight 429 (`code` "ingestion_in_flight"), which classify meets since
+  // D-139 because the route takes the per-user slot upload and reprocess hold.
+  // Worded as `reprocessInFlight` is, "upload" naming the one slot as "the upload
+  // limit" names the one budget. Not the limit, so it does not say "limit", and it
+  // promises no time, because the reply carries none.
+  classifyInFlight:
+    'Your previous upload is still being processed, so this document was not classified. ' +
+    'You can try again once the previous upload has finished.',
   classificationFieldType: 'Document type',
   classificationFieldDepartment: 'Department',
   // The document's type while the only suggestion is provisional: `doc_type` is

@@ -400,6 +400,8 @@ describe('FR-10: a document’s summary and key points are shown beneath its tit
     // Key points and the flag are a summary's: without one, neither is shown.
     ['an empty summary beside key points', { summary: '', key_points: LEAVE_KEY_POINTS, summary_truncated: true }],
     ['a summary that is not a string', { summary: null, key_points: null, summary_truncated: null }],
+    // White space says nothing, so it is no summary: never a marked block with nothing to read.
+    ['a summary of only white space', { summary: ' \n\t  ', key_points: LEAVE_KEY_POINTS, summary_truncated: true }],
   ])('renders a result with %s as it always has: no summary block, no mark and no list', async (_case, fields) => {
     await searchedFor([{ ...LEAVE_POLICY, ...fields }])
     const item = resultOf(LEAVE_POLICY)
@@ -449,6 +451,19 @@ describe('FR-10: a document’s summary and key points are shown beneath its tit
     expect(sentence !== null).toBe(told)
     if (told) expect(block.contains(sentence), 'said with the summary it is about').toBe(true)
     expect(TEXT.documentSummaryTruncated).toBe(SUMMARY_TRUNCATED)
+  })
+
+  it('draws a summary cut short where a reader can see it: no stylesheet hides the sentence that says so, the key points’ name or a key point', async () => {
+    // jsdom applies no stylesheet, so this is held to the CSS on disk (tests/stylesheets.js),
+    // against every rule that matches inside a search result and its ancestors.
+    await searchedFor([summarised({ summary_truncated: true })])
+    const block = resultOf(LEAVE_POLICY).querySelector('.document-summary')
+
+    const items = within(block).getAllByRole('listitem')
+    expect(items).toHaveLength(LEAVE_KEY_POINTS.length)
+    for (const element of [within(block).getByText(SUMMARY_TRUNCATED), within(block).getByText(KEY_POINTS_NAME), ...items]) {
+      expect(hidingCauses(element)).toEqual([])
+    }
   })
 
   it('renders five key points as five list items, in the order they were sent', async () => {

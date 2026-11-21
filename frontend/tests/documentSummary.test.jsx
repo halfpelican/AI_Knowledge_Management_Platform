@@ -28,6 +28,9 @@ import { hidingCauses, rulesMatching } from './stylesheets.js'
 /** NFR-15's mark. */
 const SUGGESTED_BY_AI = 'Suggested by AI'
 
+/** The sentence beside the mark: what the block is, and that it is not the document's own text. */
+const SUMMARY_PROVENANCE = 'This is a summary of the document, not its own text.'
+
 /** The one line a document with no summary shows. */
 const NO_SUMMARY = 'No summary has been generated for this document.'
 
@@ -181,7 +184,8 @@ describe('FR-10: the document page shows the summary and key points beneath the 
     expect(block).toBe(summaryBlock())
     const mark = within(block).getByText(SUGGESTED_BY_AI)
     expect(comesAfter(mark, summary), 'the mark is read before the summary').toBe(true)
-    expect(mark.parentElement.textContent).toBe(`${SUGGESTED_BY_AI} ${TEXT.documentSummaryProvenance}`)
+    // Its words written out, as the mark's are, so a sentence emptied or reworded fails here.
+    expect(mark.parentElement.textContent).toBe(`${SUGGESTED_BY_AI} ${SUMMARY_PROVENANCE}`)
     expect(block.contains(screen.getByRole('list', { name: KEY_POINTS_NAME }))).toBe(true)
     // The extracted text is the document's, so it is not inside the AI boundary.
     expect(block.contains(landmarks().extractedText)).toBe(false)
@@ -248,12 +252,16 @@ describe('FR-10: a document with no summary says so in one line (D-139)', () => 
     ['the classification is from before the field', classificationBefore()],
     // Key points and the flag are a summary's: without one, neither is shown.
     ['an empty summary came beside key points', summarised({ summary: '', summary_truncated: true })],
+    // White space says nothing, so it is no summary: never a marked block with nothing to read.
+    ['the summary is only white space', summarised({ summary: ' \n\t  ', summary_truncated: true })],
   ])('shows the line, and no summary block, mark or list, when %s', async (_case, classification) => {
     await renderDetail(detailOf({ classification }))
     const { title, classification: section, extractedHeading } = landmarks()
 
     const line = screen.getByText(NO_SUMMARY)
     expect(screen.getAllByText(NO_SUMMARY)).toHaveLength(1)
+    // jsdom applies no stylesheet, so the line is held to the CSS on disk (tests/stylesheets.js).
+    expect(hidingCauses(line)).toEqual([])
     expect(comesAfter(title, line), 'the line is beneath the title').toBe(true)
     expect(comesAfter(line, section)).toBe(true)
     expect(comesAfter(line, extractedHeading)).toBe(true)

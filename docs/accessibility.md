@@ -532,7 +532,9 @@ it in a search result, and the extracted text on the document page, are the docu
 and are outside the boundary. `search.test.jsx :: marks the summary and its key points as AI
 content…`; `documentSummary.test.jsx :: marks them as AI content…` and `:: draws them where a
 reader can see them…`, which also holds that no stylesheet rule hides the mark, the summary, the
-sentence below or a key point.
+sentence below or a key point. `documentSummary.test.jsx :: marks them as AI content…` holds the
+sentence beside the mark to its words as written here, as it holds the mark's, so a sentence
+emptied or reworded fails it.
 
 **Contrast.** No new colour and no new pair. The mark, the sentence beside it, the sentence about
 a summary cut short and the line for a document with no summary are `--color-text-muted` on the
@@ -548,13 +550,17 @@ files; `search.test.jsx :: shows a summary that came with … without an empty l
 
 **A summary of part of a long document says so**, in a sentence inside the block: "This summary
 covers only the first part of the document." (FR-10: never "summarised from a fragment without
-the user being told"). `:: says so when summary_truncated is true` in both files.
+the user being told"). `:: says so when summary_truncated is true` in both files. In a search
+result, `search.test.jsx :: draws a summary cut short where a reader can see it…` holds that no
+stylesheet rule hides that sentence, the key points' name or a key point, the result's own rules
+included.
 
 **No summary.** A search result with none shows nothing in its place, and is the result it was
 before summaries existed. The document page says "No summary has been generated for this
 document." in one line, which is the page's own sentence and carries no mark. `search.test.jsx
 :: renders a result with … as it always has`; `documentSummary.test.jsx :: shows the line, and
-no summary block, mark or list, when …`.
+no summary block, mark or list, when …`, which also holds that no stylesheet rule hides the line.
+A summary of only white space is no summary, on both screens: a case of each of those tests.
 
 **Tab order (SC 2.1.1).** The block holds no control and is not focusable itself, so it adds no
 tab stop to either screen. Both "marks … as AI content" tests assert that nothing in the block,

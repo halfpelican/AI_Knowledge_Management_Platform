@@ -255,7 +255,10 @@ export function reprocessDocument(docId, options = {}) {
  * text was extracted, so there is nothing to classify (FR-10's own code); 503
  * NFR-19's notice, after `MAXIMUM_CLASSIFY_ATTEMPTS`; 429 past the ingestion
  * rate it shares with upload, meeting ingestion and reprocess (D-79), with a
- * `Retry-After` in seconds.
+ * `Retry-After` in seconds. Since D-139 the route also takes D-85's per-user
+ * ingestion slot, so a second 429, `code` `ingestion_in_flight` (`error.code`,
+ * src/api/ingestion.js) and no `Retry-After`, while another ingestion of this
+ * user's is still being processed; it classifies nothing.
  */
 export function classifyDocument(docId, options = {}) {
   return post(`/documents/${encodeURIComponent(docId)}/classify`, {}, options)
