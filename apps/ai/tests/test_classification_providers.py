@@ -278,7 +278,13 @@ def test_flm_gives_up_on_a_section_after_exactly_three_calls_and_sends_no_final_
 
     assert len(handler.seen) == MAXIMUM_CLASSIFY_ATTEMPTS == 3
     assert sent_prompts(handler) == [LONG_REQUESTS[0]] * 3
-    assert BASE_URL in str(excinfo.value)
+    # The provider's own label, "FLM at <base url>", opens the message. Not just the URL anywhere
+    # in it: the transport error's text carries the URL too, in "last failure: call failed: ...",
+    # so that would pass with the endpoint dropped from the label.
+    assert str(excinfo.value).startswith(
+        f"FLM at {BASE_URL} returned no response conforming to SECTION_SUMMARY_SCHEMA "
+        f"for section 1 of 3 in {MAXIMUM_CLASSIFY_ATTEMPTS} attempts; last failure: call failed: "
+    )
     assert not isinstance(excinfo.value, ProviderRefused)
 
 

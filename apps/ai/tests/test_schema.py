@@ -86,6 +86,22 @@ def test_a_brace_inside_a_string_does_not_end_the_object():
     assert parse_statement_list(raw).statements[0].text == "Use {braces} carefully."
 
 
+def test_a_repeated_key_is_read_as_json_s_last_value_here_as_it_always_was():
+    """Only the classification parsers refuse an object that repeats a key (``loads_reply``'s
+    ``unique_keys``, 21 November 2026, the review of D-139). This parser's rates were measured on
+    json's own rule, keeping the last value, and it still decodes that way: pinned, so the refusal
+    cannot spread to it unmeasured."""
+    other = "8b5d04e2-1a7f-4c93-b620-de91f3805c47"
+    raw = (
+        '{"statements": [{"text": "First.", "chunk_id": "%s"}], '
+        '"statements": [{"text": "Last.", "chunk_id": "%s"}]}' % (CHUNK_ID, other)
+    )
+
+    parsed = parse_statement_list(raw)
+
+    assert [(s.text, s.chunk_id) for s in parsed.statements] == [("Last.", other)]
+
+
 # --- Text inside a JSON string is never repaired (16 November 2026, D-136) --------------
 #
 # Both repairs read a JSON string as _outermost_json_object reads one, so three backticks inside a

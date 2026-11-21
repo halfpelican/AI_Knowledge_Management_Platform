@@ -332,6 +332,77 @@ def test_the_section_parser_refuses_a_non_string_reply():
         parse_section_summary(None)
 
 
+# --- A repeated key is refused, never read as json's last value (21 November 2026) ----------
+#
+# json.loads keeps the LAST of two equal keys. Until the review of D-139 a reply carrying an
+# over-long summary and then a short one conformed: the refused value was dropped unseen, a fourth
+# repair where invariant 10 allows three. Both parsers now refuse the object whole.
+
+REPEATED = "a JSON object repeats a key"
+RAW = pytest.mark.parametrize(
+    "base,parse_raw",
+    [(CLASSIFICATION_PART, lambda raw: parse_classification(raw, SCHEME)), ({}, parse_section_summary)],
+    ids=["classification", "section"],
+)
+
+
+def repeated(base: dict, key: str, first, last, *, spelling: str | None = None, closing: str = "}") -> str:
+    """A reply holding ``key`` twice, ``first`` in its place and ``last`` spliced in before the
+    closing brace, which json.dumps cannot write. ``spelling`` is how the second key is written."""
+    text = json.dumps({**base, "summary": SUMMARY, "key_points": KEY_POINTS, key: first})
+    return text[:-1] + f", {spelling or json.dumps(key)}: {json.dumps(last)}{closing}"
+
+
+@RAW
+@pytest.mark.parametrize(
+    "key,refused,conforming",
+    [
+        ("summary", "s" * (MAXIMUM_SUMMARY_CHARACTERS + 1), SUMMARY),
+        ("key_points", [f"Point {n}." for n in range(MAXIMUM_KEY_POINTS + 1)], ["One point."]),
+    ],
+    ids=["an over-long summary, then a short one", "six key points, then one"],
+)
+def test_a_repeated_key_is_refused_and_never_read_as_its_last_value(base, parse_raw, key, refused, conforming):
+    raw = repeated(base, key, refused, conforming)
+    assert json.loads(raw)[key] == conforming  # what json alone reads, and what used to conform
+
+    with pytest.raises(SchemaViolation) as caught:
+        parse_raw(raw)
+    assert str(caught.value) == REPEATED  # fixed: it quotes neither value nor the key
+
+
+@RAW
+def test_a_key_repeated_with_the_same_value_is_refused_too(base, parse_raw):
+    """Neither value is chosen, so whether the two agree is never asked."""
+    with pytest.raises(SchemaViolation) as caught:
+        parse_raw(repeated(base, "summary", SUMMARY, SUMMARY))
+    assert str(caught.value) == REPEATED
+
+
+@RAW
+def test_a_key_repeated_through_an_escape_is_the_same_key(base, parse_raw):
+    """Keys are compared as decoded: "summ\\u0061ry" is "summary"."""
+    raw = repeated(base, "summary", "s" * (MAXIMUM_SUMMARY_CHARACTERS + 1), "Short.", spelling='"summ\\u0061ry"')
+    assert json.loads(raw)["summary"] == "Short."
+
+    with pytest.raises(SchemaViolation) as caught:
+        parse_raw(raw)
+    assert str(caught.value) == REPEATED
+
+
+@RAW
+def test_a_repeated_key_is_refused_after_the_trailing_comma_repair_too(base, parse_raw):
+    """The comma before the closing brace stops the first decode before that object's keys are
+    checked, so the repaired text's decode must refuse the repeat as well."""
+    raw = repeated(base, "summary", "s" * (MAXIMUM_SUMMARY_CHARACTERS + 1), "Short.", closing=",}")
+    with pytest.raises(json.JSONDecodeError):
+        json.loads(raw)  # the repair really is needed to read it
+
+    with pytest.raises(SchemaViolation) as caught:
+        parse_raw(raw)
+    assert str(caught.value) == REPEATED
+
+
 # --- The schema objects say what the parsers enforce ----------------------------------------
 
 

@@ -12,7 +12,6 @@ import json
 import pytest
 
 import apps.ai
-import apps.ai.testing
 from apps.ai.base import Assignment, DocumentClassification, ProviderUnavailable, TagScheme, TagSuggestion
 from apps.ai.classification import parse_section_summary, summary_sections
 from apps.ai.testing import (
@@ -121,12 +120,6 @@ def test_the_stubs_summary_is_one_a_provider_could_return():
     assert all(0 < len(point) <= MAXIMUM_KEY_POINT_CHARACTERS for point in result.key_points)
     parsed = parse_section_summary(json.dumps({"summary": result.summary, "key_points": list(result.key_points)}))
     assert (parsed.summary, parsed.key_points) == (result.summary, result.key_points)
-
-
-def test_the_summary_helpers_are_importable_from_the_testing_module():
-    """The contract names both: other suites compare a stored summary with these."""
-    assert apps.ai.testing.stub_document_summary is stub_document_summary
-    assert apps.ai.testing.STUB_KEY_POINTS is STUB_KEY_POINTS
 
 
 def test_summary_truncated_is_the_real_flag():

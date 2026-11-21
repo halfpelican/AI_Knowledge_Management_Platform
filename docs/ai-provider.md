@@ -439,6 +439,9 @@ When either happened, the ask and classify routes answered 500 instead of NFR-19
 meeting summary's run ended as "error" in the background runner, or stopped
 `retry_meeting_summaries` or `summarise_meetings` outright.
 
+Since 21 November 2026 the classification and section parsers also pass `unique_keys`, which
+refuses an object that repeats a key (§5b). The statement and meeting-summary parsers do not.
+
 **What the repairs leave alone (16 November 2026, D-136).** No repair touches text inside a JSON
 string. Three backticks inside a string are not a code fence, and a comma before a closing bracket
 or brace inside a string is not a trailing comma. A string is read as the object extraction reads
@@ -527,6 +530,11 @@ had deferred them. A document too long for one request is summarised in sections
   A summary or key point holding a NUL or an unpaired surrogate is refused at the decode step
   (§5), since neither can be stored.
 - No violation's message quotes a summary or a key point: it gives a length or a position.
+- An object that repeats a key, at the top level or nested, is a violation (21 November 2026,
+  the review of D-139). json keeps the last of two equal keys, so a reply carrying an over-long
+  `summary` and then a short one used to conform: a silent fourth repair. The refusal is
+  `loads_reply`'s `unique_keys`, which only this parser and the section parser pass; its message
+  is fixed and quotes nothing. The statement and meeting-summary parsers keep json's rule.
 
 **Prompt strategy, in order** (`CLASSIFICATION_SYSTEM_PROMPT`, `build_classification_messages`)
 
@@ -551,7 +559,9 @@ had deferred them. A document too long for one request is summarised in sections
    scheme (the corpus manifest) and in no real user turn. Since D-139 the example's reply also
    holds a summary and three key points about its lighthouse text: one sentence, well under the
    limits, and fewer key points than the cap, because a demonstrated count is copied too. Every
-   word of them is a word of the example's text, but for four the test lists.
+   word of them is a word of the example's text, but for three the test lists. The summary sets
+   the text's statements side by side, as the text does, and gives no cause: until 21 November
+   2026 it joined them with "because", a cause the text never states (the review of D-139).
 3. The user turn carries the scheme's lists (document types, departments, Project, Process and
    Topic tags — `(none listed)` where a dimension is empty), then the title, then the text, then
    the instruction to reply with the JSON object only.
@@ -564,8 +574,14 @@ had deferred them. A document too long for one request is summarised in sections
 this prompt cites no identifier, so unlike the generation prompt (D-45) it has no delimiter whose
 forgery converts into an accepted citation, and no neutralisation is applied. The residual is a
 body that steers the model in prose or forges a scheme line; shape validation cannot detect it.
-What bounds it: the type is held to the fixed list by the parser, the department and tag values
-are held to the scheme by the application (D-105), and a person confirms the suggestions.
+What bounds it: the type is held to the fixed list by the parser, and the department and tag
+values are held to the scheme by the application (D-105). A person does not confirm every
+suggestion: a value in the scheme at or above its threshold (D-122, D-129) is applied **without**
+a person's confirmation, so a steered suggestion can be applied, though only as a value the scheme
+already holds. A value below its threshold, and a new Topic at any confidence, wait for a person.
+Since D-139 the text that can try to steer the type, the department and the tags is not the
+opening alone but the first `MAXIMUM_SUMMARY_SECTIONS` × `CLASSIFICATION_INPUT_TOKENS` tokens
+(12,000), because a section's summary enters the final request.
 
 **A summary has fewer bounds than a tag (D-139).** Nobody confirms a summary and nothing holds
 its content to a list, so a body that instructs the model can put its own words beneath the
@@ -585,8 +601,9 @@ model call judges it: invariant 5's limitation, conceded the same way.
 joined by single spaces. Whether anything was cut is returned as `input_truncated` on the
 `DocumentClassification` and kept on the record rather than hidden. The cut is made by the
 provider and again at the prompt boundary (it is idempotent), so no caller can send more. Since
-D-139 the flag means the type, the department and the tags were chosen from the opening; the
-rest of the text is no longer unread, because it is summarised in sections.
+D-139 the flag means the type, the department and the tags were chosen from the opening. The
+rest of the text, up to `MAXIMUM_SUMMARY_SECTIONS` sections in all, is summarised in sections;
+past them it is unread, and `summary_truncated` says so.
 
 **Long documents** (`summary_sections`, `classify_and_summarise`, D-139). FR-10: "Documents
 exceeding the model's context limit are summarised in sections and consolidated, rather than
@@ -609,6 +626,15 @@ limit as `CLASSIFICATION_INPUT_TOKENS`, which did not change.
 - **Past the ceiling the record says so.** A text of more than 8 sections (12,000 tokens) has
   only its first 8 summarised, and `summary_truncated` is True. A text of exactly 8 is
   summarised whole and is not flagged.
+- **And so do the requests** (21 November 2026, the review of D-139). Until then the last
+  section of a cut text was labelled "Section 8 of 8" and the final request asked for the
+  document "as a whole". Now every "Section n of m", in a section's turn, in the final turn and
+  in the attempt log, counts the document's real sections, ceil(tokens / 1,500): "Section 8 of
+  20". The final turn carries `TRUNCATED_SECTIONED_NOTICE` and
+  `TRUNCATED_CONSOLIDATION_INSTRUCTION` in place of `SECTIONED_NOTICE` and
+  `CONSOLIDATION_INSTRUCTION`: the section summaries cover only the first 8 sections, the rest
+  of the document was not read, and the summary must never present that part as the whole. A
+  text within the ceiling is sent exactly what it was before, byte for byte.
 - **A failure anywhere returns nothing.** No later section is sent and no final request is
   made, and the sections that did succeed are not turned into a result.
 - **Both providers call `classify_and_summarise`,** passing only a function that makes one call
@@ -657,23 +683,38 @@ that revision (`corpus/objective-05/runs/2026-11-12/dev-sweep-haiku-d127/`). D-1
 so the prompt above is the one those measurements describe.
 
 *Dated note, 21 November 2026 (D-139):* **every measurement above describes the prompt before
-D-139, and none has been repeated on the prompt as it now stands.** Rule 2 changed, rules 9 to 11
-and two reply keys were added, and FLM's reply ceiling rose from 400 to 1,200. Rules 3 to 8 were
-kept word for word and the summary comes last in the reply, to disturb the classification as
-little as a prompt change can; that is a precaution, not evidence. Not measured on either
-provider:
+D-139.** Rule 2 changed, rules 9 to 11 and two reply keys were added, and FLM's reply ceiling rose
+from 400 to 1,200. Rules 3 to 8 were kept word for word and the summary comes last in the reply,
+to disturb the classification as little as a prompt change can; that is a precaution, not
+evidence. One run has been made on D-139's prompt: Objective 05's check of 21 November 2026
+(`corpus/objective-05/runs/2026-11-21-d139/`), one draw on claude-haiku-5-5, with all three
+clauses met and nothing re-tuned. It is also the only run in which a model has answered a
+section's request, or a final request carrying section summaries: one document of six sections
+(D04), whose seven requests conformed at their first attempt, as every other request of that draw
+did. It ran at `186be70`, before the worked example's summary was reworded that day (the review of
+D-139), so it describes the prompt as it stood then. Not measured on either provider:
 
-- whether the types, departments, tags and confidences come out as before, which the two
-  thresholds (0.95, and 0.72 with 0.30 for departments) depend on;
-- the schema conformance rate of the five-key reply and of a section's reply, including how
-  often a summary or key point runs past its limit;
+- whether the types, departments, tags and confidences come out as they did, which the
+  thresholds depend on (0.95 on gemma3:4b; 0.72, and 0.30 for departments, on claude-haiku-5-5):
+  D-106's sweep has not been run on D-139's prompt, nothing has been run on it on FLM, and one
+  draw of Objective 05 is a check, not a re-derivation;
+- the schema conformance rate of the five-key reply and of a section's reply, beyond that one
+  draw's twenty and six requests, and how often a reply is refused over its summary or a key
+  point running past its limit;
+- a last section of fewer than `MINIMUM_CONTENT_LENGTH` (50) tokens, which a text 1 to 49 tokens
+  past a multiple of `CLASSIFICATION_INPUT_TOKENS` sends, and which must still return 1 to 5 key
+  points: no measured document has one (D04's last section is 857 tokens);
 - on FLM, where `temperature` is 0.0 and a retry repeats the same request, whether a reply that
   breaks a limit recovers at all;
-- how long a document of several sections takes, and whether the final request's longer prompt
-  fits `CLASSIFICATION_TIMEOUT_SECONDS` on the NPU.
+- how long a sectioned document takes: Objective 02's bound, a document of twenty pages or fewer
+  processed within sixty seconds, and NFR-13's two minutes from upload to visible confirmation,
+  each under sectioning. Both are being re-timed on anthropic; on FLM both are expected to be
+  exceeded, and whether the final request's longer prompt fits `CLASSIFICATION_TIMEOUT_SECONDS`
+  on the NPU is not known.
 
-`scripts/classification_dev_sweep.py` on the development documents is the instrument for the
-first two.
+`scripts/classification_dev_sweep.py` measures nothing of a long document. Its development
+documents are each within one request, at most 344 words, so it sends no section request, and it
+records each document's result rather than each request's attempts.
 
 ---
 

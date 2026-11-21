@@ -338,7 +338,20 @@ def _unusable_string(value) -> str | None:
     return None
 
 
-def _loads_reply(text: str):
+def _refuse_a_repeated_key(pairs: list) -> dict:
+    """``loads_reply``'s ``object_pairs_hook`` under ``unique_keys``: the object, or SchemaViolation.
+
+    Called once for every JSON object as it closes, at any depth, with its ``(key, value)`` pairs
+    in the reply's order and its keys already decoded, so ``"summ\\u0061ry"`` repeats
+    ``"summary"``. The message is fixed and quotes nothing: a key is the model's words.
+    """
+    decoded = dict(pairs)
+    if len(decoded) != len(pairs):
+        raise SchemaViolation("a JSON object repeats a key")
+    return decoded
+
+
+def _loads_reply(text: str, *, unique_keys: bool = False):
     """``json.loads`` for a model reply: a SchemaViolation for every failure but a syntax error.
 
     A JSONDecodeError, a syntax error, propagates unchanged, so the caller can try its
@@ -353,6 +366,12 @@ def _loads_reply(text: str):
     - a string holding an unpaired surrogate, such as a lone ``\\ud800`` escape, which neither the
       database nor DRF's JSON renderer can encode as UTF-8.
 
+    ``unique_keys`` adds a fifth: an object, at any depth, that repeats a key. json.loads keeps
+    the LAST of two equal keys, so a reply holding an over-long ``"summary"`` and then a short one
+    would conform: a fourth repair, made silently, where invariant 10 allows the three. Only
+    apps/ai/classification.py passes it (21 November 2026, the review of D-139). The statement
+    and meeting-summary parsers do not, and decode exactly as they did, keeping json's last value.
+
     Until 13 November 2026 none of them was. The attempt loops retry only a SchemaViolation and a
     failed call (a ProviderUnavailable that is not a ProviderRefused, which ends them at once). So
     the first two always ended the work they were part of, and the last two did whenever the
@@ -365,7 +384,12 @@ def _loads_reply(text: str):
     them.
     """
     try:
-        value = json.loads(text)
+        if unique_keys:
+            # The hook's SchemaViolation is not a ValueError, so it passes the handlers below as
+            # itself, and json's decoder catches nothing but StopIteration around the hook.
+            value = json.loads(text, object_pairs_hook=_refuse_a_repeated_key)
+        else:
+            value = json.loads(text)
     except json.JSONDecodeError:
         raise
     except RecursionError as exc:
@@ -389,7 +413,9 @@ outermost_json_object = _outermost_json_object
 # That name is gone, not kept as an alias: a caller still reaching for it would edit strings again.
 remove_trailing_commas = _remove_trailing_commas
 # And the decode step, added on 13 November 2026 on the same principle: the statement,
-# classification and summary parsers all decode through it, so all three fail the same way.
+# classification and summary parsers all decode through it, so all three fail the same way. The
+# one exception, since 21 November 2026: only classification passes ``unique_keys``, so only it
+# refuses a repeated key.
 loads_reply = _loads_reply
 
 

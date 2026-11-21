@@ -38,6 +38,8 @@ from apps.ai.classification import (
     REPLY_INSTRUCTION,
     SECTION_SUMMARY_SYSTEM_PROMPT,
     SECTIONED_NOTICE,
+    TRUNCATED_CONSOLIDATION_INSTRUCTION,
+    TRUNCATED_SECTIONED_NOTICE,
     SectionSummary,
     build_classification_user_prompt,
     build_section_summary_user_prompt,
@@ -350,6 +352,82 @@ def test_the_final_turn_still_cuts_its_text_to_the_opening():
     assert tokens[SECTION] not in final.split()
 
 
+# A text within the ceiling: the final turn's two sentences as they stood at 186be70, where
+# Objective 05's check of 21 November 2026 was run. Copied, not imported, so that an edit to either
+# fails here: the review of D-139 changed what a text PAST the ceiling is sent, and nothing else.
+SECTIONED_NOTICE_AT_186BE70 = (
+    "The text above is only the opening of a longer document. The document was summarised "
+    "one section at a time, and the section summaries follow in order."
+)
+CONSOLIDATION_INSTRUCTION_AT_186BE70 = (
+    'Choose "doc_type", "department" and "tags" from the title and the text above. Write '
+    '"summary" and "key_points" for the document as a whole from the section summaries, '
+    "which stand for its text."
+)
+
+
+def test_within_the_ceiling_the_notice_and_the_instruction_are_word_for_word_what_was_measured():
+    assert SECTIONED_NOTICE == SECTIONED_NOTICE_AT_186BE70
+    assert CONSOLIDATION_INSTRUCTION == CONSOLIDATION_INSTRUCTION_AT_186BE70
+
+
+# Past the ceiling the section summaries cover only the first MAXIMUM_SUMMARY_SECTIONS sections,
+# and until 21 November 2026 the final turn still said "Section 8 of 8" and asked for the document
+# "as a whole" (the review of D-139). Each part of the turn is written out here.
+EIGHT_SUMMARIES = tuple(
+    SectionSummary(summary=f"Part {n}.", key_points=(f"Point {n}.",))
+    for n in range(1, MAXIMUM_SUMMARY_SECTIONS + 1)
+)
+
+
+def test_past_the_ceiling_the_final_turn_counts_the_real_sections_and_says_the_rest_was_not_read():
+    """``section_count`` above the number of summaries: every label counts the document's 20
+    sections, and the notice and the instruction say that only the first sections were read and
+    that the summary must not present that part as the whole document."""
+    turn = build_classification_user_prompt(
+        TITLE, "The opening text.", SCHEME, section_summaries=EIGHT_SUMMARIES, section_count=20
+    )
+
+    summaries = "\n\n".join(
+        f"Section {n} of 20\nSummary: Part {n}.\nKey points:\n- Point {n}."
+        for n in range(1, MAXIMUM_SUMMARY_SECTIONS + 1)
+    )
+    assert turn == (
+        "Document types (choose one): Policy; Procedure; Report; Meeting Paper\n"
+        "Departments (choose one): Finance; Human Resources\n"
+        "Project tags: atlas\n"
+        "Process tags: onboarding\n"
+        "Topic tags: safety\n"
+        "\n"
+        "Title: Operations handbook\n"
+        "Text:\n"
+        "The opening text.\n"
+        "\n"
+        "The text above is only the opening of a longer document. The section summaries that "
+        f"follow, in order, cover only its first {MAXIMUM_SUMMARY_SECTIONS} sections; the rest of the "
+        'document was not read. So "summary" and "key_points" describe only part of the document: '
+        "never present that part as the whole document.\n"
+        "\n"
+        f"{summaries}\n"
+        "\n"
+        'Choose "doc_type", "department" and "tags" from the title and the text above. Write '
+        '"summary" and "key_points" from the section summaries, which stand for the part of the '
+        "document that was read.\n"
+        "\n"
+        f"{REPLY_INSTRUCTION}"
+    )
+    assert TRUNCATED_SECTIONED_NOTICE in turn and TRUNCATED_CONSOLIDATION_INSTRUCTION in turn
+    assert SECTIONED_NOTICE not in turn and CONSOLIDATION_INSTRUCTION not in turn
+    assert "as a whole" not in turn
+
+
+def test_a_section_count_equal_to_the_summaries_changes_nothing():
+    """What ``classify_and_summarise`` passes for every text within the ceiling."""
+    assert build_classification_user_prompt(
+        TITLE, "The opening text.", SCHEME, section_summaries=SUMMARIES, section_count=len(SUMMARIES)
+    ) == build_classification_user_prompt(TITLE, "The opening text.", SCHEME, section_summaries=SUMMARIES)
+
+
 def test_chat_messages_is_system_then_user():
     assert chat_messages("the system prompt", "the user turn") == [
         {"role": "system", "content": "the system prompt"},
@@ -545,8 +623,90 @@ def test_a_text_past_the_ceiling_makes_the_maximum_sections_plus_one_calls_and_s
     assert result.input_truncated is True
     for _, user in script.calls:
         assert tokens[-1] not in user.split()
-    assert f"Section {MAXIMUM_SUMMARY_SECTIONS} of {MAXIMUM_SUMMARY_SECTIONS}:" in script.calls[MAXIMUM_SUMMARY_SECTIONS - 1][1]
-    assert f"Section {MAXIMUM_SUMMARY_SECTIONS} of {MAXIMUM_SUMMARY_SECTIONS}\n" in script.calls[-1][1]
+    # The one token is a ninth section, never sent, and the labels count it: ceil(tokens / section
+    # size), so the last section sent is "8 of 9". Until 21 November 2026 it was "8 of 8", which
+    # told the model the eighth section ended the document (the review of D-139).
+    real = MAXIMUM_SUMMARY_SECTIONS + 1
+    assert f"Section {MAXIMUM_SUMMARY_SECTIONS} of {real}:" in script.calls[MAXIMUM_SUMMARY_SECTIONS - 1][1]
+    assert f"Section {MAXIMUM_SUMMARY_SECTIONS} of {real}\n" in script.calls[-1][1]
+    for _, user in script.calls:
+        assert f" of {MAXIMUM_SUMMARY_SECTIONS}:" not in user and f" of {MAXIMUM_SUMMARY_SECTIONS}\n" not in user
+    assert TRUNCATED_SECTIONED_NOTICE in script.calls[-1][1]
+
+
+def test_past_the_ceiling_every_label_counts_the_documents_real_sections(caplog):
+    """Nineteen sections and one token are 20 sections, of which the first
+    MAXIMUM_SUMMARY_SECTIONS are sent. Each section's turn, the final turn and each attempt line
+    say "of 20", and the final turn carries the notice that the rest was not read in place of the
+    one that says the summaries stand for the whole text."""
+    tokens = words(19 * SECTION + 1)
+    text = " ".join(tokens)
+    sections, left_over = summary_sections(text)
+    assert left_over is True and len(sections) == MAXIMUM_SUMMARY_SECTIONS
+    script = Script(*[section_reply(n) for n in range(1, MAXIMUM_SUMMARY_SECTIONS + 1)], FINAL)
+
+    with caplog.at_level(logging.INFO, logger=attempt_log.ATTEMPT_LOGGER_NAME):
+        result = classify(script, text)
+
+    assert script.kinds == ["section"] * MAXIMUM_SUMMARY_SECTIONS + ["final"]
+    for index, section in enumerate(sections):
+        assert script.calls[index][1] == f"Title: {TITLE}\nSection {index + 1} of 20:\n{section}\n\n{REPLY_INSTRUCTION}"
+    final = script.calls[-1][1]
+    for n in range(1, MAXIMUM_SUMMARY_SECTIONS + 1):
+        assert f"\n\nSection {n} of 20\nSummary: Summary of section {n}.\nKey points:\n" in final
+    assert f"\n\n{TRUNCATED_SECTIONED_NOTICE}\n\nSection 1 of 20\n" in final
+    assert final.endswith(f"\n\n{TRUNCATED_CONSOLIDATION_INSTRUCTION}\n\n{REPLY_INSTRUCTION}")
+    assert SECTIONED_NOTICE not in final and CONSOLIDATION_INSTRUCTION not in final
+    lines = attempt_lines(caplog)
+    assert [line.rsplit(": ", 1)[1] for line in lines[:MAXIMUM_SUMMARY_SECTIONS]] == [
+        f"section {n} of 20, 2 key point(s)" for n in range(1, MAXIMUM_SUMMARY_SECTIONS + 1)
+    ]
+    assert result.summary_truncated is True
+
+
+@pytest.mark.parametrize(
+    "count", [SECTION + 1, 3 * SECTION, CEILING], ids=["two sections", "three full sections", "exactly the ceiling"]
+)
+def test_within_the_ceiling_every_request_is_byte_for_byte_what_it_was(count):
+    """The review of D-139 changed what a text past the ceiling is sent, and nothing else: a
+    sectioned text within it gets each section's turn under "Section n of N", N the sections
+    sent, and the final turn with the notice and the instruction Objective 05's check was
+    measured on. Written out from literals, not built by the module."""
+    tokens = words(count)
+    sent = -(-count // SECTION)
+    script = Script(*[section_reply(n) for n in range(1, sent + 1)], FINAL)
+
+    classify(script, " ".join(tokens))
+
+    assert len(script.calls) == sent + 1
+    for index in range(sent):
+        section = " ".join(tokens[index * SECTION : (index + 1) * SECTION])
+        assert script.calls[index][1] == (
+            f"Title: {TITLE}\nSection {index + 1} of {sent}:\n{section}\n\nReply with the JSON object only."
+        )
+    summaries = "\n\n".join(
+        f"Section {n} of {sent}\nSummary: Summary of section {n}.\nKey points:\n- Point {n}a.\n- Point {n}b."
+        for n in range(1, sent + 1)
+    )
+    assert script.calls[-1][1] == (
+        "Document types (choose one): Policy; Procedure; Report; Meeting Paper\n"
+        "Departments (choose one): Finance; Human Resources\n"
+        "Project tags: atlas\n"
+        "Process tags: onboarding\n"
+        "Topic tags: safety\n"
+        "\n"
+        f"Title: {TITLE}\n"
+        "Text:\n"
+        f"{' '.join(tokens[:SECTION])}\n"
+        "\n"
+        f"{SECTIONED_NOTICE_AT_186BE70}\n"
+        "\n"
+        f"{summaries}\n"
+        "\n"
+        f"{CONSOLIDATION_INSTRUCTION_AT_186BE70}\n"
+        "\n"
+        "Reply with the JSON object only."
+    )
 
 
 def test_a_text_many_times_the_ceiling_makes_no_more_calls_than_one_just_past_it():

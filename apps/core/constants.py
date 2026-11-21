@@ -865,6 +865,14 @@ MAXIMUM_KEY_POINT_CHARACTERS = 200
 # final one.
 MAXIMUM_SUMMARY_SECTIONS = 8
 
+# Dated, 21 November 2026 (D-139). The three thresholds below,
+# CLASSIFICATION_CONFIDENCE_THRESHOLD, CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL and
+# CLASSIFICATION_DEPARTMENT_CONFIDENCE_THRESHOLD_BY_MODEL, were each derived on the classification
+# prompt as it stood before D-139. Objective 05 was run on D-139's prompt that day, at 186be70,
+# before its worked example's summary was reworded: one draw on claude-haiku-5-5
+# (corpus/objective-05/runs/2026-11-21-d139/), all three clauses met, and nothing was re-tuned.
+# The 0.95 that gemma3:4b uses was not in that run.
+#
 # An assignment whose confidence is below this is marked provisional and held for confirmation
 # rather than applied (FR-10 Business logic, confidence; compared with ``<`` in one place,
 # apps/documents/classification.py). Chosen on the development documents under

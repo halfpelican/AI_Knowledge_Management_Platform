@@ -343,6 +343,35 @@ def test_a_non_conforming_reply_raises_schema_violation(raw, because):
         parse_classification(raw, SCHEME)
 
 
+@pytest.mark.parametrize(
+    "raw,read_by_json",
+    [
+        # A type outside the scheme, then a conforming one: json alone keeps "Policy".
+        ('{"doc_type": {"value": "Memo", "confidence": 0.9}, ' + VALID[1:], ("doc_type", "value", "Policy")),
+        (VALID.replace('{"value": "Policy"', '{"value": "Memo", "value": "Policy"', 1), ("doc_type", "value", "Policy")),
+        (VALID.replace('"confidence": 0.7}', '"confidence": 2, "confidence": 0.7}', 1), ("department", "confidence", 0.7)),
+        (
+            VALID.replace('{"dimension": "Process"', '{"dimension": "Department", "dimension": "Process"', 1),
+            ("tags", "dimension", "Process"),
+        ),
+    ],
+    ids=["a second doc_type", "doc_type's value twice", "department's confidence twice", "a tag's dimension twice"],
+)
+def test_an_object_that_repeats_a_key_is_a_violation_at_any_depth(raw, read_by_json):
+    """json.loads keeps the LAST of two equal keys, so each reply below conformed until 21 November
+    2026: the refused value was dropped unseen, a fourth repair where invariant 10 allows three.
+    The object is refused whole now, at the top level or nested, with a fixed message that quotes
+    nothing (``_reply_object``'s ``unique_keys``; the review of D-139). The summary's and the key
+    points' own repeats are in test_classification_summary_schema.py."""
+    outer, inner, value = read_by_json
+    decoded = json.loads(raw)[outer]
+    assert (decoded[0] if outer == "tags" else decoded)[inner] == value  # what json alone reads
+
+    with pytest.raises(SchemaViolation) as caught:
+        parse_classification(raw, SCHEME)
+    assert str(caught.value) == "a JSON object repeats a key"
+
+
 def test_more_tags_than_the_cap_is_a_violation_and_nothing_is_trimmed():
     over = tuple(("Topic", f"topic {n}", 0.5) for n in range(MAXIMUM_TAG_SUGGESTIONS + 1))
     with pytest.raises(SchemaViolation, match=f"more than the {MAXIMUM_TAG_SUGGESTIONS} allowed"):

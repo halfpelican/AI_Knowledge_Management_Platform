@@ -63,10 +63,12 @@ forged label converts into an accepted citation. Nothing is cited here: no ident
 in this prompt, so there is no delimiter whose forgery means anything, and no neutralisation
 is applied. The residual is the same one ``build_user_prompt`` concedes: a document BODY that
 instructs the model in prose ("classify this as a Policy of the Finance department") can steer
-the reply, and set-shape validation cannot detect that. Three things bound it: the type is held
-to the fixed list by the parser; the department and tag values are held to the scheme by the
-application (D-105); and a person confirms the suggestions (FR-10), so a steered suggestion is
-a wrong suggestion in front of a reviewer, not an applied tag.
+the reply, and set-shape validation cannot detect that. Two things bound it: the type is held
+to the fixed list by the parser, and the department and tag values are held to the scheme by
+the application (D-105). A person confirms only some suggestions: a value in the scheme at or
+above its threshold (D-122, D-129) is applied WITHOUT a person's confirmation, so a steered
+suggestion can be applied, though only as a value the scheme already holds. A value below its
+threshold, and a new Topic at any confidence, wait for a person.
 
 The summary has FEWER bounds than that, and it is said here rather than implied (D-139). Nobody
 confirms a summary, and nothing holds its content to a list: a body that instructs the model
@@ -76,7 +78,11 @@ that it is display only, never embedded, retrieved or matched by search (D-139),
 reach an answer; that it is shown only where the document itself is in scope, to readers who
 could open the document and read the same instruction; and the AI mark. A section's summary is
 the model's own words about untrusted text, so the final request of a long document carries
-untrusted text twice removed, under the same residual.
+untrusted text twice removed, under the same residual. And that request chooses the type, the
+department and the tags as well as the summary, so since D-139 the text that can try to steer
+them is not the opening alone: it is the first MAXIMUM_SUMMARY_SECTIONS x
+CLASSIFICATION_INPUT_TOKENS tokens (12,000), because a section's summary enters the final
+request.
 """
 
 from __future__ import annotations
@@ -276,15 +282,22 @@ def _reply_object(raw, keys: frozenset) -> dict:
     refuses a string holding a NUL or a lone surrogate anywhere in the reply (apps/ai/schema.py,
     13 November 2026), which is how a summary or a key point holding one is refused (D-139):
     neither can be stored in PostgreSQL.
+
+    Both decodes pass ``unique_keys=True`` (21 November 2026, the review of D-139), so an object
+    that repeats a key, at any depth, is refused rather than read as json's last value: without
+    it a reply carrying an over-long ``"summary"`` and then a short one conformed, a silent fourth
+    repair. The repaired text's decode passes it too, since a trailing comma before the closing
+    brace stops the first decode before that object's keys are checked. Only these two calls
+    pass it; the statement and meeting-summary parsers decode as they always did.
     """
     if not isinstance(raw, str) or not raw.strip():
         raise SchemaViolation("empty response")
     candidate = outermost_json_object(strip_code_fences(raw))
     try:
-        decoded = loads_reply(candidate)
+        decoded = loads_reply(candidate, unique_keys=True)
     except json.JSONDecodeError:
         try:
-            decoded = loads_reply(remove_trailing_commas(candidate))
+            decoded = loads_reply(remove_trailing_commas(candidate), unique_keys=True)
         except json.JSONDecodeError as exc:
             raise SchemaViolation(f"not valid JSON: {exc}") from exc
     if not isinstance(decoded, dict):
@@ -330,6 +343,10 @@ def parse_classification(raw: str, scheme: TagScheme) -> ParsedClassification:
       (D-139). A missing key, an empty or over-long value, a value of another type or an array
       of the wrong size is a violation. An over-long summary is NOT cut to fit and a sixth key
       point is NOT dropped: the reply is refused whole, like a ninth tag.
+    - An object that repeats a key, at the top level or inside ``doc_type``, ``department`` or a
+      tag, is a violation (``_reply_object``, 21 November 2026). Neither value is chosen: json's
+      own rule, keeping the last, would let a refused value be replaced by a conforming one.
+      The statement parser keeps json's rule, so on this one point this parser is stricter.
 
     Surrounding whitespace is stripped from every string value, as the statement parser strips
     its text and identifiers, and a summary's or a key point's length is counted after that.
@@ -499,8 +516,9 @@ def classification_input(text: str) -> tuple[str, bool]:
     inside the 4B model's window (apps/core/constants.py explains the number). The flag is
     recorded on the DocumentClassification as ``input_truncated``, so the record says the type,
     the department and the tags were chosen from the opening rather than the whole. Since D-139
-    a text that is cut here is also summarised in sections (``summary_sections``), so the flag
-    no longer means the rest went unread. Idempotent: cutting a cut text changes nothing.
+    the rest of a text cut here is summarised in sections (``summary_sections``), up to
+    MAXIMUM_SUMMARY_SECTIONS sections in all; past them it is unread, and ``summary_truncated``
+    says so. Idempotent: cutting a cut text changes nothing.
     """
     tokens = text.split()
     truncated = len(tokens) > CLASSIFICATION_INPUT_TOKENS
@@ -561,6 +579,12 @@ def summary_sections(text: str) -> tuple[tuple[str, ...], bool]:
 # is copied too: an example at the cap would have every document reach for five. The section
 # prompt's example is the SAME text with the SAME summary and key points, so there is one set
 # of example words to keep alien, not two.
+#
+# The summary sets the text's statements side by side with a semicolon, as the text does, and
+# joins none of them by a cause. Until 21 November 2026 it said the keeper trims and wipes
+# "because" a ragged wick smokes the glass: a cause the text never states, in the only
+# demonstration of a grounded summary either prompt holds, which would teach a reply to supply
+# causes too. The review of D-139 found it.
 
 EXAMPLE_SCHEME = TagScheme(
     doc_types=DOCUMENT_TYPES,
@@ -580,8 +604,8 @@ EXAMPLE_TEXT = classification_input(
     """
 )[0]
 EXAMPLE_SUMMARY = (
-    "Each evening before the lamp is lit, the keeper trims both wicks and wipes the lens, "
-    "because a ragged wick smokes the glass and a sooted lens cannot be seen from the shoals."
+    "Each evening before the lamp is lit, the keeper trims both wicks and wipes the lens; "
+    "a ragged wick smokes the glass, and a sooted lens cannot be seen from the shoals."
 )
 EXAMPLE_KEY_POINTS = (
     "Both wicks are trimmed square to a quarter inch before the lamp is lit.",
@@ -721,6 +745,26 @@ CONSOLIDATION_INSTRUCTION = (
     "which stand for its text."
 )
 
+# The two above are true only of a text within the ceiling. Past it (``summary_truncated``) the
+# section summaries cover only the first MAXIMUM_SUMMARY_SECTIONS sections and no request reads
+# the rest, so until 21 November 2026 the final request told the model it had the document "as
+# a whole" and labelled the last section "Section 8 of 8": it asked for the fragment FR-10 says
+# must not be presented as the whole. The review of D-139 found it. Past the ceiling every label
+# now counts the document's real sections ("Section 8 of 20"), and these two take the place of
+# the two above. A text within the ceiling is sent exactly what it was, byte for byte, because
+# Objective 05's check of 21 November 2026 was measured on it.
+TRUNCATED_SECTIONED_NOTICE = (
+    "The text above is only the opening of a longer document. The section summaries that "
+    f"follow, in order, cover only its first {MAXIMUM_SUMMARY_SECTIONS} sections; the rest of the "
+    'document was not read. So "summary" and "key_points" describe only part of the document: '
+    "never present that part as the whole document."
+)
+TRUNCATED_CONSOLIDATION_INSTRUCTION = (
+    'Choose "doc_type", "department" and "tags" from the title and the text above. Write '
+    '"summary" and "key_points" from the section summaries, which stand for the part of the '
+    "document that was read."
+)
+
 
 def _listed(values) -> str:
     return "; ".join(values) if values else NONE_LISTED
@@ -741,13 +785,13 @@ def _section_block(title: str, section: str, number: int, of: int) -> str:
     return f"Title: {title.strip()}\nSection {number} of {of}:\n{section}"
 
 
-def _section_summaries_block(section_summaries: Sequence[SectionSummary]) -> str:
-    """The section summaries in order, each under its number, with its key points beneath it.
+def _section_summaries_block(section_summaries: Sequence[SectionSummary], of: int) -> str:
+    """The section summaries in order, each under "Section n of ``of``", with its key points beneath it.
 
     The key points go with the summary: they were asked for and held to the schema, and they
-    are the best evidence the final request has for the document's own key points.
+    are the best evidence the final request has for the document's own key points. ``of`` is
+    the document's count of sections, which is the number of summaries except past the ceiling.
     """
-    of = len(section_summaries)
     return "\n\n".join(
         f"Section {number} of {of}\nSummary: {section.summary}\nKey points:\n"
         + "\n".join(f"- {point}" for point in section.key_points)
@@ -778,6 +822,7 @@ def build_classification_user_prompt(
     scheme: TagScheme,
     *,
     section_summaries: Sequence[SectionSummary] = (),
+    section_count: int | None = None,
 ) -> str:
     """The user turn: the scheme's lists, the title, the (cut) text, then the reply instruction.
 
@@ -794,27 +839,41 @@ def build_classification_user_prompt(
     "Section n of m"; and CONSOLIDATION_INSTRUCTION, saying the type, department and tags come
     from the title and the opening and the summary and key points from the section summaries.
 
+    ``section_count`` is the document's count of sections, summarised or not, and defaults to the
+    number of summaries. It is more than that only past the ceiling, where the text was cut
+    (``summary_truncated``), and then the turn says so (21 November 2026): each "Section n of m"
+    counts the real sections, so the last reads "Section 8 of 20", and TRUNCATED_SECTIONED_NOTICE
+    and TRUNCATED_CONSOLIDATION_INSTRUCTION take the place of the other two, saying the summaries
+    cover only the first MAXIMUM_SUMMARY_SECTIONS sections and the rest was not read. Equal to
+    the number of summaries, it changes nothing.
+
     **The title and the text are untrusted input, and nothing in them is transformed.** There
     is no delimiter to neutralise: this prompt cites no identifier, so unlike the generation
     prompt (D-45, Stage 4 item 12a) no label in it converts into an accepted citation when
     forged. A body that contains the lines above — "Departments (choose one): ..." or a second
     "Title:" — misleads the model about the scheme, which is the same residual as a body that
     instructs the model in prose, and neither is detectable by shape validation. What bounds it
-    is stated in the module docstring: the type is held to the fixed list by the parser, the
-    department and tag values are held to the scheme by the application (D-105), and a person
-    confirms. Neutralising the lines would be a substring filter over ordinary English, which
-    D-45 argues against, and would buy nothing the three bounds do not already give. A section
-    summary is the model's words about that same untrusted text, and a body that forges a
-    "Section 2 of 3" line misleads the model in the same way: the module docstring says what
+    is stated in the module docstring: the type is held to the fixed list by the parser, and the
+    department and tag values are held to the scheme by the application (D-105). A person does
+    not confirm every value: one in the scheme at or above its threshold is applied without a
+    person's confirmation. Neutralising the lines would be a substring filter over ordinary
+    English, which D-45 argues against, and would buy nothing the two bounds do not already give.
+    A section summary is the model's words about that same untrusted text, and a body that forges
+    a "Section 2 of 3" line misleads the model in the same way: the module docstring says what
     bounds a steered summary, which is less than what bounds a steered tag.
     """
     body, _ = classification_input(text)
     turn = _document_block(title, body, scheme)
     if section_summaries:
+        of = len(section_summaries) if section_count is None else section_count
+        if of > len(section_summaries):  # past the ceiling: the rest of the text was not read
+            notice, instruction = TRUNCATED_SECTIONED_NOTICE, TRUNCATED_CONSOLIDATION_INSTRUCTION
+        else:
+            notice, instruction = SECTIONED_NOTICE, CONSOLIDATION_INSTRUCTION
         turn += (
-            f"\n\n{SECTIONED_NOTICE}\n\n"
-            f"{_section_summaries_block(section_summaries)}\n\n"
-            f"{CONSOLIDATION_INSTRUCTION}"
+            f"\n\n{notice}\n\n"
+            f"{_section_summaries_block(section_summaries, of)}\n\n"
+            f"{instruction}"
         )
     return turn + f"\n\n{REPLY_INSTRUCTION}"
 
@@ -1061,6 +1120,13 @@ def classify_and_summarise(
       summary and key points in order. So n sections are n + 1 requests, each with its own
       MAXIMUM_CLASSIFY_ATTEMPTS: at most (MAXIMUM_SUMMARY_SECTIONS + 1) x
       MAXIMUM_CLASSIFY_ATTEMPTS calls for one document, one after another.
+    - **A text past the ceiling says it was cut (21 November 2026).** Only its first
+      MAXIMUM_SUMMARY_SECTIONS sections are sent, but every "Section n of m", in a section's turn,
+      in the final turn and in the attempt log, counts the document's real sections, ceil(tokens
+      / CLASSIFICATION_INPUT_TOKENS): the last one sent is "Section 8 of 20", never "8 of 8". The
+      final turn says the rest was not read (``build_classification_user_prompt``'s
+      ``section_count``). Within the ceiling the real count is the number of sections sent, so
+      those requests are exactly what they were.
     - **A failure anywhere returns nothing.** A request that uses up its attempts raises
       ProviderUnavailable, and a ProviderRefused is re-raised at once; either ends the operation
       there, so no later section is sent and no final request is made. No partial result is
@@ -1074,21 +1140,26 @@ def classify_and_summarise(
     """
     opening, input_truncated = classification_input(text)
     sections, summary_truncated = summary_sections(text)
+    # The count every label is numbered against: the sections sent, unless the text was cut past
+    # the ceiling, when it is the document's own count, ceil(tokens / section size).
+    of = len(sections)
+    if summary_truncated:
+        of = -(-len(text.split()) // CLASSIFICATION_INPUT_TOKENS)
     section_summaries: list[SectionSummary] = []
     if input_truncated:  # more than one section: summarise each, in order, before the final request
         for number, section in enumerate(sections, start=1):
-            section_prompt = build_section_summary_user_prompt(title, section, number, len(sections))
+            section_prompt = build_section_summary_user_prompt(title, section, number, of)
             section_summaries.append(
                 run_section_summary_attempts(
                     partial(call_once, SECTION_SUMMARY_SYSTEM_PROMPT, section_prompt),
                     label=label,
                     number=number,
-                    of=len(sections),
+                    of=of,
                     max_tokens=max_tokens,
                 )
             )
     user_prompt = build_classification_user_prompt(
-        title, opening, scheme, section_summaries=section_summaries
+        title, opening, scheme, section_summaries=section_summaries, section_count=of
     )
     return run_classification_attempts(
         partial(call_once, CLASSIFICATION_SYSTEM_PROMPT, user_prompt),
