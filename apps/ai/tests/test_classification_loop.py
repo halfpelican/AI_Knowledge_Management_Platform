@@ -13,6 +13,10 @@ Exercised directly, with a scripted ``call_once``, so the count is the loop's ow
 providers are exercised through their fakes in test_classification_providers.py. Every attempt is
 recorded through apps/ai/attempt_log.py under the step "classification", and no line quotes the
 reply.
+
+Since D-139 a conforming reply carries a summary and key points, and the loop writes
+``summary_truncated`` onto its result. A section's loop and the flow that joins the two are in
+test_classification_sections.py.
 """
 
 from __future__ import annotations
@@ -27,20 +31,35 @@ import pytest
 
 from apps.ai import attempt_log
 from apps.ai.base import Assignment, DocumentClassification, ProviderUnavailable, TagScheme, TagSuggestion
-from apps.ai.classification import CLASSIFICATION_MAX_TOKENS, run_classification_attempts
+from apps.ai.classification import (
+    CLASSIFICATION_MAX_TOKENS,
+    classify_and_summarise,
+    run_classification_attempts,
+    run_section_summary_attempts,
+)
 from apps.ai.generation import ChatReply
-from apps.core.constants import DOCUMENT_TYPES, MAXIMUM_CLASSIFY_ATTEMPTS
+from apps.core.constants import (
+    DOCUMENT_TYPES,
+    MAXIMUM_CLASSIFY_ATTEMPTS,
+    MAXIMUM_KEY_POINTS,
+    MAXIMUM_SUMMARY_CHARACTERS,
+)
 
 SCHEME = TagScheme(
     doc_types=DOCUMENT_TYPES,
     departments=("Finance",),
     tags={"Project": (), "Process": ("onboarding",), "Topic": ("safety",)},
 )
+# Five keys since D-139: the summary and the key points are part of every conforming reply.
+SUMMARY = "New starters are set up with equipment in their first week."
+KEY_POINTS = ("A laptop is issued on day one.", "Building passes take two days.")
 CONFORMING = json.dumps(
     {
         "doc_type": {"value": "Procedure", "confidence": 0.9},
         "department": {"value": "Finance", "confidence": 0.6},
         "tags": [{"dimension": "Process", "value": "onboarding", "confidence": 0.8}],
+        "summary": SUMMARY,
+        "key_points": list(KEY_POINTS),
     }
 )
 OUT_OF_SCHEME_TYPE = CONFORMING.replace("Procedure", "Memo")
@@ -95,7 +114,53 @@ def test_a_conforming_reply_is_returned_after_exactly_one_call():
     assert result.tags == (TagSuggestion(dimension="Process", value="onboarding", confidence=0.8),)
     assert result.model == "gemma3:4b"  # the provider's, written on, never parsed
     assert result.input_truncated is True  # the caller's flag, written on, never parsed
+    assert result.summary == SUMMARY  # D-139: the reply's, parsed
+    assert result.key_points == KEY_POINTS
+    assert result.summary_truncated is False  # the caller's flag; False unless it says otherwise
     assert calls == [1]
+
+
+@pytest.mark.parametrize("flag", [True, False])
+def test_summary_truncated_is_the_callers_flag_written_on_and_never_parsed(flag):
+    """D-139: whether the text ran past MAXIMUM_SUMMARY_SECTIONS is known to the caller, which cut
+    it, and to nothing in the reply. Each value is passed with the OPPOSITE ``input_truncated``, so
+    the two flags cannot be the same field."""
+    call_once, _ = scripted(CONFORMING)
+
+    result = run(call_once, input_truncated=not flag, summary_truncated=flag)
+
+    assert result.summary_truncated is flag
+    assert result.input_truncated is (not flag)
+
+
+@pytest.mark.parametrize(
+    "broken,message",
+    [
+        (lambda reply: {k: v for k, v in reply.items() if k != "summary"},
+         "missing top-level key(s): ['summary'] (the reply had 4 key(s))"),
+        (lambda reply: {**reply, "summary": "s" * (MAXIMUM_SUMMARY_CHARACTERS + 1)},
+         f"'summary' has {MAXIMUM_SUMMARY_CHARACTERS + 1} characters, more than the {MAXIMUM_SUMMARY_CHARACTERS} allowed"),
+        (lambda reply: {**reply, "key_points": []}, "'key_points' is empty, and at least 1 is required"),
+        (lambda reply: {**reply, "key_points": ["k"] * (MAXIMUM_KEY_POINTS + 1)},
+         f"{MAXIMUM_KEY_POINTS + 1} key points, more than the {MAXIMUM_KEY_POINTS} allowed"),
+    ],
+    ids=["no summary", "an over-long summary", "no key points", "a sixth key point"],
+)
+def test_a_reply_whose_summary_breaks_its_bounds_is_a_failed_attempt_and_is_retried(broken, message):
+    """D-139, invariant 10: a classification that is right in every other part is still no reply
+    when its summary or key points do not conform. It is retried, and three of them are an outage
+    that names the violation; nothing is cut to fit and no classification is returned without its
+    summary."""
+    bad = json.dumps(broken(json.loads(CONFORMING)))
+    call_once, calls = scripted(bad, CONFORMING)
+    assert run(call_once).summary == SUMMARY
+    assert calls == [1, 2]
+
+    call_once, calls = scripted(*[bad] * MAXIMUM_CLASSIFY_ATTEMPTS)
+    with pytest.raises(ProviderUnavailable) as excinfo:
+        run(call_once)
+    assert len(calls) == MAXIMUM_CLASSIFY_ATTEMPTS
+    assert f"last failure: schema violation: {message}" in str(excinfo.value)
 
 
 def test_a_chat_reply_object_and_bare_text_are_both_accepted():
@@ -256,7 +321,8 @@ def test_no_line_quotes_the_reply(caplog):
         run(call_once)
 
     for line in attempt_lines(caplog):
-        for value in ("Memo", "Procedure", "Finance", "onboarding"):
+        # The summary and the key points are the reply too (D-139): "laptop" and "passes" are in them.
+        for value in ("Memo", "Procedure", "Finance", "onboarding", "starters", "laptop", "passes"):
             assert value not in line, line
 
 
@@ -367,4 +433,10 @@ def test_the_loop_has_no_on_attempt_observer():
     parameters = inspect.signature(run_classification_attempts).parameters
     assert "on_attempt" not in parameters
     assert [name for name, p in parameters.items() if p.kind is p.POSITIONAL_OR_KEYWORD] == ["call_once"]
-    assert set(parameters) == {"call_once", "scheme", "label", "model", "input_truncated", "max_tokens"}
+    # ``summary_truncated`` arrived with D-139: a flag the caller passes, like ``input_truncated``.
+    assert set(parameters) == {
+        "call_once", "scheme", "label", "model", "input_truncated", "summary_truncated", "max_tokens",
+    }
+    # The section loop and the whole flow have no observer either.
+    assert "on_attempt" not in inspect.signature(run_section_summary_attempts).parameters
+    assert "on_attempt" not in inspect.signature(classify_and_summarise).parameters

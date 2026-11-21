@@ -203,7 +203,10 @@ set during evaluation, not guessed in a code review.
 | `MAXIMUM_CONTEXT_TOKENS` | *tune* — ceiling on grounding context per call |
 | `MAXIMUM_GENERATION_ATTEMPTS` | **3** — 1 initial call + 2 retries, then 503 (NFR-19) |
 | `MAXIMUM_EMBED_ATTEMPTS` | **3** — 1 initial call + 2 retries, then flag the item |
-| `MAXIMUM_CLASSIFY_ATTEMPTS` | **3** — 1 initial call + 2 retries (FR-10, NIT3004) |
+| `MAXIMUM_CLASSIFY_ATTEMPTS` | **3** — 1 initial call + 2 retries (FR-10, NIT3004). Since D-139 each request of a classification has the three: every section's, and the final one |
+| `MAXIMUM_KEY_POINTS` | **5** — the most key points one classification reply may give (FR-10, D-139) |
+| `MAXIMUM_SUMMARY_CHARACTERS` / `MAXIMUM_KEY_POINT_CHARACTERS` | 600 / 200 — the longest summary and the longest key point a reply may give; a longer one is a schema violation, retried and never trimmed (D-139) |
+| `MAXIMUM_SUMMARY_SECTIONS` | **8**, *tune* — sections of a document longer than `CLASSIFICATION_INPUT_TOKENS` that are summarised before the final request; past it the summary covers only those sections, and the record and the page say so (FR-10, D-139) |
 | `MAXIMUM_TRANSCRIBE_ATTEMPTS` | **3** — 1 initial call + 2 retries (recording transcription, D-123) |
 | `MAXIMUM_SUMMARY_ATTEMPTS` | **3** — 1 initial call + 2 retries (FR-16, D-125) |
 | `MAXIMUM_MALFORMED_SUMMARY_REPLIES` | **2** — 1 malformed reply + 1 retry, within the three (FR-16: "a malformed response triggers one retry") |

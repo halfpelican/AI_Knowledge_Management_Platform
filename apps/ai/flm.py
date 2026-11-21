@@ -27,9 +27,8 @@ from apps.ai.base import (
 from apps.ai.classification import (
     CLASSIFICATION_MAX_TOKENS,
     CLASSIFICATION_TIMEOUT_SECONDS,
-    build_classification_messages,
-    classification_input,
-    run_classification_attempts,
+    chat_messages,
+    classify_and_summarise,
 )
 from apps.ai.generation import (
     GENERATION_MAX_TOKENS,
@@ -158,26 +157,33 @@ class FLMService:
     def classify_document(
         self, title: str, text: str, scheme: TagScheme
     ) -> DocumentClassification:
-        """FR-10 classification through FLM (D-104): one structured call, the shared loop.
+        """FR-10 classification and summary through FLM (D-104, D-139): the shared flow.
 
-        The prompt, the schema, the input cut and the retry policy are all in
-        apps/ai/classification.py, shared with the Anthropic provider so the two cannot
-        drift; this method supplies the one call (``_chat_once``, with its error mapping)
-        and names the model that answered. Whether the suggestions are applied is decided
-        in apps/documents (D-105), not here.
+        The prompts, the schemas, the input cut, the sectioning of a long document and the
+        retry policy are all in apps/ai/classification.py, shared with the Anthropic provider
+        so the two cannot drift. ``classify_and_summarise`` decides every request: one for a
+        text within CLASSIFICATION_INPUT_TOKENS, and for a longer one a request per section
+        and then the final request. This method supplies the one call (``_chat_once``, with
+        its error mapping) and names the model that answered. Whether the suggestions are
+        applied is decided in apps/documents (D-105), not here.
+
+        Every request, a section's and the final one, carries CLASSIFICATION_MAX_TOKENS and
+        CLASSIFICATION_TIMEOUT_SECONDS: the ceiling is sized for the final reply, the larger
+        of the two (apps/ai/classification.py has the arithmetic).
         """
-        body, truncated = classification_input(text)
-        messages = build_classification_messages(title, body, scheme)
-        # One value for the request and for the attempt log's record of it.
+        # One value for every request and for the attempt log's record of each.
         max_tokens = CLASSIFICATION_MAX_TOKENS
-        return run_classification_attempts(
-            lambda: self._chat_once(
-                messages, max_tokens=max_tokens, timeout=CLASSIFICATION_TIMEOUT_SECONDS
+        return classify_and_summarise(
+            lambda system_prompt, user_prompt: self._chat_once(
+                chat_messages(system_prompt, user_prompt),
+                max_tokens=max_tokens,
+                timeout=CLASSIFICATION_TIMEOUT_SECONDS,
             ),
+            title=title,
+            text=text,
             scheme=scheme,
             label=f"FLM at {settings.FLM_BASE_URL}",
             model=settings.FLM_CHAT_MODEL,
-            input_truncated=truncated,
             max_tokens=max_tokens,
         )
 

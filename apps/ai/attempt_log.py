@@ -75,6 +75,15 @@ reading, not observed", because nothing recorded how a reply ended.
 classification request carries no statement cap. As everywhere in this file, nothing of the
 reply is quoted: not the type, the department or a tag.
 
+**Section summaries (21 November 2026, FR-10, D-139).** A document longer than
+CLASSIFICATION_INPUT_TOKENS is summarised a section at a time before its one classification
+request, and each section's request has attempts of its own. They are recorded under the step
+``section summary`` (``SECTION_SUMMARY_STEP``): a failed attempt is a WARNING whose detail
+begins with the section, ``section 2 of 6: ...``, and a parsed attempt an INFO line ending
+``: section 2 of 6, 3 key point(s)``. The final request's lines are ``classification`` lines,
+unchanged. Nothing of a summary or a key point is quoted, in these lines or in those: a
+violation gives a length or a position, never the words.
+
 **It observes; it does not decide.** No attempt count, timeout or reply changes because
 of it. A logging call does not raise into its caller: a handler that fails reports through
 ``logging``'s own ``handleError``.
@@ -93,6 +102,9 @@ DETAIL_LIMIT = 300
 # longer is cut, so a misbehaving server cannot write an arbitrary string into the line.
 FACT_LIMIT = 40
 UNREPORTED = "unreported"
+# The step one section's summary request is logged under (FR-10, D-139). A name, so the loop in
+# apps/ai/classification.py and a reader searching the attempts file use the same words.
+SECTION_SUMMARY_STEP = "section summary"
 
 logger = logging.getLogger(ATTEMPT_LOGGER_NAME)
 
@@ -172,9 +184,11 @@ def failed_attempt(
     reply: ReplyFacts | None = None,
 ) -> None:
     """One failed attempt of ``step``: "generation", "question embedding", "classification",
-    "transcription" (one recording segment, D-123) or "summarisation" (one meeting, D-125).
+    "transcription" (one recording segment, D-123), "summarisation" (one meeting, D-125) or
+    "section summary" (one section of a long document, D-139; SECTION_SUMMARY_STEP).
 
-    ``reply`` is passed for a generation or a classification attempt, and adds the bracket.
+    ``reply`` is passed for a generation, a classification or a section-summary attempt, and
+    adds the bracket.
     """
     logger.warning(
         "%s attempt %d of %d failed after %.1f s%s (account %s): %s: %s",
@@ -238,6 +252,37 @@ def parsed_classification(number: int, of: int, seconds: float, tags: int, *, re
         _bracket(reply),
         _account.get() or "not set",
         tags,
+    )
+
+
+def parsed_section_summary(
+    number: int,
+    of: int,
+    seconds: float,
+    *,
+    section: int,
+    sections: int,
+    key_points: int,
+    reply: ReplyFacts,
+) -> None:
+    """One section-summary attempt whose reply parsed into SECTION_SUMMARY_SCHEMA, at INFO (D-139).
+
+    ``parsed_classification``'s counterpart for one section of a long document. The line says
+    which section it was and how many key points the reply held, and nothing of what the
+    summary or the key points said: this module quotes no reply, and a summary is the
+    document's content.
+    """
+    logger.info(
+        "%s attempt %d of %d parsed after %.1f s%s (account %s): section %d of %d, %d key point(s)",
+        SECTION_SUMMARY_STEP,
+        number,
+        of,
+        seconds,
+        _bracket(reply),
+        _account.get() or "not set",
+        section,
+        sections,
+        key_points,
     )
 
 

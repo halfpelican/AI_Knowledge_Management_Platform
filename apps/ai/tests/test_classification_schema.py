@@ -7,6 +7,11 @@ classification (invariant 10); the one that matters most is a ``doc_type`` outsi
 list, which FR-10 says must come from that list and not be generated freely.
 
 No provider, no network, no database: a pure function over a string and a scheme.
+
+Since D-139 (21 November 2026) the reply has five keys, not three: ``summary`` and ``key_points``
+are required. Every reply built here carries a conforming pair, so each case below still fails on
+the thing it names and not on a missing key. What the parser accepts and refuses of the summary
+and the key points themselves is in test_classification_summary_schema.py.
 """
 
 import json
@@ -38,6 +43,10 @@ SCHEME = TagScheme(
 )
 
 
+SUMMARY = "Staff book business travel through the approved agent."
+KEY_POINTS = ("Meals are reimbursed at the daily rate.",)
+
+
 def reply(
     *,
     doc_type="Policy",
@@ -45,6 +54,8 @@ def reply(
     department="Finance",
     department_confidence=0.7,
     tags=(("Process", "onboarding", 0.8),),
+    summary=SUMMARY,
+    key_points=KEY_POINTS,
 ) -> str:
     """A conforming reply; ``tags`` is a sequence of ``(dimension, value, confidence)`` triples."""
     return json.dumps(
@@ -52,23 +63,40 @@ def reply(
             "doc_type": {"value": doc_type, "confidence": type_confidence},
             "department": {"value": department, "confidence": department_confidence},
             "tags": [{"dimension": d, "value": v, "confidence": c} for d, v, c in tags],
+            "summary": summary,
+            "key_points": list(key_points),
         }
     )
 
 
 VALID = reply()
 
+# A conforming summary and key points, as the text that closes a hand-written reply (D-139).
+SUMMARY_TAIL = f', "summary": {json.dumps(SUMMARY)}, "key_points": {json.dumps(list(KEY_POINTS))}}}'
+
+
+def with_summary(raw: str) -> str:
+    """``raw``, a hand-written JSON object, with a conforming summary and key points added.
+
+    The cases below are written out as text so that each shows the exact malformation it is
+    about. Since D-139 a reply without the two keys is refused for THAT, before the parser reaches
+    anything else, so every case about something else carries them."""
+    assert raw.endswith("}"), raw
+    return raw[:-1] + SUMMARY_TAIL
+
 
 # --- The happy path ------------------------------------------------------------------------
 
 
-def test_a_conforming_reply_parses_into_the_three_parts():
+def test_a_conforming_reply_parses_into_the_five_parts():
     parsed = parse_classification(VALID, SCHEME)
 
     assert isinstance(parsed, ParsedClassification)
     assert parsed.doc_type == Assignment(value="Policy", confidence=0.9)
     assert parsed.department == Assignment(value="Finance", confidence=0.7)
     assert parsed.tags == (TagSuggestion(dimension="Process", value="onboarding", confidence=0.8),)
+    assert parsed.summary == SUMMARY  # D-139
+    assert parsed.key_points == KEY_POINTS and isinstance(parsed.key_points, tuple)
 
 
 def test_an_empty_tag_array_is_a_valid_reply():
@@ -127,9 +155,12 @@ def test_prose_around_the_object_is_discarded():
 def test_a_trailing_comma_is_repaired():
     raw = (
         '{"doc_type": {"value": "Report", "confidence": 0.8,}, '
-        '"department": {"value": "Finance", "confidence": 0.5}, "tags": [],}'
+        '"department": {"value": "Finance", "confidence": 0.5}, "tags": [], '
+        '"summary": "A quarterly report.", "key_points": ["Spending fell.",],}'
     )
-    assert parse_classification(raw, SCHEME).doc_type.value == "Report"
+    parsed = parse_classification(raw, SCHEME)
+    assert parsed.doc_type.value == "Report"
+    assert parsed.key_points == ("Spending fell.",)  # the comma inside the array went too
 
 
 def test_a_brace_inside_a_string_does_not_end_the_object():
@@ -159,13 +190,16 @@ def test_the_trailing_comma_repair_leaves_values_alone():
     raw = (
         '{"doc_type": {"value": "Report", "confidence": 0.8,}, '
         '"department": {"value": "Finance, }", "confidence": 0.5}, '
-        '"tags": [{"dimension": "Topic", "value": "budget [q1, ]", "confidence": 0.4}],}'
+        '"tags": [{"dimension": "Topic", "value": "budget [q1, ]", "confidence": 0.4}], '
+        '"summary": "Spending by quarter [q1, ], then by team.", "key_points": ["Totals {net, }."],}'
     )
 
     parsed = parse_classification(raw, SCHEME)
 
     assert parsed.department.value == "Finance, }"
     assert parsed.tags[0].value == "budget [q1, ]"
+    assert parsed.summary == "Spending by quarter [q1, ], then by team."  # D-139: a summary is a string too
+    assert parsed.key_points == ("Totals {net, }.",)
 
 
 def test_values_are_stripped_of_surrounding_whitespace_only():
@@ -277,24 +311,27 @@ def test_a_nan_confidence_is_a_violation():
         ("[1, 2, 3]", "no JSON object"),
         ('{"doc_type": {"value": "Policy", "confidence": 0.9}, "department": {"value": "Finance", "confidence": 0.5}}', "missing top-level key"),
         ('{"tags": []}', "missing top-level key"),
-        (reply()[:-1] + ', "summary": "A policy."}', "unexpected top-level key"),
-        ('{"doc_type": "Policy", "department": {"value": "Finance", "confidence": 0.5}, "tags": []}', "'doc_type' is str, not an object"),
-        ('{"doc_type": {"value": "Policy"}, "department": {"value": "Finance", "confidence": 0.5}, "tags": []}', "'doc_type' is missing"),
+        # The unexpected key was "summary" until D-139 made that one of the reply's own.
+        (reply()[:-1] + ', "reason": "It reads like a policy."}', "unexpected top-level key"),
+        # From here to the "not json" case each reply is whole but for the one thing it is about,
+        # so each carries a conforming summary and key points (``with_summary``, D-139).
+        (with_summary('{"doc_type": "Policy", "department": {"value": "Finance", "confidence": 0.5}, "tags": []}'), "'doc_type' is str, not an object"),
+        (with_summary('{"doc_type": {"value": "Policy"}, "department": {"value": "Finance", "confidence": 0.5}, "tags": []}'), "'doc_type' is missing"),
         # This and tag 0's case below match a count, not "has unexpected key", since 13 November
         # 2026: an unexpected key is counted and never named, because the reply chose its name
         # (test_a_violation_never_quotes_a_key_the_reply_chose, below).
-        ('{"doc_type": {"value": "Policy", "confidence": 0.9, "reason": "x"}, "department": {"value": "Finance", "confidence": 0.5}, "tags": []}', "'doc_type' has 1 unexpected key"),
-        ('{"doc_type": {"value": "", "confidence": 0.9}, "department": {"value": "Finance", "confidence": 0.5}, "tags": []}', "empty or non-string 'value'"),
-        ('{"doc_type": {"value": 4, "confidence": 0.9}, "department": {"value": "Finance", "confidence": 0.5}, "tags": []}', "empty or non-string 'value'"),
-        ('{"doc_type": {"value": "Policy", "confidence": 0.9}, "department": {"value": "Finance"}, "tags": []}', "'department' is missing"),
-        ('{"doc_type": {"value": "Policy", "confidence": 0.9}, "department": {"value": "  ", "confidence": 0.5}, "tags": []}', "empty or non-string 'value'"),
-        ('{"doc_type": {"value": "Policy", "confidence": 0.9}, "department": {"value": "Finance", "confidence": 0.5}, "tags": {}}', "'tags' is dict, not an array"),
-        ('{"doc_type": {"value": "Policy", "confidence": 0.9}, "department": {"value": "Finance", "confidence": 0.5}, "tags": ["safety"]}', "tag 0 is str, not an object"),
-        ('{"doc_type": {"value": "Policy", "confidence": 0.9}, "department": {"value": "Finance", "confidence": 0.5}, "tags": [{"dimension": "Topic", "value": "safety"}]}', "tag 0 is missing"),
-        ('{"doc_type": {"value": "Policy", "confidence": 0.9}, "department": {"value": "Finance", "confidence": 0.5}, "tags": [{"dimension": "Topic", "value": "safety", "confidence": 0.5, "why": "x"}]}', "tag 0 has 1 unexpected key"),
-        ('{"doc_type": {"value": "Policy", "confidence": 0.9}, "department": {"value": "Finance", "confidence": 0.5}, "tags": [{"dimension": "Department", "value": "Finance", "confidence": 0.5}]}', "dimension outside"),
-        ('{"doc_type": {"value": "Policy", "confidence": 0.9}, "department": {"value": "Finance", "confidence": 0.5}, "tags": [{"dimension": "topic", "value": "safety", "confidence": 0.5}]}', "dimension outside"),
-        ('{"doc_type": {"value": "Policy", "confidence": 0.9}, "department": {"value": "Finance", "confidence": 0.5}, "tags": [{"dimension": "Topic", "value": "", "confidence": 0.5}]}', "tag 0 has an empty or non-string 'value'"),
+        (with_summary('{"doc_type": {"value": "Policy", "confidence": 0.9, "reason": "x"}, "department": {"value": "Finance", "confidence": 0.5}, "tags": []}'), "'doc_type' has 1 unexpected key"),
+        (with_summary('{"doc_type": {"value": "", "confidence": 0.9}, "department": {"value": "Finance", "confidence": 0.5}, "tags": []}'), "empty or non-string 'value'"),
+        (with_summary('{"doc_type": {"value": 4, "confidence": 0.9}, "department": {"value": "Finance", "confidence": 0.5}, "tags": []}'), "empty or non-string 'value'"),
+        (with_summary('{"doc_type": {"value": "Policy", "confidence": 0.9}, "department": {"value": "Finance"}, "tags": []}'), "'department' is missing"),
+        (with_summary('{"doc_type": {"value": "Policy", "confidence": 0.9}, "department": {"value": "  ", "confidence": 0.5}, "tags": []}'), "empty or non-string 'value'"),
+        (with_summary('{"doc_type": {"value": "Policy", "confidence": 0.9}, "department": {"value": "Finance", "confidence": 0.5}, "tags": {}}'), "'tags' is dict, not an array"),
+        (with_summary('{"doc_type": {"value": "Policy", "confidence": 0.9}, "department": {"value": "Finance", "confidence": 0.5}, "tags": ["safety"]}'), "tag 0 is str, not an object"),
+        (with_summary('{"doc_type": {"value": "Policy", "confidence": 0.9}, "department": {"value": "Finance", "confidence": 0.5}, "tags": [{"dimension": "Topic", "value": "safety"}]}'), "tag 0 is missing"),
+        (with_summary('{"doc_type": {"value": "Policy", "confidence": 0.9}, "department": {"value": "Finance", "confidence": 0.5}, "tags": [{"dimension": "Topic", "value": "safety", "confidence": 0.5, "why": "x"}]}'), "tag 0 has 1 unexpected key"),
+        (with_summary('{"doc_type": {"value": "Policy", "confidence": 0.9}, "department": {"value": "Finance", "confidence": 0.5}, "tags": [{"dimension": "Department", "value": "Finance", "confidence": 0.5}]}'), "dimension outside"),
+        (with_summary('{"doc_type": {"value": "Policy", "confidence": 0.9}, "department": {"value": "Finance", "confidence": 0.5}, "tags": [{"dimension": "topic", "value": "safety", "confidence": 0.5}]}'), "dimension outside"),
+        (with_summary('{"doc_type": {"value": "Policy", "confidence": 0.9}, "department": {"value": "Finance", "confidence": 0.5}, "tags": [{"dimension": "Topic", "value": "", "confidence": 0.5}]}'), "tag 0 has an empty or non-string 'value'"),
         ("not json {at all", "unbalanced"),
         # Balanced braces, so the object is extracted, and then it is not JSON: a comma is
         # missing between two keys, which no repair here guesses at.
@@ -335,7 +372,8 @@ VALID_OBJECT = json.loads(VALID)
         (lambda key: {**VALID_OBJECT, key: 1}, "1 unexpected top-level key(s)"),
         (
             lambda key: {key: VALID_OBJECT["tags"]},
-            "missing top-level key(s): ['department', 'doc_type', 'tags'] (the reply had 1 key(s))",
+            # Five keys since D-139: the schema's own names, sorted, and still none of the reply's.
+            "missing top-level key(s): ['department', 'doc_type', 'key_points', 'summary', 'tags'] (the reply had 1 key(s))",
         ),
         (
             lambda key: {**VALID_OBJECT, "doc_type": {**VALID_OBJECT["doc_type"], key: 1}},
@@ -350,7 +388,7 @@ VALID_OBJECT = json.loads(VALID)
             "tag 0 has 1 unexpected key(s)",
         ),
     ],
-    ids=["a fourth top-level key", "the only key", "doc_type's third key", "department's third key", "a tag's fourth key"],
+    ids=["a sixth top-level key", "the only key", "doc_type's third key", "department's third key", "a tag's fourth key"],
 )
 def test_a_violation_never_quotes_a_key_the_reply_chose(steered, message):
     """A key name is the model's words, which an uploaded document can steer, and the violation's
@@ -432,8 +470,11 @@ def test_a_string_nothing_downstream_can_take_is_a_violation(raw, message):
 
 def test_the_schema_describes_what_the_parser_enforces():
     """The declared shape and the hand-written checks must not drift apart. The schema is not
-    executed (no jsonschema dependency), so the keys, the enums and the cap are asserted here."""
-    assert sorted(CLASSIFICATION_SCHEMA["required"]) == ["department", "doc_type", "tags"]
+    executed (no jsonschema dependency), so the keys, the enums and the cap are asserted here.
+    Five required keys since D-139; the summary's and the key points' own bounds are asserted in
+    test_classification_summary_schema.py, beside the cases that hold the parser to them."""
+    assert sorted(CLASSIFICATION_SCHEMA["required"]) == ["department", "doc_type", "key_points", "summary", "tags"]
+    assert sorted(CLASSIFICATION_SCHEMA["properties"]) == sorted(CLASSIFICATION_SCHEMA["required"])
     assert CLASSIFICATION_SCHEMA["additionalProperties"] is False
     doc_type = CLASSIFICATION_SCHEMA["properties"]["doc_type"]
     assert sorted(doc_type["required"]) == ["confidence", "value"]

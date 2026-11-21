@@ -830,11 +830,40 @@ DOCUMENT_TYPES = ("Policy", "Procedure", "Report", "Meeting Paper")
 
 # How much of a document the classification call reads: its title and this many whitespace
 # tokens (D-31's token) from the START of the extracted text. The opening of a document is
-# where its kind is stated; FR-10's sectioned summarising of long documents is deferred, and
-# this is said in the DocumentAnalysis record rather than hidden. 1,500 is about five pages,
-# well inside the 4B model's window beside the prompt, and larger than every corpus document
-# but D04 (8,357 words), whose first chapter already says it holds procedures.
+# where its kind is stated, and the DocumentAnalysis record says when the type, the department
+# and the tags were chosen from the opening alone (``input_truncated``). 1,500 is about five
+# pages, well inside the 4B model's window beside the prompt, and larger than every corpus
+# document but D04 (8,357 words), whose first chapter already says it holds procedures.
+#
+# Since D-139 it is also the size of one SECTION of a longer document. FR-10: "Documents
+# exceeding the model's context limit are summarised in sections and consolidated". D-139 reads
+# "the model's context limit" as this cap, which does not change: a document within it gets one
+# request, and a longer one is summarised a section of this many tokens at a time and
+# consolidated in a final request (apps/ai/classification.py). Until D-139 that clause was
+# deferred (D-104) and a long document had no summary at all.
 CLASSIFICATION_INPUT_TOKENS = 1500
+
+# Document summaries (D-139). FR-10 Front-End: "Each document displays a short summary and a list
+# of key points". The four below bound what one classification reply may give and how much of a
+# long document is summarised. The first three are schema limits, held by the parser in
+# apps/ai/classification.py: a reply over one is a schema violation, retried and never trimmed to
+# fit (invariant 10).
+#
+# The most key points one reply may give (D-139, decision 5: a search result shows at most five).
+MAXIMUM_KEY_POINTS = 5
+# The longest summary one reply may give, in characters, counted after surrounding whitespace is
+# stripped (D-139). About a hundred words: FR-10's "short summary", shown beneath a title.
+MAXIMUM_SUMMARY_CHARACTERS = 600
+# The longest single key point, in characters, counted the same way (D-139): one sentence.
+MAXIMUM_KEY_POINT_CHARACTERS = 200
+# The most sections of a long document that are summarised (D-139). TUNE: set by D-139, not
+# measured. A document longer than this many sections of CLASSIFICATION_INPUT_TOKENS (12,000
+# tokens, about forty pages) has only its first ones summarised, and the record says so
+# (``DocumentClassification.summary_truncated``) rather than presenting a summary of a fragment
+# as a summary of the whole. Each section costs one request of up to MAXIMUM_CLASSIFY_ATTEMPTS
+# attempts, so this also bounds what one upload can spend: this many section requests and the
+# final one.
+MAXIMUM_SUMMARY_SECTIONS = 8
 
 # An assignment whose confidence is below this is marked provisional and held for confirmation
 # rather than applied (FR-10 Business logic, confidence; compared with ``<`` in one place,
@@ -886,7 +915,7 @@ CLASSIFICATION_DEPARTMENT_CONFIDENCE_THRESHOLD_BY_MODEL = {"claude-haiku-5-5": 0
 # (100,000 / 16,000), not measured, and it is a ratio for prose, not a ceiling: a run of punctuation
 # can be one token of many characters, and at 10 characters a token, the ratio D-133's 4,000 option
 # was priced at, the ceiling would be 160,000 characters. FLM's ceiling, CLASSIFICATION_MAX_TOKENS
-# (400 tokens), is far inside either. So a proposal longer than this is possible, and would still be
+# (400 tokens then; 1,200 since D-139), is far inside either. So a proposal longer than this is possible, and would still be
 # refused 400: a residual, since nothing bounds a tag value in the reply, but far from anything
 # measured (the longest Topic in the recorded Objective 05 runs is 21 characters). D-133 names it, and
 # the reviews' notes on it, under "Not covered". apps/core/tests/test_constants.py fails if either

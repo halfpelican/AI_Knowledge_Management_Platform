@@ -106,8 +106,19 @@ class DocumentClassification:
     ``department`` and ``tags`` are the model's suggestions AS MADE: whether a value is in the
     scheme, provisional or applied is decided by application code afterwards
     (apps/documents/classification.py, D-105), never here. ``model`` names the chat model, for
-    the DocumentAnalysis record. ``input_truncated`` says the text was cut at
-    CLASSIFICATION_INPUT_TOKENS before it was sent, which the record keeps rather than hides.
+    the DocumentAnalysis record. ``input_truncated`` says the classifier read only the opening
+    of the text, its first CLASSIFICATION_INPUT_TOKENS, which the record keeps rather than hides.
+
+    **The summary (D-139).** ``summary`` and ``key_points`` are the machine's short account of the
+    document, for display beneath its title (FR-10). From a provider ``summary`` is never empty
+    and at most MAXIMUM_SUMMARY_CHARACTERS, and ``key_points`` holds 1 to MAXIMUM_KEY_POINTS
+    strings of at most MAXIMUM_KEY_POINT_CHARACTERS each: the parser refuses any other reply.
+    The defaults, an empty summary and no key points, exist only for a caller that builds this
+    dataclass itself (a test, a measurement script); no provider returns them.
+    ``summary_truncated`` says the document had more than MAXIMUM_SUMMARY_SECTIONS sections, so
+    the summary covers only the first MAXIMUM_SUMMARY_SECTIONS of them. Nothing checks the
+    summary against the text: the prompt asks for only what the text says, and that is all
+    (apps/ai/classification.py).
     """
 
     doc_type: Assignment
@@ -115,6 +126,9 @@ class DocumentClassification:
     tags: tuple[TagSuggestion, ...]
     model: str
     input_truncated: bool
+    summary: str = ""
+    key_points: tuple[str, ...] = ()
+    summary_truncated: bool = False
 
 
 # --- Recording transcription (D-123) ---------------------------------------------
@@ -270,14 +284,24 @@ class AIService(Protocol):
     def classify_document(
         self, title: str, text: str, scheme: TagScheme
     ) -> DocumentClassification:
-        """FR-10: the type, department and tags of one document, in one structured call.
+        """FR-10: one document's type, department, tags, summary and key points, together.
 
         The prompt shows the model the scheme's fixed types, departments and tag values and
         the document's title and opening text (apps/ai/classification.py). A reply that does
-        not conform to CLASSIFICATION_SCHEMA, including a ``doc_type`` outside the four, is
-        no reply: retried to MAXIMUM_CLASSIFY_ATTEMPTS (1 initial call + 2 retries), then
-        ProviderUnavailable. The scheme rule, the provisional rule and provenance are
-        application code over the returned suggestions, not the model's judgement (D-105).
+        not conform to CLASSIFICATION_SCHEMA, including a ``doc_type`` outside the four or a
+        summary or key point outside its bounds, is no reply: retried to
+        MAXIMUM_CLASSIFY_ATTEMPTS (1 initial call + 2 retries), then ProviderUnavailable. The
+        scheme rule, the provisional rule and provenance are application code over the
+        returned suggestions, not the model's judgement (D-105).
+
+        **How many requests (D-139).** A text within CLASSIFICATION_INPUT_TOKENS is one
+        request, which returns all five parts. A longer text is cut into sections of that
+        many tokens, at most MAXIMUM_SUMMARY_SECTIONS: one request per section returns that
+        section's summary and key points, then one final request, carrying the title, the
+        opening and the section summaries in order, returns all five parts. Every request has
+        its own MAXIMUM_CLASSIFY_ATTEMPTS. If any request uses them up the operation raises
+        ProviderUnavailable and returns nothing, and a ProviderRefused from any request is
+        re-raised at once (D-118). It is still one operation: the caller makes one call.
         """
         ...
 

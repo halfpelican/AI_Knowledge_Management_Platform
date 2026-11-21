@@ -35,13 +35,7 @@ from apps.ai.base import (
     TagScheme,
     Transcription,
 )
-from apps.ai.classification import (
-    CLASSIFICATION_SYSTEM_PROMPT,
-    CLASSIFICATION_TIMEOUT_SECONDS,
-    build_classification_user_prompt,
-    classification_input,
-    run_classification_attempts,
-)
+from apps.ai.classification import CLASSIFICATION_TIMEOUT_SECONDS, classify_and_summarise
 from apps.ai.generation import (
     GENERATION_TIMEOUT_SECONDS,
     ChatReply,
@@ -215,35 +209,38 @@ class AnthropicService:
     def classify_document(
         self, title: str, text: str, scheme: TagScheme
     ) -> DocumentClassification:
-        """FR-10 classification through Claude (D-104): the same prompt, schema and loop as FLM.
+        """FR-10 classification and summary through Claude (D-104, D-139): the same flow as FLM.
 
         Not yet exercised against the live API, like generation: the path was dormant under
         D-35 until D-113 funded it, and the suite tests it against mocked SDK responses.
-        ``_claude_once`` carries the classification system prompt in the SDK's own parameter
-        and the classification timeout; everything else is apps/ai/classification.py's,
-        shared with the FLM provider, which is what keeps the two symmetrical.
+        ``classify_and_summarise`` (apps/ai/classification.py) decides every request, one for
+        a text within CLASSIFICATION_INPUT_TOKENS and a request per section then a final one
+        for a longer text, and hands each one's system prompt and user turn to
+        ``_claude_once``, which carries the system prompt in the SDK's own parameter and the
+        classification timeout. Everything else is shared with the FLM provider, which is
+        what keeps the two symmetrical.
 
-        **The ceiling is Claude's, not FLM's.** CLASSIFICATION_MAX_TOKENS (400) is sized for
-        gemma3:4b's short reply. Claude's thinking counts against ``max_tokens`` (D-115), so
-        the same 400 would cut a reply off before its JSON; classification takes
-        CLAUDE_MAX_TOKENS, generation's Claude ceiling, for the same reason generation does.
+        **The ceiling is Claude's, not FLM's.** CLASSIFICATION_MAX_TOKENS (1,200) is sized for
+        gemma3:4b's reply alone. Claude's thinking counts against ``max_tokens`` (D-115), so
+        that ceiling could cut a reply off before its JSON; every request here, a section's
+        and the final one, takes CLAUDE_MAX_TOKENS, generation's Claude ceiling, for the same
+        reason generation does.
         """
-        body, truncated = classification_input(text)
-        user_prompt = build_classification_user_prompt(title, body, scheme)
-        # One value for the request and for the attempt log's record of it. Claude's ceiling,
-        # because thinking counts against it (see the docstring).
+        # One value for every request and for the attempt log's record of each. Claude's
+        # ceiling, because thinking counts against it (see the docstring).
         max_tokens = CLAUDE_MAX_TOKENS
-        return run_classification_attempts(
-            lambda: self._claude_once(
+        return classify_and_summarise(
+            lambda system_prompt, user_prompt: self._claude_once(
                 user_prompt,
                 max_tokens=max_tokens,
-                system=CLASSIFICATION_SYSTEM_PROMPT,
+                system=system_prompt,
                 timeout=CLASSIFICATION_TIMEOUT_SECONDS,
             ),
+            title=title,
+            text=text,
             scheme=scheme,
             label=f"Claude ({settings.ANTHROPIC_MODEL})",
             model=settings.ANTHROPIC_MODEL,
-            input_truncated=truncated,
             max_tokens=max_tokens,
         )
 
