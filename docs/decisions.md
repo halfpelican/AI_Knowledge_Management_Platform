@@ -7444,6 +7444,14 @@ Nothing else in this entry moves.
 **Dated note, 13 November 2026 (later): reversed by D-129.** The prompt is this entry's again,
 byte-identical to #85's commit: a new value in Topic only. D-128's revision no longer ships.
 
+**Dated note, 21 November 2026: the deferral is reversed (D-139).** The user asked for the summary
+clauses on 19 November and settled their shape on 21 November. The five clauses listed in the note
+of 10 November above are built by D-139: this entry's `classify_document` now returns the summary
+and the key points in the same reply, as its second bullet said the schema would. The prompt is no
+longer byte-identical to #85's commit: rule 2's count of keys changed and the summary rules were
+added after rule 8, with rules 3 to 8 word for word as they were. `CLASSIFICATION_INPUT_TOKENS` is
+unchanged, and `input_truncated` keeps its meaning.
+
 ## D-105 · Schema v2 for FR-10: `DocumentAnalysis`, two `ContentTags` columns, the audience-scoped scheme, and how a suggestion becomes a record
 
 **Status:** Settled by the user · **Date:** 2026-11-08 · **Concerns:** FR-10, FR-15, invariants 1, 4
@@ -21030,3 +21038,253 @@ the empty sentence to a stricter one.
 **The corrections were not read by the auditor again.** A third run could not return a clean
 verdict in any case: the screen-reader run, the reflow, the axe run and the walk on the alpha are
 owed by a person.
+
+## D-139 · FR-10's document summaries are built: one request returns the classification, a summary and key points; a long document is summarised in sections; the summary is displayed and never indexed
+
+**Status:** Settled by the user (21 November 2026) · **Date:** 2026-11-21 · **Concerns:** FR-10,
+FR-08, FR-12, NFR-15, NFR-19, NFR-20, invariants 1, 2, 5, 8 and 10, D-19, D-31, D-104, D-105,
+D-106, D-119, D-122, D-125, D-129, `apps/ai/base.py`, `apps/ai/classification.py`,
+`apps/ai/anthropic.py`, `apps/ai/flm.py`, `apps/ai/testing.py`, `apps/core/constants.py`,
+`apps/documents/models.py`, `apps/documents/classification.py`, `apps/api/serializers.py`,
+`apps/retrieval/search.py`, `frontend/src/components/SearchResults.jsx`,
+`frontend/src/pages/DocumentDetail.jsx`, `docs/api-contract.md`, `docs/schema-v1.md`,
+`docs/ai-provider.md`, CLAUDE.md §5 · **Stage:** NIT3004, before Stage 5's closing audits (items
+10 and 11) · **Area:** AI and RAG pipeline, Benjamin Morovan's (CLAUDE.md §1) · **Reverses:**
+D-104's deferral (its dated note of 10 November 2026, night; D-119's finding 1)
+
+**What was open.** FR-10 was INCOMPLETE by decision. D-104 built the classification and deferred
+the summary "only if time allows after both verifications pass"; on 10 November the user decided
+it would not be built in NIT3004. On 19 November he asked for it, before the closing audits. The
+five clauses, in the proposal's words:
+
+1. Front-End: "Each document displays a short summary and a list of key points, shown beneath the
+   title in search results so users can judge relevance before opening the file."
+2. Server-End: "A single structured request issued at upload returns the classification, the
+   summary and key points, and the tag assignments together, at the cost of one call rather than
+   three."
+3. Validation, its third sentence: "Documents exceeding the model's context limit are summarised
+   in sections and consolidated, rather than being truncated and summarised from a fragment
+   without the user being told."
+4. "Business logic (grounding)   the summarisation prompt constrains output to content present in
+   the document."
+5. Responses: "200 OK with the classification, summary and tags; 409 Conflict on a duplicate tag
+   name within a dimension; 422 Unprocessable Entity where insufficient text was extracted."
+
+§1.8's in-scope list has "AI-generated document summaries and key points".
+
+**The clauses against the §8 mock-ups,** compared before any design, as the knowledge map's history
+requires (D-138):
+
+- **No figure shows a search-results list.** Figure 8.3 (Home; "Search, facets, categories and
+  tags, with most-asked questions in the index.") has the search box and the facets and no
+  results. So "beneath the title in search results" has no picture, and the clause is its only
+  specification.
+- **Figure 8.5 (Reading Room; "A source document, annotated with what depends on it.") shows no
+  summary and no key points:** the title, a line of metadata, then the document's own text. Clause
+  1 says "Each document displays" them.
+- **Figure 8.4 (Ask) lists its sources without a summary.** The clause names search results, so
+  the Ask screen is unchanged.
+- **The Reading Room shows things no FR-10 clause asks for:** what rests on the document, contested
+  passages, the answers built from the page. None is part of this work.
+
+### The user's choices (21 November 2026)
+
+The work was started by a scheduled run, in which the tabbed-question tool was not available. The
+seven questions were put to the user in one message, each with its recommended choice first. His
+answer, in his words: "Yes, all recommended".
+
+| Question | Choice | Not chosen |
+|---|---|---|
+| 1. Reverse D-104's deferral? | **Yes: all five clauses are built now** | Keep the deferral |
+| 2. The AI contract's shape | **Extend `classify_document`:** its reply gains the summary and the key points, so one request returns everything, as clause 2 says and as D-104 planned ("The schema gains them then"). CLAUDE.md §4's operation list is unchanged. The stated cost: the classification prompt changes, so Haiku's thresholds (0.72 and 0.30, D-122 and D-129) were measured on a different prompt; Objective 05's measurement is run once on a new scratch database, reported, and nothing is tuned on it | A new operation, `summarise_document`, leaving classification byte-identical: two calls an upload, clause 2 left partial |
+| 3. Is a summary indexed as a retrievable passage? | **No: display only.** No FR-10 clause asks for retrieval, and no retrieval figure, frozen set or threshold moves | Indexed as the document's own chunks, as FR-16 indexes a meeting's summary (D-125) |
+| 4. Backfill the documents already on the alpha? | **Yes, after the merge,** by a command that stores only the summary and key points and leaves each document's classification and tags as they are | No backfill: only new uploads and re-classified documents get a summary |
+| 5. Search results, where there is no mock-up | **The summary and the key points are both visible** beneath the title and above the snippet, marked AI-generated, with key points capped at five | The key points behind a disclosure |
+| 6. The document page, where Figure 8.5 shows neither | **The summary and key points beneath the title and above the text** (clause 1) | Follow the figure: search results only |
+| 7. CLAUDE.md | **New rows in §5** for the new constants | No CLAUDE.md edit |
+
+Four defaults were stated in the same message, to stand unless he objected, and he did not:
+
+- **The summary is written at upload, in the request,** as the classification is. A failed summary
+  never fails the upload (invariant 8).
+- **The summary is read-only.** FR-10 makes the type, the department and the tags editable and
+  says nothing of the kind about the summary. Each run replaces it.
+- **Grounding is the prompt's constraint,** which is all clause 4 asks. No code checks a summary
+  against the text, and no second model call judges it: invariant 5's limitation, conceded the
+  same way.
+- **A ceiling on sections.** Past it the page says the summary covers only the first part of the
+  document, which clause 3 allows when the user is told.
+
+### Two readings this entry makes
+
+- **"The model's context limit" is the build's own input cap,** `CLASSIFICATION_INPUT_TOKENS`:
+  1,500 whitespace tokens (D-31's token), unchanged since D-104. Claude's window is far larger and
+  gemma3:4b's far smaller; the cap is the one number both providers are held to, and keeping it
+  keeps what the classifier reads as it was measured. A document within it costs one request. A
+  longer one is cut into sections of that size.
+- **"200 OK with the classification, summary and tags"** is met by the classification object, which
+  now holds the summary. That object is in the classify route's 200 and in the upload's 201 (201 is
+  FR-08's own code for a stored document), and in the document detail.
+
+### What these readings and choices cost, recorded
+
+An adversarial review of the three layers (below) asked for each of these to be said in this entry
+and not only in comments.
+
+- **(a) A long document is not one request.** Clause 2 says "a single structured request ... at the
+  cost of one call rather than three". That holds for a document within the cap. A longer one costs
+  one request per section and a final one, at most `MAXIMUM_SUMMARY_SECTIONS` + 1, on Claude as on
+  FLM, although Claude's own window would hold it whole. Clause 3 governs that document, and the
+  final request is still the one that "returns the classification, the summary and key points, and
+  the tag assignments together".
+- **(b) Past the ceiling the summary is of a fragment, and says so.** A document over
+  `MAXIMUM_SUMMARY_SECTIONS` × `CLASSIFICATION_INPUT_TOKENS` (12,000 tokens) is summarised from its
+  first 12,000 and flagged `summary_truncated`. That is a literal departure from "summarised in
+  sections and consolidated, rather than being truncated", inside the clause's own condition: the
+  user is told, on both screens.
+- **(c) Grounding is one prompt sentence** in each prompt. Nothing checks a summary against its text.
+- **(d) One reply carries everything, so one bad summary loses the classification.** A reply whose
+  summary or key points break a bound is refused whole (invariant 10), retried, and after three
+  attempts the document is left unclassified, where before D-139 it would have been classified. How
+  often that happens is not measured beyond Objective 05's run below, where all 26 requests conformed
+  at the first attempt.
+- **(e) A summary is a model's statement shown without a citation, and invariant 6 does not govern
+  it.** Invariant 6, and FR-12's "The interface has no state in which an uncited factual statement
+  is shown", govern the statements of an answer, which `verifyCitations` checks. FR-10 itself puts
+  the summary beneath the title in search results, and its clause 4 gives the summary's prompt
+  grounding, not citations. The block is attributed to the document it sits under, in words, and
+  carries NFR-15's mark. D-125's `snippet_ai_generated` is the precedent for AI summary text in
+  search results.
+- **(f) A widened document keeps the summary it was given.** The scheme a document is classified
+  against is built for its audience at that time (D-105), and the summary is written from the same
+  prompt. D-105's rule already says widening should reclassify; reclassifying also rewrites the
+  summary.
+- **(g) A section's summary enters the final request,** which decides the type, the department and
+  the tags. So text anywhere in the first 12,000 tokens of a document can now try to steer them,
+  where before only the first 1,500 could. What bounds it is unchanged: the type is held to the
+  fixed list, the department and tags to the scheme, and a value below its threshold waits for a
+  person. A value in the scheme at or above its threshold is applied without one.
+
+### Two further choices, after the review of the three layers (21 November 2026)
+
+Each was put to the user as a tabbed question with a recommendation. The review is in the dated
+note below.
+
+| Question | Choice | Not chosen |
+|---|---|---|
+| "Classify now" on a long document can make up to nine requests, and the classify route had no in-flight limit: D-105 left it out as "one provider call" | **The route takes the per-user in-flight slot** that upload and reprocess use (D-85). This reverses D-105's "no in-flight slot" for this route | Leave it exempt and record the worst case |
+| Sectioning adds requests to the upload of any document over 1,500 words, and Objective 02's bound (twenty pages or fewer within sixty seconds) was last timed with one request | **Re-time the twenty-page upload once on `anthropic`** with this entry's code, on a new scratch database, **and record that on FLM the bound is expected to be exceeded:** Objective 02 stands verified on `anthropic` only | Record both as unmeasured; on FLM, summarise from the opening only |
+
+### Objective 05 on the new prompt: all three clauses met on two draws, and one wrong type applied
+
+Choice 2's stated cost, and nothing was tuned on it. The record is
+`corpus/objective-05/runs/2026-11-21-d139/objective-05-d139.md`.
+
+- **How:** the frozen twenty on a new database, `kmp_obj05_d139_20261121`, restored from the
+  anthropic snapshot of 10 November (dump `6e514170…e6fc`). The route of 10 November, an FLM snapshot
+  converted, is refused since D-131. Claude Haiku 5.5, thresholds 0.72 and 0.30.
+- **Two draws, because the prompt changed between them.** The first ran at `186be70`. The review
+  then had the worked example's summary reworded (below), which changes one line of each system
+  prompt, so the measurement was repeated at `789c05a`, the code that ships. Every user turn for the
+  twenty is byte for byte the same on both.
+- **Clause 1:** 18 of 20 types (90%) against 75%, on each draw. The misses are D04 (Policy) and D09
+  (Report), the two the old prompt missed on its draws of 10 and 11 November (19, 18 and 18 of 20).
+- **A wrong type was applied on the second draw, for the first time on Haiku.** D04's Policy scored
+  0.8, above 0.72, and was applied. On the four earlier draws its type scored 0.6 or 0.7 and was
+  held, and the 10 November record says "No wrong type was ever applied."
+  - No clause is broken: clause 2 concerns assignments below the threshold.
+  - D04 is the one reference document that takes the sectioned path, so its final request shows six
+    section summaries the old prompt never showed. That is a plausible cause, and one draw cannot
+    establish it. It is cost (g) above in a measured case.
+  - Whether 0.72 still separates right from wrong on a sectioned document is open, on one case. A
+    person can still change an applied type on the page, and that edit is kept.
+- **Clause 2:** no violation on either draw. 34 of 34 below their threshold held on each; 52 of 55
+  and 48 of 51 at or above applied, with 3 held each time to keep a department the document already
+  had.
+- **Clause 3:** no violation, and nothing exercised it. Each old-prompt draw proposed one Topic
+  ("customer complaints", D06); neither new-prompt draw proposed any, so the new prompt is the
+  likely cause.
+- **The calls:** 26 requests on each draw, every one parsed at its first attempt, about $0.013 a
+  draw. Nineteen documents took one request. D04, 8,357 words, took seven: six sections and the
+  final request.
+- **What it does not show.** The department figures have nothing earlier to compare with, because
+  no Objective 05 run had the department's own threshold in force (D-129).
+
+### Objective 02's bound at twenty pages, on `anthropic`: met on five uploads, 23.4 to 32.1 s
+
+The second further choice. The record is
+`corpus/objective-02/runs/2026-11-21-d139-twenty-pages/twenty-pages.md`.
+
+- **How:** the method of 10 November's FLM run. The first twenty pages of D04 (6,539 tokens, five
+  sections), five copies, each through `POST /api/documents` on Waitress, at `789c05a`, on a new
+  database, `kmp_obj02_d139_20261121`, restored from the same snapshot.
+- **Result:** every upload 201 and Indexed, in 23.4 to 32.1 s, against sixty. Each made six
+  classification requests (14.6 to 19.7 s) where the upload made one before, and stored a summary
+  with five key points.
+- **One upload needed a retry.** Its final request's first reply was refused: `'summary' has 652
+  characters, more than the 600 allowed`. The second conformed. That is cost (d) above happening:
+  of the seven final requests a sectioned document has made on Haiku, one was refused over its
+  summary. Three in a row would leave a document unclassified; that has not been seen.
+- **FLM is not measured and is expected to exceed the bound.** The five added requests would add at
+  least 46 s (FLM's fastest attempt on 10 November was 9.3 s) to its 43.5 to 51.6 s. By the user's
+  choice, **Objective 02 stands verified on `anthropic` only.**
+- **Not re-run:** NFR-08 and NFR-13, and any document other than this one.
+
+### What is built
+
+Commits on `feat/FR-10-document-summaries`, in order: `ce9ead8` the AI layer, `2f3f863` storage and
+replies, `71dd9f6` the screens, `ae19420` the write side, then the review's fixes: `f3227f1` (AI
+layer), `245d247` (server) and `90dbbfa` (screens).
+
+- **The AI layer** (`apps/ai/classification.py`, both providers, the stub).
+  - `DocumentClassification` gains `summary`, `key_points` and `summary_truncated`. The reply schema
+    requires `summary` (1 to `MAXIMUM_SUMMARY_CHARACTERS`) and `key_points` (1 to
+    `MAXIMUM_KEY_POINTS` strings of at most `MAXIMUM_KEY_POINT_CHARACTERS`). A reply that breaks
+    either, holds U+0000 or a lone surrogate, or repeats a key at any depth, is a schema violation:
+    retried, never trimmed or repaired (invariant 10). The repeated-key refusal is the review's; the
+    statement and meeting-summary parsers are unchanged.
+  - A text within the cap: one request. A longer one: `summary_sections` cuts it into sections of
+    `CLASSIFICATION_INPUT_TOKENS`, at most `MAXIMUM_SUMMARY_SECTIONS`; each gets a request against
+    its own schema; one final request carries the title, the opening exactly as classification read
+    it before, and the section summaries. Every request has `MAXIMUM_CLASSIFY_ATTEMPTS` attempts,
+    1 initial call + 2 retries. Any request that uses them up raises `ProviderUnavailable`, and
+    nothing is returned.
+  - Past the ceiling the sections are numbered against the document's real count ("Section 8 of
+    20"), and the final request says the summaries cover only the first sections and must not be
+    presented as the whole (the review's fix). That wording has never been sent to a model: no
+    reference or development document is over 12,000 tokens.
+  - Rules 3 to 8 of the prompt are word for word D-104's. Rule 2's count of keys changed, rules 9 to
+    11 were added, and the worked example's reply gained a summary and key points. The example's
+    summary asserts nothing its text does not state (the review's fix; it first read "because").
+  - FLM's reply ceiling, `CLASSIFICATION_MAX_TOKENS`, rose from 400 to 1,200 to fit the summary.
+- **Storage** (`documents 0016`, additive and reversible): `summary`, `key_points`,
+  `summary_truncated`, `summary_model` and `summarised_at` on `DocumentAnalysis`. No summary is a
+  `ContentChunk`, and nothing embeds one.
+- **The write side** (`apps/documents/classification.py`).
+  - Every run writes the five columns, on a `user_edited` row too. An empty summary resets them. A
+    NUL or a lone surrogate is stored as U+FFFD, so no value can raise at save.
+  - `apply_summary` writes only the five columns of an existing analysis row, under the module's
+    lock order. `summarise_documents` is the backfill: by default every classified document with no
+    summary; `--force`, `--id`, and a JSON record. It builds its prompt for the document's own
+    audience, as a classification does.
+- **The replies.** The classification object carries `summary`, `key_points` and
+  `summary_truncated` wherever it appears: the upload's and the reprocess's 201, the classify
+  route's 200, the document detail. Each `GET /api/search` result carries the three; a document with
+  no summary, and every meeting, carries `""`, `[]` and `false`. The summary is read through the
+  scoped query that admitted the result (invariant 1), and search does not match on it.
+- **The classify route** (the review's fixes). It answers the scoped 404 for a document deleted
+  while its classification ran, where it answered a 500. It takes the per-user in-flight slot, and
+  answers 429 `ingestion_in_flight` while the user's slot is held. The message a refused classify
+  shows is the one upload and reprocess show, "Your previous upload is still being processed":
+  "upload" there covers all four routes.
+- **The screens.** One component, `DocumentSummary`, on both. A search result shows the summary and
+  then the key points beneath the title and above the snippet; the document page shows them beneath
+  the title and above the text. The block carries NFR-15's mark and a sentence saying it is a
+  summary of the document, not its own text. Where `summary_truncated` is true a sentence says the
+  summary covers only the first part of the document. A document with no summary says so in one
+  line; a result with none renders as before.
+
+**Named and not fixed.** If a document is deleted between the classify route's scoped lookup and
+the read of its text, the route answers 422 "insufficient text" and not 404. No provider call
+happens in that window, and the caller could see the document. The lock order of `apply_summary`
+is documented and has no two-connection test.
