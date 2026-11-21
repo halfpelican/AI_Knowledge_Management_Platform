@@ -8055,6 +8055,24 @@ link that value for that document (D-128).
 - **"A retired Project or Process tag stays retired" holds again.** A retired Topic comes back only
   through a person, on a document every role can read.
 
+**Dated note, 21 November 2026: the classify route takes the in-flight slot, and a classification is
+no longer one provider call (D-139).** This entry's route list gives `POST /api/documents/{id}/classify`
+"no in-flight slot", and its text speaks of waiting for "one classification call". Both were true
+until D-139.
+
+- **A classification is now one `classify_document` operation:** one request for a text within
+  `CLASSIFICATION_INPUT_TOKENS`, and otherwise one request per section, at most
+  `MAXIMUM_SUMMARY_SECTIONS`, then a final one, each with `MAXIMUM_CLASSIFY_ATTEMPTS` attempts. On an
+  upload it runs inside the ingestion transaction, and on a reprocess inside the document's row lock
+  as well, as the one call did.
+- **The classify route takes the per-user in-flight slot** that upload, meeting ingest and reprocess
+  use (D-85): the user's decision of 21 November 2026, which reverses this entry's "no in-flight
+  slot" for that route. It answers 429 `ingestion_in_flight` while the user's slot is held.
+- **The `DocumentAnalysis` record gained five summary columns** (`documents 0016`). This entry's
+  list of departures from the proposal's field table stands, with those five added by D-139.
+
+Nothing else in this entry moves.
+
 ## D-106 · Objective 05's measurement: the reference set is frozen, the database is `kmp_obj0506_20261101`, and the confidence threshold is chosen on development documents by a rule fixed in advance
 
 **Status:** Settled by the user · **Date:** 2026-11-08 · **Concerns:** Objective 05, FR-10, D-84,
@@ -10643,6 +10661,13 @@ on the second audit, with the doc corrections it asked for made after it.
   did not meet clause 3, and on `anthropic` it did not meet clause 1. Each rule change was made with
   the thirty in view. An independent test on a fresh question set is planned (D-126's note of 12
   November).
+
+**Dated note, 21 November 2026: where FR-10 stands now (D-139).** "Where FR-10 stands", above, says
+FR-10 is INCOMPLETE by decision because the summary, key points, sectioned summarising and grounding
+are not built. They are built now, by D-139, at the user's request of 19 November: finding 1 of this
+entry's audit is closed, and D-104 carries the note that reverses its deferral. The tag browser
+remains FR-15's facets plus the Administrator-only inventory (D-105's recorded deviation, finding 2
+here). D-139 holds the closing requirements audit of the summary clauses, verbatim.
 
 ## D-120 · The relevance threshold and the partial-match floor are per embedding model: `voyage-4` gets 0.2687 and 0.2468, and EmbeddingGemma keeps 0.30 and no floor
 
@@ -21042,7 +21067,7 @@ owed by a person.
 ## D-139 · FR-10's document summaries are built: one request returns the classification, a summary and key points; a long document is summarised in sections; the summary is displayed and never indexed
 
 **Status:** Settled by the user (21 November 2026) · **Date:** 2026-11-21 · **Concerns:** FR-10,
-FR-08, FR-12, NFR-15, NFR-19, NFR-20, invariants 1, 2, 5, 8 and 10, D-19, D-31, D-104, D-105,
+FR-08, FR-12, NFR-15, NFR-19, NFR-20, invariants 1, 2, 5, 6, 8 and 10, D-19, D-31, D-104, D-105,
 D-106, D-119, D-122, D-125, D-129, `apps/ai/base.py`, `apps/ai/classification.py`,
 `apps/ai/anthropic.py`, `apps/ai/flm.py`, `apps/ai/testing.py`, `apps/core/constants.py`,
 `apps/documents/models.py`, `apps/documents/classification.py`, `apps/api/serializers.py`,
@@ -21128,8 +21153,8 @@ Four defaults were stated in the same message, to stand unless he objected, and 
 
 ### What these readings and choices cost, recorded
 
-An adversarial review of the three layers (below) asked for each of these to be said in this entry
-and not only in comments.
+An adversarial review of the three layers, and then the two closing reviews (the dated notes at the
+end of this entry), asked for each of these to be said in this entry and not only in comments.
 
 - **(a) A long document is not one request.** Clause 2 says "a single structured request ... at the
   cost of one call rather than three". That holds for a document within the cap. A longer one costs
@@ -21146,8 +21171,15 @@ and not only in comments.
 - **(d) One reply carries everything, so one bad summary loses the classification.** A reply whose
   summary or key points break a bound is refused whole (invariant 10), retried, and after three
   attempts the document is left unclassified, where before D-139 it would have been classified. How
-  often that happens is not measured beyond Objective 05's run below, where all 26 requests conformed
-  at the first attempt.
+  often that happens is not measured beyond Objective 05's four draws below, where all 104 requests
+  conformed at the first attempt, and Objective 02's timing, where one of 31 attempts was refused
+  for a 652-character summary and its retry conformed.
+  - **A short last section is a case of it that nobody has measured.** A text 1 to 49 tokens past a
+    multiple of `CLASSIFICATION_INPUT_TOKENS` sends a last section shorter than
+    `MINIMUM_CONTENT_LENGTH`, which must still return a summary and 1 to 5 key points under the
+    grounding rule. Three refused replies there would leave the document unclassified. No measured
+    document has such a section (D04's last is 857 tokens), and on FLM, where a retry repeats the
+    same request, whether such a reply recovers is not known.
 - **(e) A summary is a model's statement shown without a citation, and invariant 6 does not govern
   it.** Invariant 6, and FR-12's "The interface has no state in which an uncited factual statement
   is shown", govern the statements of an answer, which `verifyCitations` checks. FR-10 itself puts
@@ -21161,14 +21193,37 @@ and not only in comments.
   summary.
 - **(g) A section's summary enters the final request,** which decides the type, the department and
   the tags. So text anywhere in the first 12,000 tokens of a document can now try to steer them,
-  where before only the first 1,500 could. What bounds it is unchanged: the type is held to the
-  fixed list, the department and tags to the scheme, and a value below its threshold waits for a
-  person. A value in the scheme at or above its threshold is applied without one.
+  where before only the first 1,500 could.
+  - **The confidence threshold does not bound a steered reply.** The confidence is the model's own
+    number, in the same reply the document's text is steering, so a steered value in the scheme,
+    reported with a high confidence, is applied without a person. (As first written this entry
+    listed the threshold among the bounds; the closing security review corrected it, S3.)
+  - **What does bound it:** the type is held to the fixed list; the department and the tags to the
+    scheme, built for the document's audience; a department is written only where the column is
+    blank; `user_edited` keeps a person's type and department; a tag a person removed or rejected is
+    never linked again; and no run creates a tag.
+- **(h) A document can write its own summary.** The summary is the model's prose from untrusted
+  text, with fewer bounds than a classification: a document that instructs the model can dictate
+  what its summary says. What bounds it: its length; that it is rendered as text, never as markup,
+  a link or a control; that it is display only, never indexed or retrievable; that it is shown only
+  where the document itself is in scope; and NFR-15's mark with the sentence beside it. The sentence
+  that says a summary covers only part of a document comes from a flag the code computes, not from
+  the model, and nothing a model returns widens scope. `docs/ai-provider.md` holds the same account.
+- **(i) What the in-flight slot leaves.** The slot limits how many classifications one account runs
+  at once, not what it spends, and not how many accounts do the same:
+  - per account, one at a time, but up to `INGESTION_THROTTLE_RATE` (60 an hour), a budget the
+    classify route shares with upload, meeting ingest and reprocess;
+  - each classification makes up to `MAXIMUM_SUMMARY_SECTIONS` + 1 requests, each with
+    `MAXIMUM_CLASSIFY_ATTEMPTS` attempts at `CLASSIFICATION_TIMEOUT_SECONDS`, so one request to the
+    server can hold a thread for up to 8,100 s by arithmetic, where it could hold 900 s before;
+  - the slot is per account, so several accounts are not bounded by it. Upload and reprocess have
+    had the same residual since D-85;
+  - the attempts log does not name the account whose request spent the calls.
 
 ### Two further choices, after the review of the three layers (21 November 2026)
 
-Each was put to the user as a tabbed question with a recommendation. The review is in the dated
-note below.
+Each was put to the user as a tabbed question with a recommendation. The review is in the first
+dated note at the end of this entry.
 
 | Question | Choice | Not chosen |
 |---|---|---|
@@ -21224,8 +21279,9 @@ The second further choice. The record is
   with five key points.
 - **One upload needed a retry.** Its final request's first reply was refused: `'summary' has 652
   characters, more than the 600 allowed`. The second conformed. That is cost (d) above happening:
-  of the seven final requests a sectioned document has made on Haiku, one was refused over its
-  summary. Three in a row would leave a document unclassified; that has not been seen.
+  of the ten final requests a sectioned document has made on Haiku (nine with a committed attempt
+  log), one was refused over its summary. Three in a row would leave a document unclassified; that
+  has not been seen.
 - **FLM is not measured and is expected to exceed the bound.** The five added requests would add at
   least 46 s (FLM's fastest attempt on 10 November was 9.3 s) to its 43.5 to 51.6 s. By the user's
   choice, **Objective 02 stands verified on `anthropic` only.**
@@ -21234,8 +21290,11 @@ The second further choice. The record is
 ### What is built
 
 Commits on `feat/FR-10-document-summaries`, in order: `ce9ead8` the AI layer, `2f3f863` storage and
-replies, `71dd9f6` the screens, `ae19420` the write side, then the review's fixes: `f3227f1` (AI
-layer), `245d247` (server) and `90dbbfa` (screens).
+replies, `71dd9f6` the screens, `ae19420` the write side, then the first review's fixes: `f3227f1`
+(AI layer), `245d247` (server) and `90dbbfa` (screens); then, after the closing reviews and the
+break runs: `c9c007b` (two transaction tests), `3677e81` and `6fc40c4` (wording, and a sentence
+pinned as words), `55f8c55` (the character cap) and `68bfd36` (the truncation sentence).
+`68bfd36` is the last commit that changes code or tests.
 
 - **The AI layer** (`apps/ai/classification.py`, both providers, the stub).
   - `DocumentClassification` gains `summary`, `key_points` and `summary_truncated`. The reply schema
@@ -21258,6 +21317,9 @@ layer), `245d247` (server) and `90dbbfa` (screens).
     11 were added, and the worked example's reply gained a summary and key points. The example's
     summary asserts nothing its text does not state (the review's fix; it first read "because").
   - FLM's reply ceiling, `CLASSIFICATION_MAX_TOKENS`, rose from 400 to 1,200 to fit the summary.
+  - A request carries at most `CLASSIFICATION_INPUT_CHARACTERS` (15,000) of document text, for the
+    opening and for a section alike (the closing security review's S1, below). It never binds on
+    the project's own documents, whose longest section is 9,780 characters.
 - **Storage** (`documents 0016`, additive and reversible): `summary`, `key_points`,
   `summary_truncated`, `summary_model` and `summarised_at` on `DocumentAnalysis`. No summary is a
   `ContentChunk`, and nothing embeds one.
@@ -21282,10 +21344,935 @@ layer), `245d247` (server) and `90dbbfa` (screens).
   then the key points beneath the title and above the snippet; the document page shows them beneath
   the title and above the text. The block carries NFR-15's mark and a sentence saying it is a
   summary of the document, not its own text. Where `summary_truncated` is true a sentence says the
-  summary covers only the first part of the document. A document with no summary says so in one
+  summary covers only part of the document. A document with no summary says so in one
   line; a result with none renders as before.
 
 **Named and not fixed.** If a document is deleted between the classify route's scoped lookup and
 the read of its text, the route answers 422 "insufficient text" and not 404. No provider call
 happens in that window, and the caller could see the document. The lock order of `apply_summary`
 is documented and has no two-connection test.
+
+### Where FR-10 stands after this
+
+The five summary clauses are built, under readings (a), (b) and (e) above, which are literal
+departures recorded for an examiner to weigh. The tag browser remains FR-15's facets plus the
+Administrator-only inventory (D-105's recorded deviation), and the `DocumentAnalysis` field
+departures stand as D-105 records them, with the five summary columns added. The closing
+requirements audit below gives its own verdict on the summary clauses.
+
+**Dated note, 21 November 2026: the review of the first three layers, and what was done on each
+finding.** Before the write side was built, three reviewers read the AI layer, the storage and
+replies, and the screens as committed at `186be70`: a requirements auditor, a security reviewer and
+a reviewer of the AI flow. A second reader then tried to refute the two most serious findings of
+each. They made 22 findings. The review's own text is not in the repository; this table is its
+record.
+
+| Lens | Finding | Second reader | What was done |
+|---|---|---|---|
+| Requirements | D-139 is cited throughout and is not in the decision log; D-104 still says the clauses are not built | Refuted: both existed, uncommitted | Committed as `2ea4f55`, with reading (e) added |
+| Requirements | Sectioning multiplies the upload's requests, and Objective 02's sixty-second bound is unmeasured | Confirmed | The user's second further choice: timed on `anthropic` (`9d424f6`); FLM recorded as expected to exceed it |
+| Requirements | The write side must store and test `summary_truncated` in both writers | Not read | Built in `ae19420`; a stale flag is tested in `245d247` |
+| Requirements | A document classified earlier gets a summary only from the backfill, so it must be a named deployment step | Not read | `docs/alpha-deployment.md` names it (`ae19420`, `245d247`) |
+| Requirements | The classify route's contract row and docstring say "one provider call" | Not read | Corrected in `245d247` |
+| Requirements | Three sentences describe truncation in a way sectioning makes untrue | Not read | Corrected in `f3227f1` and `245d247` |
+| Requirements | The `user_edited` rule is stated two incompatible ways | Not read | One true sentence in three places (`245d247`) |
+| Requirements | The thresholds are described as derived on the shipped prompt | Not read | A dated comment beside them (`f3227f1`); Objective 05 run four times, above |
+| Requirements | The search screen's stylesheet check does not cover the truncation sentence or the key points | Not read | Tested in `90dbbfa` |
+| Security | The classify route answers 500 when the document is deleted during the provider phase | Confirmed | The scoped 404, tested from both roles (`245d247`) |
+| Security | The classify route can hold a thread for up to 27 provider calls with no in-flight bound | Confirmed | The user's first further choice: the slot (`245d247`, `90dbbfa`) |
+| Security | The backfill must build its prompt for the document's own audience and save only the five columns, under the lock order | Not read | Built in `ae19420`; the audience is tested in `245d247`; the lock order is tested in the closing round, below |
+| Security | A section summary can carry forged lines into the final request, and the docstrings' bound is untrue | Not read | The wording is corrected (`f3227f1`); cost (g) |
+| Security | The widening residual now covers a summary written against the narrower audience's scheme | Not read | Cost (f); `tag_scheme`'s docstring (`245d247`) |
+| AI flow | The same 500 on the classify route | Confirmed | As above |
+| AI flow | `summary_sections` can make the last section one token long | Refuted as a defect: the harm is unmeasured | Recorded as unmeasured, under cost (d) and in `docs/ai-provider.md` |
+| AI flow | The tool `docs/ai-provider.md` names for measuring section replies sends no section request | Not read | The document says what has exercised them (`f3227f1`) |
+| AI flow | The classify route's exemption from the slot rests on "one provider call" | Not read | The slot, as above |
+| AI flow | The backfill must classify against `tag_scheme(document)`, and the stored flag must be the reply's | Not read | As the security finding above |
+| AI flow | Past the ceiling the prompts tell the model it has the whole document | Not read | The real section count and a notice that says the rest was not read (`f3227f1`) |
+| AI flow | The worked example's summary states a cause its text does not | Not read | Reworded (`f3227f1`), and Objective 05 run again on it |
+| AI flow | A reply that repeats a key is accepted with the last value | Not read | Refused by the classification parsers (`f3227f1`) |
+
+**Dated note, 22 November 2026: the deliberate breaks.** A new or changed test of this work counts
+only after it has failed under a deliberate break. The exceptions are named after the tables.
+
+- **How, as D-138's note records the practice:** a break list is written as data by the
+  `test-engineer` agent, and only a script applies a break. A break is one exact replacement of a
+  text that occurs once in one source file, applied alone. The named tests are run, the file is
+  restored, and its SHA-256 is checked. Each list ran in a clean checkout of its own, never in the
+  worktree the code is committed from.
+- **Four lists,** one for each part of the work. Each was written and proven when its part was
+  committed, brought up to the code after the reviews' fixes, and then run whole at `68bfd36`, the
+  last commit that changes code or tests. The tables below are generated from those final runs and
+  from nothing else.
+- **In all:** 316 breaks, of which 316 failed at least one test; 281 new or changed
+  tests, of which 1 failed under no break.
+- **The lists, the script and every run's results are not in the repository.** They are kept with
+  the session's files, in the folder `KMP-fr10-summaries-handover` in the lead's Documents.
+- **Once, a break was left applied.** A usage limit cut two agents off in the middle of a run, and
+  each left one broken line in its own break checkout. Both were restored from git before anything
+  else ran there. No break was ever applied in the worktree the code is committed from.
+
+**The AI layer** (pytest), at `68bfd36`. Unbroken: 748 passed in 5.35s. 148 breaks, 148 failed at least one test. 167 new or changed tests, 0 failed under no break. The widest break fails 41 tests.
+
+| Break | File | What was broken | Tests that failed |
+|---|---|---|---|
+| A01 | `apps/core/constants.py` | The summary's character limit moves off D-139's 600 without a recorded decision. | 1: `test_the_bounds_are_the_contracts` |
+| A02 | `apps/core/constants.py` | The section ceiling moves off D-139's 8 without a recorded decision. | 3: `test_the_section_ceiling_is_the_contracts`; `test_a_text_past_the_ceiling_makes_the_maximum_sections_plus_one_calls_and_says_it_was_truncated` and 1 more |
+| A03 | `apps/ai/classification.py` | FLM's reply ceiling falls back to the pre-D-139 400 tokens, too few for a reply carrying a summary. | 1: `test_flm_sends_the_classification_prompt_and_parameters` |
+| A04 | `apps/ai/classification.py` | The declared schema gives the summary the key point's length limit, so it no longer says what the parser holds. | 2: `test_the_schema_declares_the_bounds_the_parser_holds[classification]`; `test_the_schema_declares_the_bounds_the_parser_holds[section]` |
+| A05 | `apps/ai/classification.py` | The section schema declares that a section's reply may carry other keys. | 1: `test_the_section_schema_has_exactly_the_two_keys` |
+| A06 | `apps/ai/classification.py` | CLASSIFICATION_SCHEMA requires key_points but no longer describes it. | 2: `test_the_schema_describes_what_the_parser_enforces`; `test_the_schema_declares_the_bounds_the_parser_holds[classification]` |
+| A07 | `apps/ai/classification.py` | A reply that is not a string crashes the parser instead of being refused. | 2: `test_the_section_parser_refuses_a_non_string_reply`; `test_a_non_string_reply_raises_rather_than_crashing` |
+| A08 | `apps/ai/classification.py` | The parser repairs a fourth thing: it closes an unbalanced object instead of refusing it. | 2: `test_the_section_parser_repairs_nothing_else[{"summary": "A summary."-unbalanced]`; `test_a_non_conforming_reply_raises_schema_violation[not json {at all-unbalanced]` |
+| A09 | `apps/ai/classification.py` | The trailing-comma repair is dropped from both parsers. | 7: `test_the_section_parser_makes_the_same_three_repairs[trailing commas]`; `test_a_repeated_key_is_refused_after_the_trailing_comma_repair_too[classification]` and 5 more |
+| A10 | `apps/ai/classification.py` | The parsers' first decode is plain json.loads, so a NUL or a lone surrogate in a summary or key point is accepted, and a repeated key is read as its last value. | 28: `test_a_summary_or_key_point_postgresql_cannot_store_is_refused[a NUL in the summary-classification]`; `test_a_summary_or_key_point_postgresql_cannot_store_is_refused[a NUL in the summary-section]` and 26 more |
+| A11 | `apps/ai/classification.py` | A reply missing a required key is not refused, so the parser fails later with a KeyError. | 10: `test_a_missing_summary_is_refused[classification]`; `test_a_missing_summary_is_refused[section]` and 8 more |
+| A12 | `apps/ai/classification.py` | The missing-key list also takes in the reply's own extra keys, so a violation quotes a key the reply chose. | 5: `test_a_section_reply_carrying_a_classification_is_refused`; `test_a_non_conforming_reply_raises_schema_violation[{"doc_type": {"value": "Policy", "confidence": 0.9}, "department": {"value": "Finance", "confidence": 0.7}, "tags": [{"dimension": "Process", "value": "onboarding", "confidence": 0.8}], "summary": "Staff book business travel through the approved agent.", "key_points": ["Meals are reimbursed at the daily rate."], "reason": "It reads like a policy."}-unexpected top-level key]` and 3 more |
+| A13 | `apps/ai/classification.py` | A reply with unexpected top-level keys is accepted, so a classification passes as a section's summary. | 5: `test_a_section_reply_carrying_a_classification_is_refused`; `test_a_non_conforming_reply_raises_schema_violation[{"doc_type": {"value": "Policy", "confidence": 0.9}, "department": {"value": "Finance", "confidence": 0.7}, "tags": [{"dimension": "Process", "value": "onboarding", "confidence": 0.8}], "summary": "Staff book business travel through the approved agent.", "key_points": ["Meals are reimbursed at the daily rate."], "reason": "It reads like a policy."}-unexpected top-level key]` and 3 more |
+| A14 | `apps/ai/classification.py` | A summary that is empty after stripping is accepted. | 6: `test_a_summary_empty_after_stripping_is_refused[empty-classification]`; `test_a_summary_empty_after_stripping_is_refused[empty-section]` and 4 more |
+| A15 | `apps/ai/classification.py` | A summary that is a number, a boolean, an array or an object is turned into a string instead of refused. | 8: `test_a_summary_that_is_not_a_string_is_refused[number-classification]`; `test_a_summary_that_is_not_a_string_is_refused[number-section]` and 6 more |
+| A16 | `apps/ai/classification.py` | The summary's length is counted before surrounding whitespace is stripped. | 2: `test_a_summarys_length_is_counted_after_stripping[classification]`; `test_a_summarys_length_is_counted_after_stripping[section]` |
+| A17 | `apps/ai/classification.py` | A summary of exactly MAXIMUM_SUMMARY_CHARACTERS is refused (off by one). | 4: `test_a_summary_exactly_at_the_maximum_is_accepted_and_one_character_more_is_refused[classification]`; `test_a_summary_exactly_at_the_maximum_is_accepted_and_one_character_more_is_refused[section]` and 2 more |
+| A18 | `apps/ai/classification.py` | An over-long summary is cut to fit instead of refusing the reply. | 9: `test_a_summary_exactly_at_the_maximum_is_accepted_and_one_character_more_is_refused[classification]`; `test_a_summary_exactly_at_the_maximum_is_accepted_and_one_character_more_is_refused[section]` and 7 more |
+| A19 | `apps/ai/classification.py` | The summary is neither stripped nor measured stripped. | 4: `test_surrounding_whitespace_is_stripped_and_the_text_inside_is_kept[classification]`; `test_surrounding_whitespace_is_stripped_and_the_text_inside_is_kept[section]` and 2 more |
+| A20 | `apps/ai/classification.py` | The over-long-summary violation quotes the start of the summary, which reaches the attempts log. | 5: `test_a_summary_exactly_at_the_maximum_is_accepted_and_one_character_more_is_refused[classification]`; `test_a_summary_exactly_at_the_maximum_is_accepted_and_one_character_more_is_refused[section]` and 3 more |
+| A21 | `apps/ai/classification.py` | A bare string in key_points is wrapped into an array of one instead of refused. | 2: `test_key_points_that_are_not_an_array_are_refused[a bare string-classification]`; `test_key_points_that_are_not_an_array_are_refused[a bare string-section]` |
+| A22 | `apps/ai/classification.py` | An empty key_points array is accepted. | 3: `test_an_empty_key_points_array_is_refused[classification]`; `test_an_empty_key_points_array_is_refused[section]` and 1 more |
+| A23 | `apps/ai/classification.py` | Exactly MAXIMUM_KEY_POINTS key points are refused (off by one). | 2: `test_exactly_the_maximum_number_of_key_points_is_accepted_and_one_more_is_refused[classification]`; `test_exactly_the_maximum_number_of_key_points_is_accepted_and_one_more_is_refused[section]` |
+| A24 | `apps/ai/classification.py` | Key points past the maximum are dropped instead of refusing the reply. | 6: `test_exactly_the_maximum_number_of_key_points_is_accepted_and_one_more_is_refused[classification]`; `test_exactly_the_maximum_number_of_key_points_is_accepted_and_one_more_is_refused[section]` and 4 more |
+| A25 | `apps/ai/classification.py` | An empty or non-string key point is dropped instead of refusing the reply. | 16: `test_a_key_point_that_is_not_a_string_is_refused[number-classification]`; `test_a_key_point_that_is_not_a_string_is_refused[number-section]` and 14 more |
+| A26 | `apps/ai/classification.py` | A key point that is a number, a boolean, an array or an object is turned into a string instead of refused. | 8: `test_a_key_point_that_is_not_a_string_is_refused[number-classification]`; `test_a_key_point_that_is_not_a_string_is_refused[number-section]` and 6 more |
+| A27 | `apps/ai/classification.py` | A key point of exactly MAXIMUM_KEY_POINT_CHARACTERS is refused (off by one). | 2: `test_a_key_point_exactly_at_the_maximum_is_accepted_and_one_character_more_is_refused[classification]`; `test_a_key_point_exactly_at_the_maximum_is_accepted_and_one_character_more_is_refused[section]` |
+| A28 | `apps/ai/classification.py` | A key point is neither stripped nor measured stripped. | 4: `test_surrounding_whitespace_is_stripped_and_the_text_inside_is_kept[classification]`; `test_surrounding_whitespace_is_stripped_and_the_text_inside_is_kept[section]` and 2 more |
+| A29 | `apps/ai/classification.py` | Two key points that say the same thing are merged into one, a judgement about content. | 2: `test_two_key_points_that_say_the_same_thing_are_both_kept[classification]`; `test_two_key_points_that_say_the_same_thing_are_both_kept[section]` |
+| A30 | `apps/ai/classification.py` | The key points come back in the reverse of the reply's order. | 27: `test_a_conforming_summary_and_key_points_parse[classification]`; `test_a_conforming_summary_and_key_points_parse[section]` and 25 more |
+| A31 | `apps/ai/classification.py` | The classification parser returns the key points as a list, not the tuple the frozen dataclass holds. | 20: `test_a_conforming_summary_and_key_points_parse[classification]`; `test_one_key_point_is_enough[classification]` and 18 more |
+| A32 | `apps/ai/classification.py` | The section parser stops holding the summary to its bounds, so the two parsers drift apart. | 13: `test_a_summary_exactly_at_the_maximum_is_accepted_and_one_character_more_is_refused[section]`; `test_an_over_long_summary_is_refused_whole_and_never_cut_to_fit[section]` and 11 more |
+| A33 | `apps/ai/schema.py` | The decode step treats every character outside the BMP as a surrogate, so an escaped surrogate pair (an emoji) is refused. | 2: `test_a_paired_surrogate_escape_is_one_character_and_is_accepted[classification]`; `test_a_paired_surrogate_escape_is_one_character_and_is_accepted[section]` |
+| A34 | `apps/ai/classification.py` | A text of exactly CLASSIFICATION_INPUT_TOKENS tokens is reported cut (input_truncated), though nothing of it was left out (off by one). | 7: `test_on_ordinary_text_more_than_one_section_is_exactly_what_input_truncated_means[1500]`; `test_a_text_within_the_cap_makes_exactly_one_call[exactly the cap]` and 5 more |
+| A35 | `apps/ai/classification.py` | The sections split on single spaces, not on whitespace as the input cut does. | 4: `test_an_empty_text_has_no_sections_and_nothing_left_over[empty]`; `test_an_empty_text_has_no_sections_and_nothing_left_over[spaces]` and 2 more |
+| A36 | `apps/ai/classification.py` | Sections overlap by 50 tokens, like the chunker's overlap. | 31: `test_a_text_shorter_than_one_section_is_one_section`; `test_a_text_of_exactly_one_section_is_one_section` and 29 more |
+| A37 | `apps/ai/classification.py` | Each section holds one token fewer than a section's size, so a token is lost at every boundary. | 13: `test_a_text_of_exactly_one_section_is_one_section`; `test_one_section_plus_one_token_is_two_sections_and_the_second_holds_the_one_token` and 11 more |
+| A38 | `apps/ai/classification.py` | A text of exactly the ceiling is reported truncated (off by one). | 3: `test_exactly_the_ceiling_is_every_section_full_and_nothing_left_over`; `test_a_text_of_exactly_the_ceiling_is_summarised_whole_and_not_reported_truncated` and 1 more |
+| A39 | `apps/ai/classification.py` | The section ceiling is not applied, so a long document is sent every section it has. | 7: `test_one_token_past_the_ceiling_is_left_over_and_is_in_no_section`; `test_a_text_many_times_the_ceiling_still_has_only_the_maximum_sections` and 5 more |
+| A40 | `apps/ai/classification.py` | The section prompt's rule 5 no longer carries the grounding sentence. | 1: `test_the_grounding_sentence_is_in_the_section_prompt` |
+| A41 | `apps/ai/classification.py` | The section prompt states a summary limit that is not the one the parser holds. | 1: `test_the_section_rules_say_json_only_two_keys_and_the_bounds_the_parser_holds` |
+| A42 | `apps/ai/classification.py` | The section prompt no longer tells the model not to finish a cut-off sentence or guess the rest. | 1: `test_the_section_rules_say_a_cut_sentence_is_not_to_be_finished` |
+| A43 | `apps/ai/classification.py` | The section prompt's rule 6 is misnumbered 5, so the prompt has no rule 6. | 1: `test_all_six_section_rules_survive_an_edit[6.]` |
+| A44 | `apps/ai/classification.py` | The section prompt's worked example is built in the classification shape, with the scheme's lists. | 2: `test_the_section_prompt_classifies_nothing`; `test_the_section_example_is_in_the_same_shape_as_a_real_section_turn` |
+| A45 | `apps/ai/classification.py` | The section prompt's worked example ends with the classification example's reply. | 2: `test_the_section_prompt_classifies_nothing`; `test_the_section_prompt_has_one_worked_example_and_ends_with_its_reply` |
+| A46 | `apps/ai/classification.py` | The section example's block swaps its section number and count, so it no longer matches a real section turn. | 1: `test_the_section_example_is_in_the_same_shape_as_a_real_section_turn` |
+| A47 | `apps/ai/classification.py` | The section example carries a generation-style passage label, an identifier the model could be led to cite. | 2: `test_the_section_example_is_in_the_same_shape_as_a_real_section_turn`; `test_the_section_prompt_carries_no_identifier_of_any_shape` |
+| A48 | `apps/ai/classification.py` | A requirement number leaks from a comment into the section prompt. | 1: `test_no_decision_number_and_no_comment_leaked_into_either_prompt` |
+| A49 | `apps/ai/classification.py` | A section's turn carries the title unstripped. | 1: `test_a_sections_user_turn_is_the_title_its_number_its_text_and_the_instruction` |
+| A50 | `apps/ai/classification.py` | A section's turn no longer cuts its own text, so a caller can send more than one section's worth. | 2: `test_a_sections_user_turn_cuts_the_section_itself`; `test_the_prompt_builders_hold_an_uncut_text_to_the_character_cap_themselves` |
+| A51 | `apps/ai/classification.py` | A section's turn carries the worked example's title instead of the document's. | 8: `test_a_sections_user_turn_is_the_title_its_number_its_text_and_the_instruction`; `test_a_sections_user_turn_carries_no_scheme_and_nothing_from_the_example` and 6 more |
+| A52 | `apps/ai/classification.py` | The prompt's measured header is reworded for D-139. | 1: `test_the_header_and_rule_1_are_word_for_word_what_they_were_before_d139` |
+| A53 | `apps/ai/classification.py` | Rule 2 still counts three keys, the count from before D-139. | 1: `test_the_rules_say_json_only_the_fixed_type_the_listed_department_and_the_cap` |
+| A54 | `apps/ai/classification.py` | A summary rule is written into rule 2, among the classification rules, instead of after rule 8. | 3: `test_the_rules_say_json_only_the_fixed_type_the_listed_department_and_the_cap`; `test_rules_3_to_8_are_word_for_word_what_they_were_before_d139` and 1 more |
+| A55 | `apps/ai/classification.py` | A word of measured rule 8 changes. | 1: `test_rules_3_to_8_are_word_for_word_what_they_were_before_d139` |
+| A56 | `apps/ai/classification.py` | The example's measured declaration is reworded. | 1: `test_the_examples_declaration_is_word_for_word_what_it_was_before_d139` |
+| A57 | `apps/ai/classification.py` | An unrecorded twelfth rule is added to the classification prompt. | 11: `test_all_eleven_rules_survive_an_edit[1.]`; `test_all_eleven_rules_survive_an_edit[2.]` and 9 more |
+| A58 | `apps/ai/classification.py` | The grounding sentence loses the word that constrains the summary to the document. | 1: `test_the_grounding_sentence_is_in_the_classification_prompt` |
+| A59 | `apps/ai/classification.py` | The classification prompt states a key-point count the parser does not hold. | 1: `test_the_rules_state_the_bounds_the_parser_holds` |
+| A60 | `apps/ai/classification.py` | The worked example's reply puts the summary before the classification, so a model writes it first. | 1: `test_the_reply_gives_the_classification_before_the_summary` |
+| A61 | `apps/ai/classification.py` | The worked example's reply gives the summary as an array, which the schema it teaches refuses. | 2: `test_the_example_reply_conforms_to_the_schema_it_teaches`; `test_both_prompts_demonstrate_the_same_summary_of_the_same_text` |
+| A62 | `apps/ai/classification.py` | The worked example shows key points at the cap, which every reply would then reach for. | 1: `test_the_example_shows_fewer_key_points_than_the_cap_and_a_summary_well_under_its_limit` |
+| A63 | `apps/ai/classification.py` | A worked-example key point states a fact its text does not hold. | 1: `test_the_examples_summary_and_key_points_say_nothing_its_text_does_not` |
+| A64 | `apps/ai/classification.py` | The section example's reply misspells a key, so it does not conform to the schema it teaches. | 2: `test_the_section_examples_reply_conforms_to_the_schema_it_teaches`; `test_both_prompts_demonstrate_the_same_summary_of_the_same_text` |
+| A65 | `apps/ai/classification.py` | The worked example's summary uses an organisational word (staff) its lighthouse text does not hold. | 2: `test_the_examples_summary_and_key_points_say_nothing_its_text_does_not`; `test_the_example_subject_matter_cannot_collide_with_an_organisational_corpus` |
+| A66 | `apps/ai/classification.py` | The user turn lists the worked example's scheme instead of the caller's. | 14: `test_every_scheme_value_appears_in_the_user_turn`; `test_a_dimension_with_no_values_says_so` and 12 more |
+| A67 | `apps/ai/classification.py` | A short document's turn gains a notice and an instruction about sections it does not have; through classify_and_summarise, which passes a count of one, they are the truncated pair. | 10: `test_a_text_within_the_cap_gets_the_user_turn_it_got_before_d139`; `test_the_example_is_in_the_same_shape_as_a_real_user_turn` and 8 more |
+| A68 | `apps/ai/classification.py` | The final turn's section summaries run together with no blank line between them. | 8: `test_the_final_turn_is_the_ordinary_turn_then_the_section_summaries_then_the_instructions`; `test_past_the_ceiling_the_final_turn_counts_the_real_sections_and_says_the_rest_was_not_read` and 6 more |
+| A69 | `apps/ai/classification.py` | The final turn's notice follows the text with one line break, so the turn no longer begins as a short document's does. | 9: `test_the_final_turn_is_the_ordinary_turn_then_the_section_summaries_then_the_instructions`; `test_the_final_turn_begins_exactly_as_a_short_documents_turn_does` and 7 more |
+| A70 | `apps/ai/classification.py` | The final turn's notice tells the model the opening is the whole document. | 7: `test_the_final_turn_says_where_the_classification_and_the_summary_each_come_from`; `test_within_the_ceiling_the_notice_and_the_instruction_are_word_for_word_what_was_measured` and 5 more |
+| A71 | `apps/ai/classification.py` | The final turn stops cutting its text to the opening when section summaries are given. | 7: `test_the_final_turn_still_cuts_its_text_to_the_opening`; `test_a_text_of_three_sections_makes_exactly_four_calls` and 5 more |
+| A72 | `apps/ai/classification.py` | chat_messages puts the user turn in the system message and the system prompt in the user message. | 9: `test_chat_messages_is_system_then_user`; `test_the_messages_are_the_system_prompt_and_one_user_turn` and 7 more |
+| A73 | `apps/ai/classification.py` | The sections are sent last first. | 17: `test_a_text_of_three_sections_makes_exactly_four_calls`; `test_one_token_over_the_cap_is_two_sections_and_three_calls` and 15 more |
+| A74 | `apps/ai/classification.py` | The final request is sent without the section summaries, so the summary comes from the opening alone. | 15: `test_a_text_of_three_sections_makes_exactly_four_calls`; `test_a_text_past_the_ceiling_makes_the_maximum_sections_plus_one_calls_and_says_it_was_truncated` and 13 more |
+| A75 | `apps/ai/classification.py` | The flow records input_truncated from the section ceiling's flag, so a sectioned document says it was read whole. | 9: `test_a_text_of_three_sections_makes_exactly_four_calls`; `test_one_token_over_the_cap_is_two_sections_and_three_calls` and 7 more |
+| A76 | `apps/ai/classification.py` | The classification loop writes the input-cut flag into summary_truncated instead of the caller's own flag. | 12: `test_a_conforming_reply_is_returned_after_exactly_one_call`; `test_summary_truncated_is_the_callers_flag_written_on_and_never_parsed[True]` and 10 more |
+| A77 | `apps/ai/classification.py` | A long document's key points are stitched together from the sections' in code instead of taken from the final reply. | 4: `test_a_text_of_three_sections_makes_exactly_four_calls`; `test_the_final_reply_is_the_result_and_no_section_summary_is_returned` and 2 more |
+| A78 | `apps/ai/classification.py` | A section that uses up its attempts is replaced by a placeholder and the operation carries on to a partial result. | 11: `test_a_section_whose_calls_all_fail_raises_after_exactly_three_calls_and_no_final_request_is_sent`; `test_a_later_section_that_fails_ends_the_operation_there` and 9 more |
+| A79 | `apps/ai/classification.py` | Every request gets two attempts, not MAXIMUM_CLASSIFY_ATTEMPTS (1 initial call + 2 retries). | 41: `test_a_reply_whose_summary_breaks_its_bounds_is_a_failed_attempt_and_is_retried[no summary]`; `test_a_reply_whose_summary_breaks_its_bounds_is_a_failed_attempt_and_is_retried[an over-long summary]` and 39 more |
+| A80 | `apps/ai/classification.py` | A refused request is retried to the last attempt before the refusal is raised. | 13: `test_a_refusal_from_a_section_is_re_raised_after_one_call`; `test_a_refusal_from_a_later_section_stops_there_too` and 11 more |
+| A81 | `apps/ai/classification.py` | Any exception from a call, a bug included, is treated as a failed attempt and retried. | 3: `test_any_other_exception_from_a_section_propagates_after_one_call`; `test_any_other_exception_propagates_as_itself_after_one_call[undecided]` and 1 more |
+| A82 | `apps/ai/classification.py` | The final failure no longer says which section used up its attempts. | 10: `test_a_section_whose_calls_all_fail_raises_after_exactly_three_calls_and_no_final_request_is_sent`; `test_a_later_section_that_fails_ends_the_operation_there` and 8 more |
+| A83 | `apps/ai/classification.py` | A classification request's final failure no longer names CLASSIFICATION_SCHEMA. | 5: `test_a_final_request_that_fails_after_every_section_succeeded_returns_nothing`; `test_a_within_cap_request_that_fails_makes_exactly_three_calls` and 3 more |
+| A84 | `apps/ai/classification.py` | A section's reply is parsed naively with json.loads, without the shared repairs, bounds or SchemaViolation. | 13: `test_a_malformed_section_reply_is_retried`; `test_three_malformed_section_replies_are_an_outage_after_exactly_three_calls[prose]` and 11 more |
+| A85 | `apps/ai/classification.py` | The section loop gains an on_attempt observer, a second route from a raw reply into apps/. | 1: `test_the_loop_has_no_on_attempt_observer` |
+| A86 | `apps/ai/attempt_log.py` | Section attempts are logged under a step name other than the one documented. | 3: `test_section_attempts_are_logged_under_their_own_step_and_the_final_request_under_classification`; `test_logging_changes_no_call_count` and 1 more |
+| A87 | `apps/ai/classification.py` | A section's failed-attempt line no longer names the section. | 3: `test_section_attempts_are_logged_under_their_own_step_and_the_final_request_under_classification`; `test_no_line_quotes_a_section_summary_or_the_documents` and 1 more |
+| A88 | `apps/ai/classification.py` | A schema violation's log line quotes the start of the raw reply. | 4: `test_section_attempts_are_logged_under_their_own_step_and_the_final_request_under_classification`; `test_no_line_quotes_a_section_summary_or_the_documents` and 2 more |
+| A89 | `apps/ai/attempt_log.py` | A section's parsed line swaps the section's number and the count of sections. | 3: `test_past_the_ceiling_every_label_counts_the_documents_real_sections`; `test_section_attempts_are_logged_under_their_own_step_and_the_final_request_under_classification` and 1 more |
+| A90 | `apps/ai/classification.py` | The section loop does not pass on its request's max_tokens, so a section's attempt lines report it unreported. | 2: `test_section_attempts_are_logged_under_their_own_step_and_the_final_request_under_classification`; `test_flm_section_attempts_reach_the_attempt_log` |
+| A91 | `apps/ai/flm.py` | FLM records the embedding model, not the chat model that answered. | 2: `test_flm_classifies_through_the_chat_endpoint_and_names_its_model`; `test_flm_summarises_a_long_document_in_sections_then_classifies_it_in_one_final_request` |
+| A92 | `apps/ai/flm.py` | FLM sends generation's reply ceiling on classification and section requests. | 4: `test_flm_sends_the_classification_prompt_and_parameters`; `test_flm_summarises_a_long_document_in_sections_then_classifies_it_in_one_final_request` and 2 more |
+| A93 | `apps/ai/anthropic.py` | Claude is given FLM's 1,200-token ceiling, which its thinking can use up before the JSON. | 2: `test_claude_classifies_with_the_shared_prompt_and_the_classification_parameters`; `test_claude_summarises_a_long_document_in_sections_then_classifies_it_in_one_final_request` |
+| A94 | `apps/ai/anthropic.py` | Claude is sent the user turn as its system prompt and the system prompt as its message. | 7: `test_claude_classifies_with_the_shared_prompt_and_the_classification_parameters`; `test_claude_and_flm_send_the_same_prompt_for_the_same_document` and 5 more |
+| A95 | `apps/ai/anthropic.py` | Claude's failure no longer names the model that could not answer. | 2: `test_claude_gives_up_on_a_section_after_exactly_three_calls_and_sends_no_final_request`; `test_claude_raises_provider_unavailable_after_exactly_three_malformed_replies` |
+| A96 | `apps/ai/base.py` | AIService gains a summarise_document operation, which D-139 decision 2 rules out. | 4: `test_d139_added_no_operation_and_no_parameter`; `test_every_implementation_has_every_operation_the_protocol_lists[FLMService]` and 2 more |
+| A97 | `apps/ai/base.py` | DocumentClassification's new fields are declared in another order. | 1: `test_document_classification_gained_three_fields_with_defaults_after_the_five_it_had` |
+| A98 | `apps/ai/base.py` | A DocumentClassification built without a summary carries placeholder text instead of an empty summary. | 2: `test_document_classification_gained_three_fields_with_defaults_after_the_five_it_had`; `test_an_override_is_returned_as_given_with_no_summary_added` |
+| A99 | `apps/ai/testing.py` | The stub's summary no longer names the title, so two documents' summaries are the same. | 2: `test_the_default_carries_a_summary_naming_the_title_and_the_two_stub_key_points`; `test_the_stubs_summary_tells_two_documents_apart` |
+| A100 | `apps/ai/testing.py` | The stub returns its key points as a list, which no provider returns. | 2: `test_the_default_carries_a_summary_naming_the_title_and_the_two_stub_key_points`; `test_the_stubs_summary_is_one_a_provider_could_return` |
+| A101 | `apps/ai/testing.py` | The stub reports the input-cut flag as summary_truncated. | 1: `test_summary_truncated_is_the_real_flag` |
+| A102 | `apps/ai/testing.py` | The stub records a call per section of a long text, so a test counting calls counts requests, not operations. | 1: `test_the_stub_is_one_call_however_long_the_text` |
+| A103 | `apps/ai/classification.py` | The worked example's summary joins the text's statements by a cause the text never states ("because"), as it did before the review. | 1: `test_the_examples_summary_and_key_points_say_nothing_its_text_does_not` |
+| A104 | `apps/ai/classification.py` | The module docstring says again that a person confirms a value before it is applied, the bound the review found untrue. | 1: `test_a_body_carrying_the_prompts_own_lines_reaches_the_prompt_unchanged` |
+| A105 | `apps/ai/classification.py` | build_classification_user_prompt's docstring says again that a person confirms every value. | 1: `test_a_body_carrying_the_prompts_own_lines_reaches_the_prompt_unchanged` |
+| A106 | `apps/ai/classification.py` | The module docstring no longer says that since D-139 the text that can steer the type, the department and the tags reaches past the opening, to 12,000 tokens. | 1: `test_a_body_carrying_the_prompts_own_lines_reaches_the_prompt_unchanged` |
+| A107 | `apps/ai/flm.py` | FLM's classification label loses its endpoint, so an outage no longer says which server failed. | 2: `test_flm_gives_up_on_a_section_after_exactly_three_calls_and_sends_no_final_request`; `test_flm_raises_provider_unavailable_after_exactly_three_malformed_replies` |
+| A108 | `apps/ai/classification.py` | The count of sections is rounded down, so a text whose last section is not full is numbered a section short: "Section 2 of 1" within the ceiling, and "of 8" for eight sections and a token past it, which tells the final request it has the whole document. | 26: `test_a_text_of_three_sections_makes_exactly_four_calls`; `test_one_token_over_the_cap_is_two_sections_and_three_calls` and 24 more |
+| A109 | `apps/ai/classification.py` | Every label counts only the sections sent, so past the ceiling the last reads "Section 8 of 8" and the final request is told it has the whole document, as before the review. | 2: `test_a_text_past_the_ceiling_makes_the_maximum_sections_plus_one_calls_and_says_it_was_truncated`; `test_past_the_ceiling_every_label_counts_the_documents_real_sections` |
+| A110 | `apps/ai/classification.py` | Past the ceiling each section's turn counts only the sections sent, so the eighth tells the model it is the last. | 2: `test_a_text_past_the_ceiling_makes_the_maximum_sections_plus_one_calls_and_says_it_was_truncated`; `test_past_the_ceiling_every_label_counts_the_documents_real_sections` |
+| A111 | `apps/ai/classification.py` | Past the ceiling a section's attempt lines and failure count only the sections sent. | 1: `test_past_the_ceiling_every_label_counts_the_documents_real_sections` |
+| A112 | `apps/ai/classification.py` | The final request is not given the real count, so past the ceiling it reads "Section 8 of 8" and says the summaries stand for the whole text. | 2: `test_a_text_past_the_ceiling_makes_the_maximum_sections_plus_one_calls_and_says_it_was_truncated`; `test_past_the_ceiling_every_label_counts_the_documents_real_sections` |
+| A113 | `apps/ai/classification.py` | Past the ceiling the final turn says the rest was not read but numbers its summaries "of 8", the count of summaries, not of sections. | 3: `test_past_the_ceiling_the_final_turn_counts_the_real_sections_and_says_the_rest_was_not_read`; `test_a_text_past_the_ceiling_makes_the_maximum_sections_plus_one_calls_and_says_it_was_truncated` and 1 more |
+| A114 | `apps/ai/classification.py` | A text within the ceiling is told only part of it was read, so the requests Objective 05 was measured on change (off by one). | 7: `test_the_final_turn_is_the_ordinary_turn_then_the_section_summaries_then_the_instructions`; `test_within_the_ceiling_every_request_is_byte_for_byte_what_it_was[two sections]` and 5 more |
+| A115 | `apps/ai/classification.py` | Any request given a section count is treated as past the ceiling, so every long document within it is told the rest was not read. | 13: `test_a_section_count_equal_to_the_summaries_changes_nothing`; `test_a_text_of_three_sections_makes_exactly_four_calls` and 11 more |
+| A116 | `apps/ai/classification.py` | The comparison is inverted, so a text past the ceiling is never told the rest was not read. | 3: `test_past_the_ceiling_the_final_turn_counts_the_real_sections_and_says_the_rest_was_not_read`; `test_a_text_past_the_ceiling_makes_the_maximum_sections_plus_one_calls_and_says_it_was_truncated` and 1 more |
+| A117 | `apps/ai/classification.py` | Past the ceiling the final instruction still asks for the document "as a whole", against the notice before it. | 2: `test_past_the_ceiling_the_final_turn_counts_the_real_sections_and_says_the_rest_was_not_read`; `test_past_the_ceiling_every_label_counts_the_documents_real_sections` |
+| A118 | `apps/ai/classification.py` | The truncated notice no longer tells the model never to present the part it read as the whole document. | 1: `test_past_the_ceiling_the_final_turn_counts_the_real_sections_and_says_the_rest_was_not_read` |
+| A119 | `apps/ai/classification.py` | Past the ceiling the instruction asks for the document as a whole, word for word the instruction for a text within it. | 2: `test_past_the_ceiling_the_final_turn_counts_the_real_sections_and_says_the_rest_was_not_read`; `test_past_the_ceiling_every_label_counts_the_documents_real_sections` |
+| A120 | `apps/ai/classification.py` | The instruction a text within the ceiling is sent loses "for the document as a whole", so the requests Objective 05 was measured on change. | 7: `test_the_final_turn_says_where_the_classification_and_the_summary_each_come_from`; `test_within_the_ceiling_the_notice_and_the_instruction_are_word_for_word_what_was_measured` and 5 more |
+| A121 | `apps/ai/classification.py` | The first decode no longer refuses a repeated key, so a reply carrying an over-long summary and then a short one conforms. | 12: `test_an_object_that_repeats_a_key_is_a_violation_at_any_depth[a second doc_type]`; `test_an_object_that_repeats_a_key_is_a_violation_at_any_depth[doc_type's value twice]` and 10 more |
+| A122 | `apps/ai/classification.py` | The decode after the trailing-comma repair no longer refuses a repeated key. | 2: `test_a_repeated_key_is_refused_after_the_trailing_comma_repair_too[classification]`; `test_a_repeated_key_is_refused_after_the_trailing_comma_repair_too[section]` |
+| A123 | `apps/ai/schema.py` | A key repeated with the same value is accepted; only a repeat whose two values differ is refused. | 3: `test_a_key_repeated_with_the_same_value_is_refused_too[classification]`; `test_a_key_repeated_with_the_same_value_is_refused_too[section]` and 1 more |
+| A124 | `apps/ai/schema.py` | The repeated-key hook raises ValueError, which the decode step reports as a number too long to decode. | 14: `test_a_repeated_key_is_refused_and_never_read_as_its_last_value[an over-long summary, then a short one-classification]`; `test_a_repeated_key_is_refused_and_never_read_as_its_last_value[an over-long summary, then a short one-section]` and 12 more |
+| A125 | `apps/ai/schema.py` | The repeated-key violation quotes the object's keys, the model's words, into the attempts log. | 14: `test_a_repeated_key_is_refused_and_never_read_as_its_last_value[an over-long summary, then a short one-classification]`; `test_a_repeated_key_is_refused_and_never_read_as_its_last_value[an over-long summary, then a short one-section]` and 12 more |
+| A126 | `apps/ai/schema.py` | The hook is installed as object_hook, which sees each object after json has kept the last of two equal keys, so no repeat is refused. | 14: `test_a_repeated_key_is_refused_and_never_read_as_its_last_value[an over-long summary, then a short one-classification]`; `test_a_repeated_key_is_refused_and_never_read_as_its_last_value[an over-long summary, then a short one-section]` and 12 more |
+| A127 | `apps/ai/schema.py` | Refusing a repeated key becomes the default, so it reaches the statement and meeting-summary parsers, whose rates were measured without it. | 2: `test_a_repeated_key_is_read_as_json_s_last_value_here_as_it_always_was`; `test_a_repeated_key_is_read_as_json_s_last_value_here_as_it_always_was` |
+| A128 | `apps/ai/schema.py` | The statement parser refuses a repeated key, a change to the answer path's parser that was never measured. | 1: `test_a_repeated_key_is_read_as_json_s_last_value_here_as_it_always_was` |
+| A129 | `apps/ai/summarisation.py` | The meeting-summary parser refuses a repeated key, a change FR-16's parser was never measured under. | 1: `test_a_repeated_key_is_read_as_json_s_last_value_here_as_it_always_was` |
+| A130 | `apps/ai/classification.py` | A text that joins to exactly CLASSIFICATION_INPUT_CHARACTERS misses the fast path, so it is sent whole but reported cut (off by one at the fast path). | 6: `test_a_token_exactly_at_the_character_cap_is_kept_whole_and_not_cut`; `test_tokens_that_join_to_exactly_the_cap_are_kept_whole_and_not_cut` and 4 more |
+| A131 | `apps/ai/classification.py` | The fast path counts the tokens' characters but not the spaces between them, so a text whose words fit but whose joined text does not is sent whole, over the cap, and not reported cut. | 1: `test_a_token_after_an_opening_of_exactly_the_cap_is_dropped_and_the_opening_kept_whole` |
+| A132 | `apps/ai/classification.py` | In the loop a token that brings the text to exactly the cap is dropped, so an opening that would fill the cap exactly ends a token short (off by one in the loop). | 1: `test_a_token_after_an_opening_of_exactly_the_cap_is_dropped_and_the_opening_kept_whole` |
+| A133 | `apps/ai/classification.py` | The loop counts a space before the first token, so where the kept tokens would join to exactly the cap the last of them is dropped (off by one). | 1: `test_a_token_after_an_opening_of_exactly_the_cap_is_dropped_and_the_opening_kept_whole` |
+| A134 | `apps/ai/classification.py` | A token that would take the text over the cap is skipped and the tokens after it still added, so the cut text is no longer the text's first tokens in order. | 2: `test_a_first_token_over_the_cap_is_cut_and_nothing_after_it_is_added`; `test_the_token_that_would_cross_the_cap_is_dropped_whole_with_every_token_after_it` |
+| A135 | `apps/ai/classification.py` | A first token longer than the cap is sent whole, so a text of one enormous word is not held to the cap at all. | 6: `test_a_token_one_character_over_the_cap_is_cut_at_the_cap_and_the_cut_is_reported`; `test_a_first_token_over_the_cap_is_cut_and_nothing_after_it_is_added` and 4 more |
+| A136 | `apps/ai/classification.py` | A first token longer than the cap is dropped, so a text of one enormous word is read not at all rather than in part. | 5: `test_a_token_one_character_over_the_cap_is_cut_at_the_cap_and_the_cut_is_reported`; `test_a_first_token_over_the_cap_is_cut_and_nothing_after_it_is_added` and 3 more |
+| A137 | `apps/ai/classification.py` | A first token longer than the cap is cut but the cut is not reported, so input_truncated and summary_truncated miss it. | 6: `test_a_token_one_character_over_the_cap_is_cut_at_the_cap_and_the_cut_is_reported`; `test_a_first_token_over_the_cap_is_cut_and_nothing_after_it_is_added` and 4 more |
+| A138 | `apps/ai/classification.py` | When the cap drops the tokens after whole ones the cut is not reported, so input_truncated and summary_truncated miss it. | 9: `test_a_token_after_an_opening_of_exactly_the_cap_is_dropped_and_the_opening_kept_whole`; `test_the_token_that_would_cross_the_cap_is_dropped_whole_with_every_token_after_it` and 7 more |
+| A139 | `apps/ai/classification.py` | The opening is joined without the shared cap, so the request that classifies a document carries its first 1,500 tokens however long they are, and section 1 is no longer the opening. | 13: `test_a_token_one_character_over_the_cap_is_cut_at_the_cap_and_the_cut_is_reported`; `test_a_first_token_over_the_cap_is_cut_and_nothing_after_it_is_added` and 11 more |
+| A140 | `apps/ai/classification.py` | input_truncated no longer reports an opening the character cap cut, so a text of one section the cap cut is recorded as read whole. | 10: `test_a_token_one_character_over_the_cap_is_cut_at_the_cap_and_the_cut_is_reported`; `test_a_first_token_over_the_cap_is_cut_and_nothing_after_it_is_added` and 8 more |
+| A141 | `apps/ai/classification.py` | Sections are joined without the shared cap, so a section the cap should cut is returned whole and not reported in summary_truncated, and section 1 is no longer the opening (the section prompt's own cut still holds each request to the cap). | 10: `test_a_section_the_character_cap_cuts_sets_summary_truncated_though_nothing_is_past_the_ceiling`; `test_the_tokens_the_cap_drops_from_a_section_are_in_no_section_and_the_next_starts_where_it_always_did` and 8 more |
+| A142 | `apps/ai/classification.py` | The tokens the cap drops from a section spill into the next, which starts where the cut one stopped, so every later section moves and a text of one section can become several. | 3: `test_the_tokens_the_cap_drops_from_a_section_are_in_no_section_and_the_next_starts_where_it_always_did`; `test_a_dense_text_makes_as_many_requests_as_before_and_none_carries_more_than_the_cap` and 1 more |
+| A143 | `apps/ai/classification.py` | summary_truncated no longer reports a section the character cap cut, so a summary of part of the text is presented as a summary of the whole. | 6: `test_a_section_the_character_cap_cuts_sets_summary_truncated_though_nothing_is_past_the_ceiling`; `test_the_tokens_the_cap_drops_from_a_section_are_in_no_section_and_the_next_starts_where_it_always_did` and 4 more |
+| A144 | `apps/ai/classification.py` | summary_truncated reports the cap only when it cut every section, so a document with one cut section among whole ones is presented as summarised whole. | 9: `test_an_empty_text_has_no_sections_and_nothing_left_over[empty]`; `test_an_empty_text_has_no_sections_and_nothing_left_over[spaces]` and 7 more |
+| A145 | `apps/ai/classification.py` | The flow branches on input_truncated rather than on the count of sections, so a text of one section the cap cut is sent a section request before its one request. | 1: `test_a_text_of_a_few_enormous_tokens_is_still_one_request_carrying_at_most_the_cap` |
+| A146 | `apps/ai/testing.py` | The stub reports input_truncated as "more than one section", which is the real flag only on text the character cap does not cut. | 1: `test_the_stubs_flags_are_the_real_functions_for_a_dense_text` |
+| A147 | `apps/ai/testing.py` | The stub decides summary_truncated by the section ceiling in tokens alone, so a text the character cap cut is reported as summarised whole. | 1: `test_the_stubs_flags_are_the_real_functions_for_a_dense_text` |
+| A148 | `apps/core/constants.py` | The character cap falls below the longest section of the project's own documents (9,780 characters), so it would cut D04, without a recorded decision. | 11: `test_exactly_the_ceiling_is_every_section_full_and_nothing_left_over`; `test_one_token_past_the_ceiling_is_left_over_and_is_in_no_section` and 9 more |
+
+**Storage, replies and the classify route** (pytest), at `68bfd36`. Unbroken: 287 passed in 95.04s (0:01:35). 45 breaks, 45 failed at least one test. 37 new or changed tests, 1 failed under no break. The widest break fails 13 tests.
+
+| Break | File | What was broken | Tests that failed |
+|---|---|---|---|
+| S01 | `apps/documents/models.py` | DocumentAnalysis.summary loses blank=True, so an analysis with no summary fails validation. | 1: `test_a_new_analysis_has_no_summary` |
+| S02 | `apps/documents/models.py` | summarised_at is stamped when the row is created: an analysis with no summary has a time, and the time a run gives is replaced. | 2: `test_a_new_analysis_has_no_summary`; `test_an_analysis_stores_a_summary_its_key_points_in_order_and_who_wrote_it_when` |
+| S03 | `apps/documents/models.py` | summary_model is copied from the classifier's model on every save, so the two can never differ (D-139 keeps them apart). | 1: `test_an_analysis_stores_a_summary_its_key_points_in_order_and_who_wrote_it_when` |
+| S04 | `apps/documents/models.py` | key_points defaults to one shared list instance instead of the list callable, so every row shares one list. | 1: `test_each_analysis_has_its_own_key_points_list_and_the_model_name_fits_a_name_column` |
+| S05 | `apps/documents/models.py` | summary_model is narrower than model, which holds the same kind of name. | 1: `test_each_analysis_has_its_own_key_points_list_and_the_model_name_fits_a_name_column` |
+| S06 | `apps/documents/migrations/0016_document_summary.py` | The migration leaves a database default on summary behind. | 1: `test_0016_forward_adds_the_columns_with_existing_rows_empty_and_no_database_default` |
+| S07 | `apps/documents/migrations/0016_document_summary.py` | The migration fills the key points of existing rows with an empty object, not an empty list. | 2: `test_0016_forward_adds_the_columns_with_existing_rows_empty_and_no_database_default`; `test_0016_backwards_removes_the_columns_and_keeps_the_rest_of_the_row` |
+| S08 | `apps/documents/migrations/0016_document_summary.py` | summarised_at is added by hand-written SQL whose reverse does nothing, so migrating back leaves the column. | 3: `test_0016_only_adds_fields_to_document_analysis`; `test_0016_forward_adds_the_columns_with_existing_rows_empty_and_no_database_default` and 1 more |
+| S09 | `apps/documents/migrations/0016_document_summary.py` | 0016 gains a dependency it does not need, which moves it in the migration plan. | 2: `test_0016_only_adds_fields_to_document_analysis`; `test_migrations_apply_in_schema_v1_section_5_order` |
+| S10 | `apps/documents/migrations/0016_document_summary.py` | The migration adds summarized_at, not the model's summarised_at, so the table's columns are not the schema's. | 4: `test_table_has_exactly_the_section_1_columns[document_analysis]`; `test_0016_only_adds_fields_to_document_analysis` and 2 more |
+| S11 | `apps/api/serializers.py` | The classification object's summary_truncated is read from the classifier's input_truncated. | 4: `test_the_detail_carries_the_stored_summary_its_key_points_and_whether_it_is_partial[employee]`; `test_the_detail_carries_the_stored_summary_its_key_points_and_whether_it_is_partial[administrator]` and 2 more |
+| S12 | `apps/api/serializers.py` | The classification object has no key_points. | 13: `test_classify_returns_the_classification_and_the_tag_details[employee]`; `test_classify_returns_the_classification_and_the_tag_details[administrator]` and 11 more |
+| S13 | `apps/api/serializers.py` | The classification object renders key_points as one string, not a list of strings. | 5: `test_the_detail_carries_the_stored_summary_its_key_points_and_whether_it_is_partial[employee]`; `test_the_detail_carries_the_stored_summary_its_key_points_and_whether_it_is_partial[administrator]` and 3 more |
+| S14 | `apps/api/serializers.py` | The classification object's model is read from summary_model, so the summary's model reaches the body. | 2: `test_the_detail_carries_the_stored_summary_its_key_points_and_whether_it_is_partial[employee]`; `test_the_detail_carries_the_stored_summary_its_key_points_and_whether_it_is_partial[administrator]` |
+| S15 | `apps/api/serializers.py` | The classification object exposes summarised_at, which D-139 keeps out of every reply. | 12: `test_classify_returns_the_classification_and_the_tag_details[employee]`; `test_classify_returns_the_classification_and_the_tag_details[administrator]` and 10 more |
+| S16 | `apps/api/serializers.py` | The document object that the repository list, browse and the dashboard return carries the summary. | 6: `test_no_list_of_documents_carries_the_summary[employee-/api/documents]`; `test_no_list_of_documents_carries_the_summary[employee-/api/documents/browse]` and 4 more |
+| S17 | `apps/api/views.py` | The document detail is looked up by identifier without the role scope, so an Employee reads an Administrator-only document and its summary. | 1: `test_an_employee_naming_an_administrator_only_document_gets_404_and_none_of_its_summary` |
+| S18 | `apps/retrieval/search.py` | Keyword search also matches a document on its summary text. | 4: `test_a_term_found_only_in_a_summary_finds_nothing_and_is_recorded_as_any_empty_search_is[employee]`; `test_a_term_found_only_in_a_summary_finds_nothing_and_is_recorded_as_any_empty_search_is[administrator]` and 2 more |
+| S19 | `apps/retrieval/search.py` | The document query that carries the summary is scoped to the Administrator's role whoever asks. | 3: `test_nothing_of_a_restricted_documents_summary_reaches_an_employee`; `test_a_title_match_is_scoped_exactly_as_a_body_match_is` and 1 more |
+| S20 | `apps/retrieval/search.py` | Each result's summary is read by a query of its own, by identifier, outside the scoped document query. | 1: `test_two_document_results_cost_no_more_queries_than_one_and_the_summary_rides_the_scoped_query` |
+| S21 | `apps/retrieval/search.py` | A search result's summary_truncated is read from the classifier's input_truncated. | 8: `test_a_document_result_carries_its_summary_its_key_points_and_whether_it_is_partial[employee]`; `test_a_document_result_carries_its_summary_its_key_points_and_whether_it_is_partial[administrator]` and 6 more |
+| S22 | `apps/retrieval/search.py` | A document with no analysis row carries a null summary instead of an empty one. | 5: `test_each_result_carries_exactly_what_the_clause_says_it_shows`; `test_a_document_never_classified_and_one_classified_without_a_summary_carry_the_empty_values[employee]` and 3 more |
+| S23 | `apps/retrieval/search.py` | The frozen result holds its key points as a list, so it is unhashable and no longer equals a tuple. | 6: `test_a_document_result_carries_its_summary_its_key_points_and_whether_it_is_partial[employee]`; `test_a_document_result_carries_its_summary_its_key_points_and_whether_it_is_partial[administrator]` and 4 more |
+| S24 | `apps/retrieval/search.py` | A meeting result carries its FR-16 summary in the FR-10 summary field. | 4: `test_a_meeting_result_carries_no_summary_even_when_the_meeting_has_one[employee]`; `test_a_meeting_result_carries_no_summary_even_when_the_meeting_has_one[administrator]` and 2 more |
+| S25 | `apps/retrieval/search.py` | A document found by its title alone carries no summary. | 3: `test_nothing_of_a_restricted_documents_summary_reaches_an_employee`; `test_a_document_found_by_its_title_alone_carries_its_summary_too` and 1 more |
+| S26 | `apps/retrieval/search.py` | A document with a summary shows the summary in place of the matching passage. | 5: `test_a_document_result_carries_its_summary_its_key_points_and_whether_it_is_partial[employee]`; `test_a_document_result_carries_its_summary_its_key_points_and_whether_it_is_partial[administrator]` and 3 more |
+| S27 | `apps/retrieval/search.py` | The result is built without its summary, so every document result shows none. | 12: `test_a_document_result_carries_its_summary_its_key_points_and_whether_it_is_partial[employee]`; `test_a_document_result_carries_its_summary_its_key_points_and_whether_it_is_partial[administrator]` and 10 more |
+| S28 | `apps/retrieval/search.py` | A document with no analysis row carries a null summary_truncated instead of false. | 5: `test_each_result_carries_exactly_what_the_clause_says_it_shows`; `test_a_document_never_classified_and_one_classified_without_a_summary_carry_the_empty_values[employee]` and 3 more |
+| S29 | `apps/retrieval/search.py` | The summaries are read by a second query keyed by document identifier (a prefetch), not by the scoped document query itself; one query whatever the number of results, so only the SQL shows it. | 1: `test_two_document_results_cost_no_more_queries_than_one_and_the_summary_rides_the_scoped_query` |
+| S30 | `apps/api/serializers.py` | A search result has no summary key. | 10: `test_each_result_carries_exactly_what_the_clause_says_it_shows`; `test_a_document_result_carries_its_summary_its_key_points_and_whether_it_is_partial[employee]` and 8 more |
+| S31 | `apps/api/views.py` | The classify route no longer maps NotOnThisDocument, so a document deleted while its classification runs is answered with an unhandled exception (the 500 the review found), not the scoped 404. | 4: `test_a_document_deleted_while_its_classification_runs_is_the_scoped_404_and_leaves_nothing[employee]`; `test_a_document_deleted_while_its_classification_runs_is_the_scoped_404_and_leaves_nothing[administrator]` and 2 more |
+| S32 | `apps/api/views.py` | A document deleted while its classification runs is a 404 with DRF's generic body, not the scoped lookup's body word for word. | 2: `test_a_document_deleted_while_its_classification_runs_is_the_scoped_404_and_leaves_nothing[employee]`; `test_a_document_deleted_while_its_classification_runs_is_the_scoped_404_and_leaves_nothing[administrator]` |
+| S33 | `apps/api/views.py` | The re-read of the department is unguarded, so a document deleted after its classification committed is answered with an unhandled DoesNotExist (a 500), not the scoped 404. | 2: `test_a_document_deleted_after_its_classification_and_before_the_reply_is_the_same_404[employee]`; `test_a_document_deleted_after_its_classification_and_before_the_reply_is_the_same_404[administrator]` |
+| S34 | `apps/api/views.py` | A document deleted after its classification and before the re-read is a 404 with DRF's generic body, not the scoped lookup's body word for word. | 2: `test_a_document_deleted_after_its_classification_and_before_the_reply_is_the_same_404[employee]`; `test_a_document_deleted_after_its_classification_and_before_the_reply_is_the_same_404[administrator]` |
+| S35 | `apps/api/views.py` | The route takes the slot but ignores a refusal, so a classify while the user's upload, reprocess or other classify holds the slot goes on to call the provider. | 4: `test_a_classify_while_the_users_slot_is_held_is_429_at_once_and_calls_no_provider[employee]`; `test_a_classify_while_the_users_slot_is_held_is_429_at_once_and_calls_no_provider[administrator]` and 2 more |
+| S36 | `apps/api/views.py` | The slot is taken before the scoped lookup and the permission check, so while it is held an unknown id is the 429, not the 404, and a 404 or a 403 leaves the slot taken. | 5: `test_classify_is_throttled_in_the_ingestion_scope[employee]`; `test_classify_is_throttled_in_the_ingestion_scope[administrator]` and 3 more |
+| S37 | `apps/api/views.py` | The slot is taken between the scoped lookup and the permission check, so while it is held a role without contribute_content gets the 429, not the 403, and a 403 leaves the slot taken. | 2: `test_a_classify_refused_with_404_or_403_is_so_refused_while_the_slot_is_held[employee]`; `test_a_classify_refused_with_404_or_403_is_so_refused_while_the_slot_is_held[administrator]` |
+| S38 | `apps/api/views.py` | The slot is released as soon as it is taken, before the provider is called, so it is not held while the classification runs. | 2: `test_a_classify_holds_the_slot_while_its_provider_requests_run[employee]`; `test_a_classify_holds_the_slot_while_its_provider_requests_run[administrator]` |
+| S39 | `apps/api/views.py` | The slot is released after the classification instead of in finally, so a 422, a 503 or the 404 of a document deleted while it was classified leaves it taken. | 8: `test_a_document_deleted_while_its_classification_runs_is_the_scoped_404_and_leaves_nothing[employee]`; `test_a_document_deleted_while_its_classification_runs_is_the_scoped_404_and_leaves_nothing[administrator]` and 6 more |
+| S40 | `apps/api/views.py` | The slot is released only just before the 200, so every other answer, the 422, the 503 and both 404s of a document deleted meanwhile, leaves it taken. | 10: `test_a_document_deleted_while_its_classification_runs_is_the_scoped_404_and_leaves_nothing[employee]`; `test_a_document_deleted_while_its_classification_runs_is_the_scoped_404_and_leaves_nothing[administrator]` and 8 more |
+| S41 | `apps/api/views.py` | The classify route takes the slot of the document's uploader, not of the person asking, so another user's classify is refused while the uploader's slot is held. | 2: `test_this_users_slot_does_not_hold_another_users_classify[employee]`; `test_this_users_slot_does_not_hold_another_users_classify[administrator]` |
+| S42 | `apps/api/ingestion_slot.py` | The in-flight slot is one for the whole server instead of one per user, so one user's upload or classify in flight refuses every other user's. | 2: `test_this_users_slot_does_not_hold_another_users_classify[employee]`; `test_this_users_slot_does_not_hold_another_users_classify[administrator]` |
+| S43 | `apps/api/ingestion_slot.py` | Taking the slot overwrites one already held (cache.set, not the atomic cache.add), so a second classify or upload of the same user is never refused. | 4: `test_a_classify_while_the_users_slot_is_held_is_429_at_once_and_calls_no_provider[employee]`; `test_a_classify_while_the_users_slot_is_held_is_429_at_once_and_calls_no_provider[administrator]` and 2 more |
+| S44 | `apps/api/views.py` | The classify route answers its own in-flight 429 without the code, so the client cannot tell it from the rate limit's 429. | 4: `test_a_classify_while_the_users_slot_is_held_is_429_at_once_and_calls_no_provider[employee]`; `test_a_classify_while_the_users_slot_is_held_is_429_at_once_and_calls_no_provider[administrator]` and 2 more |
+| S45 | `apps/documents/classification.py` | apply_classification uses the document it was handed instead of re-reading it under a lock, so a classification of a document deleted meanwhile goes on to write its analysis and tag links (the write side's file, touched by 245d247; the classify route's test is what sees it). | 2: `test_a_document_deleted_while_its_classification_runs_is_the_scoped_404_and_leaves_nothing[employee]`; `test_a_document_deleted_while_its_classification_runs_is_the_scoped_404_and_leaves_nothing[administrator]` |
+
+New or changed tests that failed under no break:
+- `apps/documents/tests/test_migration_0015_departments.py::test_0015_is_on_the_path_to_the_leaf_of_documents`
+
+**The write side** (pytest), at `68bfd36`. Unbroken: 52 passed in 23.58s. 53 breaks, 53 failed at least one test. 36 new or changed tests, 0 failed under no break. The widest break fails 16 tests.
+
+| Break | File | What was broken | Tests that failed |
+|---|---|---|---|
+| W01 | `apps/documents/classification.py` | Rule 1 no longer writes the summary: a classification run (the upload, the classify route) stores none. | 16: `test_a_run_stores_the_summary_its_key_points_the_flag_the_model_and_when`; `test_a_second_run_replaces_all_five` and 14 more |
+| W02 | `apps/documents/classification.py` | The summary is written only on a row nobody edited, so a person's edit freezes the summary. | 1: `test_a_user_edited_row_keeps_the_persons_type_and_department_and_takes_the_new_summary` |
+| W03 | `apps/documents/classification.py` | An empty summary leaves the earlier summary, key points, flag, model and time in place instead of resetting all five. | 4: `test_an_empty_summary_resets_all_five_to_their_defaults[empty-classification run]`; `test_an_empty_summary_resets_all_five_to_their_defaults[empty-backfill]` and 2 more |
+| W04 | `apps/documents/classification.py` | The summary is not stripped, so a whitespace-only summary counts as one and a padded summary is stored padded. | 4: `test_an_empty_summary_resets_all_five_to_their_defaults[whitespace-classification run]`; `test_an_empty_summary_resets_all_five_to_their_defaults[whitespace-backfill]` and 2 more |
+| W05 | `apps/documents/classification.py` | The summary is stored without the storage guard, so a NUL or a lone surrogate reaches PostgreSQL. | 4: `test_a_summary_or_key_point_that_cannot_be_stored_is_stored_with_the_replacement_character[nul-classification run]`; `test_a_summary_or_key_point_that_cannot_be_stored_is_stored_with_the_replacement_character[nul-backfill]` and 2 more |
+| W06 | `apps/documents/classification.py` | The key points are stored without the storage guard, so a NUL or a lone surrogate reaches jsonb. | 4: `test_a_summary_or_key_point_that_cannot_be_stored_is_stored_with_the_replacement_character[nul-classification run]`; `test_a_summary_or_key_point_that_cannot_be_stored_is_stored_with_the_replacement_character[nul-backfill]` and 2 more |
+| W07 | `apps/documents/classification.py` | A key point that is blank once stripped is kept, so the page would show an empty point. | 2: `test_the_summary_and_key_points_are_stored_stripped_and_a_blank_key_point_is_left_out[classification run]`; `test_the_summary_and_key_points_are_stored_stripped_and_a_blank_key_point_is_left_out[backfill]` |
+| W08 | `apps/documents/classification.py` | Each key point is stored unstripped. | 2: `test_the_summary_and_key_points_are_stored_stripped_and_a_blank_key_point_is_left_out[classification run]`; `test_the_summary_and_key_points_are_stored_stripped_and_a_blank_key_point_is_left_out[backfill]` |
+| W09 | `apps/documents/classification.py` | summary_model is not cut to its column, so a long model name fails the save. | 2: `test_the_summary_model_is_cut_to_the_column[classification run]`; `test_the_summary_model_is_cut_to_the_column[backfill]` |
+| W10 | `apps/documents/classification.py` | summary_model is copied from the classification on record, so the backfill names the earlier classifier, not the model that wrote the summary. | 3: `test_the_summary_model_is_cut_to_the_column[backfill]`; `test_apply_summary_writes_the_five_columns_and_nothing_else` and 1 more |
+| W11 | `apps/documents/classification.py` | summarised_at is never set, so a stored summary has no time. | 6: `test_a_run_stores_the_summary_its_key_points_the_flag_the_model_and_when`; `test_a_second_run_replaces_all_five` and 4 more |
+| W12 | `apps/documents/classification.py` | summary_truncated is stored from the classifier's input_truncated, the flag it is easily confused with. | 3: `test_a_run_stores_the_summary_its_key_points_the_flag_the_model_and_when`; `test_a_user_edited_row_keeps_the_persons_type_and_department_and_takes_the_new_summary` and 1 more |
+| W13 | `apps/documents/classification.py` | summary_truncated is never written, so a summary of the first sections only is not marked as such. | 6: `test_a_run_stores_the_summary_its_key_points_the_flag_the_model_and_when`; `test_a_user_edited_row_keeps_the_persons_type_and_department_and_takes_the_new_summary` and 4 more |
+| W14 | `apps/documents/classification.py` | A summary once written is kept, so a later run or the backfill never replaces it. | 7: `test_a_second_run_replaces_all_five`; `test_a_user_edited_row_keeps_the_persons_type_and_department_and_takes_the_new_summary` and 5 more |
+| W15 | `apps/documents/classification.py` | apply_summary saves every column of the row, not only the five summary columns. | 1: `test_apply_summary_writes_the_five_columns_and_nothing_else` |
+| W16 | `apps/documents/classification.py` | SUMMARY_FIELDS leaves out summarised_at, so the backfill never saves the summary's time. | 3: `test_an_empty_summary_resets_all_five_to_their_defaults[empty-backfill]`; `test_an_empty_summary_resets_all_five_to_their_defaults[whitespace-backfill]` and 1 more |
+| W17 | `apps/documents/classification.py` | apply_summary creates an analysis row where there is none, storing a summary with no classification beside it. | 1: `test_apply_summary_on_a_document_with_no_analysis_raises_and_writes_nothing` |
+| W18 | `apps/documents/classification.py` | apply_summary locks the document with get(), so a document deleted meanwhile raises DoesNotExist, which the command's per-document handling does not catch. | 1: `test_apply_summary_on_a_document_deleted_meanwhile_raises` |
+| W19 | `apps/documents/classification.py` | summarise_document_now drops its check for an analysis row, so a provider call is spent on a document apply_summary will refuse. | 1: `test_summarise_now_without_an_analysis_raises_before_any_provider_call` |
+| W20 | `apps/documents/classification.py` | summarise_document_now drops its text check, so a document with no text is sent to the provider. | 3: `test_summarise_now_without_text_raises_before_any_provider_call[no extracted text]`; `test_summarise_now_without_text_raises_before_any_provider_call[whitespace only]` and 1 more |
+| W21 | `apps/documents/classification.py` | summarise_document_now accepts whitespace-only text as text. | 1: `test_summarise_now_without_text_raises_before_any_provider_call[whitespace only]` |
+| W22 | `apps/documents/classification.py` | The oldest extraction is read instead of the latest. | 3: `test_a_later_run_on_a_short_text_sets_summary_truncated_back_to_false[classification run]`; `test_a_later_run_on_a_short_text_sets_summary_truncated_back_to_false[backfill]` and 1 more |
+| W23 | `apps/documents/classification.py` | The latest extraction is read across every document, not only this one, so a summary can be written from another document's text. | 1: `test_a_failure_is_recorded_against_its_document_and_the_run_continues` |
+| W24 | `apps/documents/classification.py` | summarise_document_now applies the whole classification, overwriting the type, tags and classified_at on record. | 3: `test_summarise_now_calls_the_service_once_and_stores_only_the_summary`; `test_a_classified_documents_type_department_tags_and_classified_at_are_unchanged` and 1 more |
+| W25 | `apps/documents/classification.py` | summarise_document_now retries an outage itself, on top of the provider's own attempts. | 1: `test_summarise_now_during_a_provider_outage_propagates_and_writes_nothing` |
+| W26 | `apps/documents/classification.py` | summarise_document_now swallows an outage and returns the row as it was, so the command records a failure as a success. | 2: `test_summarise_now_during_a_provider_outage_propagates_and_writes_nothing`; `test_a_failure_is_recorded_against_its_document_and_the_run_continues` |
+| W27 | `apps/documents/management/commands/summarise_documents.py` | The default selection takes every classified document, those with a summary included. | 1: `test_by_default_every_classified_document_without_a_summary_is_summarised` |
+| W28 | `apps/documents/management/commands/summarise_documents.py` | --force no longer widens the default selection to documents that have a summary. | 1: `test_force_also_summarises_the_documents_that_already_have_a_summary` |
+| W29 | `apps/documents/management/commands/summarise_documents.py` | The selection takes documents with no analysis row too, so --force sends them to be refused. | 1: `test_force_also_summarises_the_documents_that_already_have_a_summary` |
+| W30 | `apps/documents/management/commands/summarise_documents.py` | The default run no longer lists the documents that have no classification. | 3: `test_by_default_every_classified_document_without_a_summary_is_summarised`; `test_force_also_summarises_the_documents_that_already_have_a_summary` and 1 more |
+| W31 | `apps/documents/management/commands/summarise_documents.py` | A skipped document's line no longer shows its status. | 1: `test_a_document_with_no_classification_is_skipped_and_listed_never_classified` |
+| W32 | `apps/documents/management/commands/summarise_documents.py` | A named document with a summary is skipped even with --force. | 1: `test_a_named_document_with_a_summary_is_skipped_without_force_and_summarised_with_it` |
+| W33 | `apps/documents/management/commands/summarise_documents.py` | A named document with a summary is summarised again without --force. | 1: `test_a_named_document_with_a_summary_is_skipped_without_force_and_summarised_with_it` |
+| W34 | `apps/documents/management/commands/summarise_documents.py` | Without --force every named classified document is skipped as already summarised, those with no summary included. | 2: `test_id_summarises_only_the_documents_named`; `test_a_failure_is_recorded_against_its_document_and_the_run_continues` |
+| W35 | `apps/documents/management/commands/summarise_documents.py` | The record says the selection was the default when documents were named. | 1: `test_id_summarises_only_the_documents_named` |
+| W36 | `apps/documents/management/commands/summarise_documents.py` | An unknown --id raises DoesNotExist and ends the run instead of being an error entry. | 1: `test_an_unknown_or_malformed_id_is_an_error_entry_not_a_crash` |
+| W37 | `apps/documents/management/commands/summarise_documents.py` | A malformed --id raises ValueError and ends the run instead of being an error entry. | 1: `test_an_unknown_or_malformed_id_is_an_error_entry_not_a_crash` |
+| W38 | `apps/documents/management/commands/summarise_documents.py` | The command reaches only documents an Employee can read, so an Administrator-only document never gets a summary. | 1: `test_a_document_is_summarised_whatever_its_visibility` |
+| W39 | `apps/documents/management/commands/summarise_documents.py` | A document the apply layer refuses (no text, classification deleted) ends the run. | 1: `test_a_failure_is_recorded_against_its_document_and_the_run_continues` |
+| W40 | `apps/documents/management/commands/summarise_documents.py` | One document's provider outage ends the run. | 1: `test_a_failure_is_recorded_against_its_document_and_the_run_continues` |
+| W41 | `apps/documents/management/commands/summarise_documents.py` | The command classifies each document instead of summarising it, overwriting the classification on record. | 2: `test_a_classified_documents_type_department_tags_and_classified_at_are_unchanged`; `test_the_record_carries_the_run_and_each_documents_summary` |
+| W42 | `apps/documents/management/commands/summarise_documents.py` | The record leaves out each document's stored summary. | 2: `test_the_record_carries_the_run_and_each_documents_summary`; `test_a_record_that_appears_during_the_run_is_not_overwritten_and_is_printed_instead` |
+| W43 | `apps/documents/management/commands/summarise_documents.py` | An existing record is not refused up front, so provider calls are spent before the record is refused. | 1: `test_an_existing_record_is_refused_before_anything_is_summarised` |
+| W44 | `apps/documents/management/commands/summarise_documents.py` | The record overwrites a file that appeared during the run. | 1: `test_a_record_that_appears_during_the_run_is_not_overwritten_and_is_printed_instead` |
+| W45 | `apps/documents/management/commands/summarise_documents.py` | The kmp gate checks the connection's alias, not the database's name, so kmp is not refused. | 1: `test_the_kmp_database_is_refused` |
+| W46 | `apps/documents/management/commands/summarise_documents.py` | A record that cannot be written is not printed, so the run's results are lost. | 1: `test_a_record_that_appears_during_the_run_is_not_overwritten_and_is_printed_instead` |
+| W47 | `apps/ingestion/documents.py` | The upload's classification hook catches nothing, so a provider outage fails the upload (invariant 8). | 2: `test_an_outage_at_upload_answers_201_with_the_document_stored_indexed_and_unclassified[employee]`; `test_an_outage_at_upload_answers_201_with_the_document_stored_indexed_and_unclassified[administrator]` |
+| W48 | `apps/ingestion/documents.py` | The hook drops the analysis it wrote, so the upload's 201 carries classification null and no summary. | 3: `test_the_upload_201_carries_the_summary_and_the_detail_and_search_then_return_it[employee]`; `test_the_upload_201_carries_the_summary_and_the_detail_and_search_then_return_it[administrator]` and 1 more |
+| W49 | `apps/api/views.py` | The document detail is looked up by identifier without the role scope, so an Employee reads an Administrator-only document and the summary its upload wrote. | 1: `test_a_summary_written_at_upload_reaches_no_reader_outside_the_documents_scope` |
+| W50 | `apps/documents/classification.py` | The backfill builds its prompt from the full scheme, grown values carried only by restricted material included, and not for the document's own audience. | 1: `test_summarise_now_builds_its_prompt_for_the_documents_own_audience` |
+| W51 | `apps/documents/classification.py` | A summary once marked as covering only part of a document keeps the mark after a later run that read the whole of it. | 3: `test_a_second_run_replaces_all_five`; `test_a_later_run_on_a_short_text_sets_summary_truncated_back_to_false[classification run]` and 1 more |
+| W52 | `apps/documents/classification.py` | apply_summary loses its own transaction, so its row lock is asked for in autocommit, as the command runs. | 1: `test_a_backfill_in_autocommit_as_the_command_runs_it_stores_the_summary` |
+| W53 | `apps/documents/classification.py` | apply_summary locks the analysis row before the document, against the module's lock order. | 1: `test_a_backfill_waits_on_a_held_document_without_locking_the_analysis_row_then_commits` |
+
+**The screens** (vitest), at `68bfd36`. Unbroken: 109 passed, 0 failed, 30 suites. 70 breaks, 70 failed at least one test. 41 new or changed tests, 0 failed under no break. The widest break fails 12 tests.
+
+| Break | File | What was broken | Tests that failed |
+|---|---|---|---|
+| F01 | `frontend/src/components/DocumentSummary.jsx` | The summary block loses the ai-content class, so the summary and key points are no longer bounded as AI content (NFR-15). | 12: `shows FR-10’s document summary in its states: marked with its key points, cut short, absent, and beneath a search result’s title (D-139)`; `marks them as AI content: the mark is inside their block and ahead of them, and the document’s own text is outside it` and 10 more |
+| F02 | `frontend/src/components/DocumentSummary.jsx` | The summary block loses NFR-15's mark, 'Suggested by AI', and keeps only the sentence beside it. | 5: `shows FR-10’s document summary in its states: marked with its key points, cut short, absent, and beneath a search result’s title (D-139)`; `marks them as AI content: the mark is inside their block and ahead of them, and the document’s own text is outside it` and 3 more |
+| F03 | `frontend/src/components/DocumentSummary.jsx` | The mark and its sentence come after the summary instead of before it, so the summary is read before the reader is told it is the AI's. | 2: `marks them as AI content: the mark is inside their block and ahead of them, and the document’s own text is outside it`; `marks the summary and its key points as AI content: the mark is inside their block and ahead of them, and the snippet is outside it` |
+| F04 | `frontend/src/components/DocumentSummary.jsx` | The sentence saying this is a summary and not the document's own text is dropped, and the mark stands alone. | 2: `marks them as AI content: the mark is inside their block and ahead of them, and the document’s own text is outside it`; `marks the summary and its key points as AI content: the mark is inside their block and ahead of them, and the snippet is outside it` |
+| F05 | `frontend/src/components/DocumentSummary.jsx` | Any truthy summary_truncated, such as the string 'true', shows the truncation sentence, not only true. | 1: `a summary that covers only the first part of a document: does not say so when summary_truncated is not a boolean` |
+| F06 | `frontend/src/components/DocumentSummary.jsx` | The truncation sentence is shown whenever summary_truncated is a boolean, so a summary of a whole document (false) is said to be partial. | 5: `shows FR-10’s document summary in its states: marked with its key points, cut short, absent, and beneath a search result’s title (D-139)`; `replaces the summary on screen when a reply’s classification carries a new one: the new text is shown and the old is gone` and 3 more |
+| F07 | `frontend/src/components/DocumentSummary.jsx` | A summary whose summary_truncated is absent is said to cover only the first part of the document. | 3: `does not say so when summary_truncated is absent`; `a summary that covers only the first part of a document: does not say so when summary_truncated is absent` and 1 more |
+| F08 | `frontend/src/components/DocumentSummary.jsx` | An empty summary string still renders the marked block, with nothing in it, on a search result and on the document page. | 8: `shows FR-10’s document summary in its states: marked with its key points, cut short, absent, and beneath a search result’s title (D-139)`; `shows the line, and no summary block, mark or list, when the classification has an empty summary` and 6 more |
+| F09 | `frontend/src/components/DocumentSummary.jsx` | A summary of null is taken for a summary and renders the marked block. | 3: `shows the line, and no summary block, mark or list, when the summary is only white space`; `renders a result with a summary that is not a string as it always has: no summary block, no mark and no list` and 1 more |
+| F10 | `frontend/src/components/DocumentSummary.jsx` | Key points that came with no summary still render the marked block, with its list and truncation sentence, in place of nothing or the no-summary line. | 4: `shows the line, and no summary block, mark or list, when an empty summary came beside key points`; `shows the line, and no summary block, mark or list, when the summary is only white space` and 2 more |
+| F11 | `frontend/src/components/DocumentSummary.jsx` | The 'Key points' label and list are rendered even when no key point is left, an empty list under its label. | 4: `shows a summary that came with no key points without an empty list`; `shows a summary that came with no key points without an empty list` and 2 more |
+| F12 | `frontend/src/components/DocumentSummary.jsx` | key_points that is not a list is spread with Array.from, so a string becomes one key point per character. | 1: `shows a summary that came with key points that are not a list without an empty list` |
+| F13 | `frontend/src/components/DocumentSummary.jsx` | Only falsy key points are dropped, so a key point of spaces is drawn as an empty bullet. | 2: `shows a summary that came with only key points that say nothing without an empty list`; `leaves out a key point that says nothing, and keeps the rest in order` |
+| F14 | `frontend/src/components/DocumentSummary.jsx` | The screen cuts the key points to four, so the fifth of five is never shown (the cap of five is the server's). | 2: `renders five key points as five list items, in the order they were sent`; `renders five key points as five list items, in the order they were sent` |
+| F15 | `frontend/src/components/DocumentSummary.jsx` | The key points are drawn in reverse, not in the order they were sent. | 6: `puts the summary, then its key points, after the title and before the classification and the extracted-text heading`; `renders five key points as five list items, in the order they were sent` and 4 more |
+| F16 | `frontend/src/components/DocumentSummary.jsx` | The key points become a numbered ol, which ranks them, instead of the bulleted ul. | 2: `puts the summary, then its key points, after the title and before the classification and the extracted-text heading`; `renders five key points as five list items, in the order they were sent` |
+| F17 | `frontend/src/components/DocumentSummary.jsx` | The key-point list loses aria-labelledby, so it has no accessible name, 'Key points'. | 10: `shows FR-10’s document summary in its states: marked with its key points, cut short, absent, and beneath a search result’s title (D-139)`; `puts the summary, then its key points, after the title and before the classification and the extracted-text heading` and 8 more |
+| F18 | `frontend/src/components/DocumentSummary.jsx` | The model's summary is set as HTML, so markup in it becomes elements. | 1: `renders a summary and a key point holding markup as the characters they are` |
+| F19 | `frontend/src/components/DocumentSummary.jsx` | Each key point is set as HTML, so markup in it becomes elements. | 1: `renders a summary and a key point holding markup as the characters they are` |
+| F20 | `frontend/src/components/DocumentSummary.jsx` | The summary block becomes a tab stop, one more on every summarised search result and on the document page. | 2: `marks them as AI content: the mark is inside their block and ahead of them, and the document’s own text is outside it`; `marks the summary and its key points as AI content: the mark is inside their block and ahead of them, and the snippet is outside it` |
+| F21 | `frontend/src/components/DocumentSummary.jsx` | The page's own no-summary line is drawn inside the AI boundary, as if the AI had written it. | 6: `shows FR-10’s document summary in its states: marked with its key points, cut short, absent, and beneath a search result’s title (D-139)`; `shows the line, and no summary block, mark or list, when the document was never classified` and 4 more |
+| F22 | `frontend/src/components/DocumentSummary.jsx` | The component keeps the props of its first render in state, so a later reply's summary never reaches the screen. | 2: `shows the new summary after "Classify now", in place of the line that said there was none`; `replaces the summary on screen when a reply’s classification carries a new one: the new text is shown and the old is gone` |
+| F23 | `frontend/src/components/SearchResults.jsx` | A search result's summary and key points sit below its snippet instead of between the title and the snippet. | 2: `shows FR-10’s document summary in its states: marked with its key points, cut short, absent, and beneath a search result’s title (D-139)`; `shows the summary and each key point in the result, in the order title, summary, key points, snippet` |
+| F24 | `frontend/src/components/SearchResults.jsx` | A search result's summary and key points sit above its title instead of beneath it. | 2: `shows FR-10’s document summary in its states: marked with its key points, cut short, absent, and beneath a search result’s title (D-139)`; `shows the summary and each key point in the result, in the order title, summary, key points, snippet` |
+| F25 | `frontend/src/components/SearchResults.jsx` | A search result never passes summary_truncated, so a summary of part of a long document is shown without the user being told. | 2: `a summary that covers only the first part of a document: says so when summary_truncated is true`; `draws a summary cut short where a reader can see it: no stylesheet hides the sentence that says so, the key points’ name or a key point` |
+| F26 | `frontend/src/components/SearchResults.jsx` | A search result never passes key_points, so its summary is shown without its key points. | 7: `shows FR-10’s document summary in its states: marked with its key points, cut short, absent, and beneath a search result’s title (D-139)`; `shows the summary and each key point in the result, in the order title, summary, key points, snippet` and 5 more |
+| F27 | `frontend/src/components/SearchResults.jsx` | A search result with no summary gains the document page's no-summary line, so it no longer renders as it did before summaries existed. | 6: `renders a result with an empty summary as it always has: no summary block, no mark and no list`; `renders a result with no summary field at all as it always has: no summary block, no mark and no list` and 4 more |
+| F28 | `frontend/src/components/SearchResults.jsx` | A result's summary is coerced to a string, so a result with no summary field, or a null one, shows a marked block reading 'undefined' or 'null'. | 3: `marks the summary and its key points as AI content: the mark is inside their block and ahead of them, and the snippet is outside it`; `renders a result with no summary field at all as it always has: no summary block, no mark and no list` and 1 more |
+| F29 | `frontend/src/pages/DocumentDetail.jsx` | On the document page the summary and key points, or the no-summary line, sit below the classification section instead of above it. | 7: `puts the summary, then its key points, after the title and before the classification and the extracted-text heading`; `shows the line, and no summary block, mark or list, when the document was never classified` and 5 more |
+| F30 | `frontend/src/pages/DocumentDetail.jsx` | On the document page the summary and key points, or the no-summary line, sit above the document's title instead of beneath it. | 7: `puts the summary, then its key points, after the title and before the classification and the extracted-text heading`; `shows the line, and no summary block, mark or list, when the document was never classified` and 5 more |
+| F31 | `frontend/src/pages/DocumentDetail.jsx` | A document never classified shows nothing where its summary would be; only a classified one says none has been generated. | 2: `shows the line, and no summary block, mark or list, when the document was never classified`; `shows the new summary after "Classify now", in place of the line that said there was none` |
+| F32 | `frontend/src/pages/DocumentDetail.jsx` | The document page passes no emptyMessage, so a document with no summary shows nothing in its place. | 6: `shows the line, and no summary block, mark or list, when the document was never classified`; `shows the line, and no summary block, mark or list, when the classification has an empty summary` and 4 more |
+| F33 | `frontend/src/pages/DocumentDetail.jsx` | The page reads the classifier's input_truncated for the sentence, so it follows what classification read, not what the summary covers. | 4: `draws them where a reader can see them: no stylesheet hides the mark, the summary, the sentence or a key point, and the block’s one border is the AI convention’s`; `replaces the summary on screen when a reply’s classification carries a new one: the new text is shown and the old is gone` and 2 more |
+| F34 | `frontend/src/pages/DocumentDetail.jsx` | Either flag shows the sentence, so a summary of a whole document is said to be partial when only classification read the opening. | 1: `does not say so when only input_truncated is true` |
+| F35 | `frontend/src/pages/DocumentDetail.jsx` | The page reads summary from the detail's top level, where a search result carries it, instead of from the classification object, so no summary is ever shown there. | 12: `puts the summary, then its key points, after the title and before the classification and the extracted-text heading`; `marks them as AI content: the mark is inside their block and ahead of them, and the document’s own text is outside it` and 10 more |
+| F36 | `frontend/src/pages/DocumentDetail.jsx` | The page coerces the classification's summary to a string, so a classification from before the field shows a marked block reading 'undefined'. | 1: `shows the line, and no summary block, mark or list, when the classification is from before the field` |
+| F37 | `frontend/src/pages/DocumentDetail.jsx` | The page keeps its own fields over what a route returned, so the classification, and the summary it carries, never takes a reply's new value. | 2: `shows the new summary after "Classify now", in place of the line that said there was none`; `replaces the summary on screen when a reply’s classification carries a new one: the new text is shown and the old is gone` |
+| F38 | `frontend/src/constants.js` | The truncation sentence no longer says the summary covers only part of the document. | 11: `draws them where a reader can see them: no stylesheet hides the mark, the summary, the sentence or a key point, and the block’s one border is the AI convention’s`; `replaces the summary on screen when a reply’s classification carries a new one: the new text is shown and the old is gone` and 9 more |
+| F39 | `frontend/src/constants.js` | The no-summary line says a summary is loading, when none has been generated and none is coming. | 6: `shows the line, and no summary block, mark or list, when the document was never classified`; `shows the line, and no summary block, mark or list, when the classification has an empty summary` and 4 more |
+| F40 | `frontend/src/components/DocumentSummary.css` | A rule hides the line holding the mark and the sentence beside it. | 2: `draws them where a reader can see them: no stylesheet hides the mark, the summary, the sentence or a key point, and the block’s one border is the AI convention’s`; `marks the summary and its key points as AI content: the mark is inside their block and ahead of them, and the snippet is outside it` |
+| F41 | `frontend/src/components/DocumentSummary.css` | A rule hides the summary's text. | 2: `draws them where a reader can see them: no stylesheet hides the mark, the summary, the sentence or a key point, and the block’s one border is the AI convention’s`; `marks the summary and its key points as AI content: the mark is inside their block and ahead of them, and the snippet is outside it` |
+| F42 | `frontend/src/components/DocumentSummary.css` | A rule hides the sentence saying the summary covers only the first part of the document. | 2: `draws them where a reader can see them: no stylesheet hides the mark, the summary, the sentence or a key point, and the block’s one border is the AI convention’s`; `draws a summary cut short where a reader can see it: no stylesheet hides the sentence that says so, the key points’ name or a key point` |
+| F43 | `frontend/src/components/DocumentSummary.css` | The key-point list is collapsed to no height, so no key point is seen. | 2: `draws them where a reader can see them: no stylesheet hides the mark, the summary, the sentence or a key point, and the block’s one border is the AI convention’s`; `draws a summary cut short where a reader can see it: no stylesheet hides the sentence that says so, the key points’ name or a key point` |
+| F44 | `frontend/src/components/DocumentSummary.css` | A rule hides the list's visible name, 'Key points'. | 2: `draws them where a reader can see them: no stylesheet hides the mark, the summary, the sentence or a key point, and the block’s one border is the AI convention’s`; `draws a summary cut short where a reader can see it: no stylesheet hides the sentence that says so, the key points’ name or a key point` |
+| F45 | `frontend/src/components/DocumentSummary.css` | The block draws a solid border of its own, so the AI boundary's dashed border is not the only one on it. | 2: `draws them where a reader can see them: no stylesheet hides the mark, the summary, the sentence or a key point, and the block’s one border is the AI convention’s`; `marks the summary and its key points as AI content: the mark is inside their block and ahead of them, and the snippet is outside it` |
+| F46 | `frontend/src/components/DocumentSummary.css` | The summary no longer breaks a long unbroken string, so the page scrolls sideways at 320 px (SC 1.4.10). | 1: `lets a long unbroken string in the summary or a key point wrap inside the block, so the page never scrolls sideways (SC 1.4.10)` |
+| F47 | `frontend/src/components/DocumentSummary.css` | A key point no longer breaks a long unbroken string, so the page scrolls sideways at 320 px (SC 1.4.10). | 1: `lets a long unbroken string in the summary or a key point wrap inside the block, so the page never scrolls sideways (SC 1.4.10)` |
+| F48 | `frontend/src/pages/Repository.css` | The document page's rule draws a solid line under the summary block, a second border beside the AI boundary's dashed one. | 1: `draws them where a reader can see them: no stylesheet hides the mark, the summary, the sentence or a key point, and the block’s one border is the AI convention’s` |
+| F49 | `frontend/src/components/ComponentSheet.jsx` | The sheet stops showing the summary on its own, the one sample of a summary cut short. | 1: `shows FR-10’s document summary in its states: marked with its key points, cut short, absent, and beneath a search result’s title (D-139)` |
+| F50 | `frontend/src/components/ComponentSheet.jsx` | The sheet stops showing the no-summary line. | 1: `shows FR-10’s document summary in its states: marked with its key points, cut short, absent, and beneath a search result’s title (D-139)` |
+| F51 | `frontend/src/components/ComponentSheet.jsx` | The sheet's sample search result carries no summary, so the sheet shows no summary beneath a result's title. | 1: `shows FR-10’s document summary in its states: marked with its key points, cut short, absent, and beneath a search result’s title (D-139)` |
+| F52 | `frontend/src/components/ComponentSheet.jsx` | The sheet's first sample is not a summary cut short, so the sheet never shows the truncation sentence. | 1: `shows FR-10’s document summary in its states: marked with its key points, cut short, absent, and beneath a search result’s title (D-139)` |
+| F53 | `frontend/src/components/DocumentSummary.css` | A rule hides the document page's no-summary line, so a document without a summary says nothing a reader can see (round one's gap G1, caught by no test at 186be70). | 5: `shows the line, and no summary block, mark or list, when the document was never classified`; `shows the line, and no summary block, mark or list, when the classification has an empty summary` and 3 more |
+| F54 | `frontend/src/components/DocumentSummary.jsx` | A summary of only white space is taken for a summary, so a marked block with nothing to read is drawn on a search result and on the document page (round one's gap G3, caught by no test at 186be70). | 2: `shows the line, and no summary block, mark or list, when the summary is only white space`; `renders a result with a summary of only white space as it always has: no summary block, no mark and no list` |
+| F55 | `frontend/src/constants.js` | The sentence beside the mark is reworded and no longer says the summary is not the document's own text (round one's gap G4, caught by no test at 186be70). | 1: `marks them as AI content: the mark is inside their block and ahead of them, and the document’s own text is outside it` |
+| F56 | `frontend/src/constants.js` | The sentence beside the mark is emptied, so the mark stands with nothing saying what the block is (round one's probe G2). | 2: `marks them as AI content: the mark is inside their block and ahead of them, and the document’s own text is outside it`; `still marks a meeting’s snippet that is from its AI-generated summary, and gives the meeting no summary block` |
+| F57 | `frontend/src/components/SearchResults.css` | A rule in the search results' stylesheet hides the truncation sentence inside a search result, so a summary of part of a long document is shown there without the user being told. | 1: `draws a summary cut short where a reader can see it: no stylesheet hides the sentence that says so, the key points’ name or a key point` |
+| F58 | `frontend/src/components/SearchResults.css` | A rule in the search results' stylesheet hides the key points' name and list inside a search result, so a result shows its summary without its key points. | 1: `draws a summary cut short where a reader can see it: no stylesheet hides the sentence that says so, the key points’ name or a key point` |
+| F59 | `frontend/src/components/DocumentSummary.jsx` | The truncation sentence takes the visually-hidden class, so a screen reader hears it but a sighted reader is never told the summary covers only part of the document. | 2: `draws them where a reader can see them: no stylesheet hides the mark, the summary, the sentence or a key point, and the block’s one border is the AI convention’s`; `draws a summary cut short where a reader can see it: no stylesheet hides the sentence that says so, the key points’ name or a key point` |
+| F60 | `frontend/src/components/Classification.jsx` | Classify's 429 goes back to its one sentence from before 90dbbfa, so the in-flight 429 says the upload limit was reached and names a time to try again. | 2: `says on the in-flight 429 that the previous upload is still being processed, in its own sentence and not the limit’s, naming no time`; `tells the in-flight 429 from the limit’s by `code` alone, not by `detail` or by Retry-After` |
+| F61 | `frontend/src/components/Classification.jsx` | Classify's two 429s are told apart by whether a Retry-After came instead of by `code`, so an in-flight reply carrying one is given the limit's sentence and a limit reply without one the in-flight sentence. | 1: `tells the in-flight 429 from the limit’s by `code` alone, not by `detail` or by Retry-After` |
+| F62 | `frontend/src/components/Classification.jsx` | Classify's two 429s are told apart by the reply's `detail` instead of by `code`, so a limit reply worded like the in-flight one is given the in-flight sentence. | 1: `tells the in-flight 429 from the limit’s by `code` alone, not by `detail` or by Retry-After` |
+| F63 | `frontend/src/components/Classification.jsx` | The `code` test is inverted, so the in-flight 429 is given the limit's sentence and the limit's 429 the in-flight one. | 3: `names when to try again on the ingestion 429, from Retry-After`; `says on the in-flight 429 that the previous upload is still being processed, in its own sentence and not the limit’s, naming no time` and 1 more |
+| F64 | `frontend/src/components/Classification.jsx` | Every classify 429 shows the limit's sentence and the in-flight one together, as a screen that cannot tell them apart might, so neither reply is said in its own sentence alone. | 3: `names when to try again on the ingestion 429, from Retry-After`; `says on the in-flight 429 that the previous upload is still being processed, in its own sentence and not the limit’s, naming no time` and 1 more |
+| F65 | `frontend/src/components/Classification.jsx` | The in-flight 429 shows the reply's own `detail` after the client's sentence, so backend text reaches the screen. | 1: `says on the in-flight 429 that the previous upload is still being processed, in its own sentence and not the limit’s, naming no time` |
+| F66 | `frontend/src/constants.js` | The in-flight sentence promises a time, 'later', which the in-flight reply never carries. | 2: `says on the in-flight 429 that the previous upload is still being processed, in its own sentence and not the limit’s, naming no time`; `tells the in-flight 429 from the limit’s by `code` alone, not by `detail` or by Retry-After` |
+| F67 | `frontend/src/api/ingestion.js` | The client's copy of the in-flight code is misspelt, so classify's in-flight 429 is never recognised and is given the limit's sentence. | 2: `says on the in-flight 429 that the previous upload is still being processed, in its own sentence and not the limit’s, naming no time`; `tells the in-flight 429 from the limit’s by `code` alone, not by `detail` or by Retry-After` |
+| F68 | `frontend/src/components/SearchResults.css` | A rule in the search results' stylesheet hides every key point after the first inside a search result, with the list's name and first point still shown. | 1: `draws a summary cut short where a reader can see it: no stylesheet hides the sentence that says so, the key points’ name or a key point` |
+| F69 | `frontend/src/constants.js` | The page says again that only the opening was read to classify a long document, which is untrue since D-139. | 1: `says so when the classification has input_truncated true` |
+| F70 | `frontend/src/constants.js` | The in-flight sentence loses its reason: it no longer says an earlier upload is still being processed. | 1: `says on the in-flight 429 that the previous upload is still being processed, in its own sentence and not the limit’s, naming no time` |
+
+**What the break runs found, beyond the tables.**
+
+- **Three tests could not fail, and none is counted.**
+  - `test_the_summary_helpers_are_importable_from_the_testing_module` (the stub's tests): its
+    file's own import line enforces what it claimed. Deleted in `f3227f1`.
+  - `test_0016_is_on_the_path_to_the_leaf_of_documents`: any defect that would fail it breaks the
+    migration graph, so every test errors first. Deleted in `245d247`.
+  - `test_0015_is_on_the_path_to_the_leaf_of_documents`: the same, and it is the one test the
+    server table lists as failing under no break. It is kept as the 0013 test's precedent has it,
+    and its comment says it is a record and not a test that can fail.
+- **Gaps the breaks exposed, each closed with a test that its break now fails.**
+  - A stylesheet rule hiding the document page's no-summary line; a summary of only spaces; the
+    words of the sentence beside the AI mark (`90dbbfa`).
+  - The words of the sentence "Classify now" shows when an earlier upload is in flight: reworded to
+    drop its reason, it passed all 1,265 front-end tests (`6fc40c4`).
+  - The backfill's prompt being built for the document's own audience: with the full scheme sent
+    instead, every test passed, because no test's corpus held a value only Administrators can see
+    (`245d247`).
+  - `apply_summary` running outside a transaction, as the command runs it, and its lock order: with
+    its own transaction removed, or the analysis row locked first, every test passed (`c9c007b`).
+  - An FLM test's assertion that passed when the provider's label lost its endpoint (`f3227f1`).
+- **Gaps recorded and left.**
+  - **The stylesheet checks lay nothing out.** A rule clamping a search result's key points to 24
+    pixels with the overflow hidden failed no test. `docs/accessibility.md` says so now, and leaves
+    it to the browser checks a person owes.
+  - **Four write-side tests are thinner than their names.**
+    `test_apply_summary_on_a_document_deleted_meanwhile_raises` does not isolate the document
+    check, because the cascade deletes the analysis row too; it fails only under W18. The route
+    test of an outage at upload passes with the upload hook's first `except` removed, because the
+    general one catches the outage; an older ingestion test catches that removal.
+    `test_summary_truncated_is_stored_as_the_reply_reports_it_for_the_text` cannot tell
+    `summary_truncated` from `input_truncated`, which three other tests can. And no test sends two
+    documents with different texts and checks which text each provider call carried.
+  - **One assertion has never been seen failing:** the scope route test's check that an Employee's
+    search finds nothing of an Administrator-only document. Search filters passages through the
+    scoped chunks as well as the scoped documents, so no single break removes both.
+  - **Untested details of the backfill command:** its oldest-first order, the "part of the
+    document only" words in its console line, and its path for a failed commit.
+  - **Two front-end breaks are unlikely defects** (F64, F65), kept because each is the only break
+    that reaches one assertion.
+  - **Many AI-layer tests rest on one break each.** Of its 167 tests, 62 fail under exactly one
+    break, mostly tests that pin a prompt's wording or one schema bound. Three of the character
+    cap's tests are among them: two fail only under A130 and one only under A148.
+  - **Two comments in the AI layer's tests** still say `input_truncated` means the classification
+    read the opening only (`test_classification_providers.py`, `test_classification_sections.py`).
+    No assertion depends on either. They were found after the final runs and are left, so that
+    `68bfd36` stays the last commit that changes a test file.
+- **What is not recorded.** The agents that brought the AI and server lists up to the first fixes
+  were cut off by a usage limit before they reported. Their lists were complete and valid, and the
+  session ran them; anything else those two agents would have said is lost.
+
+**Dated note, 22 November 2026: the closing security review, verbatim.** The `security-reviewer`
+agent read the branch at `2ea4f55`, read-only. A second reader then tried to refute its one major
+finding, S1, and confirmed it. Its report as it returned it, checked character for character against
+the reviewer's recorded reply:
+
+> # Security review of D-139 (FR-10's document summaries) at `2ea4f55`
+>
+> Verdict: PASS WITH NOTES
+>
+> **Scope.** The whole of `git diff e92b801..2ea4f55` on `feat/FR-10-document-summaries`:
+> - the AI layer (`ce9ead8`, `f3227f1`);
+> - storage and replies (`2f3f863`, `245d247`);
+> - the screens (`71dd9f6`, `90dbbfa`);
+> - the write side (`ae19420`);
+> - the measurement records (`789c05a`, `9d424f6`);
+> - D-139 itself (`2ea4f55`).
+>
+> It was read against FR-10's text, CLAUDE.md invariants 1, 2, 4, 5, 8 and 10, and D-139's settled choices, which are not reopened here. The review was read-only. No suite, database or provider was run; the main session runs both suites.
+>
+> **In short.** Nothing on any route that returns a summary lets a reader get the summary of an out-of-scope document, or learn that one exists, by content, count, flag, shape or timing. The fixes in `245d247` hold, for the classify route's 404 and for its in-flight slot. No instruction the model can emit widens scope. The committed records hold no secret. S1 must be fixed or recorded before the pull request: one classification is bounded in requests but not in size, and a code comment says it is bounded. S2, S3 and S4 are fixes to records and runbook wording.
+>
+> ## Findings, most severe first
+>
+> ### S1 (major). Nothing caps the characters in a classification request, and D-139 sends up to nine. *Confirmed in the code; how much it costs is inferred.*
+>
+> - **What is exposed.** Provider spend and Waitress thread time. Any account holding `contribute_content` can trigger it. Both roles hold that permission in the shipped seed (`apps/core/constants.py:785-791`), and self-registration creates an Employee (`apps/api/views.py:581-601`).
+> - **Where.**
+>   - `classification_input` (`apps/ai/classification.py:510-525`) and `summary_sections` (`:528-553`) cut text only by D-31's whitespace token. A token is a word, and a word can be any length.
+>   - The ingestion checks that run before `_classify` count the same tokens (`apps/ingestion/documents.py:221-276`). So a TXT under 50 MB of just over 10,500 very long "words" passes all of them.
+>   - `classify_and_summarise` (`apps/ai/classification.py:1141-1172`) then sends up to `MAXIMUM_SUMMARY_SECTIONS` section requests. It also sends a final request that carries the opening again. Each request can be as large as the provider accepts, and each has `MAXIMUM_CLASSIFY_ATTEMPTS` attempts. Before D-139 the same document cost one such request.
+>   - The comment above `MAXIMUM_SUMMARY_SECTIONS` (`apps/core/constants.py:863-865`) says the constant "also bounds what one upload can spend". It bounds how many requests are made, not how big they are.
+>   - D-139's cost (a) records only the request count. The comment at `apps/ai/classification.py:154-159` sizes the final request in words ("some 3,800 words"), on the same assumption.
+> - **How it is reached.**
+>   1. Sign in or self-register.
+>   2. Upload a TXT of about 10,501 whitespace tokens, each a few hundred characters long, so that each section stays just under the provider's context window.
+>   3. The upload makes nine requests of near-window size.
+>   4. "Classify now" repeats this on the same document, and so does each upload of a fresh copy. The ingestion rate allows 60 of these an hour per account.
+>
+>   For scale, D04's measured section requests were about 3,300 prompt tokens each (`corpus/objective-02/runs/2026-11-21-d139-twenty-pages/run/attempts.log`). A crafted section can fill the provider's whole window. On FLM, each request also queues on the one NPU, ahead of asks. The alpha as deployed is bound to 127.0.0.1 (`docs/alpha-deployment.md` step 7), so only someone who can reach the laptop could do this. The comment is untrue wherever the code runs.
+> - **Precedent.** The security review of 12 November 2026 found the same class of gap in FR-16 (D-125's third note, finding 3). It was fixed with `SUMMARY_INPUT_CHARACTERS` beside `SUMMARY_INPUT_TOKENS` (`apps/core/constants.py:1132-1138`). Classification never got the same cap, and D-139 multiplies the gap.
+> - **Smallest correct fix.**
+>   - Add a `CLASSIFICATION_INPUT_CHARACTERS` cap beside `CLASSIFICATION_INPUT_TOKENS`. Apply it where `classification_input` and `summary_sections` join their tokens.
+>   - A section that the cap cuts counts as cut: `input_truncated` for the opening, `summary_truncated` for the sections.
+>   - Set the value from the corpus's measured characters per word, so that it never binds on real text. Every measured request then stays byte for byte the same.
+>   - Add a test of the dense case, as FR-16 has.
+>   - Correct the comment at `apps/core/constants.py:863-865`.
+>
+>   If the cap is not added in this pull request, correct the comment and add the residual to D-139's costs. State the bound as (`MAXIMUM_SUMMARY_SECTIONS` + 1) × `MAXIMUM_CLASSIFY_ATTEMPTS` requests, each as large as the provider's context window.
+>
+> ### S2 (minor). The backfill's record holds every document's summary whatever its visibility, and the runbook writes it from inside the alpha checkout. *Confirmed.*
+>
+> - **Where.**
+>   - `summary_entry` (`apps/documents/management/commands/summarise_documents.py:97-110`) writes each document's title, summary and key points into the `--out` record. It does this for every document the command reads, whatever its `visible_to_roles`.
+>   - `_write_record` (`:299-313`) creates the parent folders of whatever path it is given.
+>   - The command's docstring (`:26-30`, "It exposes nothing") and `docs/api-contract.md:1424` ("an operator's command, which exposes nothing") describe the database writes, not the record.
+>   - `docs/alpha-deployment.md:181-185` runs `& $py manage.py summarise_documents --out <a new record path>.json` in the deployment window. That window's working directory is the alpha checkout (`:63-65`), and the step names no location. Every other alpha artefact is kept outside every checkout (`:26`, `:110-114`, `:309-310`).
+> - **What goes wrong.** The alpha holds Administrator-only documents (`docs/alpha-deployment.md:164-167`). A relative `--out` path leaves their summaries as an untracked file in a git checkout, one commit away from the remote. Step 7's `dirty` check would only flag it afterwards.
+> - **Fix.**
+>   - In the runbook, name a path under the deployment folder, for example `C:\kmp-demo\2026-11-13\records\summarise-documents-<date>.json`. Say that the record holds each document's summary and key points whatever its visibility.
+>   - Reword the docstring and the contract line: what the command writes reaches readers only through scoped routes, but its record holds every document's summary and is kept with the server's logs.
+>
+> ### S3 (minor). D-139's account of prompt injection: cost (g) counts the threshold as a bound on steering, and the summary's own residual is not among the costs. *Confirmed.*
+>
+> - **Where.** D-139, "What these readings and choices cost", cost (g) (`docs/decisions.md`, the D-139 entry).
+> - **What is wrong.**
+>   - (g) lists "a value below its threshold waits for a person" among the things that bound steering. But the confidence is the model's own number, in the same reply the document's text is steering. A document that asks for a value "with confidence 1.0" therefore gets an in-scheme value applied without a person, within the rules below.
+>   - The threshold bounds an honest low-confidence reply, not a steered one. What does bound a steered classification:
+>     - the fixed list of types;
+>     - the scheme, built for the document's audience;
+>     - the department, written only where it is blank (rule 3);
+>     - `user_edited`, which keeps a person's type and department;
+>     - the rule that a tag a person removed or rejected is never linked again;
+>     - the rule that no Tag is ever created.
+>   - The entry says nothing about the summary, which has fewer bounds. Any document can dictate its own summary and key points. Every reader of the document then sees them beneath the title in search results, introduced as "This is a summary of the document, not its own text."
+>   - `docs/ai-provider.md:573-590` and `apps/ai/classification.py:60-85` state both points correctly. D-139 itself says the review asked for each cost "to be said in this entry and not only in comments".
+> - **What is true and should be kept.** No instruction the model emits can widen scope (see below). The truncation sentence comes from the computed `summary_truncated` flag, not from the model. So an injected claim that the summary covers the whole document cannot hide a cut. The wrong type applied at 0.8 on D04, the one sectioned reference document, is already recorded.
+> - **Fix.**
+>   - Reword (g) along these lines: "the type is held to the fixed list and the department and tags to the scheme; the confidence is the model's own number, so a steered value in the scheme is applied without a person".
+>   - Add a cost (h): a document can write its own summary. Say what bounds it: its length, that it renders as text, that it is display only, that it is shown only where the document is in scope, and the AI mark. Cite the paragraph in `docs/ai-provider.md`.
+>
+> ### S4 (minor). D-139 does not record what the in-flight slot leaves. *Confirmed.*
+>
+> - **Where.** D-139, "Two further choices": the classify route takes D-85's per-user slot (`apps/api/views.py:2586-2613`, `apps/api/ingestion_slot.py:49-67`). The option not chosen was "record the worst case". The chosen option records no worst case.
+> - **What remains.** The slot limits how many classifications one account runs at once. It does not limit spend, and it does not limit how many accounts can do the same.
+>   - **Per account.** One classification at a time, but up to 60 an hour (`INGESTION_THROTTLE_RATE`, `apps/core/constants.py:537`; the budget is shared with upload, meeting ingest and reprocess). Each classification makes up to `MAXIMUM_SUMMARY_SECTIONS` + 1 requests, which is (`MAXIMUM_SUMMARY_SECTIONS` + 1) × `MAXIMUM_CLASSIFY_ATTEMPTS` calls. It holds a Waitress thread throughout. The arithmetic ceiling at `CLASSIFICATION_TIMEOUT_SECONDS` is 8,100 s.
+>   - **Across accounts.** The slot is keyed on the account (`ingestion_slot_key`). Separate accounts each hold one of the alpha's 24 threads (D-85) and each spend the full rate. Self-registration gives an account the Employee role, which holds `contribute_content`.
+>   - **No attribution.** The classify route, upload and reprocess do not enter `attempt_log.account`. Only the ask, transcription and the gap cycle do (`apps/api/views.py:2416`, `:3085`, `:3481`). Their attempt lines therefore read "(account not set)" (`corpus/objective-02/runs/2026-11-21-d139-twenty-pages/run/attempts.log`), and the attempts log cannot say whose requests they were.
+> - **Fix.**
+>   - Record this residual under D-139's further choices, as a list, per the rule at the head of `docs/decisions.md`.
+>   - Add classify to the routes named in the comment at `apps/core/constants.py:535-536`. Classify has spent that budget since D-105.
+>   - Optionally, wrap the provider work of classify, upload and reprocess in `attempt_log.account(request.user.pk)`.
+>
+> ## The fixes in `245d247`: checked, and they hold
+>
+> - **The classify route's 404 for a document deleted meanwhile** (`apps/api/views.py:2594-2618`).
+>   - Deleted while the provider requests run: `apply_classification` locks the row with `select_for_update().filter(...).first()` and raises `NotOnThisDocument` when it is gone (`apps/documents/classification.py:641-644`). The route maps this to `Http404(DOCUMENT_NOT_FOUND_MESSAGE)`, the scoped lookup's body.
+>   - Deleted after the classification commits: `refresh_from_db` raises `Document.DoesNotExist`, which is mapped to the same 404.
+>   - A deletion that holds the lock makes the run wait, after which the run finds nothing.
+>   - Tests: `apps/api/tests/test_document_classification.py:352-407`.
+>   - The window that remains is a deletion before the text is read, which answers 422. D-139 lists it under "Named and not fixed", and describes it accurately.
+> - **The in-flight slot.**
+>   - It is taken after `scoped_document_or_404` and `require_contribute_content`. An out-of-scope id therefore gets the 404, and a role without the permission gets the 403, never the 429.
+>   - Nothing runs between taking the slot and the `try`.
+>   - It is released in `finally` after the 200, the 422, the 503, both 404s and any unexpected exception.
+>   - It is keyed on `request.user.pk`, so one account never blocks another.
+>   - The DRF rate's 429 comes before the lookup, the same for every id.
+>   - Tests: `:418-541`.
+>
+> ## Checked and found clean
+>
+> - **Invariant 1, at every place a summary can reach a reader.**
+>   - `ClassificationSerializer` (`apps/api/serializers.py:461-507`) names its fields one by one, and `summary_model` and `summarised_at` are not exposed. The object travels on:
+>     - the detail (`apps/api/views.py:1658`);
+>     - the upload's 201, for the uploader's own new document, and the reprocess's 201 (`:2474-2476`);
+>     - the classify 200 (`:2587`);
+>     - the confirm 200 (`:2644`);
+>     - the proposed-tag 200s (`:2785`).
+>
+>     Each of these resolves the document through the caller's scope first (`:1580-1593`).
+>   - `GET /api/search`: `_with_summary` (`apps/retrieval/search.py:431-448`) annotates the matched, scoped queryset through a LEFT JOIN on the one-to-one `analysis` relation. There is no second lookup, no duplicated row and no count. No predicate reads the summary. `search_total`, which the gap cycle runs as an Administrator, never touches it. Meetings carry `""`, `[]` and `false`.
+>   - The repository list, browse and the dashboard return `DocumentSerializer`, which carries no classification (test at `apps/api/tests/test_document_classification.py:955-969`). The knowledge map and the tag routes read no analysis row.
+>   - No log line or attempt line quotes a summary, a key point or a key the reply chose. Each violation message gives a count or a schema key. The 503 bodies are fixed text.
+>   - Timing: a provider is called only for a document in scope. An out-of-scope id gets the immediate 404, as before.
+> - **Visibility, reprocessing and deletion.**
+>   - The summary is not denormalised. It is read through the document's scoped query at request time, so narrowing a document hides its summary at once. Invariant 2's cascade has nothing to re-stamp.
+>   - Widening a document keeps the summary written against the narrower audience's scheme. That is cost (f), and no shipped route changes `visible_to_roles`.
+>   - A reprocess rewrites the summary. If its classification fails, the reprocess keeps the summary of the same stored original.
+>   - `delete_document` locks the document and then the analysis row, and the cascade removes the row with its summary (`apps/documents/deletion.py:76-91`). A classify run or a backfill that finishes after the deletion finds no document.
+>   - No `ContentChunk` is written from a summary, so no answer, citation or reopened thread can carry one.
+> - **The write side.**
+>   - `apply_classification` writes the summary columns before the `user_edited` guard. No person's decision exists for a summary (settled), and the type, department, outcomes and links are guarded as before.
+>   - `apply_summary` locks the document and then the analysis row. That is the module's documented order, and the order `delete_document` and `confirm_classification` use. `confirm_proposed_tag` and `reject_proposed_tag` hold only the analysis row and wait on no document, so no lock cycle exists.
+>   - `apply_summary` saves with `update_fields` set to `SUMMARY_FIELDS` alone. It refuses a document with no analysis row and a deleted document.
+>   - Every path passes one document object to both the provider call and the apply step, so a summary cannot be stored on another document.
+>   - `_write_summary` passes the summary and each key point through `_recordable`, so U+0000 and lone surrogates become U+FFFD.
+>   - A non-string summary or key point raises `AttributeError` before the save. That needs a hand-built classification: the parser guarantees strings, and no route accepts a classification from a caller.
+>   - Very long values reach `TextField` and `JSONField` only by hand.
+> - **The parser (`f3227f1`).**
+>   - `_reply_object` passes `unique_keys=True` to the first decode and to the decode after the trailing-comma repair (`apps/ai/classification.py:297`, `:300`).
+>   - The hook's `SchemaViolation` is not a `ValueError`, so it is not relabelled as the digit-limit message, and its own message is fixed.
+>   - Bounds are counted after stripping, and nothing is cut to fit.
+>   - Beyond the three shared repairs, only surrounding whitespace is stripped and a repeated tag spelling dropped, which predates D-139.
+>   - The statement and meeting-summary parsers decode as before.
+>   - Tests: `apps/ai/tests/test_classification_summary_schema.py:335-397`.
+> - **Prompt injection cannot widen scope.**
+>   - The model's output reaches only three places: this document's analysis row; links from this document to active Tags in the scheme built for its audience (`tag_scheme`); and this document's `Documents.department`, only where it is blank and only with a value in that scheme.
+>   - No Tag is created. The summary is display only, shown only where the document is in scope.
+>   - Section summaries reach only the final request of the same operation, and are never stored.
+>   - The scheme values in the prompt are, by construction, readable by every role in the audience. A summary that echoes them therefore discloses nothing to the document's readers, until a widening (cost (f)).
+> - **The front end.**
+>   - `DocumentSummary` renders the summary and key points as React text children only: never markup, a link, an attribute or a control.
+>   - There is no `dangerouslySetInnerHTML` anywhere in `frontend/src`, and nothing is stored on the client.
+>   - A 429 `ingestion_in_flight` on classify shows fixed copy, chosen by `code`, with no retry and no change of state.
+> - **The measurement records.**
+>   - `corpus/objective-02/runs/2026-11-21-d139-twenty-pages/` and `corpus/objective-05/runs/2026-11-21-d139/` hold no API key, database URL, password, session or CSRF token.
+>   - The driver's account is on `example.com`. Its password comes from `secrets`, is never printed or written, and is made unusable after the run. Both scripts refuse any database other than their own scratch one.
+>   - The Objective 05 summaries are of the committed reference documents.
+>   - The Windows home paths in them have precedent in many earlier committed records.
+>
+> ## Not assessed
+>
+> - **The deliberate-break lists.** They were changing while this review read them. `server.json` and `write.json` already hold breaks on the classify route's 404 mappings and slot, on `_with_summary` and on `apply_summary`. The AI list was proven at `186be70`, before `f3227f1`. The update in progress should cover the repeated-key refusal on the repaired decode and the switch to the past-the-ceiling wording (`of > len(section_summaries)`).
+> - **The browser, screen-reader and axe checks** a person owes (`docs/accessibility.md` section 10).
+
+**What was done on the security review.**
+
+- **S1 (major, confirmed): fixed in `55f8c55`.** `CLASSIFICATION_INPUT_CHARACTERS`, 15,000, beside
+  `CLASSIFICATION_INPUT_TOKENS`: ten characters a token, the ratio FR-16's
+  `SUMMARY_INPUT_CHARACTERS` uses.
+  - One shared join applies it to the opening and to every section. Whole tokens are kept while
+    the text fits. The tokens it drops are not read by any request and do not spill into the next
+    section, so the number of requests is still counted in tokens. A text it cuts is recorded as
+    cut: `input_truncated` for the opening, `summary_truncated` for a section.
+  - It does not bind on the project's own text. Over the forty documents of the Objective 02
+    corpus, the Objective 05 development set and the demo files, the longest opening is 9,725
+    characters and the longest section 9,780.
+  - Every request for a text the cap does not cut is byte for byte what it was: 92 texts and 258
+    requests compared with the commit before, no difference. So Objective 05's four draws and
+    Objective 02's timing stand.
+  - The finding's own case, about 10,500 tokens in 50 MB, now sends 14,282 characters a request
+    where it sent about 7.1 million.
+  - **Because the cap can cut a section that is not the last,** the page's sentence became "This
+    summary covers only part of the document." (`68bfd36`); it had said "only the first part".
+  - **Left as it is, and recorded:** a text within the ceiling whose section the cap cut still gets
+    the ordinary notice in its final request, not the one written for a cut text. Only
+    `summary_truncated` records the cut.
+  - **Not measured:** how many model tokens 15,000 characters of dense text make, and whether either
+    provider accepts such a request.
+- **S2 (minor): fixed in `3677e81`.** The command's docstring and the contract say what the
+  `--out` record holds, and the runbook writes it under the deployment folder with the server's
+  logs.
+- **S3 (minor): this entry.** Cost (g) no longer counts the threshold as a bound on a steered
+  reply, and cost (h) records that a document can write its own summary.
+- **S4 (minor): this entry and `55f8c55`.** Cost (i) records what the slot leaves. The comment
+  beside `INGESTION_THROTTLE_RATE` names the classify route. Naming the account in the attempts
+  log, which the review offered as optional, was not built.
+- **The corrections were not read by the reviewer again.**
+
+**Dated note, 22 November 2026: the closing requirements audit, verbatim.** The
+`requirements-auditor` agent read the same commit, `2ea4f55`, read-only. A second reader tried to
+refute its two major findings. It found R1 refuted in substance, because reading (e) already says
+what the finding asks it to say, and asked only for invariant 6 in this entry's Concerns line. It
+found R2's conclusion wrong, because the breaks it found missing were already written and being
+run. Its report as it returned it, checked the same way:
+
+> ## Audit: FR-10's document summaries (D-139), `feat/FR-10-document-summaries` — 21 November 2026
+>
+> **Verdict:** COMPLETE WITH RECORDED DEVIATIONS
+>
+> This verdict covers FR-10's five summary clauses as a set, read against the proposal's words. Every clause is met by committed code and held by tests. On the server the tests run from both an Employee and an Administrator session, and wherever only a screen can show a clause, a front-end test holds it.
+>
+> Two literal departures are recorded, and both can be accepted:
+> - clause 2, for a document longer than `CLASSIFICATION_INPUT_TOKENS` (D-139 cost (a));
+> - clause 3, past 12,000 tokens (cost (b)).
+>
+> Showing the summary without a citation (reading (e)) stands on FR-10's own text. Its record, however, leaves out facts an examiner will weigh (R1).
+>
+> The verdict does not close the definition of done. Neither suite has been shown passing at the head, and the tests added by the three fix commits have not yet been shown to fail under a break (R2).
+>
+> **What was read.**
+> - The code at `2ea4f55`: the whole of `e92b801..2ea4f55`.
+> - During the audit the branch gained `6ed023d` (23:18). It adds Objective 05's third and fourth draws, and edits D-139, `docs/ai-provider.md` and one comment in `apps/core/constants.py`. No executable line changed, so every code citation below holds at both commits.
+> - D-139's text and figures were checked at `6ed023d`, and the `docs/decisions.md` line numbers below are that commit's.
+> - Neither suite was run for this audit.
+> - The break lists and results are kept outside the repository, with the session's handover files. They were read at about 23:30, while other runs were rewriting them.
+>
+> ### Clause coverage
+>
+> | Clause | Status | Evidence |
+> |---|---|---|
+> | 1. "Each document displays a short summary and a list of key points" (the document page) | Satisfied | **Code:** `frontend/src/pages/DocumentDetail.jsx:222-227` and `frontend/src/components/DocumentSummary.jsx:52-84`, reading the classification object (`apps/api/serializers.py:505-507`). **Server tests, both roles:** `apps/api/tests/test_document_classification.py:896`; `:933` (out of scope, the 404 carries no word of the summary); `apps/api/tests/test_fr10_summary_writes.py:90`, `:114`. **Screen:** `frontend/tests/documentSummary.test.jsx:159-375` |
+> | 1. "shown beneath the title in search results so users can judge relevance before opening the file" | Satisfied | **Code:** the summary is selected by the scoped document query (`apps/retrieval/search.py:431-467`, `:599`) and serialized at `apps/api/serializers.py:1053-1055`. It is drawn beneath the title and above the snippet (`frontend/src/components/SearchResults.jsx:43-51`). **Server tests, both roles:** `apps/api/tests/test_search.py:434-534`; `apps/retrieval/tests/test_search.py:801-904`. **Screen:** `frontend/tests/search.test.jsx:347` onward |
+> | 1. NFR-15's mark on the block | Satisfied | **Code:** `frontend/src/components/DocumentSummary.jsx:62-66`. **Screen:** `frontend/tests/search.test.jsx:370`; `frontend/tests/documentSummary.test.jsx:178-214` |
+> | 2. "A single structured request issued at upload returns the classification, the summary and key points, and the tag assignments together, at the cost of one call rather than three" | Satisfied within `CLASSIFICATION_INPUT_TOKENS`. Recorded deviation (a) beyond it | **Code:** one flow serves both providers (`apps/ai/classification.py:1095-1172`). The schema has five keys (`:191-228`). Upload reaches it through `apps/ingestion/documents.py:303-323`. **Tests:** `apps/ai/tests/test_classification_sections.py:511` (one call within the cap), `:540`, `:611`; `apps/ai/tests/test_classification_providers.py:234`, `:571`, `:595`; `apps/api/tests/test_fr10_summary_writes.py:90` |
+> | 3. "Documents exceeding the model's context limit are summarised in sections and consolidated, rather than being truncated and summarised from a fragment without the user being told" | Satisfied up to 12,000 tokens. Recorded deviation (b) past that, and the user is told on both screens | **Code:** `apps/ai/classification.py:528-553`, `:738-766`, `:861-877`, `:1141-1163`. The flag is written at `apps/documents/classification.py:805-839` and shown at `frontend/src/components/DocumentSummary.jsx:67`. **Tests:** `apps/ai/tests/test_classification_sections.py:383`, `:611`; `apps/documents/tests/test_classification_summary.py:282`, `:301`; `frontend/tests/documentSummary.test.jsx:356-374`; `frontend/tests/search.test.jsx:444` |
+> | 4. "the summarisation prompt constrains output to content present in the document" | Satisfied, by the prompt alone (cost (c)) | **Code:** `GROUNDING_SENTENCE` (`apps/ai/classification.py:639-642`) appears as rule 11 (`:695-696`) and as section rule 5 (`:723-725`). **Tests:** `apps/ai/tests/test_classification_prompt.py:330`; `apps/ai/tests/test_classification_sections.py:188` |
+> | 5. "200 OK with the classification, summary and tags" | Satisfied | **Code:** `apps/api/views.py:2619-2625`. `classification` carries the summary and `tag_details` carries the tags. The upload's 201 carries the same object (`apps/api/views.py:1617`). **Tests, both roles:** `apps/api/tests/test_fr10_summary_writes.py:114`, `:90` |
+> | 5. "409 Conflict on a duplicate tag name within a dimension" | Satisfied, unchanged | **Tests:** `apps/api/tests/test_fr10_person_applied_tags.py:242`; `apps/api/tests/test_fr10_tag_create.py:202` |
+> | 5. "422 Unprocessable Entity where insufficient text was extracted" | Satisfied. Since D-139 the 422 is decided inside the in-flight slot, so while the user's slot is held the route answers 429 instead. This is documented in `docs/api-contract.md` and tested | **Code:** `apps/api/views.py:2591-2600`. **Tests:** `apps/api/tests/test_document_classification.py:308`, `:418` |
+>
+> ### The readings, and where the summary is
+>
+> - **(a) can be accepted.**
+>   - Clause 3 presupposes more than one request for a document past the limit, so the two clauses must be read together. The final request is still the one that returns all three.
+>   - The reading's weight rests on taking "the model's context limit" to be the 1,500-token cap. On the default provider, that makes every document of more than about five pages a multi-request document.
+>   - D-139 says so ("although Claude's own window would hold it whole") and gives its reason.
+> - **(b) can be accepted.**
+>   - Past 12,000 tokens, the summary covers the first eight sections. The server sets `summary_truncated` from the real token count.
+>   - Both screens say so, in a sentence inside the AI block. This is tested on each screen and at the server (table above).
+>   - No other screen shows a summary. The list, browse and dashboard replies carry none (`apps/api/tests/test_document_classification.py:956`). The Ask screen is unchanged, as D-139 records.
+>   - The wording sent to a model past the ceiling has never actually been sent to one. D-139 says so.
+> - **(e): the conclusion is sound; the argument is incomplete.**
+>   - FR-10 itself puts the summary beneath the title in search results, and gives it prompt grounding, not citations.
+>   - FR-12's sentence sits among FR-12's answer clauses.
+>   - Reading invariant 6 as governing an answer's statements therefore reconciles two proposal clauses, and it is the user's settled choice.
+>   - The record leaves out what weighs against the reading. See R1.
+> - **Clause 5: where the summary is.**
+>   - It is in the classification object. That object travels in the classify route's 200, the upload's and the reprocess's 201 (FR-08's code), the document detail, and the confirm and proposed-tag replies.
+>   - The same three keys appear on each `GET /api/search` document result.
+>   - `docs/api-contract.md` says the same in three places: the classify row, the notes on the classification object, and the search-result shape. All three match the serializers.
+>
+> ### FR-10's other clauses
+>
+> | Clause | After D-139 | Evidence |
+> |---|---|---|
+> | The type comes from a fixed list | Holds | `apps/ai/classification.py:365-368`. `apps/ai/tests/test_classification_prompt.py` holds prompt rules 3 to 8 word for word |
+> | The type and department are editable; "any value a user edits are retained and is not overwritten by later reprocessing, and the machine assignment is retained alongside it" | Holds | A run on a `user_edited` row keeps the person's type and department, records the machine's values beside them, and replaces only the summary (`apps/documents/classification.py:653-697`; `apps/documents/tests/test_classification_summary.py:183`). The summary is not a value a person can edit (D-139's default), so replacing it overwrites no person's value. The backfill writes the five summary columns and nothing else (`apps/documents/classification.py:770-802`; `apps/documents/tests/test_classification_summary.py:330`; `apps/documents/tests/test_summarise_documents_command.py:261`) |
+> | Four dimensions, controlled taxonomy growth, provenance | Unchanged | Prompt rules 4 to 7 are word for word as before. Apply rule 4 is not in the diff |
+> | Confidence and provisional | Holds. The thresholds were derived on the old prompt | Objective 05 ran four times on D-139's prompt. Every clause was met on every run. One wrong type was applied once (D04, 0.8). This is recorded, and nothing was tuned |
+> | 409 and 422 | Hold | Clause coverage table, above |
+>
+> ### NFRs and invariants
+>
+> - **Invariant 1: pass.**
+>   - A summary reaches a reader only on a row the role predicate admitted. Search selects it in the scoped document query, and no count or flag about it exists. The classification object travels only with a document the scoped lookup resolved.
+>   - Tested from both roles, each with a mirror case: `apps/api/tests/test_search.py:502`; `apps/api/tests/test_fr10_summary_writes.py:172`.
+>   - The scheme in the prompt is the document's own audience's, for the backfill too (`apps/documents/tests/test_classification_summary.py:498`).
+> - **Invariant 5: pass,** conceded as cost (c). There is no second model call, and no code checks a summary.
+> - **Invariant 6: recorded deviation (e).** The record is incomplete (R1).
+> - **Invariant 8: pass.** A provider outage at upload answers 201. The document is stored, indexed and left unclassified (`apps/api/tests/test_fr10_summary_writes.py:146`). Cost (d) is recorded.
+> - **Invariant 9 and NFR-21: pass.**
+>   - Classification runs in a savepoint inside the ingestion transaction (`apps/ingestion/documents.py:321-334`).
+>   - `apply_summary` is one transaction that saves only the five summary columns (`apps/documents/classification.py:795-802`).
+>   - Since D-139, the upload's and the reprocess's transaction stays open across up to nine provider requests instead of one, and a reprocess holds the document's row lock throughout. That breaches nothing, but it is not recorded.
+> - **Invariant 10: pass.**
+>   - A summary or key point out of bounds refuses the whole reply; nothing is trimmed (`apps/ai/classification.py:463-504`).
+>   - A repeated key is refused at any depth (`apps/ai/schema.py:341-351`, `:390`; `apps/ai/classification.py:297`, `:300`).
+>   - `_write_summary` substitutes U+FFFD and drops blank key points, but only for a classification a caller builds itself. The parser refuses either in a provider's reply first.
+> - **NFR-15: pass** (clause coverage table).
+> - **NFR-19: pass.**
+>   - The classify route answers 503 with the notice once any one request uses up its attempts (`apps/api/views.py:2601-2608`; `apps/api/tests/test_document_classification.py:319`).
+>   - Exactly three calls per request are asserted (`apps/ai/tests/test_classification_sections.py:733`, `:889`).
+>   - The wait is bounded but longer. The worst case is (`MAXIMUM_SUMMARY_SECTIONS` + 1) × `MAXIMUM_CLASSIFY_ATTEMPTS` × `CLASSIFICATION_TIMEOUT_SECONDS`, that is 27 × 300 s; before D-139 it was 3 × 300 s. `docs/ai-provider.md` gives the factors but not the product.
+> - **NFR-20:** it concerns meeting transcripts and is untouched. A document's source survives a failed classification (invariant 8). As before, nothing retries a failed document classification automatically, and FR-10 asks for nothing that would.
+>
+> ### Definition of done (CLAUDE.md §8)
+>
+> 1. **Behaviour, error paths and codes: met,** with readings (a), (b) and (e) recorded.
+> 2. **Both suites, both roles, the screen: partly shown.**
+>    - Both roles: met. Every new route test runs from an Employee and an Administrator session (`session_client`, `conftest.py:319-324`). The scope tests use both clients.
+>    - Screen-only clauses: each has a front-end test.
+>    - Passing: **not shown at the head.** The counts below are claims in commit messages; the repository holds no run output:
+>      - pytest 6,030 at `ae19420`, before the fixes;
+>      - after the fixes, 3,491 in `apps/api`, `apps/documents` and `apps/retrieval`, and 1,477 in `apps/ai`;
+>      - the front end, 1,265 at `90dbbfa`.
+>    - `apps/accounts`, `apps/core`, `apps/ingestion`, `apps/meetings` and the remaining apps have not been run since the fixes.
+>    - No executable line changed after `90dbbfa`, so one full run of each suite at the head closes this item.
+> 3. **Happy path and failure path: met,** for every clause.
+> 4. **Committed on its branch with the FR ID: met.** Every commit subject carries FR-10, and each layer's tests are in that layer's commit.
+> 5. **This audit:** gaps R1 to R7.
+>
+> Three further things are claimed but not shown in the repository:
+> - the rehearsal upload's final request, which has no committed log;
+> - the reflow figures in `docs/accessibility.md` §10, which come from a recorded browser run; the suite holds them only through the CSS rules;
+> - FLM's expected Objective 02 overrun, which is arithmetic and recorded as such.
+>
+> ### The documents committed with the change
+>
+> - `docs/api-contract.md`, `docs/schema-v1.md` and `docs/alpha-deployment.md` were checked against the code. No untrue sentence was found. The backfill is a named step after `migrate` and on the first redeploy.
+> - `docs/ai-provider.md` is true of the code, except for line 705's count (R3) and line 604's "chosen from the opening" (R6).
+> - `docs/accessibility.md` §10: every claim names a test that exists. The browser, screen-reader and axe checks are still owed, and that is recorded.
+> - CLAUDE.md §5: the four new rows match `apps/core/constants.py:853-866`. The addition to the `MAXIMUM_CLASSIFY_ATTEMPTS` row matches `apps/ai/classification.py:947`.
+> - D-139: these claims are borne out by the committed records.
+>   - The nine choices.
+>   - Objective 05's four draws, each against its `verification.md`:
+>     - 18 of 20 types on every draw;
+>     - below-threshold assignments held: 34/34, 34/34, 32/32, 33/33;
+>     - at or above the threshold, applied: 52/55, 48/51, 50/54, 49/53;
+>     - D04's type confidence: 0.6, 0.8, 0.6, 0.6;
+>     - one Topic proposed, on draw 4;
+>     - 26 requests a draw, every one parsed at the first attempt, at $0.0125 to $0.013 a draw.
+>   - Objective 02:
+>     - uploads took 23.4 to 32.1 s;
+>     - classification took 17.1, 14.6, 16.1, 14.7 and 19.7 s, summed from `run/attempts.log`;
+>     - one reply was refused for a 652-character summary.
+>   - FLM's fastest attempt on 10 November, 9.3 s (`corpus/objective-02/runs/2026-11-10/ingestion-classify-flm/attempts.log`).
+>   - "What is built", checked against the code.
+> - D-139: not borne out: R1, R3, R4, R5.
+>
+> ### The deliberate breaks
+>
+> **The lists proven at `186be70`: 184 breaks, every one caught.**
+> - AI list: 137 new tests and 102 breaks. 136 of the tests fail under at least one break. The one that cannot, `test_the_summary_helpers_are_importable_from_the_testing_module`, was deleted in `f3227f1`.
+> - Server list: 31 new tests and 30 breaks. 29 of the tests fail under at least one break. Two cannot:
+>   - `test_0016_is_on_the_path_to_the_leaf_of_documents` was deleted in `245d247`;
+>   - its 0015 sibling is an existing test. It now carries a comment saying it holds for every valid graph and is kept as a record, not as a test that can fail (`apps/documents/tests/test_migration_0015_departments.py:84-87`).
+> - Screens list: 34 new tests and 52 breaks. Every test fails under at least one break.
+> - Write side's list at `ae19420`: 32 new tests and 49 breaks. Every break was caught, and every test fails under at least one break.
+>
+> What is recorded as unable to fail is honest.
+>
+> **The fixed code is not yet proven.** The three fix commits added 24 test functions: 12 in `f3227f1`, 9 in `245d247` and 3 in `90dbbfa`. At 23:30:
+> - the screens list (40 tests, 68 breaks) named its three and had no result past `186be70`;
+> - the server list (37 tests, 45 breaks) named its seven and had no result past `186be70`;
+> - the write list (34 tests, 51 breaks) named its two and was being run at `6ed023d`, with 14 breaks run so far, all caught;
+> - the AI list had not changed since 17:44 and named none of `f3227f1`'s twelve tests (R2).
+>
+> ### FR-10 as a whole
+>
+> D-139 builds the five clauses that D-104 deferred. What remains is recorded elsewhere:
+> - the tag browser is FR-15's facets plus the Administrator-only inventory (D-105; recorded as partial in D-119);
+> - `DocumentAnalysis` departs from the proposal's field table (D-105, `docs/schema-v1.md`).
+>
+> With these and readings (a), (b) and (e), FR-10 as a whole would read COMPLETE WITH RECORDED DEVIATIONS. The log does not say so. D-119's "Where FR-10 stands" still reads INCOMPLETE for the summary clauses, and D-139 states no standing for FR-10 (R7).
+>
+> ### Set-level checks
+>
+> - No AI vendor SDK is imported outside `apps/ai/`.
+> - No limit or threshold literal was added inline. The four new limits are at `apps/core/constants.py:853-866`.
+> - Nothing is built twice:
+>   - one component draws the summary on both screens;
+>   - one flow serves both providers (`classify_and_summarise`);
+>   - one attempt loop serves every request (`_run_attempts`);
+>   - one write rule serves both writers (`_write_summary`).
+> - Each part is in its layer: AI calls in `apps/ai`, writes in `apps/documents`, routes in `apps/api`, search in `apps/retrieval`.
+> - Nothing is enforced in the interface alone. The bounds are the parser's, the truncation flag is computed on the server, and the scope is a condition on the query.
+> - No chunk is written. A summary is never embedded, so the rule that every chunk records `embedding_model` and `embedding_dimension` is not engaged.
+> - M6 (1 November) is past. FR-10 is a SHOULD in NIT3004, so this work takes nothing from the twelve MUST-HAVEs.
+>
+> ### Missing or partial
+>
+> 1. **R1 (major): reading (e) is recorded without the facts that weigh against it.**
+>    - **What (e) says.** D-139 (e) (`docs/decisions.md:21151-21157`) declares invariant 6 to govern only an answer's statements.
+>    - **What weighs against it:**
+>      - CLAUDE.md §6 states invariant 6 without limit (`CLAUDE.md:300`).
+>      - FR-12's first sentence, "Every factual statement displayed carries a citation", is just as unlimited, and (e) quotes only FR-12's second sentence.
+>      - The log has applied invariant 6 beyond an answer before: D-55 (`docs/decisions.md:2914`) and D-56 (`:2950`). D-44 (`:2042`) excused retrieved text only because it is not a model's statement.
+>      - The precedent (e) cites, D-125's `snippet_ai_generated`, comes from a meeting summary in which every sentence names numbered transcript passages, checked by set membership (`docs/decisions.md:11460-11472`). The meeting page shows those references (`frontend/src/components/MeetingSummary.jsx:22-43`).
+>    - **The gap.** FR-10's document summary is the first model-written prose the interface shows with no citation and no check in application code, and nothing in the record says so. D-139's Concerns line (`:21044-21045`) also omits invariant 6.
+>    - **Change (no code):**
+>      - In (e), quote both FR-12 sentences, state the reading as a scoping of invariant 6 that rests on FR-10 Front-End clause 1 and clause 4, answer D-44, D-55 and D-56, and describe D-125 accurately.
+>      - Add invariant 6 to D-139's Concerns line.
+>      - Have the main session add a dated note under invariant 6 in CLAUDE.md §6 naming this surface and D-139, as invariant 2 carries its dated correction.
+> 2. **R2 (major): the twelve tests the AI-layer fix added are in no break list.**
+>    - `f3227f1` added twelve test functions that hold two of the review's fixes: the repeated-key refusal (invariant 10) and the past-the-ceiling wording (clause 3). None is in any break list:
+>      - `apps/ai/tests/test_classification_schema.py:360`;
+>      - `apps/ai/tests/test_classification_sections.py:369`, `:383`, `:424`, `:637`, `:670`;
+>      - `apps/ai/tests/test_classification_summary_schema.py:365`, `:375`, `:383`, `:394`;
+>      - `apps/ai/tests/test_schema.py:89`;
+>      - `apps/ai/tests/test_summarisation_schema.py:588`.
+>    - **Change:**
+>      - Add the twelve to the AI list, with at least these breaks: `unique_keys=True` on each decode (`apps/ai/classification.py:297`, `:300`); `_refuse_a_repeated_key` (`apps/ai/schema.py:341-351`) and its hook (`:390`); the truncated branch (`apps/ai/classification.py:869`); the real-count computation (`:1146-1147`).
+>      - Run all four lists at the head, and generate D-139's tables from those runs alone.
+> 3. **R3 (minor): D-139's counts of refused replies are stale.**
+>    - Cost (d) (`docs/decisions.md:21148-21150`) says a summary breaking its bound is "not measured beyond Objective 05's run below, where all 26 requests conformed".
+>      - The entry now holds four draws: 104 requests, every one at the first attempt.
+>      - Its own Objective 02 section reports a refused reply, which it calls "cost (d) above happening".
+>    - "Of the seven final requests" (`:21227`, and `docs/ai-provider.md:705`) was true when `twenty-pages.md` was written, before draws 2 to 4.
+>      - There are now ten final requests.
+>      - Nine have a committed attempt log: D04's in each of the four draws, and the five twenty-page uploads. The tenth is the rehearsal's.
+>      - One was refused.
+>    - **Change:** correct both counts. Leave `twenty-pages.md` as it was written, since it was true at the time.
+> 4. **R4 (minor): the short last section is recorded only in `docs/ai-provider.md`.**
+>    - **The risk.** `summary_sections` (`apps/ai/classification.py:528-553`) gives a text 1 to 49 tokens past a multiple of `CLASSIFICATION_INPUT_TOKENS` a last section shorter than `MINIMUM_CONTENT_LENGTH`.
+>      - That section's request must still return a summary and 1 to 5 key points, under the grounding rule.
+>      - Three refused replies end the whole operation and leave the document unclassified. Before D-139 the same document would have been classified.
+>      - The risk is unmeasured on both providers. On FLM, a retry repeats the same request at temperature 0.
+>    - **Where it is recorded.** The earlier review verified this as major, but it is said only in `docs/ai-provider.md:708-710`.
+>    - **Change:** add it to D-139, as cost (h) or under "Named and not fixed".
+> 5. **R5 (minor): D-139 points to a review note that is not in the log.**
+>    - D-139 refers to "An adversarial review of the three layers (below)" (`docs/decisions.md:21131`) and says "The review is in the dated note below" (`:21170-21171`).
+>    - No such note exists; the entry ends at line 21291. The review, 22 findings across three lenses, exists only in the session's files outside the repository.
+>    - **Change:** add the note, with each finding's disposition (the commit that fixed it, or where it is recorded). Otherwise, remove both references and say where the review is kept.
+> 6. **R6 (minor): the page still says only the opening was read to classify a long document.**
+>    - `TEXT.classificationTruncated` (`frontend/src/constants.js:1146`) is shown whenever `input_truncated` is true (`frontend/src/components/Classification.jsx:910-912`). It says "Only the opening of this document was read to classify it."
+>    - Since D-139, every such document is classified by a final request that also carries its section summaries (`apps/ai/classification.py:861-877`).
+>      - Cost (g) says those summaries can now steer the type, the department and the tags.
+>      - Objective 05's second draw names them as a plausible cause of D04's applied wrong type.
+>    - `apps/ai/base.py:109-110` and `docs/ai-provider.md:604` say the same of the flag.
+>    - **Change:**
+>      - Reword the sentence so it is true both of rows classified before D-139 and of rows classified after, and update its test (`frontend/tests/documentClassification.test.jsx:294`).
+>      - Align the docstring and `docs/ai-provider.md` with the new wording.
+>      - Alternatively, record beside (g) why the sentence stands.
+> 7. **R7 (minor): the log does not say where FR-10 now stands.**
+>    - D-119's "Where FR-10 stands" (`docs/decisions.md:10257`) still says FR-10 is INCOMPLETE because the summary clauses are not built.
+>    - D-105 (`:7570-7571`) still lists the classify route as having no in-flight slot.
+>    - D-139 overtakes both, and neither has a dated note, as D-104 does (`:7447`). D-139 itself states no standing for FR-10.
+>    - **Change:** add the two dated notes. Add one sentence to D-139: the summary clauses are built, with readings (a), (b) and (e); the tag browser remains D-105's recorded deviation; subject to this audit.
+>
+> ### Gate impact
+>
+> No effect on M6, which is past. Before the pull request: R1, R2, and one passing run of each suite at the head. R3 to R7 are corrections to the record and to one screen sentence, cheap enough to land in the same commit.
+>
+> **One line:** FR-10's five summary clauses are COMPLETE WITH RECORDED DEVIATIONS; the pull request waits on R1, R2 and both suites passing at the head.
+
+**What was done on the requirements audit.**
+
+- **R1 (refuted in substance):** invariant 6 is in this entry's Concerns line. Reading (e) stands
+  as written.
+- **R2 (its conclusion refuted):** the AI list holds the tests the fixes added, and all four lists
+  were run whole at the last code commit: the note on the deliberate breaks, above.
+- **R3:** the counts in cost (d) and in the Objective 02 section are corrected here, and in
+  `docs/ai-provider.md` (`55f8c55`). The run record `twenty-pages.md` keeps "seven", which was true
+  when it was written.
+- **R4:** the short last section is recorded under cost (d).
+- **R5:** the note on the review of the first three layers is in this entry, with what was done on
+  each of its 22 findings.
+- **R6:** the page now says "This document is long. It was classified from its opening, with at
+  most a summary of the rest." (`3677e81`), and its test pins the words. `apps/ai/base.py` and
+  `docs/ai-provider.md` say the same of `input_truncated` (`55f8c55`).
+- **R7:** D-105 and D-119 each carry a dated note pointing here, and "Where FR-10 stands after
+  this" is above.
+- **Its definition of done, item 2, "Passing: not shown at the head".** Both suites were run after
+  the audit, at `68bfd36`, the last commit that changes code or tests:
+  - pytest, on a clean checkout: 6,099 passed, none failed, in 24 minutes; all 54 protected
+    endpoints exercised from both an Employee and an Administrator session;
+  - `makemigrations --check --dry-run`: no changes detected;
+  - the front-end suite: 1,265 passed in 67 files; lint and build clean.
+
+  These are this session's runs. The repository holds no run output, as the audit says; CI's run on
+  the pull request is the record an examiner can open.
+- **The corrections were not read by the auditor again.** Neither closing verdict was given on the
+  code as it now stands: both were given at `2ea4f55`, and the commits after it hold the fixes,
+  tests and records described in these notes.
