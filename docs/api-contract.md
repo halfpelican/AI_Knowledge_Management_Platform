@@ -179,8 +179,8 @@ Every code below is quoted from the FR's own Responses clause unless marked
 
 | Method | Path | Auth | Success | Failures |
 |---|---|---|---|---|
-| POST | `/api/documents` | session + `contribute_content` | `201` document object, carrying `doc_id`, and since FR-10 `classification` (the object or `null`; see NIT3004 — FR-10) | `400` no file, or an empty title, or a `visible_to_roles` that is empty or names an unknown role; `401`; `403` the role lacks `contribute_content`, or the list excludes the uploader's own role (*convention*, D-29); `409` a document with the same content already exists; `413` over 50 MB, or a DOCX or XLSX whose members declare more decompressed content than a parser may inflate (*convention*, Stage 4 item 12b — a size rejection of decompressed size, carrying its own message, not the 415); `415` the file signature is not one of the four accepted formats; `422` the document was stored but no text could be extracted, or it holds too little text to index, or it is too large to index (D-51; for a PDF, any of D-81's bounds), or every chunk failed to embed; `429` past `INGESTION_THROTTLE_RATE`, shared with meeting ingest, reprocess and, since FR-10, classify (D-79, D-105); `429 {"detail": "...", "code": "ingestion_in_flight"}` while another upload, transcript or reprocess of this user's is still being processed, nothing stored (D-85) |
-| POST | `/api/documents/{id}/reprocess` | session + `contribute_content` | `201` the document object, now `Indexed` or `Partially indexed`, with `classification` since FR-10 (NIT3004 — FR-10) | `401`; `403` the role lacks `contribute_content`; `404` no such document, or one outside the caller's scope; `409` already indexed, or restoring its content hash collided with a copy indexed meanwhile; `422` the reprocess failed the same way the upload did, or the document has no stored original: its `file_path` is blank or names a file missing from disk or outside the media folder (`NO_STORED_ORIGINAL_MESSAGE`, D-75); `429` past the ingestion rate (D-79); `429 {"detail": "...", "code": "ingestion_in_flight"}` while another upload, transcript or reprocess of this user's is still being processed, the document left as it was (D-85) |
+| POST | `/api/documents` | session + `contribute_content` | `201` document object, carrying `doc_id`, and since FR-10 `classification` (the object or `null`; see NIT3004 — FR-10). Since D-139 the object carries the document's `summary`, `key_points` and `summary_truncated`, which the same single classification request returned and the upload stored | `400` no file, or an empty title, or a `visible_to_roles` that is empty or names an unknown role; `401`; `403` the role lacks `contribute_content`, or the list excludes the uploader's own role (*convention*, D-29); `409` a document with the same content already exists; `413` over 50 MB, or a DOCX or XLSX whose members declare more decompressed content than a parser may inflate (*convention*, Stage 4 item 12b — a size rejection of decompressed size, carrying its own message, not the 415); `415` the file signature is not one of the four accepted formats; `422` the document was stored but no text could be extracted, or it holds too little text to index, or it is too large to index (D-51; for a PDF, any of D-81's bounds), or every chunk failed to embed; `429` past `INGESTION_THROTTLE_RATE`, shared with meeting ingest, reprocess and, since FR-10, classify (D-79, D-105); `429 {"detail": "...", "code": "ingestion_in_flight"}` while another upload, transcript or reprocess of this user's is still being processed, nothing stored (D-85) |
+| POST | `/api/documents/{id}/reprocess` | session + `contribute_content` | `201` the document object, now `Indexed` or `Partially indexed`, with `classification` since FR-10 (NIT3004 — FR-10), which since D-139 carries the summary the reprocess's classification wrote | `401`; `403` the role lacks `contribute_content`; `404` no such document, or one outside the caller's scope; `409` already indexed, or restoring its content hash collided with a copy indexed meanwhile; `422` the reprocess failed the same way the upload did, or the document has no stored original: its `file_path` is blank or names a file missing from disk or outside the media folder (`NO_STORED_ORIGINAL_MESSAGE`, D-75); `429` past the ingestion rate (D-79); `429 {"detail": "...", "code": "ingestion_in_flight"}` while another upload, transcript or reprocess of this user's is still being processed, the document left as it was (D-85) |
 | GET | `/api/documents` | session | `200 [document object, ...]`, newest first, scoped to the caller's role | `401` |
 | GET | `/api/documents/{id}` | session | `200` document object, with the detail fields Stage 5 adds (`extracted_text`, `tags`, `can_delete`; see Stage 5 — FR-15) | `401`; `404` no such document, or one outside the caller's scope |
 
@@ -1224,7 +1224,7 @@ for every id.
 
 | Method | Path | Auth | Success | Errors |
 |---|---|---|---|---|
-| POST | `/api/documents/{id}/classify` | session + `contribute_content` | `200 {"classification": ..., "tag_details": [...], "department": "Finance"}` after one provider call and the apply rules, in one transaction; a second call updates the one analysis. `department` is the document's `department` column after the classification, re-read from the row: an applied in-scheme suggestion fills a blank department, and a different department already there is kept, with the suggestion held as `department_outcome: "provisional"` (D-105's note of 10 November) | `401`; `404`; `403`; `422 {"detail": "..."}` no extracted text (FR-10: "where insufficient text was extracted"), before any provider call; `503 {"detail": "..."}` the provider failed after `MAXIMUM_CLASSIFY_ATTEMPTS` (NFR-19), nothing written; `429` past the ingestion rate, one budget with upload, meeting ingest and reprocess (D-79); no in-flight slot |
+| POST | `/api/documents/{id}/classify` | session + `contribute_content` | `200 {"classification": ..., "tag_details": [...], "department": "Finance"}` after one provider call and the apply rules, in one transaction; a second call updates the one analysis. The classification object carries the `summary`, `key_points` and `summary_truncated` this call wrote (D-139), replacing any earlier summary, on a `user_edited` analysis too. `department` is the document's `department` column after the classification, re-read from the row: an applied in-scheme suggestion fills a blank department, and a different department already there is kept, with the suggestion held as `department_outcome: "provisional"` (D-105's note of 10 November) | `401`; `404`; `403`; `422 {"detail": "..."}` no extracted text (FR-10: "where insufficient text was extracted"), before any provider call; `503 {"detail": "..."}` the provider failed after `MAXIMUM_CLASSIFY_ATTEMPTS` (NFR-19), nothing written; `429` past the ingestion rate, one budget with upload, meeting ingest and reprocess (D-79); no in-flight slot |
 | POST | `/api/documents/{id}/classification` | session + `contribute_content` | `200 {"classification": ..., "department": "Finance"}`, where `department` is the document's `department` column after the confirm or edit, so the client need not infer it from the outcome. Body `{"doc_type"?: string, "department"?: string}`: both omitted confirms as it stands (a provisional type is applied; a provisional department is written to `department`); `doc_type` must be one of `DOCUMENT_TYPES`; `department` may be blank, which clears it; `null` means omitted | `401`; `404`, also when the document has no classification yet; `403`; `400 {"doc_type": ["..."]}` or `{"department": ["..."]}` |
 | POST | `/api/documents/{id}/tags/{content_tag_id}/confirm` | session + `contribute_content` | `200` the `tag_details` entry, now `confirmed: true, provisional: false`, `applied_by` unchanged | `401`; `404`, also when the link is not this document's or has been removed; `403` |
 | DELETE | `/api/documents/{id}/tags/{content_tag_id}` | session + `contribute_content` | `204` no body: the tag is removed (FR-10: "accepted or removed in a single action"). The link is **kept, marked removed**, a person's (`applied_by: "user"`) as well as an AI link (`applied_by: "ai"`, held or applied, confirmed or not, with the confidence the machine gave it), and no read lists it again; a later classify, reprocess or `classify_documents` run neither links it again nor alters it, and a removed value is neither proposed, created nor reactivated again on this document, in any dimension (D-128; a removed Topic until then). Applying the tag again restores it (`200` on the POST below). A person's link was deleted until the requirements re-audit of 10 November 2026 (D-105). The `Tags` row stays | `401`; `404`, also when the link is not this document's or has already been removed; `403` |
@@ -1261,9 +1261,21 @@ The classification object (`null` for a document never classified):
     travel only with a document the caller's scope resolved, like the rest of the object.
   - `GET /api/search` carries the same three on each document result (FR-12 — keyword search,
     above).
-  - **No route writes a summary yet.** `documents 0016` and the two reads landed first. Until the
-    upload, the classify route and the backfill command write one, every analysis reads as having
-    none.
+  - **Who writes it.** Every classification run writes the summary, the key points and
+    `summary_truncated` with the classification, from the same single request (FR-10's
+    Server-End): the upload, `POST /api/documents/{id}/reprocess`,
+    `POST /api/documents/{id}/classify` and `manage.py classify_documents`. Each run replaces the
+    summary before it, on a `user_edited` analysis too: a person's edit protects the type and the
+    department from reprocessing, not the summary (D-139). A summary or key point holding U+0000
+    or a lone surrogate is stored with U+FFFD in its place, as a discarded tag value is, although
+    the parser already refuses such a reply. `manage.py summarise_documents` (below) writes the
+    summary alone, for a document classified before `documents 0016`. Nothing else writes it: the
+    confirm and proposed-tag routes leave it as it is and carry it as stored, and the tag routes
+    do not touch it.
+  - When the classification fails, so does the summary: the upload's and the reprocess's 201
+    carry `classification: null`, and the document is stored and indexed with no summary
+    (invariant 8). The classify route's 503 writes nothing and leaves the earlier summary, if any,
+    in place.
 
 - **The effective department is the document object's `department`** (D-72); `department_outcome`
   says how the machine's suggestion was disposed of. `doc_type` is `null` while the type is
@@ -1355,9 +1367,10 @@ dimension sorted by name and always present:
   `409`, whatever exists elsewhere, and the `409` names the Topic, which its id restores (`200`).
 
 **The 201 bodies** of `POST /api/documents` and `POST /api/documents/{id}/reprocess` carry
-`classification` (section 7.8 line 100): the object, or `null` when classification failed or the
-provider was unavailable, in which case the document is indexed and unclassified (invariant 8,
-D-33 part 1). A 422 body does not carry it, and neither do the list and browse routes.
+`classification` (section 7.8 line 100): the object, with the summary the same request returned
+(D-139), or `null` when classification failed or the provider was unavailable, in which case the
+document is indexed and unclassified (invariant 8, D-33 part 1). A 422 body does not carry it, and
+neither do the list and browse routes.
 
 **FR-15's reads and provisional links (D-105).** A provisional link is held, not applied: it is not
 in the detail's `tags`, not a browse facet value and not a filter hit until it is confirmed.
@@ -1381,7 +1394,31 @@ Applying the tag again restores the link (`200`).
 **The management command** `python manage.py classify_documents --all | --document <uuid>...
 [--out record.json]` runs the same path per document and writes the Objective 05 record (D-106:
 database, commit, per-document values, outcomes, links, seconds or error). It refuses the
-database `kmp`.
+database `kmp`. Since D-139 it writes each document's summary too, as every classification run
+does.
+
+**The summary backfill** `python manage.py summarise_documents [--force] [--id <uuid>...]
+[--out record.json]` (D-139, decision 4) gives a document classified before `documents 0016` its
+summary and key points, and stores nothing else: its type, department, outcomes, proposals, tags
+and `classified_at` stay exactly as they are, so a person's corrections stand. Re-running
+`classify_documents` would write the summaries too, but it applies every classification again.
+
+- **Selection.** By default, every document that has a classification and an empty summary.
+  `--force` adds those that already have one. `--id` names documents, repeatable, and the same
+  rule applies to them: one that has a summary is skipped unless `--force` is passed.
+- **A document with no classification is never summarised.** It is skipped and listed with its
+  status, and a line points at `classify_documents`, which classifies and summarises in one call.
+- **One document's failure is recorded and the run continues:** `ProviderUnavailable` (a refusal
+  included), `InsufficientText`, or a classification deleted while the run was going.
+- **The record** (`--out`): the database, the commit, the selection, per document the stored
+  summary, key points, `summary_truncated`, `summary_model`, `summarised_at` and the unchanged
+  `classified_at`, or the error, and the skipped documents with the reason. **A record is never
+  overwritten:** an existing path is refused before anything is summarised.
+- It reads every document, whatever its visibility: an operator's command, which exposes nothing.
+  It refuses the database `kmp`.
+- **Cost.** One `classify_document` operation per document: one request, or for a document longer
+  than `CLASSIFICATION_INPUT_TOKENS` one per section, up to `MAXIMUM_SUMMARY_SECTIONS`, and a final
+  one, each of up to `MAXIMUM_CLASSIFY_ATTEMPTS` attempts.
 
 ### Tag administration (D-119 finding 5; D-105's dated note of 10 November 2026, night)
 

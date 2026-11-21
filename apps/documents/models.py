@@ -349,13 +349,15 @@ class DocumentAnalysis(models.Model):
         and ``classified_at`` must keep saying when the classification on record was made.
       - Display only. A summary is never a ``ContentChunk``, is never embedded, and no search
         matches on it. The API shows the first three and neither of the last two.
-      - ``documents 0016`` adds the columns and nothing writes them yet, so every row holds the
-        defaults until the apply layer and the backfill command do.
+      - Every classification run writes the five (``apply_classification`` rule 1): the upload,
+        the classify route, a reprocess and ``manage.py classify_documents``. ``manage.py
+        summarise_documents`` writes them, and nothing else, on a row classified before
+        ``documents 0016`` (``apply_summary``). A row neither has reached holds the defaults.
 
     ``user_edited`` protects a person's decision from reprocessing ("any value a user edits
     [is] retained and is not overwritten by later reprocessing"): once set, a re-run writes the
-    ``machine_*`` columns, ``model``, ``input_truncated`` and ``classified_at``, and nothing
-    else on this row or on ``Documents.department``.
+    ``machine_*`` columns, ``model``, ``input_truncated``, ``classified_at`` and, since D-139, the
+    five summary columns, and nothing else on this row or on ``Documents.department``.
     """
 
     id = uuid_primary_key("analysis_id")

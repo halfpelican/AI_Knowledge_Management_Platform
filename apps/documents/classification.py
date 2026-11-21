@@ -48,6 +48,9 @@ model:
   is kept the same way, in ``rejected_tags`` with the machine's confidence, and later reprocessing
   never proposes or links that value on the document, even once it is in the scheme
   (``reject_proposed_tag``; the requirements audit of D-128, finding A5).
+- **the summary** (D-139) — every run writes the five summary columns (``SUMMARY_FIELDS``), on a
+  ``user_edited`` row too (``apply_classification`` rule 1). ``apply_summary`` writes those five
+  and nothing else, for D-139's backfill of documents classified before the summary existed.
 
 **The scheme is built for the document's own audience** (``tag_scheme``), so the prompt never
 lists a value that exists only on material some reader of this document may not see, and a
@@ -56,13 +59,14 @@ rule 4, CLAUDE.md invariant 1). Its departments are the active ``Department`` na
 audience (D-129): a hidden (grown) one only for an audience that reads everything, and a department
 in use on documents but not in the list never.
 
-**What this module does not do.** It calls the provider only in ``classify_document_now``; it
-decides no status code (the route and the ingestion hook map the exceptions below); and it never
-resolves a ``Document`` for a caller: every function takes one the caller already reached through
-``scoped_documents`` (D-46, D-53). It lives in ``apps/documents`` beside ``deletion.py``, outside
-the request-serving packages ``apps/api/tests/test_source_rows_fail_closed.py`` scans, for the
-reason that module gives: it reads managers directly, for writes against a row already resolved
-and for the vocabulary tables.
+**What this module does not do.** It calls the provider only in ``classify_document_now`` and
+``summarise_document_now`` (D-139's backfill); it decides no status code (the route and the
+ingestion hook map the exceptions below); and it never resolves a ``Document`` for a caller: every
+function takes one the caller already reached through ``scoped_documents`` (D-46, D-53), or one
+an operator's command named (``classify_documents``, ``summarise_documents``). It lives in
+``apps/documents`` beside ``deletion.py``, outside the request-serving packages
+``apps/api/tests/test_source_rows_fail_closed.py`` scans, for the reason that module gives: it
+reads managers directly, for writes against a row already resolved and for the vocabulary tables.
 
 **Lock order** (the focused re-audit of ``5c60564``, finding N1; narrowed after the re-audit of
 ``7377d38``, finding N3).
@@ -85,6 +89,8 @@ Each one:
 
 - ``apply_classification``: the document, the analysis row, then this document's links (rule 4c).
   It takes no Tag row.
+- ``apply_summary`` (D-139's backfill): the document, then the analysis row, as
+  ``apply_classification`` takes them, and nothing after: no link and no Tag row.
 - ``confirm_classification``: the document, then the analysis row, and only then the document's
   department, which is already locked. Until N1 it took the analysis row first and then wrote the
   document, so a confirmation during a reprocess, which holds the document while classification
@@ -162,6 +168,10 @@ _CONFIDENCE_PLACES = Decimal("0.001")
 # with U+FFFD, the replacement character, in place of each such character (``_recordable``).
 _NUL = chr(0)
 _REPLACEMENT_CHARACTER = "\ufffd"
+
+# FR-10's document summary on ``DocumentAnalysis`` (``documents 0016``; D-139): the five columns
+# every run writes (``apply_classification`` rule 1) and the only ones ``apply_summary`` writes.
+SUMMARY_FIELDS = ("summary", "key_points", "summary_truncated", "summary_model", "summarised_at")
 
 
 # --- Exceptions: the caller decides the status code --------------------------------------------
@@ -428,17 +438,57 @@ def classify_document_now(document: Document) -> DocumentAnalysis:
     apps/ingestion/embedding.py and apps/retrieval/pipeline.py do, so the suite's stub applies
     (docs/ai-provider.md section 6).
     """
-    text = (
-        document.extracted_contents.order_by("-extracted_at", "pk")
-        .values_list("extracted_text", flat=True)
-        .first()
-    )
+    text = _latest_extracted_text(document)
     if text is None or not text.strip():
         raise InsufficientText("No text was extracted from this document.")
     scheme = tag_scheme(document)
     service = apps.ai.get_ai_service()
     classification = service.classify_document(document.title, text, scheme)
     return apply_classification(document, classification, scheme=scheme)
+
+
+def summarise_document_now(document: Document) -> DocumentAnalysis:
+    """Summarise an already classified ``document`` from its extracted text, and store only the
+    summary: D-139's backfill, which ``manage.py summarise_documents`` calls.
+
+    The shape of ``classify_document_now``: the latest ``ExtractedContent``, read the same way;
+    the scheme built ONCE for the document's own audience (``tag_scheme``, so the prompt lists no
+    value some reader of the document may not see, CLAUDE.md invariant 1); one ``classify_document``
+    call, the operation that returns the summary with the classification (D-139: no new
+    ``AIService`` operation). Then ``apply_summary``, not ``apply_classification``: of the reply,
+    only the summary, the key points and ``summary_truncated`` are stored, and the classification
+    on record is left as it was (D-139, decision 4).
+
+    Two refusals, both before any provider call, so neither costs one:
+
+    - ``NotOnThisDocument`` when the document has no analysis row. A summary is stored on that row
+      and ``apply_summary`` writes no other, so a call for such a document could only be spent and
+      refused. ``classify_document_now`` is the path for it, and it writes the summary too.
+      ``apply_summary`` checks again under its lock, for a row deleted in the meantime.
+    - ``InsufficientText`` when there is no extracted text, as ``classify_document_now`` raises it.
+
+    ``ProviderUnavailable`` propagates from the service after MAXIMUM_CLASSIFY_ATTEMPTS per
+    request, and nothing is written.
+    """
+    if not DocumentAnalysis.objects.filter(document_id=document.pk).exists():
+        raise NotOnThisDocument("This document has no classification.")
+    text = _latest_extracted_text(document)
+    if text is None or not text.strip():
+        raise InsufficientText("No text was extracted from this document.")
+    scheme = tag_scheme(document)
+    service = apps.ai.get_ai_service()
+    classification = service.classify_document(document.title, text, scheme)
+    return apply_summary(document, classification)
+
+
+def _latest_extracted_text(document: Document) -> str | None:
+    """The document's latest extracted text, newest by ``extracted_at`` with the primary key
+    breaking a tie (as apps/api/repository.py and ``manage.py reindex`` read it), or None."""
+    return (
+        document.extracted_contents.order_by("-extracted_at", "pk")
+        .values_list("extracted_text", flat=True)
+        .first()
+    )
 
 
 # --- Apply ---------------------------------------------------------------------------------------
@@ -455,7 +505,11 @@ def apply_classification(
        ``machine_doc_type`` and its confidence, ``machine_department`` and its confidence,
        ``model``, ``input_truncated``, ``classified_at`` — are ALWAYS overwritten, whatever a
        person has decided: "the machine assignment is retained alongside it so that
-       classification accuracy can be measured over time".
+       classification accuracy can be measured over time". **So are the five summary columns**
+       (``SUMMARY_FIELDS``), on a ``user_edited`` row too (D-139): the summary and each key point
+       through the storage guard rule 4d gives a value that cannot be stored, ``summary_model``
+       the classification's model, ``summarised_at`` this run's time, and all five back to their
+       defaults when the reply's summary is empty (``_write_summary``).
     2. **Type**, unless ``user_edited``: provisional when its confidence is below the classifying
        model's threshold, ``confidence_threshold(model)`` (D-122: 0.72 for claude-haiku-5-5,
        CLASSIFICATION_CONFIDENCE_THRESHOLD for any other model), in which case ``doc_type`` is
@@ -590,6 +644,9 @@ def apply_classification(
         analysis.model = classification.model[:NAME_MAX_LENGTH]
         analysis.input_truncated = classification.input_truncated
         analysis.classified_at = now
+        # The summary is the machine's too, so it is written before the user_edited guard below:
+        # a person's edit protects the type and the department, never the summary (D-139).
+        _write_summary(analysis, classification, now)
 
         if not analysis.user_edited:
             # Rule 2: the type.
@@ -696,6 +753,78 @@ def apply_classification(
     return analysis
 
 
+def apply_summary(document: Document, classification: DocumentClassification) -> DocumentAnalysis:
+    """Store ``classification``'s summary on ``document``'s EXISTING analysis row, and nothing else:
+    D-139's backfill (decision 4), for a document classified before the summary existed.
+
+    **Only the five summary columns are written** (``SUMMARY_FIELDS``), by the rule
+    ``apply_classification``'s rule 1 applies to them (``_write_summary``), and saved with
+    ``update_fields`` naming those five, so no other column of the row is written, whatever the
+    instance holds. Everything else of the reply is ignored: its type, its department, its tags,
+    its ``input_truncated``. Untouched are the ``machine_*`` columns, ``model``,
+    ``classified_at`` (which keeps saying when the classification on record was made, D-139),
+    ``input_truncated``, ``doc_type``, both outcomes, ``department_applied_by``, ``user_edited``,
+    ``proposed_tags``, ``discarded_suggestions`` and ``rejected_tags``; so are
+    ``Documents.department``, every Tag and every link.
+
+    **No analysis row, no write.** A document with none raises ``NotOnThisDocument``, the module's
+    "not on this document" (``_analysis_of``), and nothing is created: a summary is never stored
+    without the classification it belongs beside. So does a document deleted meanwhile.
+    ``classify_document_now`` is the path for a document never classified, and it writes the
+    summary too.
+
+    **Lock order** (the module's "Lock order"): the document row first, then the analysis row, as
+    ``apply_classification`` takes them, and nothing after. So a backfill waits for a run, a
+    reprocess, a confirmation or a deletion that holds the document, and never holds the analysis
+    row while waiting for the document. One transaction, a savepoint inside a caller's.
+    """
+    now = timezone.now()
+    with transaction.atomic():
+        if Document.objects.select_for_update().filter(pk=document.pk).first() is None:
+            raise NotOnThisDocument("The document no longer exists.")
+        analysis = _analysis_of(document, for_update=True)
+        _write_summary(analysis, classification, now)
+        analysis.save(update_fields=list(SUMMARY_FIELDS))
+    return analysis
+
+
+def _write_summary(
+    analysis: DocumentAnalysis, classification: DocumentClassification, now
+) -> None:
+    """Set the five summary columns of ``analysis`` from ``classification`` (D-139). The caller
+    saves the row: ``apply_classification`` with every column, ``apply_summary`` with these five.
+
+    - ``summary``: the reply's summary, stripped, through ``_recordable``, the guard rule 4d gives a
+      value that cannot be stored, so a NUL or a lone surrogate becomes U+FFFD and the save cannot
+      raise. The parser refuses such a reply (D-139), so this guards what a caller builds itself.
+    - ``key_points``: a list of strings in the reply's order, each stripped and through the same
+      guard. One that is blank once stripped is left out: the parser refuses it, and the page would
+      show an empty point.
+    - ``summary_truncated``: the reply's flag.
+    - ``summary_model``: the classification's model, cut to the column, as ``model`` is.
+    - ``summarised_at``: ``now``, the run's time.
+
+    **A reply whose summary is empty once stripped resets all five to their defaults** (``""``,
+    ``[]``, ``False``, ``""``, None), so an analysis never claims a summary it does not hold. A
+    provider never returns one (D-139); a caller that builds the classification itself can.
+    """
+    summary = (classification.summary or "").strip()
+    if not summary:
+        analysis.summary = ""
+        analysis.key_points = []
+        analysis.summary_truncated = False
+        analysis.summary_model = ""
+        analysis.summarised_at = None
+        return
+    analysis.summary = _recordable(summary)
+    analysis.key_points = [
+        _recordable(point.strip()) for point in (classification.key_points or ()) if point.strip()
+    ]
+    analysis.summary_truncated = bool(classification.summary_truncated)
+    analysis.summary_model = classification.model[:NAME_MAX_LENGTH]
+    analysis.summarised_at = now
+
+
 def confidence_threshold(model: str) -> float:
     """FR-10's threshold for suggestions ``model`` made (D-122).
 
@@ -769,7 +898,8 @@ def _storable(name: str) -> bool:
 def _recordable(name: str) -> str:
     """``name`` as ``discarded_suggestions`` records it: each NUL or lone surrogate replaced by U+FFFD,
     so the jsonb column always accepts the record. A NUL made the classify route answer 500 (D-128's
-    security review). Every other character is kept as the model wrote it."""
+    security review). Every other character is kept as the model wrote it. Since D-139 it is also
+    the guard on the summary and each key point (``_write_summary``)."""
     return "".join(
         _REPLACEMENT_CHARACTER if _unstorable(character) else character for character in name
     )

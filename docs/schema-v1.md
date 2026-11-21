@@ -439,8 +439,12 @@ by nothing else.
     two places: on the classification object, which travels only with a document the caller's
     scope resolved, and on each document result of `GET /api/search`, where the scoped document
     query itself selects them (invariant 1). It does not show the other two.
-  - **0016 adds the columns and nothing writes them yet.** Every row holds the defaults until the
-    apply layer and the backfill command write them.
+  - **Who writes them.** Every classification run writes all five with the classification
+    (`apply_classification` rule 1): the upload, a reprocess, the classify route and
+    `manage.py classify_documents`. `manage.py summarise_documents`, D-139's backfill, writes these
+    five and no other column, on a row classified before 0016 (`apply_summary`). A reply with an
+    empty summary resets all five to their defaults, so a row never claims a summary it does not
+    hold. A row neither has reached holds the defaults.
   - **Not FR-16's.** `summarise_meeting` (D-125) summarises meetings, into `MeetingSummaries`
     above.
 

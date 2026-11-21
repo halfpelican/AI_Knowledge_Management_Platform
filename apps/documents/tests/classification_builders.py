@@ -36,10 +36,17 @@ def classification(
     tags=(),
     model=STUB_CHAT_MODEL,
     input_truncated=False,
+    summary="",
+    key_points=(),
+    summary_truncated=False,
 ) -> DocumentClassification:
     """A DocumentClassification as the parser would return it.
 
-    ``tags`` is a sequence of ``(dimension, value, confidence)`` triples.
+    ``tags`` is a sequence of ``(dimension, value, confidence)`` triples. ``summary``,
+    ``key_points`` and ``summary_truncated`` are D-139's; by default there is no summary, the
+    dataclass's own defaults, so every caller written before D-139 builds what it built then. A
+    provider never returns an empty summary (the parser refuses one), so a test that stands for a
+    provider's reply passes one.
     """
     return DocumentClassification(
         doc_type=Assignment(value=doc_type, confidence=type_confidence),
@@ -50,6 +57,9 @@ def classification(
         ),
         model=model,
         input_truncated=input_truncated,
+        summary=summary,
+        key_points=tuple(key_points),
+        summary_truncated=summary_truncated,
     )
 
 
