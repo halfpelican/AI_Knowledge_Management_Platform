@@ -29,6 +29,8 @@ Swapping the application's provider does not change how the code is written.
 from dataclasses import dataclass
 from typing import Callable, Literal, Protocol
 
+INPUT_TYPE_QUERY = "query"                 # the two values callers pass as input_type
+INPUT_TYPE_DOCUMENT = "document"
 InputType = Literal["query", "document"]   # what embed()'s texts are (D-116)
 
 @dataclass(frozen=True)
@@ -56,6 +58,10 @@ class ProviderHealth:
     available: bool
     detail: str
 
+class ProviderUnavailable(Exception): ...  # not reached, or nothing usable came back: NFR-19's 503
+
+class ProviderRefused(ProviderUnavailable): ...  # a 4xx other than a 429: never retried (D-118)
+
 @dataclass(frozen=True)
 class GenerationAttempt:          # apps/ai/generation.py — the observer's record
     number: int                   # 1-based; the last is MAXIMUM_GENERATION_ATTEMPTS
@@ -64,6 +70,7 @@ class GenerationAttempt:          # apps/ai/generation.py — the observer's rec
     raw: str | None = None        # the reply text, None where the call itself failed
     detail: str | None = None     # the violation message or the failure description
     statements: int | None = None
+    max_statements: int | None = None  # the statement cap this attempt asked for (D-100)
 
 @dataclass(frozen=True)
 class TagScheme:                  # FR-10 — the scheme one document is classified against (D-104)
@@ -146,6 +153,17 @@ November 2026 with recording transcription (D-123), when the user asked for it �
 `summarise_meeting` arrived on 11 November 2026 with FR-16 (D-125), in its own module,
 `apps/ai/summarisation.py` — section 5d.
 
+`embed` makes one call and retries nothing: the attempts are its callers',
+`MAXIMUM_EMBED_ATTEMPTS` in ingestion (`apps/ingestion/embedding.py`) and in retrieval's
+`embed_question` (`apps/retrieval/query_embedding.py`). It raises `ProviderUnavailable` for a
+transport failure, a 5xx, a 429, a 200 carrying no embedding data, or a count of usable vectors
+that does not match the texts, and on `anthropic` for a missing `VOYAGE_API_KEY`, before any call.
+Any other 4xx is `ProviderRefused`, which neither caller retries (D-118). No embedding call sets a
+timeout of its own, so each carries the `openai` client's default: 5 seconds to connect and 600 to
+read. An empty list of texts is a `ValueError`, as an empty list of passages is for
+`generate_statements` and `summarise_meeting`: a caller's bug, not an outage. `health` is a report
+and never raises.
+
 `generate_statements` raises `ProviderUnavailable` after
 `MAXIMUM_GENERATION_ATTEMPTS`, which the view turns into 503 with the NFR-19 notice.
 A transport failure, a 5xx and, since D-118, a 429 each count as a failed attempt. Any
@@ -195,19 +213,23 @@ written down: NFR-19's fault-injection test asserts the provider was called exac
 times before the 503, and a measuring instrument must not be able to move the number it is
 measuring.
 
-**Nothing under `apps/` passes it.** The only caller in the repository is
-`scripts/citation_harness.py`, which needs per-attempt records to report schema
-conformance **per response**, with the first-attempt rate separately, the way
-`docs/flm-baseline.md` does. Without the observer the harness would have to run its own
-retry loop, and a second retry loop beside the shipped one is exactly the duplication
-Stage 4 item 5 removed. `apps/ai/tests/test_observer_is_not_used_in_application_code.py`
-reads the source of every module under `apps/` and fails if one appears as a caller.
+**Nothing under `apps/` passes it.** The only callers in the repository are
+`scripts/citation_harness.py` and the copies of it kept with three runs under `corpus/`. The
+harness needs per-attempt records to report schema conformance **per response**, with the
+first-attempt rate separately, the way `docs/flm-baseline.md` does. Without the observer the
+harness would have to run its own retry loop, and a second retry loop beside the shipped one is
+exactly the duplication Stage 4 item 5 removed.
+`apps/ai/tests/test_observer_is_not_used_in_application_code.py` reads the source of every module
+under `apps/` and fails if one appears as a caller.
 
 The observer is not an operation: the operations are the ones listed above, and a keyword on an
 existing one adds nothing to the interface a caller must implement — every implementation
-already computes what it reports. A parameter that changed what the model is asked, such as
-FR-13's conversation history, would be a different question and is argued on its own merits
-when item 9 reaches it. `classify_document` has no observer: nothing measures classification per
+already computes what it reports. A parameter that changes what the model is asked is a different
+question, argued on its own merits. FR-13's conversation history was argued that way at Stage 4
+item 9 and added no parameter: the prior questions, and never the answers, are folded into the
+`question` argument by `build_conversational_question` (`apps/ai/prompting.py`), so no provider
+knows conversations exist (D-42). `input_type` was argued the same way and was added (D-116,
+below). `classify_document` has no observer: nothing measures classification per
 attempt, and a second route from a raw model reply into `apps/` is not opened for it.
 
 It is declared in the Protocol signature itself, not only in the implementations: a
@@ -249,10 +271,14 @@ just as changing a prefix does.
 def get_ai_service() -> AIService:
     provider = settings.AI_PROVIDER
     if provider == "flm":
+        from apps.ai.flm import FLMService
+
         return FLMService()
     if provider == "anthropic":
+        from apps.ai.anthropic import AnthropicService
+
         return AnthropicService()
-    raise ImproperlyConfigured(f"Unknown AI_PROVIDER: {provider}")
+    raise ImproperlyConfigured(f"Unknown AI_PROVIDER: {provider!r} (expected 'flm' or 'anthropic')")
 ```
 
 Call `get_ai_service()`. Never instantiate an implementation directly outside
@@ -270,19 +296,42 @@ value is `ImproperlyConfigured`, and the startup check reports it as `ai.E003`.
 
 ## 3. FLM implementation
 
-FLM speaks the OpenAI wire format, so the `openai` package is the client for both
-providers — only the base URL, key and model names differ.
+FLM speaks the OpenAI wire format, so the `openai` package is its client, and Voyage's embeddings
+go through the same package: only the base URL, key and model names differ. Claude is called
+through the `anthropic` package (`apps/ai/anthropic.py`), which carries the system prompt in its
+own parameter; the prompt strings are the same either way. Until 22 November 2026 this said the
+`openai` package was the client for both providers, which was never true of Claude (D-142).
+
+`apps/ai/flm.py`
 
 ```python
-from openai import OpenAI
-
 class FLMService:
-    def __init__(self):
-        self._client = OpenAI(
-            base_url=settings.FLM_BASE_URL,   # http://127.0.0.1:8625/v1
-            api_key=settings.FLM_API_KEY,     # "flm" — a placeholder, not a credential
+    def __init__(self, client: openai.OpenAI | None = None):
+        # ``client`` is injected by tests; production builds one from settings.
+        self._client = client or _openai_compat.build_client(
+            settings.FLM_BASE_URL, settings.FLM_API_KEY
         )
 ```
+
+`FLM_BASE_URL` is `http://127.0.0.1:8625/v1` unless `.env` says otherwise, and `FLM_API_KEY` is
+`flm`, a placeholder, not a credential. `build_client`, in `apps/ai/_openai_compat.py`, is where
+every client of the `openai` package that a provider uses is made:
+
+```python
+def build_client(base_url: str, api_key: str) -> openai.OpenAI:
+    # max_retries=0: the retry policy belongs to the application and is governed by
+    # MAXIMUM_EMBED_ATTEMPTS and MAXIMUM_GENERATION_ATTEMPTS in apps.core.constants.
+    # The SDK's own silent retries would multiply those counts.
+    return openai.OpenAI(base_url=base_url, api_key=api_key, max_retries=0)
+```
+
+So every client a provider builds has `max_retries=0`: FLM's and Voyage's through `build_client`,
+as is the FLM client the Anthropic provider builds for transcription, and the Anthropic SDK's in
+`apps/ai/anthropic.py`. The attempt constants are the only retry policy (D-19). An SDK's own
+silent retries would multiply them, and NFR-19's test, which counts exactly three calls before
+the 503, would stop describing what the provider does. Until 22 November 2026 the sketch here
+built `OpenAI(...)` itself, without `max_retries=0`, so a provider written from it would have had
+the SDK's retries (D-142).
 
 ### Running the server
 
@@ -291,6 +340,12 @@ In its own PowerShell window, left running for the session:
 ```powershell
 flm serve gemma3:4b --embed 1
 ```
+
+**FLM must serve on port 8625,** the port in `FLM_BASE_URL`. FastFlowLM's own default is 52625,
+which can fall inside a range Windows reserves for Hyper-V, so the project moved to 8625
+(`6d36036`). The command above serves there only where the `FLM_SERVE_PORT` environment variable is
+8625, in a PowerShell window opened after it was set, or with `--port 8625` added to each
+`flm serve` command here. `flm port` prints the port FLM will use, and must print 8625 (D-142).
 
 **FLM must be v0.9.39** (D-83). From v1.0.4 onward its embeddings are non-deterministic
 (upstream ROCm/FastFlowLM#732): the same text embeds to a different vector each time, so
@@ -360,19 +415,42 @@ Rules, enforced in code rather than remembered:
    `EMBEDDING_DIMENSION` follows `AI_PROVIDER` (`EMBEDDING_DIMENSION_BY_PROVIDER`, D-131). An
    `EMBEDDING_DIMENSION` in `.env` that disagrees is refused at startup (ai.E004).
 4. A database keeps the provider it was set up with (D-131).
-   - Migration 0002 sizes the column when it first runs, and nothing resizes it afterwards:
-     `--resize-column` (D-117) was removed.
+   - Each vector column is sized when its migration first runs, the chunks' (`documents` migration
+     0002) and FR-19's gap entries' (`retrieval` migration 0004), and nothing resizes them
+     afterwards: `--resize-column` (D-117) was removed.
    - Changing provider means a new database, set up under that provider and ingested again.
    - Within one provider, `python manage.py reindex` rebuilds every chunk with the configured
      model, after a change of chunking or of the model at the same width.
-5. A startup check compares `EMBEDDING_DIMENSION` against the dimension the provider
-   actually returns for a probe string and refuses to start on a mismatch. Silent
-   dimension drift is the failure this prevents. A second check compares the database's
-   vector columns with `EMBEDDING_DIMENSION` and refuses a database set up for another
-   provider (ai.E005). Rows embedded by another model are a warning (ai.W003).
+5. Startup checks (`apps/ai/checks.py`) run before `runserver`, `migrate`, `check`, `reindex` and
+   every other command that runs Django's system checks: an Error stops the command, and a Warning
+   is printed. Waitress runs none, so the serve steps run `manage.py check` first. A pytest run
+   does not run them as it starts; `apps/ai/tests/test_checks.py` calls them against stubs.
+   - **ai.E001**, an Error: the dimension the provider returns for a probe string differs from
+     `EMBEDDING_DIMENSION`. Silent dimension drift is the failure this prevents. The probe runs
+     only when the provider answers: an unreachable provider, or a probe that fails, is
+     **ai.W001**, a Warning, and the API answers 503 until it returns. Until 22 November 2026
+     this rule said the process refuses to start on a mismatch, and did not say that the probe is
+     skipped when the provider does not answer (D-142).
+   - **ai.E002**, an Error: an unknown `AI_PROVIDER`.
+   - **ai.E003**, an Error: an unknown `TRANSCRIPTION_PROVIDER`. **ai.W002**, a Warning:
+     transcription switched on and FLM not answering (D-123).
+   - **ai.E004**, an Error: an `EMBEDDING_DIMENSION` in `.env` that disagrees with `AI_PROVIDER`
+     (rule 3).
+   - Under a tag of their own, `embedding`, so that `check --tag ai` needs no database (D-131):
+     - **ai.E005**, an Error: a vector column, the chunks' or FR-19's gap entries', of another
+       width than `EMBEDDING_DIMENSION`, which means a database set up for another provider;
+     - **ai.W003**, a Warning: rows embedded by another model;
+     - **ai.W004**, a Warning: a database that cannot be read, so whether it was set up for this
+       provider is not known.
 6. The relevance threshold and the partial-match floor belong to the model too (D-120).
    `ranking.admit` and `partial_matches` are given the question's embedding model and look
    up its own values. A model that is not listed gets EmbeddingGemma's.
+7. EmbeddingGemma's task prefixes belong to the model as well (D-38). `apps/ai/prefixes.py`
+   formats a question as `task: search result | query: {content}` and a passage as
+   `title: {title} | text: {content}`, with `title: none` where the source has no title. It
+   dispatches on the name of the embedding model in use, not on the provider, so Voyage's text
+   goes unprefixed and Voyage learns the side from `input_type` (§1). The stored chunk text is
+   never prefixed. Changing a prefix is a re-index.
 
 | Provider | Model | Dimension | Threshold / floor |
 |---|---|---|---|
@@ -382,8 +460,21 @@ Rules, enforced in code rather than remembered:
 So the two providers never share a database. A Voyage database is set up under
 `AI_PROVIDER=anthropic` from its first `migrate`, as the alpha's was on 13 November 2026 (D-131).
 
-Dev and production are therefore **two separate indexes**. Do not point a
-FLM-embedded database at a Voyage query path and wonder why retrieval got worse.
+An FLM database and a Voyage database are therefore **two separate indexes**, never one index
+serving both. A database set up for the other provider is refused at startup (ai.E005, rule 5),
+and retrieval would rank none of its chunks anyway, because their recorded model is not the query
+model (rule 2).
+
+Four more tuned values are keyed by a model in the same way: FR-19's two by the embedding model,
+as rule 6's are, and FR-10's two by the chat model, because a confidence belongs to the model that
+reported it (D-122). Each was set on `anthropic`, and a model not listed keeps the general value:
+
+| Constant (`apps/core/constants.py`) | Keyed by | Listed | Otherwise |
+|---|---|---|---|
+| `GAP_GROUPING_THRESHOLD_BY_MODEL` (FR-19) | embedding model | `voyage-4`: 0.5054 (D-122) | 0.5256 |
+| `GAP_EXCLUSION_RULE_BY_MODEL` (FR-19) | embedding model | `voyage-4`: threshold-first (D-126) | rank-one |
+| `CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL` (FR-10) | chat model | `claude-haiku-5-5`: 0.72 (D-122) | 0.95 |
+| `CLASSIFICATION_DEPARTMENT_CONFIDENCE_THRESHOLD_BY_MODEL` (FR-10) | chat model | `claude-haiku-5-5`: 0.30 (D-129) | the shared threshold for that model, 0.95 on gemma3:4b |
 
 ---
 
@@ -414,18 +505,19 @@ not assume.
    question return `{"statements": []}`.
 2. One worked example in the prompt. Small models follow a demonstration far better
    than a description.
-3. A tolerant parser — strip code fences, take the outermost balanced JSON object,
-   reject anything still unparseable. What decoding refuses besides a syntax error is
+3. A tolerant parser — strip code fences, take the outermost balanced JSON object, remove
+   trailing commas if it does not decode, and reject anything still unparseable. No repair
+   touches text inside a JSON string (D-136). What decoding refuses besides a syntax error is
    listed below.
 4. Any response that does not parse into the schema is a **failed attempt**, retried
    up to `MAXIMUM_GENERATION_ATTEMPTS`, then 503. Never a partial answer.
 5. If FLM exposes constrained decoding or a grammar option in a later release, use
    it and delete steps 2 and 3.
 
-**What decoding refuses (13 November 2026).** All three parsers, for statements,
-classification and summaries, decode through `loads_reply` in `apps/ai/schema.py`. Besides a
-syntax error, it refuses four replies, each a violation with a fixed message that quotes
-nothing of the reply:
+**What decoding refuses (13 November 2026).** All three parsers of that date, for statements,
+classification and summaries, decode through `loads_reply` in `apps/ai/schema.py`, and the section
+parser D-139 added later does too. Besides a syntax error, it refuses four replies, each a
+violation with a fixed message that quotes nothing of the reply:
 
 - nesting past the decoder's limit, a few thousand levels (`RecursionError`);
 - an integer literal past Python's 4,300-digit limit (`ValueError`);
@@ -465,6 +557,17 @@ prompt tells the model to keep to it.
 - **Why.** Phase 1 found every 503 was a reply still listing statements at the 800-token
   ceiling, and repeating the identical request never recovered it (D-82's note of
   7 November 2026).
+
+**Ceilings and sampling.** On FLM a generation call carries `GENERATION_MAX_TOKENS` (800),
+`GENERATION_TIMEOUT_SECONDS` (300) and `temperature` 0.0, for the same reply to the same passages
+run to run. Both numbers live in `apps/ai/generation.py`, as parameters of a provider call rather
+than tuned constants, and they are the values the baseline was measured at. On Claude the timeout
+is the same and the ceiling is `CLAUDE_MAX_TOKENS` (16,000), because the model's thinking counts
+against `max_tokens` and 800 would cut the reply off mid-object. The call carries `effort`
+`"low"` (`CLAUDE_EFFORT`), a starting value rather than a measured one, leaves `thinking` at the
+model's default, and sends no sampling parameter, which current Claude models refuse, so this path
+is not deterministic run to run (D-115). Every Claude call carries the same `effort`,
+classification's and summaries' included.
 
 **Measure it before building on it.** `scripts/citation_harness.py` runs a fixed
 question set against a fixed corpus and reports:
@@ -681,21 +784,22 @@ limit as `CLASSIFICATION_INPUT_TOKENS`, which did not change.
   `apps/ai/tests/test_classification_providers.py` compares them request for request.
 
 **Retry policy** (`run_classification_attempts`): `run_generation_attempts`' exactly, with
-`MAXIMUM_CLASSIFY_ATTEMPTS` (3) as the total — 1 initial call + 2 retries. A transport failure
-or a 5xx is a failed attempt; a non-conforming reply is a failed attempt; a 4xx propagates after
-one call and consumes no retry; after the last attempt, `ProviderUnavailable` naming the
-provider and the last failure. Every attempt is recorded through `apps/ai/attempt_log.py` under
-the step `classification`, at WARNING when it failed and INFO when it parsed, quoting nothing of
-the reply. A section's request has the same policy through the same loop
-(`run_section_summary_attempts`), recorded under the step `section summary` with the section
-named. On FLM, `temperature` is 0.0 and `max_tokens` is `CLASSIFICATION_MAX_TOKENS`: 1,200 since
-D-139, 400 before. The longest conforming reply, every limit filled, is about 920 tokens by
-arithmetic (`apps/ai/classification.py` shows it); **no reply to this prompt has been counted on
-gemma3:4b.** On Claude there is no sampling parameter, which current models refuse, and
-`max_tokens` is `CLAUDE_MAX_TOKENS`, generation's Claude ceiling, because thinking counts against
-it and FLM's ceiling could cut the reply off before its JSON (#67, D-115). Every call, a
-section's and the final one, carries `CLASSIFICATION_TIMEOUT_SECONDS` (300). `model` on
-the result is `FLM_CHAT_MODEL` or `ANTHROPIC_MODEL`, whichever answered.
+`MAXIMUM_CLASSIFY_ATTEMPTS` (3) as the total — 1 initial call + 2 retries. A transport failure,
+a 5xx or, since D-118, a 429 is a failed attempt; a non-conforming reply is a failed attempt; any
+other 4xx is `ProviderRefused`, which ends the attempts at once and consumes no retry; after the
+last attempt, `ProviderUnavailable` naming the provider and the last failure. Until 22 November
+2026 this sentence said any 4xx propagated after one call, the rule before D-118 (D-142). Every
+attempt is recorded through `apps/ai/attempt_log.py` under the step `classification`, at WARNING
+when it failed and INFO when it parsed, quoting nothing of the reply. A section's request has the
+same policy through the same loop (`run_section_summary_attempts`), recorded under the step
+`section summary` with the section named. On FLM, `temperature` is 0.0 and `max_tokens` is
+`CLASSIFICATION_MAX_TOKENS`: 1,200 since D-139, 400 before. The longest conforming reply, every
+limit filled, is about 920 tokens by arithmetic (`apps/ai/classification.py` shows it); **no reply
+to this prompt has been counted on gemma3:4b.** On Claude there is no sampling parameter, which
+current models refuse, and `max_tokens` is `CLAUDE_MAX_TOKENS`, generation's Claude ceiling,
+because thinking counts against it and FLM's ceiling could cut the reply off before its JSON (#67,
+D-115). Every call, a section's and the final one, carries `CLASSIFICATION_TIMEOUT_SECONDS` (300).
+`model` on the result is `FLM_CHAT_MODEL` or `ANTHROPIC_MODEL`, whichever answered.
 
 **The stub** (`StubAIService.classify_document`). Deterministic and derived from the scheme: the
 first document type, the first department (or `STUB_OUT_OF_SCHEME_DEPARTMENT` when the scheme
@@ -715,7 +819,7 @@ the development documents and Objective 05's runs:
 
 - **On gemma3:4b:** the threshold of 0.95, and the runs in D-106's notes.
 - **On claude-haiku-5-5:** the threshold of 0.72 (D-122), and three draws of Objective 05 (#85),
-  all on this prompt.
+  all on the prompt before D-139.
 
 *Dated note, 13 November 2026:* D-128 revised rules 6 and 7 for one day, and D-106's sweep ran on
 that revision (`corpus/objective-05/runs/2026-11-12/dev-sweep-haiku-d127/`). D-129 reversed it,
@@ -775,8 +879,10 @@ no speech-to-text: a multipart POST to FLM's `/v1/audio/transcriptions` with `FL
 builds an FLM client from `FLM_BASE_URL` only when the setting is `flm`.
 
 - **One segment per call.** The page cuts a recording into WAV segments of at most
-  `TRANSCRIPTION_SEGMENT_SECONDS` and sends them one at a time. The server never decodes MP4, M4A
-  or MP3; it accepts only a 16-bit PCM mono WAV at 16 kHz, which Python's `wave` reads.
+  `TRANSCRIPTION_SEGMENT_SECONDS` and sends them one at a time. A segment of more than
+  `MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS` (60 s) of audio is refused before any call
+  (`apps/ingestion/audio.py`). The server never decodes MP4, M4A or MP3; it accepts only a 16-bit
+  PCM mono WAV at 16 kHz, which Python's `wave` reads.
 - **At most `MAXIMUM_TRANSCRIPTIONS_IN_FLIGHT` (2) calls at once** across the server, since FLM's one
   NPU takes them in turn; past that the route answers 429 `transcription_busy` before any call.
 - **Silence never reaches the provider.** `apps/ingestion/audio.py` refuses a segment whose loudest
@@ -814,6 +920,19 @@ way.
   membership, done by the caller in `apps/meetings/summaries.py`, as FR-12's citations are
   verified outside the provider (invariant 5). A label whose number is past Python's 4,300-digit
   limit cannot be read at all, and is a violation (13 November 2026).
+- **Every limit is a schema rule, and the prompt states each one** (D-125's third note). A reply
+  over any of them is a violation, and nothing is trimmed to fit. Lengths are counted after
+  surrounding whitespace is stripped, and arrays as returned:
+  - `summary` holds 1 to `MAXIMUM_SUMMARY_SENTENCES` (6) elements;
+  - `decisions` holds at most `MAXIMUM_DECISIONS` (12), `highlights` at most `MAXIMUM_HIGHLIGHTS`
+    (8) and `action_items` at most `MAXIMUM_ACTION_ITEMS` (25);
+  - each element's `passages` names 1 to `MAXIMUM_PASSAGES_PER_ELEMENT` (6) labels;
+  - each `text` and `description` is 1 to `MAXIMUM_ELEMENT_CHARACTERS` (600) characters;
+  - each `owner` and `due` is null or a string of at most `MAXIMUM_PHRASE_CHARACTERS` (120)
+    characters.
+- **Shape tolerances:** surrounding whitespace is stripped from every string, a blank `owner` or
+  `due` is read as null, and a label repeated within one element is kept once, in first position.
+  No text is changed and nothing is invented.
 - **The worked example's labels start at P41,** above the most passages any request carries
   (`SUMMARY_INPUT_TOKENS // CHUNK_SIZE + 1`, 21). A label copied from the example therefore names
   no real passage and verification drops it. An example using P1 would let a copied reference
@@ -836,12 +955,25 @@ way.
 - **Ceilings:** FLM takes `SUMMARY_MAX_TOKENS` (3,000); Claude takes `CLAUDE_MAX_TOKENS`, because
   its thinking counts against the ceiling (D-115). Both carry `SUMMARY_TIMEOUT_SECONDS` (600).
 
-**Not measured on `gemma3:4b`, and Objective 04 not measured at all.** Only the development set
-has been run, three draws on the `anthropic` provider, scored against a development reference
-Claude wrote (`corpus/objective-04/runs/2026-11-11/`, which says it is not the objective's
-result). Objective 04 waits for a reference set written by people (D-125). On FLM the prompt is a
-first version with a tested parser and a tested retry path. A transcript near
+**Not measured on `gemma3:4b`.** On `anthropic`, with Claude Haiku 5.5, the development set was
+drawn three times on 11 November 2026 and once more on 13 November, after the security review of
+12 November changed the prompt and the owner rule. Each draw was scored against a development
+reference Claude wrote (`corpus/objective-04/runs/2026-11-11/` and `2026-11-13/`, which say they
+are not the objective's result). Objective 04 itself was measured once, on 15 November 2026, on the
+ten frozen transcripts, against the reference the team wrote and froze
+(`corpus/objective-04/reference.json`; the run is `corpus/objective-04/runs/2026-11-15/frozen/`).
+Ten of ten summaries were ready at the first attempt, 48 of 50 reference action items were
+extracted, and 3 of 51 extracted items were absent from the reference: those two criteria were
+met. Two of 47 named owners were given to the wrong person, where the bar is none, so Objective 04
+is **NOT MET on attribution** (D-125's note of 15 November). The application's owner rule was kept
+on 16 November, and recorded as a departure from FR-16's words (D-125's note of 16 November). On
+FLM the prompt is a first version with a tested parser and a tested retry path. A transcript near
 `SUMMARY_INPUT_TOKENS` is a far longer prompt than anything FLM has been measured on here.
+
+Until 22 November 2026 this paragraph was headed "Not measured on `gemma3:4b`, and Objective 04 not
+measured at all", gave the three draws of 11 November as the only run, and said Objective 04
+waited for a reference set written by people (D-125). It was written on 12 November; the fourth
+development draw followed on 13 November, and the objective's measurement on 15 November (D-142).
 
 ---
 
@@ -870,14 +1002,26 @@ background thread that would outlive the test.
 
 ## 7. What this buys the project
 
-- **No metered API cost during development** — risk R11 largely closed.
-- **No uploaded content leaving the machine during development** — risk R12 largely
-  closed for the build phase, which is worth stating at the demonstration.
-- **A demonstration that does not depend on the network.**
-- A defensible architecture point: the AI Service boundary in the UC-07 sequence
-  diagram is satisfied by either implementation. That is provider independence,
-  demonstrated rather than claimed.
+- **Provider independence, demonstrated rather than claimed.** The AI Service boundary in the
+  UC-07 sequence diagram is satisfied by either implementation: the same prompts, schemas,
+  parsers and attempt loops, answered by a different model.
+- **With `anthropic`, the default since D-122:** no NPU, so M8 can be hosted on any device with the
+  platform in place (D-114). The cost is metered, against the Max plan's monthly Claude API
+  credits, and spend stays within them (D-113); Voyage is billed separately. Document text and
+  questions leave the machine for Anthropic and Voyage, the proposal's production design, accepted
+  with D-113. So R12 returns, as D-04 said it would if this path were switched on, and D-04
+  closed R11 because there was no metered cost, which is not so here.
+- **With `flm`, the offline alternative:** no metered cost and no uploaded content leaving the
+  machine, which is what closed risk R11 and narrowed R12 for the build (D-04), and a
+  demonstration that does not depend on the network. It needs the NPU and a database set up
+  under FLM. Every measurement before 10 November 2026 ran this way.
 
-What it does not buy: answer quality equal to Claude. Do not benchmark the platform's
+What `flm` does not buy: answer quality equal to Claude. Do not benchmark the platform's
 answer quality on FLM output and present those numbers as the system's capability.
 Report them as what they are — local-model baselines.
+
+*Dated note, 22 November 2026 (D-142):* until this date the section listed no metered cost, no
+uploaded content leaving the machine and a demonstration independent of the network as what the
+project bought, without naming the provider. They were written when FLM was the default, and since
+10 November 2026, when `anthropic` became it (D-122), they hold only for a database set up under
+`flm`.

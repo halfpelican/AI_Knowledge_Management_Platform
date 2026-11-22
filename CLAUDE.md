@@ -37,7 +37,13 @@ assistant, documentation).
 
 ---
 
-## 2. The only deadline that matters right now
+## 2. The M6 gate
+
+> **Amended 22 November 2026 (D-142).** This section was headed "The only deadline that
+> matters right now". M6 has passed, so the section is now the record of the gate and of
+> the twelve it was built to. The next date is M8, the final deployment, on 27 November
+> 2026 (D-114). The section's two instructions, to build to the table and to cut depth
+> before a requirement, were M6's rule and are kept as written.
 
 **M6 — Sunday 1 November 2026 — mandatory gate.** All **twelve** MUST-HAVE
 requirements demonstrable end-to-end on a deployed alpha build.
@@ -57,9 +63,11 @@ requirements demonstrable end-to-end on a deployed alpha build.
 | FR-14 | Dashboard overview | Presentation |
 | FR-15 | Document repository & filtered browsing | Presentation |
 
-**Not in the gate.** FR-03 and FR-10 (SHOULD) and FR-16 sit in NIT3004.
-FR-07, FR-17, FR-18, FR-19, FR-20 (COULD) are protective — they are dropped in that
-order if the schedule slips, and dropping them does not move the M6 number.
+**Not in the gate.** FR-03 and FR-10 (SHOULD) and FR-16 sit in NIT3004, and are built
+(D-130, D-104, D-125).
+FR-07, FR-17, FR-18, FR-19, FR-20 (COULD) were protective: they would have been dropped in that
+order had the schedule slipped, and dropping them did not move the M6 number. FR-19 and
+FR-20 have since been built (D-107, D-132, D-138).
 
 Older documents say "fourteen MUST-HAVE (FR-01 to FR-14)". That range is wrong: it
 excludes FR-15, which is MUST, and includes FR-03, FR-07 and FR-10, which are not.
@@ -77,12 +85,19 @@ cut a requirement.
 | Layer | Choice |
 |---|---|
 | Backend | Django 5.x + Django REST Framework |
-| Database | PostgreSQL 16 + pgvector (via `pgvector-django`) |
+| Database | PostgreSQL 16 + pgvector (via the `pgvector` package's `pgvector.django` module) |
 | Frontend | React + Vite |
 | Generation & embeddings | **Claude Haiku 5.5 + Voyage `voyage-4`**, the `anthropic` provider, the default since D-122; **FastFlowLM (FLM)** on the AMD Ryzen AI NPU as the offline alternative — see §4 |
 | Extraction | `pypdf`, `python-docx`, `openpyxl`; TXT read directly |
 | Tests | `pytest-django`; Vitest + Testing Library + jsdom for `frontend/` (D-62) |
 | Python | **3.12** — matches the CI runner. Pinned in `.python-version` and CI. |
+
+> **Corrected 22 November 2026 (D-142).** Four statements in this file had been wrong and
+> are corrected in place. This table named `pgvector-django`, a package the project has
+> never depended on. Section 4 called the `openai` package the client for both providers,
+> and listed `embed` and `generate_statements` without their keyword arguments. Section 5
+> said the tuned constants live in `apps/core/constants.py` and nowhere else, with no
+> mention of the lockout values `.env` may tighten or of the front end's copies.
 
 One database serves both the relational schema and the vectors, so a record and its
 embedding are written in the same ACID transaction (NFR-21).
@@ -96,8 +111,9 @@ through `apps/ai/base.py`, which exposes exactly the operations listed here:
 
 ```python
 class AIService(Protocol):
-    def embed(self, texts: list[str]) -> EmbeddingResult: ...
-    def generate_statements(self, question: str, passages: list[Passage]) -> StatementList: ...
+    def embed(self, texts: list[str], *, input_type: InputType | None = None) -> EmbeddingResult: ...
+    def generate_statements(self, question: str, passages: list[Passage], *,
+                            on_attempt: Callable[[GenerationAttempt], None] | None = None) -> StatementList: ...
     def health(self) -> ProviderHealth: ...
     def classify_document(self, title: str, text: str, scheme: TagScheme) -> DocumentClassification: ...
     def transcribe(self, audio: bytes, *, filename: str = "segment.wav") -> Transcription: ...
@@ -105,7 +121,10 @@ class AIService(Protocol):
     def summarise_meeting(self, title: str, passages: list[str]) -> MeetingSummaryDraft: ...
 ```
 
-The list, not a count, is the source of truth. `classify_document` arrived with FR-10 on 9 November
+The list, not a count, is the source of truth. Two keyword arguments are part of it: `embed`'s
+`input_type`, which says whether the texts are questions or passages (D-116), and
+`generate_statements`' `on_attempt`, an observer that changes nothing the model is asked
+(`docs/ai-provider.md` section 1). `classify_document` arrived with FR-10 on 9 November
 2026 (D-104). `transcribe` and `transcription_health` arrived on 10 November 2026 with recording
 transcription (D-123): only FLM has speech-to-text, so the FLM and Anthropic providers alike send a
 segment to FLM's Whisper, selected by its own `TRANSCRIPTION_PROVIDER` (`none` by default), not by
@@ -152,6 +171,9 @@ assume this setup. Running FLM also needs a database set up under FLM.
 flm serve gemma3:4b --embed 1
 ```
 
+**FLM must serve on port 8625.** Its own default is 52625, so set the `FLM_SERVE_PORT`
+environment variable to 8625, or pass `--port 8625`, and check with `flm port` (D-142).
+
 **FLM must be v0.9.39** (D-83). From v1.0.4 onward its embeddings are non-deterministic
 (upstream ROCm/FastFlowLM#732): the same text embeds to a different vector each time, so
 retrieval silently returns noise while chat still works. Check with `flm version`, and run
@@ -167,8 +189,9 @@ FLM_CHAT_MODEL=gemma3:4b
 FLM_EMBED_MODEL=embed-gemma
 ```
 
-FLM speaks the OpenAI wire format, so the `openai` Python package is the client for
-both providers — only `base_url`, `api_key` and model names differ.
+FLM speaks the OpenAI wire format, so the `openai` Python package is its client, and Voyage's
+embeddings go through the same package: only `base_url`, `api_key`, the model names and
+Voyage's `input_type` (D-116) differ. Claude is called through the `anthropic` package.
 
 ### Embedding consistency (FR-08 — this will bite you)
 
@@ -190,8 +213,11 @@ one most likely to be discovered the night before the demo.
 
 ## 5. Tuned constants
 
-These live in `apps/core/constants.py` and nowhere else. Values marked *tune* are
-set during evaluation, not guessed in a code review.
+These live in `apps/core/constants.py` and nowhere else on the server, with one exception
+since D-130: `.env` may tighten the two lockout values, never loosen them. The front end
+restates some of them in `frontend/src/constants.js`, and
+`apps/api/tests/test_front_end_constants_agreement.py` fails when a copy drifts. Values
+marked *tune* are set during evaluation, not guessed in a code review.
 
 | Constant | Value |
 |---|---|
@@ -229,7 +255,7 @@ set during evaluation, not guessed in a code review.
 | `MINIMUM_CONTENT_LENGTH` | below this, mark "insufficient content", do not embed |
 | `MAX_UPLOAD_BYTES` | 50 MB |
 | `ACCEPTED_FORMATS` | **PDF, DOCX, XLSX, TXT** — four, per D-15 |
-| `LOCKOUT_THRESHOLD` / `LOCKOUT_DURATION` | 5 attempts / 15 minutes (FR-02 enforces, D-25; FR-03 adds the interface, NIT3004) |
+| `LOCKOUT_THRESHOLD` / `LOCKOUT_DURATION` | 5 attempts / 15 minutes (FR-02 enforces, D-25; FR-03 adds the interface, NIT3004). `.env` may tighten either, never loosen it (`LOCKOUT_THRESHOLD`, `LOCKOUT_DURATION_MINUTES`, D-130) |
 | `NO_ANSWER_MESSAGE` | fixed text, defined once |
 
 **The attempt constants are totals, not retry counts.** The proposal words them

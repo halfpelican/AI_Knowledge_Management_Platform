@@ -1,12 +1,26 @@
 # Project 8 — Organisational Knowledge Management Platform
 
 VU IT Capstone (NIT3003 / NIT3004). The backend is Django 5 with DRF, the database is PostgreSQL 16
-with pgvector, and the frontend is React with Vite. Answers and document classification come from
-**Claude Haiku 5.5**, and embeddings from **Voyage `voyage-4`**: the `anthropic` provider, the
-default since D-122. FastFlowLM on the AMD Ryzen AI NPU is the offline alternative.
+with pgvector, and the frontend is React with Vite. Answers, document classification and summaries,
+and meeting summaries come from **Claude Haiku 5.5**, and embeddings from **Voyage `voyage-4`**: the
+`anthropic` provider, the default since D-122. FastFlowLM on the AMD Ryzen AI NPU is the offline
+alternative.
 
-Read `CLAUDE.md` before changing anything. The build plan is `M6-BUILD-PROMPT.md`, and every
-settled decision is in `docs/decisions.md`.
+Read `CLAUDE.md` before changing anything. The other documents you will reach for:
+
+- **`docs/decisions.md`** holds every settled decision, numbered from D-01. It is long, so search it
+  for the number.
+- **`docs/api-contract.md`** lists every route and its request and response shapes. The front end
+  builds against it.
+- **`docs/schema-v1.md`** defines every table and the fixed vocabularies.
+- **`docs/ai-provider.md`** defines the contract every AI provider must meet.
+- **`docs/alpha-deployment.md`** is the runbook for the deployed alpha.
+- **`docs/measurement-runbook.md`** gives the exact steps for one measured run (Objectives 02 and
+  03).
+- **`docs/demonstration-script.md`** walks the twelve M6 requirements on the alpha.
+- **`M6-BUILD-PROMPT.md`** is Stage 5's brief for the M6 gate. Its closing audits are D-140 and
+  D-141, and the briefs of earlier stages are in its git history.
+- **`frontend/README.md`** holds the front end's own notes.
 
 ## Prerequisites
 
@@ -15,11 +29,14 @@ settled decision is in `docs/decisions.md`.
   tested.
 - **[uv](https://docs.astral.sh/uv/),** for Python and package management.
 - **Docker Desktop,** for the local PostgreSQL + pgvector database.
+- **Node.js 24, version 24.15 or later, with npm,** for the front end. The front-end suite runs in
+  jsdom, which needs 24.15, and CI uses Node 24.
 - **An Anthropic API key and a Voyage API key.** Both go in `.env` only, never in a commit or a
   chat.
   - At Haiku 5.5's measured rate a question costs about 0.05¢ (D-121).
   - Your Anthropic account's usage tier sets its rate limits.
-- **Optional: FastFlowLM (`flm`) v0.9.39 exactly,** only for the offline provider below.
+- **Optional: FastFlowLM (`flm`) v0.9.39 exactly,** for the offline provider and for transcribing
+  meeting recordings, both below.
 
 ## Setup
 
@@ -44,7 +61,7 @@ docker compose up -d
 #    1024 for anthropic (voyage-4), 768 for flm (embed-gemma).
 .venv/Scripts/python.exe manage.py migrate
 
-# 5. Check the provider, then run the suite (the suite never touches a provider or the network)
+# 5. Check the provider, then run the back-end suite (it never touches a provider or the network)
 .venv/Scripts/python.exe manage.py check
 .venv/Scripts/python.exe -m pytest
 ```
@@ -82,9 +99,9 @@ its settings:
 
 Nothing to start. With both keys in `.env`, the server calls Claude and Voyage directly.
 
-- **Generation and FR-10's classification use `ANTHROPIC_MODEL`,** `claude-haiku-5-5` by default
-  (D-121). `claude-sonnet-5-5` is the alternative, measured to the same results at twenty times the
-  price.
+- **Generation, FR-10's classification and summaries, and FR-16's meeting summaries use
+  `ANTHROPIC_MODEL`,** `claude-haiku-5-5` by default (D-121). `claude-sonnet-5-5` is the
+  alternative: on generation it measured the same results at twenty times the price.
 - **Embeddings come from `voyage-4` at 1024 dimensions.** Questions and passages are embedded as
   queries and documents respectively (D-116).
 - **These tuned values were measured on this provider before it became the default** (D-122):
@@ -105,8 +122,20 @@ embeds at 768 dimensions. In `.env`:
 AI_PROVIDER=flm
 ```
 
-The width, 768, follows from it. Point `DATABASE_URL` at a database set up under FLM, then start
-the server in a second PowerShell window, left running for the session:
+The width, 768, follows from it. Point `DATABASE_URL` at a database set up under FLM.
+
+**Set FastFlowLM's port first, once on each machine.** FastFlowLM's own default is 52625, which can
+fall inside a range Windows reserves for Hyper-V, so this project uses 8625, the port in
+`FLM_BASE_URL`:
+
+```powershell
+[Environment]::SetEnvironmentVariable('FLM_SERVE_PORT', '8625', 'User')
+```
+
+Open a new PowerShell window afterwards and run `flm port`, which must print 8625. Passing
+`--port 8625` to every `flm serve` command in this file does the same without the variable.
+
+Then start the server in a second PowerShell window, left running for the session:
 
 ```powershell
 flm serve gemma3:4b --embed 1
@@ -131,7 +160,9 @@ FLM on the NPU laptop whichever `AI_PROVIDER` is set. It is off unless `.env` sa
 TRANSCRIPTION_PROVIDER=flm
 ```
 
-Pull the speech model once (623 MB), then serve it beside `gemma3:4b` and `embed-gemma` with `--asr 1`:
+Set FastFlowLM's port to 8625 first, as "FastFlowLM, the offline alternative" above describes:
+`flm port` must print 8625. Pull the speech model once (623 MB), then serve it beside `gemma3:4b`
+and `embed-gemma` with `--asr 1`:
 
 ```powershell
 flm pull whisper-v3:turbo
@@ -153,9 +184,10 @@ flm serve gemma3:4b --embed 1 --asr 1
 - **A host without the NPU** keeps `TRANSCRIPTION_PROVIDER=none`. The draft can be saved as a text
   file on the laptop and added on that host as a transcript file.
 
-### Changing provider: a new database
+### One database, one provider
 
-A database keeps the provider it was set up with (D-131):
+**You cannot change providers once a database has been set up for one.** The provider is chosen
+once, with `AI_PROVIDER` in `.env` before the first `migrate`, and the database keeps it (D-131):
 
 - **Its vector columns have one width,** fixed by its first `migrate`: 1024 for Voyage, 768 for
   FLM.
@@ -163,16 +195,24 @@ A database keeps the provider it was set up with (D-131):
 - **The startup check refuses a database set up for the other provider** (ai.E005), so
   `runserver`, `migrate` and `check` stop rather than use it.
 
-To use the other provider, set up a new database for it:
-1. create it;
-2. set `AI_PROVIDER` in that checkout's `.env`;
+**No command moves a database to the other provider.** `reindex --resize-column`, which did
+(D-117), was removed with D-131, and `reindex` now rebuilds chunks with the database's own provider
+only.
+
+**The other provider needs a database of its own,** set up from empty:
+1. create it, under a new name, in the database container:
+
+   ```powershell
+   docker compose exec db createdb -U kmp kmp_flm
+   ```
+
+2. in that checkout's `.env`, point `DATABASE_URL` at it
+   (`postgres://kmp:kmp@127.0.0.1:5432/kmp_flm`) and set `AI_PROVIDER`;
 3. run `migrate`;
 4. ingest the content again through the API.
 
 The alpha's database was built that way on 13 November 2026
-(`corpus/objective-02/runs/2026-11-13-alpha-anthropic/`). `reindex --resize-column`, which moved a
-database across (D-117), was removed with D-131. `reindex` now rebuilds chunks with the database's
-own provider only.
+(`corpus/objective-02/runs/2026-11-13-alpha-anthropic/`).
 
 ## Running the application
 
@@ -187,7 +227,7 @@ Then the front end, in its own window:
 
 ```powershell
 cd frontend
-npm install     # first clone only
+npm ci          # after a fresh clone, and after any pull that changes package-lock.json
 npm run dev
 ```
 
@@ -203,6 +243,16 @@ Both servers have to be running. The browser only ever talks to Vite:
 - **With Django stopped,** the interface loads but every request from it fails.
 
 `frontend/README.md` has the rest: Node version, the component sheet, lint and build.
+
+**The front end has its own suite,** and `main` must pass it as well as `pytest` (`CLAUDE.md`
+section 7). It needs no server: `tests/setup.js` fails any test that reaches the network. From
+`frontend`:
+
+```powershell
+npm test
+```
+
+CI also runs `npm run lint` and `npm run build`.
 
 **The alpha is different** (Stage 5 item 9, D-64).
 
@@ -257,13 +307,15 @@ Administrator set (D-26). Promoting can only add one, but the same snippet with 
 happily remove the last. Once an Administrator exists, every further role change belongs on
 `/admin/roles`, which enforces the guard.
 
-Passwords must satisfy FR-01's complexity rules, on this path as on any other. Only two places state
-them:
+Passwords must satisfy FR-01's complexity rules, on this path as on any other. The numbers are in
+`apps/core/constants.py`:
 
-- **`apps/accounts/validators.py`** (`ComplexityValidator`), for the server;
-- **`frontend/src/utils/password.js`,** which mirrors them for the registration form.
+- **The server applies them** through `ComplexityValidator` in `apps/accounts/validators.py`, and
+  the minimum length also through Django's `MinimumLengthValidator` in `config/settings.py`.
+- **`frontend/src/utils/password.js` holds its own copy,** for the registration, password-reset and
+  profile forms. `apps/accounts/tests/test_password_policy_agreement.py` fails when the two differ.
 
-This file deliberately does not become a third.
+This file deliberately does not state them.
 
 ## Dependencies
 
@@ -277,3 +329,26 @@ uv pip sync --python .venv/Scripts/python.exe requirements.txt
 
 Sync again after any pull that changes `requirements.txt`. D-137's Pillow, which re-encodes
 profile pictures, is one: the API imports it, so a venv synced before it fails `manage.py check`.
+
+## After a pull
+
+- **Python packages:** sync again when `requirements.txt` changed (above).
+- **Front-end packages:** run `npm ci` in `frontend` when `package-lock.json` changed.
+- **Schema:** run `.venv/Scripts/python.exe manage.py migrate`.
+
+**A database set up before a feature keeps its older rows without it.** Documents classified
+before `documents` 0016 have no summary (D-139), and meetings stored before FR-16 have none
+(D-125). After `migrate`, two commands write them through the provider. A meeting costs one
+request. A document costs one request, or, where it is longer than 1,500 tokens
+(`CLASSIFICATION_INPUT_TOKENS`), one request per section, up to eight, and a final one (D-139). A
+request that fails is tried up to three times:
+
+```powershell
+.venv/Scripts/python.exe manage.py summarise_documents
+.venv/Scripts/python.exe manage.py summarise_meetings --missing
+```
+
+Both refuse the database named `kmp`, the one `.env.example` and `docker-compose.yml` set up (D-84
+decision 1). On `kmp`, **Generate Summary** on a meeting's page writes that meeting's summary. A
+document that is already classified has no such control: **Classify now** shows only on a document
+that was never classified.
