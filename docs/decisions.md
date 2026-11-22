@@ -23677,3 +23677,1082 @@ in 546 lines, compared by script with the hand-back in the agent's own transcrip
 > - **Windows-specific behaviour:** filenames and file locking were not checked.
 >
 > Verdict: FAIL. Two recorded concessions disclose the existence of out-of-scope material (finding 1, D-33 §3; finding 5, D-61 gap 11). I found no other confirmed exposure, and all 54 protected route-methods have a server-side check.
+
+## D-142 · The README and the reference documents are reviewed against `main` at `5553331` and corrected, and `FLM_BASE_URL`'s default moves to the documented port
+
+**Status:** Recorded · **Date:** 2026-11-22 · **Stage:** after Stage 5's closing audits (D-140, D-141) ·
+**Concerns:** `README.md`, `CLAUDE.md`, `docs/api-contract.md`, `docs/schema-v1.md`,
+`docs/ai-provider.md`, `frontend/README.md`, `.env.example`; `config/settings.py` (one default) ·
+**Reviewed:** `5553331`
+
+**What this is.** Benjamin's request of 22 November 2026, in his words: "Review and update the
+README.md and other project file such as: docs/api-contract.md lists every route and its request and
+response shapes. docs/schema-v1.md defines every table and the fixed vocabularies.
+docs/ai-provider.md defines the contract every AI provider must meet." The documents were read
+against the code at `5553331` and corrected. The branch is `docs/FR-12-project-documents-review`.
+FR-12 is its primary requirement only because more of the contract's findings fall under it than
+under any other: the review spans every requirement.
+
+**The rule the edits followed.** A document was changed only where the code is what was decided.
+Where the code and a document disagree and nothing shows the code was intended, the document was
+left alone and the item went to Benjamin. In a document that carries dated notes, a statement that
+had been wrong was to be corrected with its date, and not quietly rewritten. The independent check
+found two places where that had not been done, and both now carry their date (the end of this
+entry). `README.md`, `frontend/README.md` and `.env.example` carry no dated notes: this entry is
+the date of their corrections.
+
+**How it was run.**
+
+- **Five read-only reviewers,** on Opus 5.5 at max effort, each with one document or half of one:
+  the contract's lines 1 to 1185 with an inventory of every route; its lines 1186 to 2384;
+  `docs/schema-v1.md`; `docs/ai-provider.md`; and `README.md` with the files it leans on
+  (`frontend/README.md`, `.env.example`) and a lighter pass over `CLAUDE.md`, `M6-BUILD-PROMPT.md`
+  and `docs/stage-4-open-items.md`. Every finding had to be verified on both sides and classed as
+  one of: the document is stale; the document is missing something it exists to hold; the document
+  contradicts itself; the code contradicts the document; or unsure. They found 108.
+- **Three appliers,** on the same model, one per reference document. Each re-checked every finding
+  against the code before editing, and was told to try to refute it. None was rejected. The
+  appliers corrected the reviewers' own replacement text in several places, and their records
+  below say where.
+- **The coordinating session** edited `README.md`, `frontend/README.md`, `.env.example` and
+  `CLAUDE.md` itself. It checked these against the code or the proposal before relying on them:
+  six of the contract's findings (the meeting request's fields, the body of an ingestion `422`,
+  the per-model thresholds, the multipart routes, `retry_after` on the login `403`, and the logout
+  body); the settings default below; the README's claims about `tests/setup.js`,
+  `summarise_meetings --missing`, jsdom's Node requirement and CI; and the three FR-17 tables and
+  FR-18's `Conversations.mode`, which are in version 4.5 of the proposal by those names.
+- **Three independent checkers** then read the whole change before it was committed, one slice
+  each, with the code as their evidence and not the reviewers' conclusions. One of them returned
+  FAIL on the coordinating session's own text, the first wording of this entry included. Their
+  reports, and what each finding led to, are at the end of this entry.
+
+**Counts.** These are the reviewers' findings. The checkers' 25 are counted at the end.
+
+| Document | Findings | Applied | Not applied |
+|---|---|---|---|
+| `docs/api-contract.md` | 34 | 32 | 2: one for the code, one unsure |
+| `docs/schema-v1.md` | 20 | 19, one of them in part | 1: unsure |
+| `docs/ai-provider.md` | 26 | 22, and the port fact below | 4: one fixed in the code, one fixed in `CLAUDE.md`, two for the code |
+| `README.md` | 12 | 10 | 2: both answered by Benjamin below |
+| `frontend/README.md`, `.env.example`, `docker-compose.yml` | 9 | 8 | 1: a comment in `docker-compose.yml` |
+| `CLAUDE.md`, `docs/stage-4-open-items.md` | 7 | 6, on Benjamin's word | 1: `docs/stage-4-open-items.md` |
+| **Total** | **108** | **97** | **11** |
+
+All 48 routes in `apps/api/urls.py` were already documented, with the right methods and paths. The
+one live route the contract did not hold was the framework's API root, `/api/`, now a row. All 23
+tables, and every column, are in both `docs/schema-v1.md` and the migrations: none was missing on
+either side. What the document said about a column, a constraint or a delete rule is another
+matter: the review's own table marks ten of the 23 tables with findings. In `docs/ai-provider.md`
+section 5b the review's two findings (F1, F19) are on lines older than D-139, and it found nothing
+D-139 or D-136 wrote there that the code contradicts.
+
+**Benjamin's decisions of 22 November 2026.** Five things the review found were put to him. His
+answers, in his words, were "1. change to the correct port. 2. what do you recommend? 3. This can
+stay until a first time user/Install package can setup an Admin 4. What do you recommend? 5. Remove
+the stale lines.", and then "I approve 2 and 4".
+
+1. **`FLM_BASE_URL`'s default.** `config/settings.py` defaulted it to port 52625. Every document,
+   `.env.example` and `scripts/check_flm.py` say 8625. The port moved on 22 September 2026, to leave
+   a range Windows reserves for Hyper-V: `6d36036` moved it in `.env.example`, CI, `README.md` and
+   `docs/ai-provider.md`, `f1c882d` in `CLAUDE.md`, and `7fc12db` in `scripts/check_flm.py`. None
+   changed the settings default, so it disagreed with `.env.example` and with every document: an
+   installation whose `.env` had no `FLM_BASE_URL` line looked for FLM on 52625, FLM's own default,
+   and not on the port the project documents. The default is now 8625.
+   `apps/ai/tests/test_flm_base_url_default.py` reads the four places as text and fails when they
+   differ. **A second fact came with it:** FLM v0.9.39 serves on 8625 only where the
+   `FLM_SERVE_PORT` environment variable is 8625, or `--port 8625` is passed. Its own default is
+   52625: on the development laptop `flm port` prints 52625 with the variable removed from the
+   process, and 8625 with it set. No document named the variable, so the documented `flm serve`
+   command served on 8625 only on that laptop, which sets it. `README.md`, `CLAUDE.md` section 4,
+   `docs/ai-provider.md` section 3 and `.env.example` now say so.
+2. **Three write routes that can answer `500`.** Confirming a classification, starting a meeting
+   summary and adding an action item each look their record up and then touch it again. A record
+   deleted in between raises an error nothing catches. The recommendation was to fix them as the
+   classify route was fixed on 21 November (D-139), in their own pull request, because the change
+   is behaviour and needs tests from both roles. Approved. A separate session is doing it, and
+   D-143 is expected to record it. The contract was not edited for it: its rows already promise
+   `404`.
+3. **`createsuperuser` and the password rules.** Django's command shows the rules and then lets the
+   operator override them, and `--noinput` skips them. `README.md` says passwords must satisfy
+   FR-01's rules "on this path as on any other". It stays as it is until an installer or a
+   first-run flow sets up the Administrator. Neither the command nor the sentence was changed.
+4. **The backfill commands refuse the database `kmp`.** `summarise_documents`,
+   `summarise_meetings` and `classify_documents` reuse D-84 decision 1's gate, and `kmp` is the
+   database `.env.example` and `docker-compose.yml` set up. The recommendation was to leave the
+   gate: a database set up today needs no backfill, the alpha's database has another name, and
+   `README.md` now says the commands refuse `kmp`. Approved. An override flag stays an option for
+   its own pull request if someone must backfill an older `kmp`.
+5. **`CLAUDE.md`'s stale lines.** Corrected in place.
+   - **Section 2** was headed "The only deadline that matters right now". It is now "The M6
+     gate", under a dated note: M6 has passed, M8 is on 27 November 2026 (D-114), and the
+     section's two instructions were M6's rule and are kept as written. The "dropped in that
+     order if the schedule slips" lines now say FR-03, FR-10, FR-16, FR-19 and FR-20 are built.
+   - **Section 3** names the `pgvector` package and its `pgvector.django` module, not
+     `pgvector-django`.
+   - **Section 4's** `AIService` listing shows `embed`'s `input_type` and `generate_statements`'
+     `on_attempt`, and the section says Claude is called through the `anthropic` package, not
+     `openai`.
+   - **Section 5** says `.env` may tighten the two lockout values (D-130), and that the front end
+     restates some constants under a test that holds them equal.
+   - **One dated note,** under section 3's table, names the four statements that had been wrong.
+   - **One paragraph was added,** not removed: the `FLM_SERVE_PORT` requirement of decision 1.
+
+He also asked that `README.md` say "You can no longer change providers once a database has been
+chosen for a provider". Its section already said a database keeps its provider (D-131). The section
+is now headed "One database, one provider" and opens with a sentence to that effect, "You cannot
+change providers once a database has been set up for one." It goes on to say that no command moves
+a database across, and gives the steps for a database of the other provider's own. Those four
+steps never pointed `DATABASE_URL` at the new database, so step 3 stopped with `ai.E005`. They now
+do.
+
+**What changed in `README.md`, `frontend/README.md` and `.env.example`.**
+
+- **`README.md`:**
+  - a list of the project's documents, with Benjamin's three descriptions as he wrote them;
+  - Node.js 24.15 or later as a prerequisite, which jsdom needs, and FastFlowLM listed as
+    optional for transcription as well as for the offline provider;
+  - the front-end suite, which neither README told anyone to run, and `npm ci` in place of
+    "`npm install`, first clone only";
+  - the `FLM_SERVE_PORT` step with its command, ahead of the first `flm serve`, and a pointer to
+    it from the transcription section;
+  - the provider section above, and what Claude is now used for (meeting summaries and document
+    summaries as well);
+  - where the password rules live, and the test that holds the front end's copy equal;
+  - a short "After a pull" section: the two backfill commands, what each costs in provider
+    requests, and their refusal of `kmp`.
+- **`frontend/README.md`:** `npm ci` and the Node version; the test command; the server started
+  with `.venv/Scripts/python.exe`, not bare `python`; the screens added since (`/forgot-password`,
+  `/reset-password`, `/profile`, `/admin/tags`); and the password rules pointed at, not restated.
+- **`.env.example`, comments, and one setting line moved with its value unchanged:** `MEDIA_ROOT`
+  also holds profile pictures; `ANTHROPIC_MODEL` also writes summaries; the FLM block says
+  transcription reads `FLM_BASE_URL` and `FLM_API_KEY` too, and names the port step;
+  `FLM_ASR_MODEL` is back beside `TRANSCRIPTION_PROVIDER`, from under the FR-16 block that
+  `56f5613` inserted between them.
+
+**What changed in the three reference documents: each applier's own record, quoted whole.**
+The finding numbers are the reviewers'. "For Benjamin" in each record is what that applier
+left unedited because it concerns the code or a choice.
+
+*`docs/api-contract.md`*
+
+> **APPLIED (32)**
+>
+> **Early half (contract-early.md)**
+>
+> - **F1.** FR-09 now has a "Fields, in either form:" paragraph after "The transcript arrives as pasted text or as a file". It covers `title`, `meeting_date`, exactly one of `transcript_text`/`file`, `attendees` as user ids, and `visible_to_roles` (omitted means both roles, D-29), plus the ids-in, addresses-out note. The `400` list adds a file whose signature is not one of the four formats, an attendee id that is not a UUID or names no user, and an empty or unknown `visible_to_roles`.
+>   - Changed from the proposal: the paragraph mirrors FR-08's "Fields:" sentence. I also added "or one over 255 characters" to the title `400`, since the new paragraph states that limit.
+> - **F2.** A new paragraph, "A `422` carries the record that was stored", follows "A failed ingestion reserves no duplicate slot". It says the document `422` is the document object plus `detail` and carries no `classification`, and that reprocess's no-original `422` is `{"detail": ...}` alone.
+>   - Changed: the meeting half went into the FR-09 row's `422` clause, next to F9, instead of into the FR-08 paragraph.
+>   - Changed: "the reason in one sentence" became "the reason in words", because a D-81 PDF detail is two sentences.
+> - **F3.** The ask row's `503` adds "or refused the request (D-118)". The "`503` is NFR-19's" paragraph adds a "Since D-118" sentence: a `429` is a failed attempt, and any other `4xx` ends the attempts at once.
+>   - Changed: the proposal said the question's embedding fails "after `MAXIMUM_EMBED_ATTEMPTS`". That is untrue for an unusable embedding reply, which is not retried (apps/retrieval/query_embedding.py:95-103). The text now reads "after `MAXIMUM_EMBED_ATTEMPTS` for an outage, and at once for a reply that cannot be used as a query vector".
+>   - Changed: "the attempts log" became "logged".
+> - **F4.** The partial-matches bullet now says "Since D-120 the threshold and the floor are per embedding model". It gives `voyage-4` 0.2687 / 0.2468 and EmbeddingGemma 0.30 / no floor.
+>   - Changed: added "D-56 is narrowed there" for `voyage-4`. D-120 says "D-56 is narrowed on Voyage and stays open on EmbeddingGemma".
+> - **F5.** Both Stage 4 JSON examples carry `"ai_generated": false` on each passage. A "Since FR-16" sentence after "No similarity score is exposed" says each passage, live or reopened, carries the flag.
+>   - Changed: only the dated opening of that sentence.
+> - **F6.** The Stage 2 `415` bullet now reads "Any endpoint that reads a body, a body in a format the route does not parse". It names the four multipart routes, each with when it arrived (Stage 3, D-123, D-137). The FR-08 paragraph says "only that: a JSON body is `415`" and adds a dated parenthesis: until 22 November 2026 it said "the only endpoint", which FR-09's file form made untrue on the day the route was built. The upload row's `415` adds "or the body is not multipart".
+>   - Changed: "that reads a body", because a route that never reads one (reprocess, logout) never parses it and never answers `415`.
+>   - Changed: the history parenthesis follows the instruction to stay honest about time. Git shows the sentence (4958bea) and FR-09's multipart (5c67bb5) both landed on 21 September, 26 minutes apart.
+> - **F7.** The login row's `403` body carries `retry_after`, defined "since D-130", and the row adds the `auth` `429` (F17).
+>   - Changed: the example value is 812, the FR-03 section's own, instead of 840.
+> - **F8.** Applied as proposed: the search `400` adds a NUL byte (Stage 4 item 12a, D-54).
+> - **F9.** The meeting `422` adds "or, since Stage 4 item 12a, it holds too much text to index in one request (`MAXIMUM_CHUNKS_PER_SOURCE`)". It is joined with F2's body: the meeting object, status `Processing failed`, plus `detail`.
+>   - Changed: dated form, and merged with F2.
+> - **F10.** Applied as proposed: line 182's ingestion budget adds "since FR-16 `POST /api/meetings/{id}/summary` (D-125)".
+> - **F11.** Both detail rows add "since FR-10 `classification`, `tag_details` and `tag_options`", and the detail JSON gains the three keys.
+>   - Changed: the proposed JSON (`"tag_details": []`, `"Project": []`) contradicted the example's own `tags`. A document with applied links "policy refresh" and "people" has `tag_details` entries for them, and `tag_options` includes tags already on the document. I used the document's placeholder convention instead: `[tag_details entry, ...]` and `{"Project": [...], ...}`.
+> - **F12.** The FR-15 `tags` bullet says "applied", and adds "Since FR-10" that a provisional or removed link is not a tag, a facet value or a filter hit.
+>   - Changed: it also points to "Removed links" and to D-105's dated note of 10 November, which introduced `removed`.
+> - **F13.** The document delete adds "its classification (since FR-10, and since D-139 with its summary)". The meeting delete adds "since FR-16 its summaries and action items".
+>   - Changed: the D-139 dating for the summary.
+> - **F14.** Applied as proposed: the Meeting deletion GET row adds "since D-137 `attendee_people`".
+> - **F15.** Line 33 now reads "never `locked_until` except, since D-130, inside FR-03's `lock` object". The D-130 dated note names the `200` of `POST /api/users/{id}/unlock` beside `GET /api/users`.
+>   - Changed: I fixed the same contradiction in the FR-03 section's "Every other route's user object is unchanged" bullet, which now names the unlock `200` as the one exception. The finding did not list it, but it contradicts the FR-03 table's unlock row the same way.
+>   - Judgement call: I edited the D-130 note in place without a "Corrected" marker. The unlock route existed on the note's own date, so the note now states that day's facts fully.
+> - **F16.** A new row in the Stage 5 item 9 table, after `/api`, covers `/api/`: DRF's API root, `200 {}` from a session, `401` without one, `406` for an `Accept` that excludes JSON, and no screen calls it.
+>   - Changed: reworded. I checked that no frontend code calls the root.
+> - **F17.** The register and login rows add "`429` past the `auth` rate (D-26)". The Rate limiting paragraph adds the action-item writes (D-125's third note), an Administrator adding a tag or a department (D-128, D-129) and the knowledge map (17 November 2026, D-138), in date order.
+>   - Changed: "FR-16's action-item edits" became "a person adding, editing or deleting an FR-16 action item", because the `action_items` scope covers all three.
+> - **F18.** Applied as proposed: the logout `200` body is `{"detail": "You have been logged out."}`.
+> - **F19.** The CSRF bullet now reads: every `POST`, `PATCH` and `DELETE` under `/api/` from a signed-in session needs `X-CSRFToken`, and the four anonymous routes need it only when the browser already holds a session.
+>   - Changed: "on every route in this file" became "under `/api/`", because the SPA catch-all is in this file and is CSRF-exempt (config/spa.py:29).
+> - **F20.** The FR-02 dashboard paragraph now reads "Until Stage 5 the destination differed by role and the content did not. Since Stage 5 both render FR-14's dashboard". It also mentions the D-107 gap panel.
+>   - Changed: kept the history. It says the dashboard is scoped "to the caller", not "to the caller's role", because recent questions are the caller's own (D-68).
+> - **F21.** Applied with minor wording: a new paragraph after "The key set is the same on every exit" defines `result_count`.
+> - **F22.** Applied as proposed: the dashboard `400` adds a department carrying a NUL byte.
+> - **F23.** §7.2's order is kept as quoted, with "title (400, with the other fields checked at the same step)". A new sentence names three steps §7.2 does not:
+>   - before the signature: DRF's `415` for a body that is not multipart, then `400 {"file": ["No file was submitted."]}`;
+>   - after the fields' `400`: D-29's `403`, before the `409`.
+>   - Changed: the proposal spliced these into §7.2's own list. I also added DRF's `415`, for consistency with late F7 and the picture route's stated order.
+>
+> **Late half (contract-late.md)**
+>
+> - **F1.** Applied as proposed: the `tag_options` bullet says a retired value comes back grown only through a person, on a document every role can read. The classifier never brings one back (D-129), and for one day D-128 let it.
+> - **F2.** Applied as proposed, with `4xx` in code format: the classify `503` and the cycle `503` add "or the provider refused it at once with a `4xx` other than a rate limit (NFR-19, D-118)".
+> - **F3.** The classify `404` clause adds that a document deleted after the lookup and before its text is read gets the `422` instead, with no provider call (D-139, "Named and not fixed").
+>   - Changed: reworded to sit inside the `404` clause.
+> - **F4.** The summary POST `202` adds "Since D-125's third note, a run the server has no room to start ... is queued at once without reaching the provider, and the `202` then carries `"Unavailable"` with `queued_for_retry` true".
+>   - Changed: dated form, and it reuses step 4's own wording.
+> - **F5.** The classify `429` budget adds "since FR-16, `POST /api/meetings/{id}/summary` (D-79, D-125)". The Departments sentence names `POST /api/documents/{id}/tags` in the `tagging` budget.
+>   - Changed: "since FR-16".
+> - **F6.** Applied as proposed: the proposed-tags confirm row now says "created or reused". A retired tag is reactivated only through a document every role can read, and the reply is the same either way.
+> - **F7.** Applied as proposed: the transcription order adds DRF's `415` for a non-multipart body before the `400` for no `audio`, and says which `415` the later one is.
+> - **F8.** Applied as proposed: `PUBLIC_BASE_URL` must also have a host, and carry no query or fragment.
+> - **F11.** "at the end of this file" became "below" for FR-03, Stage 5 item 9, FR-10 and Recording transcription.
+>   - Changed: also fixed a fifth instance, the D-130 dated note near the top. The reviewer's grep missed it because "at the end" and "of this file" are on different lines there.
+>   - Changed: kept the short heading "NIT3004 — FR-03".
+>   - The remaining "at the end of this file" references all point into the final FR-04 section, and are correct.
+>
+> **NOT APPLIED (2)**
+>
+> - **Late F9:** CODE-VS-DOC. Per the brief, no document edit. Listed below.
+> - **Late F10:** UNSURE. Per the brief, no document edit. Listed below.
+>
+> I rejected no finding. All 32 others held against the code. Where I changed the reviewer's wording, the reason is given above.
+>
+> **FOR BENJAMIN**
+>
+> - **Late F9 (CODE-VS-DOC).**
+>   - Three write routes answer an unhandled `500` if their source is deleted in a short window after the scoped lookup:
+>     - `POST /api/documents/{id}/classification`: `document.refresh_from_db` at apps/api/views.py:2657 has no guard, unlike classify at :2614-2618.
+>     - `POST /api/meetings/{id}/summary` and `POST /api/meetings/{id}/action-items`: `Meeting.objects.select_for_update().get(...)` at apps/meetings/summaries.py:303 and :637 raises `Meeting.DoesNotExist`, which DRF does not map.
+>   - The caller could already see the source, so nothing crosses scope. The classify route had the same defect fixed on 21 November (D-141 item 12), so this looks like the same class of defect. The contract was left alone.
+> - **Late F10 (UNSURE).**
+>   - The FR-10 section's "Confidences are numbers to three places" is not true of `proposed_tags`. Those confidences are the parser's raw float, stored in a JSON column and returned as they are (apps/documents/classification.py:730-757; serializers.py:499). Only the decimal columns are rounded, by `_as_decimal`.
+>   - Either the sentence should be limited to the two machine confidences and `tag_details`, or the proposal confidences should be rounded. Nothing settles which.
+> - **New: a stale code comment, not fixed.** apps/api/views.py:1436 still says "The one endpoint that accepts something other than JSON", the same staleness as early F6. Per the brief, I edited no code.
+> - **New: a test gap behind a contract claim.** The rewritten CSRF bullet says `POST /api/auth/register` needs `X-CSRFToken` when the browser already holds a session. That follows from DRF's `SessionAuthentication`, which checks CSRF for any request carrying an active session user, but no test pins it for register. Login and both reset routes have tests.
+> - **New: possible, unverified.**
+>   - The summary POST builds its reply after `on_commit` has started the run.
+>   - Under the default thread runner, a run that ends before the reply is read would be reported as it ended. Ready would make the POST answer `200`, not the documented `202`. That needs a provider faster than the request's own next query, so it is unlikely.
+>   - Under `SUMMARY_RUNNER=inline`, which the environment can set (config/settings.py:486), the POST always answers after the run has finished.
+> - **Date to confirm.** The dated parenthesis added to FR-08's multipart paragraph says "Until 22 November 2026", today's date. If the merge date should be used instead, it is one phrase to change.
+
+*`docs/schema-v1.md`*
+
+> **APPLIED (19, F3 in part)**
+>
+> - **F1:** `Roles.role_name` and `Permissions.permission_name` are now "text, unique". `role_name` is as proposed. `permission_name` also points to the new list of seeded codes (F11).
+> - **F2:** `requested_at` and `started_at` are now two rows, and `started_at` is "timestamp, nullable", with its writers and the orphan rule. Changed: "much older" is now stated exactly, as `SUMMARY_STALE_AFTER_SECONDS`. Added a dated in-cell note, because by the document's own convention the old row read as NOT NULL.
+> - **F3 (in part):** Section 2 now names `OnboardingTemplates`, `OnboardingItems` and `UserOnboardingProgress` (FR-17, COULD) and `Conversations.mode` (FR-18, COULD), with a dated note that none of them exists. **Field lists not added, and "FR-18 reads `UserOnboardingProgress`" dropped.** Nothing in the repository names these tables or fields: the proposal is not in the worktree, and a grep of the whole worktree (decisions.md and M6-BUILD-PROMPT.md included) finds none of the names.
+>   - Verified: FR-17 and FR-18 are COULD (CLAUDE.md section 2, M6-BUILD-PROMPT.md:517); no migration creates such a table; `conversations` has no `mode` column.
+>   - Section 2 never transcribes fields (FR-07's row lists none either), so a row of names fits its form.
+> - **F4:** Section 3's block now lists `ROLE_NAMES`, `TAG_APPLIED_BY_VALUES` and `ACCEPTED_FORMATS` under a dated comment, followed by a paragraph explaining them.
+>   - Changed: the comment dates when they were listed, not "since v1". `ACCEPTED_FORMATS`' four values date from `documents 0004`, which section 5 calls post-v1.
+>   - Added to the paragraph: `visible_to_roles` is checked against `ROLE_NAMES` by the upload and meeting serializers (D-29), and the database does not constrain the column (it has no choices).
+> - **F5:** All 28 foreign keys now state their rule on their own row, in the form the existing 14 use: "**protect** on delete", "cascade delete" or "deleted with the meeting", "**set NULL** ...". A short "Foreign keys" paragraph above section 1 covers:
+>   - D-12's policy and D-67's change;
+>   - the set-NULL references to a person that FR-16 and FR-19 added;
+>   - that Django applies the rules and no database foreign key has an `ON DELETE` action (retrieval 0003's docstring, D-67);
+>   - G1/D-07.
+>
+>   Changed from the proposal, which was a paragraph only. Checked mechanically: 28 FK rows, each matched to its migration's `on_delete`.
+> - **F6:** `input_truncated` now names both caps, the token cap and `CLASSIFICATION_INPUT_CHARACTERS` (D-139, the closing security review's S1), and the one-section case. Changed: S1 is named in CLAUDE.md's wording, and the final request is stated precisely as "a text of more than one section". Dated in-cell note added.
+> - **F7:** `ContentTags.provisional` now names the per-model threshold. As proposed, plus a dated in-cell note.
+> - **F8:** The prose explaining `SUMMARY_FAILURE_REASONS` now covers "busy", including the case where the operating system refuses a thread (checked in `summary_runner.py`). Changed: dated inline ("since the security review of 12 November 2026"), not in a separate note.
+> - **F9:** G1 to G5 each gain "Settled by D-0x on 12 September 2026", and G4 adds D-137's seven-day "Remember me". Changed:
+>   - G1 also cites the two deletion modules.
+>   - G2 names the index.
+>   - G3 does not claim that `department_tag` is used nowhere: two test function names contain the words, in another sense.
+> - **F10:** Section 1's heading is now "Tables: migration v1 (M6 scope) and every migration since". The opening paragraph now makes the file the authority for v1 and every migration since, and a dated D-142 note records the old wording.
+>   - No link to the old anchor exists anywhere in the repository (grepped), so nothing breaks.
+>   - The file name and the title "Schema v1 — table definitions" are unchanged.
+> - **F11:** A table of the eight seeded codes, with holder, seed and purpose, now sits under RolePermissions. Changed: the reviewer's "For" column is now "Checked for", corrected from the views:
+>   - `contribute_content` guards uploads and reprocessing, meetings, FR-10's classification and tag routes, FR-16's summary runs and action items, and recording transcription, not just FR-08.
+>   - `manage_roles` guards the user list and a change of role.
+>   - `manage_tags` also guards `POST /api/tags` (D-128).
+>   - `view_knowledge_map` covers both views (D-138).
+> - **F12:** Applied in full, as a "Types" paragraph. The tables are untouched, so they stay readable. Every character column is accounted for:
+>   - 16 at `varchar(255)`, named individually instead of "a name, a title...", so the list is exact;
+>   - 19 vocabulary columns and the three `visible_to_roles` arrays at 32;
+>   - 13 `text`;
+>   - six with lengths of their own.
+>
+>   It also covers the non-negative check on integers and `jsonb`.
+> - **F13:** NULL in `rejected_count` now means path A, or a row written before `retrieval 0002` added the column. Changed: split into separate sentences, because the proposed one could be misparsed. Dated note added: the old text, like D-55, named the keyword search path, which writes `SearchLogs` and never a `QueryLog` row.
+> - **F14:** `Documents.status` and `Meetings.status` now read "default `Processing`" and "default `Received`". Changed "a new row is" to "default", the document's own form ("default 0", "boolean, default false").
+> - **F15:** `Users.email` is now "unique case-insensitively (D-02)". Changed: login does not store the address, it looks it up in lower case. The constraint is a plain unique one on the lower-cased value. Every writer lower-cases: `save()`, `create_user`, and the register, login and reset serializers.
+> - **F16:** Two bullets added to DocumentAnalysis' departures: `model`, `input_truncated` and `classified_at` (D-105 lists them as departures), and `department_applied_by`. As proposed, placed in the order the model's docstring uses.
+> - **F17:** "the one field" now reads "the first of the two fields". As proposed. No dated note, because the next paragraph already dates the second field (24 September 2026).
+> - **F18:** `Tags.grown` now says a confirmation grows the value it creates or reactivates: a Topic, or a Project or Process value from a proposal made while D-128 was in force. Changed: the reviewer's "a Topic since D-129" was wrong, because Topic proposals predate D-128. Dated in-cell note added.
+> - **F19:** Django's own six tables are now named. As proposed, but saying "no code of this project", because Django's own post_migrate does write `auth_permission` rows.
+>
+> **NOT APPLIED (1)**
+>
+> - **F20:** UNSURE; per the brief, no edit.
+> - No finding was rejected. F3 is applied only in part (see above).
+>
+> **FOR BENJAMIN**
+>
+> - **F20.** Four fixed lists in `apps/core/constants.py` back no column: `DOCUMENT_SORT_KEYS` (FR-15's sort parameter), `GAP_EXCLUSION_RULES` (D-126's configuration selector), `PICTURE_FORMATS` (D-137's accepted uploads) and `REPOSITORY_TAG_DIMENSIONS` (a subset of `CLASSIFICATION_DIMENSIONS`). Section 3 already holds vocabularies of a response (FR-20's): should it also hold one of a request, such as `DOCUMENT_SORT_KEYS`, or are all four outside this document?
+> - **F3's names need a check against the proposal.** `OnboardingTemplates`, `OnboardingItems`, `UserOnboardingProgress` and `Conversations.mode` appear nowhere in the repository. They rest only on the reviewer's quotation of FR-17's and FR-18's CRUD lines.
+> - **D-142 is not yet in docs/decisions.md.** This file now cites it eight times, so its entry should cover the schema review.
+> - **No code defect found.** Stale code comments, which do not affect behaviour:
+>   - `apps/retrieval/models.py`, QueryLog docstring: says NULL "will also be the keyword-search path when it exists". That path exists (D-41) and writes no QueryLog row.
+>   - `apps/retrieval/query_log.py:145-148`: says keyword search "is not built".
+>   - `apps/documents/models.py:293-295`, DocumentAnalysis docstring: says the model "departs from it in six places" and that section 1 "records the same list". Section 1 now lists seven: the docstring's six plus the provenance trio, which D-105 lists.
+>   - `apps/core/tests/test_schema.py:161-166`: `SECTION_2_TABLES` transcribes only FR-07's table. Section 2 now also names FR-17's tables. The test still passes, since none of them exists, but it covers only part of the section.
+
+*`docs/ai-provider.md`*
+
+> **APPLIED (22, plus the port fact)**
+>
+> - F1. §5b's retry policy now says a 429 is a failed attempt and any other 4xx is ProviderRefused.
+>   Changed from the proposal: "ends the attempts at once" instead of "after one call", because a 4xx
+>   on a later attempt ends the loop there. Added a dated sentence (the old rule was the one before
+>   D-118).
+> - F2. §3 now shows FLMService.__init__ verbatim from flm.py and build_client verbatim from
+>   _openai_compat.py, followed by the max_retries=0 paragraph (D-19). Changed: the proposed block
+>   was not a verbatim copy (it dropped `client: openai.OpenAI | None` and split the arguments), so I
+>   copied the files exactly and moved the URL and key comments into prose. Added a dated sentence
+>   saying the old sketch left the SDK's retries on.
+> - F3. §1 gains embed's and health's failure contract before generation's paragraph. Changed: one
+>   sentence replaces the proposal's "Each of these raises", which had no antecedent; "a count of
+>   usable vectors", because an empty vector also fails; "before any call" for the missing Voyage
+>   key.
+> - F4. §5 gains "Ceilings and sampling" (800 / 300 / temperature 0.0; CLAUDE_MAX_TOKENS 16,000,
+>   effort low, no sampling parameter). Changed: the reason the two numbers live in generation.py
+>   is the file's own (provider-call parameters, at the values the baseline was measured), and
+>   effort is called a starting value rather than a measured one (D-115, code comment).
+> - F5. §5d gains the seven summary limits and the shape tolerances. Changed: placed after the label
+>   bullets, since it refers to passage labels; split into two bullets so the list stays tight.
+>   "Two shape tolerances and no more" is replaced by the parser docstring's own list, which
+>   includes whitespace stripping.
+> - F6. GenerationAttempt gains `max_statements: int | None = None`. As proposed, except that the
+>   comment cites D-100 rather than §5.
+> - F7. §5d now records Objective 04: measured 15 November 2026, NOT MET on attribution (2 of 47
+>   owners), recall and extras met, owner rule kept 16 November. Changed: added the fourth
+>   development draw of 13 November (corpus/objective-04/runs/2026-11-13/), which the proposal
+>   left out. Named the reference file apart from the run directory. Kept the old heading's history
+>   in an "Until 22 November 2026" paragraph: it was written 12 November (a02797c).
+> - F9. §7 is rewritten for anthropic as the default, with what flm still buys. Changed: anthropic
+>   is listed first, as in the introduction. R11 and R12 are stated in D-04's and D-113's own terms:
+>   D-04 said R12 returns if the production path is switched on, and D-04 closed R11 because there
+>   was no metered cost. The proposal said "D-04's closure of R11 and R12", but D-04 only narrowed
+>   R12. Added "needs the NPU and a database set up under FLM" and a dated note.
+> - F10. §1 now says FR-13's history was argued and added no parameter (D-42). As proposed, plus "at
+>   Stage 4 item 9". Checked first: D-111 built and then withdrew a rewrite operation, so D-42 still
+>   holds.
+> - F11. §3 now says the openai package serves FLM and Voyage, and Claude is called through the
+>   anthropic package. Changed: "package", not "SDK", to match CLAUDE.md §4's new wording. Added a
+>   dated sentence: the old claim was never true of Claude, whose provider used the anthropic SDK
+>   from its first commit (ad88daa, 12 September).
+> - F12. Rule 5 now lists all eight checks and says the probe runs only when the provider answers.
+>   Changed: "pytest never runs them" is narrowed, because apps/ai/tests/test_checks.py calls them
+>   against stubs. Added a dated sentence inside the ai.E001 bullet.
+> - F13. §4 gains the table of four more per-model values (D-122, D-126, D-129). Changed: placed at
+>   the end of §4, so that "So the two providers never share a database" keeps its antecedent. The
+>   lead-in now says which values follow the embedding model and which the chat model.
+> - F14. The "Dev and production" warning is replaced by ai.E005 and rule 2. Changed: "never one
+>   index serving both" instead of "whichever is used for development".
+> - F15. The §1 block gains ProviderUnavailable, ProviderRefused, INPUT_TYPE_QUERY and
+>   INPUT_TYPE_DOCUMENT. Changed: the exceptions are placed after ProviderHealth, with the general
+>   types, which still precedes both subclasses. The constants are placed before InputType, as in
+>   base.py. The comments are shorter.
+> - F17. Step 3 names the trailing-comma repair and D-136. As proposed.
+> - F18. The dated paragraph now reads "All three parsers of that date ... and the section parser
+>   D-139 added later does too". Changed: the 13 November count stays visible, and no date is added
+>   there, so the later "Until then" still means 13 November.
+> - F19. "all on this prompt" now reads "all on the prompt before D-139". As proposed.
+> - F20. Rule 4 names both vector columns and both migrations. As proposed.
+> - F21. Rule 7 covers EmbeddingGemma's prefixes (D-38). Changed: "formats a question as ..."
+>   instead of "puts ... before", and "not on the provider", the module's own words.
+> - F22. §2's get_ai_service() is now verbatim from apps/ai/__init__.py. As proposed.
+> - F24. "The only callers" now includes the three copies under corpus/. As proposed.
+> - F26. §5c gains the 60 s segment bound. As proposed, written "(60 s)".
+> - Brief item 2 (not a finding). "Running the server" gains the port paragraph:
+>   - 8625, not FLM's own default of 52625 (Hyper-V range, `6d36036`);
+>   - FLM_SERVE_PORT set to 8625 in a window opened after it was set, or `--port 8625`;
+>   - `flm port` must print 8625 (D-142).
+>   It matches CLAUDE.md §4 and README.md.
+>
+> **NOT APPLIED (4)**
+>
+> - F8. config/settings.py is fixed in this worktree and tested (test_flm_base_url_default.py), as
+>   the brief says. The document's 8625 was already right.
+> - F16. CLAUDE.md is already corrected in this worktree. §1 of this document agrees with it, and
+>   §3 now agrees with its "anthropic package" wording.
+> - F23. CODE-VS-DOC: see FOR BENJAMIN.
+> - F25. CODE-VS-DOC: see FOR BENJAMIN.
+>
+> None of the 26 was rejected. Every applied finding held on the code.
+>
+> **FOR BENJAMIN**
+>
+> - F23. apps/ai/testing.py:157 declares StubAIService.generate_statements without the on_attempt
+>   keyword, although the AIService Protocol and every provider declare it. Nothing under apps/
+>   passes on_attempt, so no test fails today. Even so, the stub every test receives differs from
+>   the contract by a parameter, which the contract itself says should not happen.
+> - F25. apps/ai/flm.py:5 still says FLM is the "Default for development, testing and
+>   demonstration", and apps/ai/anthropic.py:129-134 and :214-215 still say the Claude path is "Not
+>   yet exercised against the live API". Both stopped being true with D-122 and the live Haiku runs
+>   of D-121 and D-122. They are comments, not behaviour.
+> - New: the same stub returns an empty StatementList for an empty passage list, where both providers
+>   raise ValueError (flm.py:83-88, anthropic.py:136-137). The document now says an empty list is a
+>   ValueError. So a test running on the stub would not notice a caller that sends no passages.
+>   This is a possible defect in the test double, not in production.
+> - New: FLMService.health() (flm.py:223) calls models.list() with no timeout, so it waits up to the
+>   openai client's 600 s read timeout. AnthropicService.health() (anthropic.py:294) uses the SDK's
+>   default. So the startup check could hang for minutes on a server that accepts the connection
+>   but never answers. Transcription health passes HEALTH_TIMEOUT_SECONDS (5). This is a possible
+>   defect: I found it by reading the code and ran nothing.
+> - New, comment only: apps/ai/schema.py:415-418 still says "all three" parsers decode through
+>   loads_reply. Since D-139 there are four.
+> - New, for the coordinating session: the docstring of the new
+>   apps/ai/tests/test_flm_base_url_default.py says 6d36036 changed .env.example, CLAUDE.md and
+>   scripts/check_flm.py. git shows that 6d36036 changed .env.example, ci.yml, README.md,
+>   docs/ai-provider.md and docs/decisions.md. CLAUDE.md moved to 8625 in f1c882d, and
+>   check_flm.py in 7fc12db, both on 22 September 2026.
+
+**Tests.**
+
+- **Before the independent check,** on the changed tree:
+  - `pytest`, the whole back-end suite: 6,104 passed, none failed, none skipped, in 26 minutes
+    57 seconds. Its dual-role line read "54/54 protected endpoints exercised from both Employee
+    and Administrator sessions (100.0%)".
+  - `npm test` in `frontend/`: 67 files, 1,265 tests, all passed.
+- **After the check's corrections.** They changed documents, the new test and its docstring, and
+  no other code. The three test files that read a changed document were run again:
+  - `apps/ai/tests/test_flm_base_url_default.py` (reads `CLAUDE.md`, `.env.example`,
+    `config/settings.py` and `scripts/check_flm.py`) and
+    `apps/api/tests/test_request_body_bound.py` (reads `README.md` and every `docs/*.md` but this
+    file, for Waitress commands): 77 passed;
+  - `frontend/tests/profilePicture.test.jsx` (reads six sentences of the contract): 28 passed.
+
+  No test reads this file, and no other test reads a file these corrections changed. The whole
+  suites were not run a second time.
+- **The new test, broken on purpose.** Each break was made in a copy of the five files outside
+  the repository, so the worktree was never broken. The table is generated from the runs.
+  Unbroken: 5 passed.
+
+  | Break, made in a copy | Tests that fail | Result line |
+  |---|---|---|
+  | `config/settings.py`'s default goes back to port 52625 | `test_no_file_that_configures_the_project_still_names_the_old_port`<br>`test_the_settings_default_is_the_documented_address` | 2 failed, 3 passed in 0.19s |
+  | `.env.example`'s value goes back to port 52625 | `test_no_file_that_configures_the_project_still_names_the_old_port`<br>`test_the_example_settings_file_names_the_same_address` | 2 failed, 3 passed in 0.18s |
+  | `scripts/check_flm.py`'s default goes back to port 52625 | `test_no_file_that_configures_the_project_still_names_the_old_port`<br>`test_the_flm_check_script_defaults_to_the_same_address` | 2 failed, 3 passed in 0.17s |
+  | `CLAUDE.md` section 4's value goes back to port 52625 | `test_claude_md_section_4_names_the_same_address` | 1 failed, 4 passed in 0.16s |
+  | `CLAUDE.md` section 4's value goes back to port 52625, and the documented address is written at the end of the file instead | `test_claude_md_section_4_names_the_same_address` | 1 failed, 4 passed in 0.17s |
+  | `config/settings.py`'s default moves to a third port, 9000 | `test_the_settings_default_is_the_documented_address` | 1 failed, 4 passed in 0.16s |
+  | `config/settings.py`'s default loses its `/v1` path | `test_the_settings_default_is_the_documented_address` | 1 failed, 4 passed in 0.16s |
+  | `config/settings.py`'s default names `localhost`, not `127.0.0.1` | `test_the_settings_default_is_the_documented_address` | 1 failed, 4 passed in 0.17s |
+
+  The fifth row is the checker's finding 12 below: the test now reads section 4 alone, where it
+  first accepted the address anywhere in `CLAUDE.md`.
+
+**The independent check.** Three read-only checkers (`requirements-auditor`, on Opus 5.5 at max
+effort) each took one slice of the uncommitted change and tried to refute every statement it added
+or reworded, against the code. They had the reviewers' and appliers' records as pointers, and were
+told that a record is a claim and not evidence.
+
+| Slice | Verdict | Findings |
+|---|---|---|
+| The coordinating session's own edits: both READMEs, `.env.example`, `CLAUDE.md`, the settings default and its test, and the first wording of this entry | **FAIL** | 12: 2 Blocker, 2 Major, 8 Minor |
+| `docs/api-contract.md`, 31 hunks | PASS WITH NOTES | 6 Minor |
+| `docs/schema-v1.md`, 20 hunks, and `docs/ai-provider.md`, 15 hunks | PASS WITH NOTES | 7: 1 Major, 6 Minor |
+
+Each of the 25 was checked against the code it cites before anything was changed. All 25 held.
+
+*The coordinating session's slice: FAIL, and what was done.*
+
+- **1, Blocker, corrected.** `README.md` said the two backfill commands write "at a model call
+  each". A document longer than `CLASSIFICATION_INPUT_TOKENS` (1,500 tokens) costs a request per
+  section, up to eight, and a final one (D-139). The README now says what each costs.
+- **2, Blocker, corrected.** This entry, and the new test's docstring, said the old default looked
+  for FLM "where nothing starts it". On a machine without `FLM_SERVE_PORT`, 52625 is exactly where
+  FLM starts. Decision 1 above and the docstring now say what was true: the default disagreed
+  with `.env.example` and with the documents.
+- **3, Major, corrected.** Four statements in `CLAUDE.md` that had been wrong were rewritten with
+  no date. One dated note under section 3's table now names them. The rule's paragraph above was
+  first written as though no such case existed.
+- **4, Major, corrected.** This entry said every column "matched the migrations". The review
+  established that none was missing on either side, and filed findings on what the document said
+  about ten tables. The sentence after the counts now says that.
+- **5 and 6, Minor, corrected.** `CLAUDE.md` section 5 says "nowhere else on the server" and names
+  the front end's copies and the test that holds them. Section 4 names Voyage's `input_type`
+  among what differs between the two `openai` clients.
+- **7 and 8, Minor, corrected.** The README's port step comes before the first `flm serve`, gives
+  its command, and is pointed to from the transcription section. `.env.example`'s FLM block names
+  the step, and no longer says the block is read only under `AI_PROVIDER=flm`.
+- **9, Minor, corrected.** The README names both server-side validators and the test that holds
+  the front end's copy equal, and says decisions are "numbered from D-01".
+- **10, Minor, corrected** in this entry: (a) the FR-16 block in `.env.example` was inserted by
+  `56f5613`, not by a merge; (b) "comments only" left out the setting line that moved; (c) the
+  README opens with a sentence to the effect of Benjamin's, not with his sentence; (d) the list of
+  README changes left out the prerequisites line; (e) the claim about section 5b went further
+  than the review's record.
+- **11, Minor, corrected.** Section 2's dated note now says its two instructions were M6's rule
+  and are kept as written. They were not removed: Benjamin's "Remove the stale lines" answered a
+  list that did not include them.
+- **12, Minor, corrected.** `test_claude_md_section_4_names_the_same_address` reads section 4
+  alone.
+
+*`docs/api-contract.md`: PASS WITH NOTES, and what was done.* All six corrected.
+
+- **1.** "what its panels show differs only because", since the page also shows a signed-in line.
+- **2.** The D-130 note and FR-03's bullet carry the date of their correction.
+- **3.** The upload's order of refusals no longer counts "three" steps, and names the rate's `429`
+  and the declared-length `413`.
+- **4.** The knowledge-gap cycle's `503` names the reply that cannot be used as a query vector.
+- **5.** The meeting route's `400` list names the DOCX or XLSX that declares too much content.
+- **6.** The citation of D-105's note says "night".
+
+The checker's uncounted remark, that the meeting-detail JSON example does not show
+`attendee_people`, predates this review and is left.
+
+*`docs/schema-v1.md` and `docs/ai-provider.md`: PASS WITH NOTES, and what was done.*
+
+- **1, Major, corrected.** `MeetingSummaries.started_at` is set per run, and never between a run's
+  provider calls.
+- **2, corrected in part.** `manage_tags` also gates retiring a tag, and `release_account_locks`
+  the lock state in the user list. The optional note on `contribute_content` was not taken.
+- **3, corrected.** `visible_to_roles` is "a column whose model field has no choices".
+- **4, corrected.** Each vector column is sized when its own migration first runs.
+- **5, corrected in `docs/ai-provider.md`:** "before 10 November 2026". `CLAUDE.md` section 4 has
+  the matching line. This review did not touch it, and its "up to then" follows "until 10
+  November 2026", so it was left.
+- **6, corrected.** "every client of the `openai` package that a provider uses".
+- **7, corrected.** The `DocumentAnalysis` date is given as D-105's.
+
+The corrections were not sent back to the checkers. Each is one of the changes listed here, made
+after opening the code its finding cites.
+
+The three reports follow as written, taken from each checker's own transcript. Their line numbers
+are those of the files as the checkers read them, before the corrections above.
+
+*The coordinating session's slice*
+
+> Verdict: FAIL. Two statements the change added are false: the README's cost of a document backfill, and the account of the old `FLM_BASE_URL` default that D-142 and the new test's docstring give. Two more D-142 statements are misleading. Everything else in the slice either held against the code or has only minor wording or form defects.
+>
+> ## Covered
+>
+> - **`README.md`, all 9 hunks:**
+>   - the opening and the list of documents;
+>   - prerequisites (Node.js, FastFlowLM);
+>   - step 5's comment;
+>   - the Anthropic bullet;
+>   - the FLM port step;
+>   - "One database, one provider";
+>   - `npm ci`;
+>   - the front-end suite paragraph;
+>   - the password-rules paragraph;
+>   - "After a pull".
+> - **`frontend/README.md`, 1 hunk:** the Install, Test, API, Auth/Screens and password lines.
+> - **`.env.example`, 3 hunks:** the `MEDIA_ROOT` comment, the `ANTHROPIC_MODEL` comment, and the `FLM_ASR_MODEL` move. I also checked for duplicate or orphaned keys.
+> - **`CLAUDE.md`, 8 hunks:**
+>   - §2's heading, dated note and "Not in the gate" lines;
+>   - §3's package name;
+>   - §4's `AIService` listing and its new sentence, the `FLM_SERVE_PORT` paragraph and the SDK sentence;
+>   - §5's opening sentence and the lockout row.
+> - **`config/settings.py`, and the untracked `apps/ai/tests/test_flm_base_url_default.py`:**
+>   - the comment, the default and the five tests;
+>   - the docstring, against `git show --stat 6d36036 f1c882d 7fc12db` and `git log -S52625 -- config/settings.py`.
+> - **D-142's head, `docs/decisions.md` lines 23681 to 23804:**
+>   - the counts, against the findings files and the three appliers' records;
+>   - the commit hashes;
+>   - the claims about routes, tables and the classify-route fix;
+>   - Benjamin's five decisions as described;
+>   - the "what changed" lists.
+> - **Not covered or not verifiable:**
+>   - FLM's own behaviour (`flm port`, `FLM_SERVE_PORT`, `--port`), taken as given as instructed. I did not check whether FLM reads a variable set at User level.
+>   - What the coordinating session says it checked.
+>   - Benjamin's words.
+>   - "FR-12 … more of the contract's findings fall under it": not counted.
+>   - That the FR-17 tables and FR-18's `Conversations.mode` are in proposal v4.5: the proposal is not in or near the repository.
+>   - Nothing was run: no suite, no Django, no Docker.
+>
+> ## Findings
+>
+> **1. Blocker. `README.md:332`, "After `migrate`, two commands write them, at a model call each:"**
+>
+> - This is false for any document longer than `CLASSIFICATION_INPUT_TOKENS`, which is 1,500 tokens (`apps/core/constants.py:852`).
+> - The command's own docstring, `apps/documents/management/commands/summarise_documents.py:52-54`, says: "One `classify_document` operation: one request for a document within CLASSIFICATION_INPUT_TOKENS, and for a longer one a request per section, up to MAXIMUM_SUMMARY_SECTIONS, and a final one (D-139), each of up to MAXIMUM_CLASSIFY_ATTEMPTS attempts." See also `apps/ai/base.py:309-316`.
+> - `MAXIMUM_SUMMARY_SECTIONS` is 8 (`constants.py:906`). So one ordinary document can cost up to nine billed requests, each with up to three attempts, on a paid provider.
+> - A meeting is one request (`summarise_meetings.py:14-15`).
+> - **Fix:** "After `migrate`, two commands write them through the provider: one request per meeting, and per document one request, or for a document over `CLASSIFICATION_INPUT_TOKENS` (1,500 tokens) one per section, up to eight, and a final one (D-139)."
+>
+> **2. Blocker. The old default is said to have pointed "where nothing starts it".**
+>
+> - **Where:** `docs/decisions.md:23748-23749`, "so an installation whose `.env` had no `FLM_BASE_URL` line looked for FLM where nothing starts it"; and the same claim in `apps/ai/tests/test_flm_base_url_default.py:6-7`, "looked for FLM on a port nothing in the project starts it on."
+> - **Why it is false:** D-142's own next sentences (23751-23755) say FLM v0.9.39 serves on 8625 only where `FLM_SERVE_PORT` is 8625 or `--port 8625` is passed. Otherwise it serves on its default, 52625, and the documented `flm serve` command "worked only on the development laptop".
+> - So on every other machine, the project's own documented command starts FLM on exactly 52625:
+>   - `README.md:129`, `CLAUDE.md:163` and `.env.example:82` all give `flm serve gemma3:4b --embed 1`, with no port.
+>   - 52625 is where the old default looked.
+> - The sentence is true only on the laptop, and it contradicts the paragraph it sits in.
+> - The settings comment (`config/settings.py:470-472`) does not make this claim and is accurate.
+> - **Fix, D-142:** "None changed the settings default, so it disagreed with `.env.example` and every document: an installation whose `.env` had no `FLM_BASE_URL` line looked for FLM on 52625, FLM's own default, not on the port the project documents."
+> - **Fix, docstring:** the same correction.
+>
+> **3. Major. `docs/decisions.md:23697-23699` states a rule the `CLAUDE.md` edits did not follow.**
+>
+> - **The rule as stated:** "A statement that had been wrong was corrected with its date, in the form each document already uses, and not quietly rewritten."
+> - **`CLAUDE.md`'s form for such a correction** is a dated block quote:
+>   - `CLAUDE.md:283`, invariant 2: "the correction is dated rather than quietly applied";
+>   - `CLAUDE.md:383`, §8.
+> - **Four `CLAUDE.md` statements that were wrong were rewritten with no date in `CLAUDE.md`:**
+>   - §3's `pgvector-django`. It was never a dependency: `git log -S pgvector-django -- requirements.in requirements.txt` is empty, and `requirements.in:13` is `pgvector==0.5.0`.
+>   - §4's "the `openai` Python package is the client for both providers". This was wrong when written: `apps/ai/anthropic.py` has imported the `anthropic` SDK since `ad88daa` (12 September).
+>   - §4's `AIService` listing, wrong since D-116.
+>   - §5's "nowhere else", wrong since D-130.
+> - D-142's own item 5 (23773-23774) says the dated note went only "where a section changed what it claims", which means §2 alone. So the entry contradicts itself.
+> - **Fix, either:**
+>   - add one dated note to `CLAUDE.md`: "> **Corrected 22 November 2026 (D-142).** Until then §3 named `pgvector-django`, §4 said the `openai` package was the client for both providers and listed `embed` and `generate_statements` without their keyword arguments, and §5 said these values live nowhere else."; or
+>   - narrow the rule sentence to say that in `CLAUDE.md`, on Benjamin's "Remove the stale lines", only §2 carries a dated note and this entry dates the rest.
+>
+> **4. Major. `docs/decisions.md:23735-23736`, "All 23 tables and every column in `docs/schema-v1.md` matched the migrations."**
+>
+> - The source review (`scratchpad/docs-review/schema.md:9-33`) gives "columns agree" for only 12 of the 23 tables. In that review "agree" covers name, type, nullability, uniqueness and foreign-key target.
+> - It filed findings on the other 11, including:
+>   - F2: `MeetingSummaries.started_at` is nullable, but the document read it as NOT NULL;
+>   - F1: unique constraints were not stated;
+>   - F15: case-insensitive uniqueness of `email`.
+> - What the review established is presence: "Every column the document names exists, and every column in the migrations is in the document."
+> - **Fix:** "All 23 tables, and every column, are in both `docs/schema-v1.md` and the migrations; none was missing on either side."
+>
+> **5. Minor. `CLAUDE.md:208`, "These live in `apps/core/constants.py` and nowhere else, with one exception since D-130".**
+>
+> - Three of the table's rows are also defined in the front end:
+>   - `MAXIMUM_RECORDING_BYTES` (`frontend/src/constants.js:169`);
+>   - `ACCEPTED_FORMATS`, as `ACCEPTED_EXTENSIONS` and a label (`:196-197`);
+>   - `MAX_UPLOAD_BYTES` (`:198`).
+> - Each is declared as a mirror, and `apps/api/tests/test_front_end_constants_agreement.py` fails when they drift.
+> - The table's own `MAXIMUM_RECORDING_BYTES` row already says "client-only".
+> - "One exception" counts only the `.env` override.
+> - **Fix:** "…nowhere else on the server, with one exception since D-130: … The front end mirrors `MAX_UPLOAD_BYTES`, `ACCEPTED_FORMATS` and `MAXIMUM_RECORDING_BYTES` in `frontend/src/constants.js`, held to these by `apps/api/tests/test_front_end_constants_agreement.py`."
+>
+> **6. Minor. `CLAUDE.md:184-185`, "Voyage's embeddings go through the same package: only `base_url`, `api_key` and model names differ."**
+>
+> - Voyage's requests also carry `extra_body={"input_type": …}` (`apps/ai/anthropic.py:112`).
+> - FLM's requests never do (`apps/ai/_openai_compat.py:32-33`).
+> - This is the D-116 keyword that the same section's new sentence introduces two paragraphs earlier.
+> - **Fix:** "only `base_url`, `api_key`, the model names and Voyage's `input_type` (D-116) differ."
+>
+> **7. Minor. The README's port step is easy to miss.**
+>
+> - **Placement.** It is at `README.md:135-139`, inside the offline-provider subsection only, and after the start command at `:129`.
+> - **Transcription readers miss it.** The new prerequisites line (`:32-36` area) sends an Anthropic user who wants transcription to the transcription subsection (`:147-177`). That subsection starts `flm serve gemma3:4b --embed 1 --asr 1` with no port step. FLM then serves on 52625, and transcription reports `ai.W002`.
+> - **No command is given.** "Set the `FLM_SERVE_PORT` environment variable to 8625 once, then open a new PowerShell window" gives no command. The usual PowerShell way, `$env:FLM_SERVE_PORT = '8625'`, is lost in the new window the step asks for.
+> - **Fix:**
+>   - give the command, for example `[Environment]::SetEnvironmentVariable('FLM_SERVE_PORT', '8625', 'User')`;
+>   - add one line to the transcription subsection pointing to the port step, or move the bullet above the first `flm serve` block.
+>
+> **8. Minor. `.env.example:81-82` now conflicts with the touched README line and with the code.**
+>
+> - The FLM block still says "FastFlowLM, only read when AI_PROVIDER=flm. Start it in a second PowerShell window: `flm serve gemma3:4b --embed 1`", with no port step.
+> - It is the one file in the set that still tells a reader to start FLM that way. The reviewer's F22 named `.env.example:80-82` for the same assumption.
+> - "only read when AI_PROVIDER=flm" is false: transcription builds its client from `FLM_BASE_URL` and `FLM_API_KEY` whatever `AI_PROVIDER` is (`apps/ai/transcription.py:89`, `:126`; `apps/ai/anthropic.py:275-279`).
+> - The new README prerequisites line also says FLM serves transcription under either provider.
+> - These lines are untouched, but they are in a file this change edited, and a touched line now contradicts them.
+> - **Fix:** "# FastFlowLM: read when AI_PROVIDER=flm, and by transcription when TRANSCRIPTION_PROVIDER=flm. It must serve on 8625: set FLM_SERVE_PORT=8625 or pass --port 8625 (README.md)."
+>
+> **9. Minor. README wording.**
+>
+> - **`:302-303`, "The numbers are in `apps/core/constants.py`, and two places apply them".**
+>   - `config/settings.py:150-153` also applies `PASSWORD_MINIMUM_LENGTH`, through Django's `MinimumLengthValidator`.
+>   - `frontend/src/utils/password.js:33` holds its own copy of the numbers.
+>   - **Fix:** "…and the server applies them (`ComplexityValidator`, and the minimum length also through `MinimumLengthValidator` in `config/settings.py`); `frontend/src/utils/password.js` mirrors them for…".
+> - **`:11`, "numbered D-NNN".** 99 of the 142 headings have two digits (D-01 to D-99).
+>   - **Fix:** "numbered from D-01".
+>
+> **10. Minor. D-142's descriptions of the change.**
+>
+> - **(a) 23802-23803, "the FR-16 block a merge had put between them".**
+>   - The FR-16 commit `56f5613` inserted the block itself. It has one parent, and its history already contains `dd56e72` with the two lines next to each other (`git show 56f5613 -- .env.example`).
+>   - The block reached `main` through PR #101's merge, but no merge placed it.
+>   - **Fix:** "the FR-16 block that `56f5613` inserted between them".
+> - **(b) 23801, "`.env.example`, comments only".** The setting line `FLM_ASR_MODEL=whisper-v3:turbo` moved, with its value unchanged.
+>   - **Fix:** "comments, and one setting line moved with its value unchanged".
+> - **(c) 23785, "opens with that sentence".** The README opens with "You cannot change providers once a database has been set up for one.", which is a paraphrase, not Benjamin's sentence.
+>   - **Fix:** "opens with a sentence to that effect".
+> - **(d) 23792-23797.** The README change list leaves out the prerequisites change: FastFlowLM is now also listed for transcription (readme F8). The list is incomplete, not false.
+> - **(e) 23736-23737, "Everything D-139 and D-136 changed in `docs/ai-provider.md` section 5b matched the code".**
+>   - No review record says this.
+>   - The ai-provider review's "Not checked" list excludes §5b's figures, beyond their agreement with constants, and the prompt wording.
+>   - Its two §5b findings, F1 and F19, are on lines older than D-139 (`git blame` at `5553331`: `fb9e18ad` of 9 November and `fa586908` of 13 November). So the claim is not shown false, but it is unsupported.
+>   - **Fix:** "The review's two findings in section 5b (F1, F19) are on lines older than D-139; it found nothing D-139 or D-136 wrote there that the code contradicts."
+>
+> **11. Minor. `CLAUDE.md:71-78` still gives orders for a gate that has passed.**
+>
+> - The new note says §2 "is now the record of the gate".
+> - But the section still instructs in the present tense: "Build to the table." (`:73`) and "When you are behind, cut depth inside a requirement … never cut a requirement." (`:76-78`).
+> - Benjamin's "Remove the stale lines" may have meant these lines.
+> - **Fix:** put the two paragraphs in the past tense, or say in the note that they are kept as the gate's rule.
+>
+> **12. Minor. The name of `test_claude_md_section_4_names_the_same_address` (`apps/ai/tests/test_flm_base_url_default.py:45-46`) promises more than it checks.**
+>
+> - It asserts that the string appears anywhere in `CLAUDE.md`, not in §4.
+> - A second copy elsewhere would hide a change to §4's block. Today there is one copy, at `CLAUDE.md:178`.
+> - **Fix:** slice from `## 4.` to `## 5.` before the assert, or rename the test.
+>
+> ## Tried to refute and could not
+>
+> - **README commands exist as written:**
+>   - `npm ci`, `npm test`, `npm run lint` and `npm run build`: `frontend/package.json:7-11`, run in that order with the test last in `.github/workflows/ci.yml:85-94`.
+>   - `summarise_documents` writes by default; there is no dry run (`summarise_documents.py:142-167`).
+>   - `summarise_meetings --missing` exists (`summarise_meetings.py:143-173`).
+>   - `docker compose exec db createdb -U kmp kmp_flm` matches `docker-compose.yml:5-16`: service `db`, user and password `kmp`, `127.0.0.1:5432`. The vector extension comes from `apps/core/migrations/0001_pgvector_extension.py`.
+> - **Both backfills refuse `kmp`,** by exact name, case-insensitively (`scripts/measurement_record.py:35`, `:132-139`; `summarise_documents.py:165-169`; `summarise_meetings.py:164-169`). The hourly retry is a separate command, `retry_meeting_summaries.py`.
+> - **The two interface controls:**
+>   - **Generate Summary** is the label when no summary is Ready, shown only with `can_edit` (`MeetingSummary.jsx:189-196`, `constants.js:1347`).
+>   - **Classify now** renders only when there is no classification (`Classification.jsx:470`, `:879-890`). It is the interface's only path to the classify route.
+> - **One database, one provider:**
+>   - `ai.E005` is a width check registered under the custom tag `embedding` (`apps/ai/checks.py:151-180`), so `check`, `migrate` and `runserver` all run it. The old four steps did stop at `migrate`, as D-142 says.
+>   - `reindex --provider` must name the database's own provider (`reindex.py:71-96`).
+>   - `--resize-column` was removed with D-131 (`reindex.py:168-173`; D-131 at 15480-15485).
+> - **Node 24.15:** jsdom's engines field is `^22.22.2 || ^24.15.0 || >=26.0.0` (`frontend/package-lock.json`), and CI uses `node-version: 24` with that comment (`ci.yml:76-80`).
+> - **`tests/setup.js:41-52`** refuses `fetch` and `XMLHttpRequest` and fails the test in `afterEach`. The Vitest config is jsdom over `tests/**/*.test.{js,jsx}` (`vite.config.js:67-72`).
+> - **Front-end routes and guards (`App.jsx:198-238`):**
+>   - `forgot-password` and `reset-password` are public;
+>   - `profile` is behind `RequireAuth`;
+>   - `admin/tags` is behind `RequireRole` for Administrators;
+>   - `manage_tags` guards both tags and departments (`apps/api/urls.py:128-133`).
+> - **The password mirror** is imported by `Profile.jsx:14` and `ResetPassword.jsx:13`. `ComplexityValidator` reads `apps/core/constants.py` (`validators.py:24-42`).
+> - **The `AIService` listing matches `apps/ai/base.py:254-344` signature by signature.** Only the quoted forward reference `"GenerationAttempt"` differs.
+>   - `input_type` is per D-116 (`base.py:255-266`).
+>   - `on_attempt` is an observer (`base.py:269-291`; `docs/ai-provider.md:203`).
+> - **SDKs and models:**
+>   - Claude goes through `anthropic` (`apps/ai/anthropic.py:21`, `:87`).
+>   - `ANTHROPIC_MODEL` drives generation, classification with its summary, and meeting summaries (`:183`, `:243`, `:266`).
+>   - D-121: Sonnet costs twenty times as much per token, measured on generation only.
+> - **`pgvector`:** `pgvector==0.5.0` in `requirements.in:13` and `requirements.txt:56`, imported as `pgvector.django` (`apps/documents/models.py:17`).
+> - **Lockout:** tighten-only bounds in `config/settings.py:193-214`, read from `LOCKOUT_THRESHOLD` and `LOCKOUT_DURATION_MINUTES`.
+> - **Built status:**
+>   - FR-03, FR-10 (including PR #124 at `825d69f`), FR-16, FR-19 and FR-20 each have `feat(...)` commits on `main`; FR-07, FR-17 and FR-18 have none.
+>   - D-107, D-130, D-104, D-125, D-132 and D-138 are the right citations.
+>   - M8 on 27 November is D-114 (`decisions.md:9681`).
+> - **The settings default and its test:**
+>   - `6d36036`, `f1c882d` and `7fc12db` moved the port exactly where the docstring says, all on 22 September.
+>   - 52625 dates from `4deddae` and no commit changed it.
+>   - `FLM_SERVE_PORT` appears nowhere at `5553331`.
+>   - Each test fails on the old port.
+>   - `parents[3]` is the repository root.
+>   - `conftest.py:108` overrides `FLM_BASE_URL`, which is why the tests read the files as text rather than the settings.
+> - **D-142's counts:**
+>   - contract: 23 + 11 = 34, of which 32 applied and 2 not;
+>   - schema: 20, of which 19 applied (F3 in part) and 1 not (F20);
+>   - ai-provider: 26, of which 22 applied and 4 not (F8, F16, F23, F25);
+>   - README: 12, of which 10 applied and 2 not (F11, F12);
+>   - files the README leans on: 9, of which 8 applied and 1 not (F21);
+>   - `CLAUDE.md` and others: 7, of which 6 applied and 1 not (F28);
+>   - totals 108 / 97 / 11. All three appliers' records say no finding was rejected.
+> - **Routes and tables:** `apps/api/urls.py` has 48 entries plus the router's API root, which is now the contract row at line 1217. There are 23 models.
+> - **Benjamin's decisions as described:**
+>   - Decision 2: the classify route was fixed on 21 November in `245d247` (D-139), and the three contract rows promise `404` (`api-contract.md:1286`, `:1730`, `:1731`).
+>   - Decision 3: matches `createsuperuser.py:185-201` (Django 5.2.17), and `UserManager.create_superuser` does not validate passwords (`apps/accounts/models.py:81-84`).
+> - **The port story** agrees across `README.md`, `CLAUDE.md` §4 and `docs/ai-provider.md:344-348`. `.env.example` is the exception (finding 8).
+> - **`.env.example`:**
+>   - every variable is defined once;
+>   - profile pictures are stored under `profile-pictures/` (`apps/accounts/models.py:92-98`);
+>   - `FLM_ASR_MODEL` is read at `config/settings.py:483`.
+
+*`docs/api-contract.md`*
+
+> Verdict: PASS WITH NOTES
+>
+> All 31 hunks hold against the code at `5553331`: every route, field, status code, body, constant and cited decision. There are six minor notes. The two that matter most: one new sentence about the dashboard overstates by one line of the page, and the D-130 dated note was corrected in place without a correction marker.
+>
+> All paths below are relative to the worktree root, `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\docs-project-documents-review`. Contract line numbers are those of the edited file.
+>
+> ## Covered
+>
+> All 31 hunks of `git diff -- docs/api-contract.md`:
+>
+> 1. The user object and the D-130 note (lines 33-43), and the Stage 2 rows for register, login and logout (53-55).
+> 2. The "Rate limiting" paragraph (83-91).
+> 3. The "FR-03 is built" note, now "below" (110).
+> 4. The FR-02 role-specific dashboard (134-139), the unmatched-path "below" (152), the CSRF bullet (153-157) and the `415` bullet (164-169).
+> 5. The `POST /api/documents` row (`415`, `429`) and the `GET /api/documents/{id}` row (192, 195).
+> 6. The multipart paragraph and its dated parenthesis (211-214), and the rejection order (223-233).
+> 7. "A `422` carries the record that was stored" (312-317).
+> 8. The `POST /api/meetings` row (363).
+> 9. FR-09's "Fields, in either form" (386-391).
+> 10. The search `400`: a NUL byte.
+> 11. The ask row's `503` (D-118).
+> 12. The answered-reply example: `ai_generated`.
+> 13. The `result_count` paragraph (603-605).
+> 14. Partial matches per embedding model (D-120).
+> 15. The `ai_generated` sentence after "No similarity score is exposed".
+> 16. The "`503` is NFR-19's" paragraph.
+> 17. The thread example: `ai_generated`.
+> 18. The dashboard `400`: a NUL byte.
+> 19. The FR-15 table's detail row and delete row.
+> 20. The detail JSON and the `tags` bullet (1032-1055).
+> 21. Meeting deletion: the GET and DELETE rows (1102-1103).
+> 22. The throttle table's `transcription` row, now "below".
+> 23. Stage 5 item 9: the new `/api/` row.
+> 24. The classify row (the `404`/`422` window, `503`, `429`) and the proposed-tags confirm row.
+> 25. The `tag_options` retired-value bullet.
+> 26. The Departments `tagging` budget.
+> 27. The knowledge-gap cycle's `503` (1577).
+> 28. The transcription rejection order.
+> 29. The summary POST's busy `202`.
+> 30. FR-03's "Every other route's user object" bullet (1904-1906).
+> 31. The `PUBLIC_BASE_URL` refusal.
+>
+> Also checked:
+> - **The applier's record.** Each of the 32 findings `contract-applied.md` records as applied landed in the diff as described.
+> - **Decision numbers.** Each of the 29 cited in added lines has an entry in `docs/decisions.md`.
+> - **Cross-references.** Each quoted one resolves to a heading or a bold label.
+> - **Form.** All 148 table rows have their table's cell count, with escaped pipes honoured. The code fences balance: 64 fence lines. The check was done with a scratchpad script, outside the repository.
+>
+> Not verified:
+> - **The proposal's §7.2 text.** It is not in the repository. What §7.2 "names" is taken from the code's docstrings (`apps/api/views.py:1400-1404`, `apps/api/serializers.py:427-432`).
+> - **Runtime behaviour.** Nothing was run. Front-end claims were checked by reading `frontend/src` only.
+>
+> ## Findings
+>
+> 1. **Minor (overstated).** Lines 137-139.
+>    - **New text:** "Since Stage 5 both render FR-14's dashboard: what it shows differs only because `GET /api/dashboard` scopes it to the caller (D-70), and a role holding `review_knowledge_gaps` also gets FR-19's knowledge-gap panel (D-107)."
+>    - **What the code does:** since PR #119 the page also has a signed-in line, "Signed in as … (Administrator)" or "(Employee)". It shows the session's own name and role, read from `useAuth`, not from `GET /api/dashboard` (`frontend/src/pages/Dashboard.jsx:542`, `:551-557`; `frontend/src/constants.js:1734`). So "only" is literally untrue of that one line.
+>    - **Why Minor and not a Blocker:** the sentence is about the panels, and they behave exactly as stated (`apps/api/views.py:3358-3363`; `frontend/src/App.jsx:207-208`). No client behaviour depends on the signed-in line. The same overstatement is in the comment at `Dashboard.jsx:465-466`, where this text came from.
+>    - **Smallest fix:** "what its panels show differs only because …".
+>
+> 2. **Minor (form: a dated note corrected without its date).** Lines 40-43 (the "13 November 2026 (D-130)" note) and lines 1904-1906.
+>    - **New text:** "`GET /api/users`, and the `200` of `POST /api/users/{id}/unlock`, add one field, `lock` …"; and "The one exception is the unlock route's `200` above …".
+>    - **The history:** the old "Every other route's user object is unchanged" was false on the day it was written. The unlock route returned `UserListEntrySerializer`, with `lock`, from its first commit, `e624e90` on 14 November (`apps/api/views.py:1391`). The note itself was written the same day, in `36ecba6`.
+>    - **What is wrong with the edit:** the new text is true, but it was rewritten in place, so the note now reads as if it always said this. The change's own rule, that a wrong statement is corrected with its date, was applied to the FR-08 paragraph (lines 212-214) but not here.
+>    - **The applier's reason does not hold.** It was "the unlock route existed on the note's own date, so the note now states that day's facts fully". A statement that was wrong on its own date is exactly the case the rule covers.
+>    - **Smallest fix:** after the note, add "(Corrected 22 November 2026: until then this note named only `GET /api/users`, though the unlock route's `200` carried `lock` from the start.)". Add the same dated clause to the FR-03 bullet.
+>
+> 3. **Minor (imprecise count).** Lines 229-233.
+>    - **New text:** "Three steps §7.2 does not name sit inside that order."
+>    - **What the code does:** the `ingestion` rate's `429` also sits inside the order. DRF checks it in `initial()`, after the permission's `403` and before the body is read (`apps/api/views.py:1442-1443`). §7.2 does not name it either.
+>    - **The contract already says so:** lines 244-245 read "only after the 403, the 429 and the declared-length 413". Read as a complete list, "three" undercounts.
+>    - **Smallest fix:** "Four steps §7.2 does not name sit inside that order. After the `403` comes the ingestion rate's `429`. Before the signature …". Alternatively: "Among the steps §7.2 does not name, these three sit inside that order:".
+>
+> 4. **Minor (incomplete, and inconsistent with another edit in this change).** Line 1577, the knowledge-gap cycle's `503`.
+>    - **New text:** "when embedding fails after `MAXIMUM_EMBED_ATTEMPTS`, or the provider refuses it at once with a `4xx` other than a rate limit (NFR-19, D-118)".
+>    - **What the code does:** the cycle embeds through `embed_question` (`apps/retrieval/gaps.py:136`, `:239`, `:247`, `:271`). That function also stops at once on a reply that cannot be used as a query vector (`apps/retrieval/query_embedding.py:95-103`). It raises the same `ProviderUnavailable`, so the route gives the same `503` (`apps/api/views.py:3484-3496`).
+>    - **Why it matters:** the ask's `503` paragraph, edited in this same change, names that case for the same function. This clause was edited to list its causes and still leaves it out. The omission itself predates the change.
+>    - **Smallest fix:** "… after `MAXIMUM_EMBED_ATTEMPTS`, at once on a reply that cannot be used as a query vector, or when the provider refuses it …".
+>
+> 5. **Minor (a list the change extended still leaves out a cause).** Line 363, the `POST /api/meetings` `400` list.
+>    - **What the code does:** a DOCX or XLSX whose members declare more decompressed content than a parser may inflate gets `400 {"file": ["..."]}` here (`apps/api/views.py:2016-2023`). The document upload answers the same case with `413`.
+>    - **Why it matters:** the list now reads as complete. A client copying the upload row's mapping would expect a `413`. The omission predates the change, and the change added the signature `400` right beside it.
+>    - **Smallest fix:** after "a file whose signature is not one of the four accepted formats,", add "a DOCX or XLSX that declares more decompressed content than may be inflated (the upload's `413`, here a field error, Stage 4 item 12b),".
+>
+> 6. **Minor (the citation points to the wrong note).** Lines 1053-1054.
+>    - **New text:** "(D-105 and its dated note of 10 November 2026; see …)".
+>    - **The decisions log:** D-105 has four dated notes of 10 November (`docs/decisions.md:7589`, `:7613`, `:7620`, `:8011`). The removed state came from the night note on the tag corrections (`:7620`). The one whose heading matches the citation word for word is `:7589`, which is about departments and the cost of classifying at upload. The contract's own label at line 1440 says "(D-105's dated note of 10 November 2026, night)".
+>    - **Smallest fix:** "(D-105 and its dated note of 10 November 2026, night; …)".
+>
+> **Not counted:** the meeting-detail JSON at lines 1105-1110 still shows only `can_delete` beside the meeting object, while the row above it now names `attendee_people`. This predates the change. The JSON uses a placeholder, so it does not contradict the row. The change did update the matching document JSON.
+>
+> ## The two findings not applied: the applier's reasons
+>
+> - **Late F9: the reason holds.** `apps/api/views.py:2657` calls `refresh_from_db` with no guard. `apps/meetings/summaries.py:303` and `:637` call `select_for_update().get`, which raises `Meeting.DoesNotExist`, and DRF does not map that. The code is wrong and the contract is right, so leaving the document alone follows the rule.
+> - **Late F10: the reason holds.** Proposal confidences are stored as the parser's raw float (`apps/documents/classification.py:730-731`, `:757`) and returned through a `JSONField` (`apps/api/serializers.py:499`). Only the decimal columns are rounded. Nothing settles which side should change.
+>
+> ## Tried to refute and could not
+>
+> - **The summary POST's busy `202` carries `"Unavailable"` with `queued_for_retry` true.**
+>   - `request_summary` starts the run from `on_commit` (`apps/meetings/summaries.py:302-320`). There is no `ATOMIC_REQUESTS`, so this happens before the reply is built.
+>   - With 22 runs already live, the new run is deferred (`apps/meetings/summary_runner.py:69-75`, `:87-94`).
+>   - `defer_busy` and `_fail` close it as queued, because a new run has `retry_runs` 0 (`summaries.py:543-548`, `:564-573`).
+>   - `is_in_progress` then gives `202` (`summaries.py:263-270`; `apps/api/views.py:2138-2140`, `:2169-2177`).
+> - **Exactly four multipart routes, and JSON alone by default:** `apps/api/views.py:1072`, `:1441`, `:1928`, `:2346`; `config/settings.py:294`.
+> - **CSRF is checked on every unsafe request from a signed-in session, register included.**
+>   - The one authentication class subclasses DRF's `SessionAuthentication` and changes only where the token is read (`apps/api/authentication.py:63-67`; `config/settings.py:285`).
+>   - No view overrides `authentication_classes`. Register is `AllowAny`, but it still authenticates (`apps/api/views.py:581-586`).
+>   - The catch-all outside `/api/` is exempt (`config/spa.py:29`); the new text's "under `/api/`" respects that.
+> - **DRF's `415` for a body that is not multipart comes before the missing-file `400`.** This holds on the upload (`apps/api/views.py:1470-1490`) and on transcription (`:2357-2366`). Both come after the declared-length `413`.
+> - **`/api/` answers `200 {}` with a session, `401` without one, and `406` for an HTML-only `Accept`:** `apps/api/urls.py:12`, `:138`; `config/settings.py:287`; `apps/api/tests/test_configuration.py:39-57`. Nothing in `frontend/src` calls it.
+> - **Embedding the question:**
+>   - An outage is retried. An unusable reply or a refusal fails at once (`apps/retrieval/query_embedding.py:79-103`).
+>   - In every provider a `429` is retried and any other `4xx` is a refusal (`apps/ai/_status.py:24-34`; `apps/ai/anthropic.py:195`; `apps/ai/flm.py:135`; `apps/ai/_openai_compat.py:48`).
+>   - Generation stops on a refusal (`apps/ai/generation.py:177-180`), and so does classification (`apps/ai/classification.py:1027-1028`).
+> - **Classify's `422` window:** a deleted document has no `ExtractedContent`, so `InsufficientText` is raised before any provider call (`apps/documents/classification.py:444-446`). This is D-139's "Named and not fixed" (`docs/decisions.md:21405-21407`).
+> - **Confirm reactivates a retired tag only on a document every role reads, and replies the same either way:** `apps/documents/classification.py:1200-1204`, `:1265-1270`, `:1287-1288`. `tag_details` has no `active` field (`apps/api/serializers.py:510-523`).
+> - **The document `422` (upload and reprocess):**
+>   - It is the document object plus `detail`, with no `classification` (`apps/api/views.py:1608-1618`; `apps/ingestion/documents.py:337-351`).
+>   - The page reads `doc_id` and `status` from it (`frontend/src/utils/uploadFailure.js:68-86`; `frontend/src/pages/DocumentRepository.jsx:433-434`).
+>   - A document with no stored original gets `{"detail"}` alone (`apps/api/views.py:356`, `:2491-2494`, `:2508-2511`).
+> - **Both meeting `422`s carry status `Processing failed` and a `detail`:** `apps/ingestion/meetings.py:125-167`; `apps/api/views.py:2001-2004`; `apps/core/constants.py:718-719`.
+> - **The FR-09 fields:**
+>   - Title at most 255 characters, a date field, attendee UUIDs, and a non-empty list of role names (`apps/api/serializers.py:826-841`; `apps/core/models.py:17`).
+>   - An unknown attendee is `400` (`apps/api/views.py:1978-1985`).
+>   - An omitted `visible_to_roles` means both roles (`apps/api/views.py:1971`; D-29 at `docs/decisions.md:987`).
+>   - Attendees go out as addresses (`apps/api/serializers.py:754-755`), and directory entries carry `id` (`:161`).
+> - **"Until 22 November 2026 … made untrue on the day this route was built":** the sentence arrived in `4958bea` (2026-09-21 14:05) and FR-09's multipart in `5c67bb5` (2026-09-21 14:31).
+> - **The per-model threshold and floor:** `apps/core/constants.py:170`, `:184`, `:205-206`; `apps/retrieval/partial_matches.py:138-171`. D-120 says "D-56 is narrowed on Voyage and stays open on EmbeddingGemma" (`docs/decisions.md:10746`).
+> - **`result_count`** is the number of passages supplied to generation, and 0 on both no-answer paths: `apps/retrieval/pipeline.py:121-132`, `:291-298`, `:347-356`, `:382-390`.
+> - **`ai_generated` on live and reopened passages:** `apps/api/serializers.py:1134-1141`, `:1332-1363`.
+> - **The detail's FR-10 fields and the `tag_options` keys:** `apps/api/serializers.py:399-402`; `apps/documents/classification.py:418-421`; `apps/core/constants.py:726`. Applied links only for `tags`, facets and filters: `apps/api/repository.py:135-141`, `:199-217`, `:265-269`, `:316-325`.
+> - **Delete cascades:** the classification and its summary by CASCADE (`apps/documents/deletion.py:76-93`); a meeting's summaries and action items (`apps/meetings/deletion.py:58-79`).
+> - **Throttles:**
+>   - Register and login are in `auth` (`apps/api/views.py:586`, `:681`).
+>   - Three POSTs share `tagging` (`:2715`, `:2861`, `:2939`). The summary POST is in `ingestion` (`:2163`).
+>   - The action-item throttle commit `985b3d1` is dated 2026-11-12.
+>   - The knowledge map has been throttled since 17 November (`docs/decisions.md:15901-15902`).
+> - **Login's `retry_after`** is rounded up and at least 1 (`apps/api/views.py:738-746`). The logout body comes from `apps/api/views.py:240`, `:845`.
+> - **`PUBLIC_BASE_URL`:** the scheme, a host, a query and a fragment are all checked (`config/settings.py:258-269`).
+
+*`docs/schema-v1.md` and `docs/ai-provider.md`*
+
+> Verdict: PASS WITH NOTES
+> I found no false statement among those I could check. One statement is misleading when read in the document's own terms, and six are imprecise or incomplete. Each is listed below with the smallest correction.
+>
+> **Covered**
+>
+> Line numbers below refer to the working-tree files. I checked the code, the migrations, `apps/core/constants.py`, `config/settings.py`, `docs/decisions.md`, the corpus run records and git history. I edited nothing and ran no suites.
+>
+> `docs/schema-v1.md`: all 20 hunks.
+> - **Opening:** the paragraph and its D-142 note; the new **Types**, **Foreign keys** and **Django's own tables** paragraphs; §1's new heading.
+> - **§1 rows:**
+>   - `Users.email` and `role_id`; `Roles.role_name`; `Permissions.permission_name`.
+>   - Both `RolePermissions` rows, and the new table of seeded codes.
+>   - `Documents.uploaded_by` and `status`; `Meetings.status`; both `MeetingAttendees` foreign keys.
+>   - `MeetingSummaries.requested_at` and `started_at`; `ActionItems.meeting_id`; `Conversations.user_id`.
+>   - `QueryLog.user_id` and `conversation_id`, the "first of the two fields" sentence, and the `rejected_count` NULL paragraph.
+>   - `SearchLogs.user_id`; `Tags.grown`; `ContentTags.tag_id` and `provisional`.
+>   - `DocumentAnalysis.input_truncated`, and the two new departure bullets.
+>   - `LoginAttempts.user_id` and `released_by`.
+> - **§2:** the FR-17 and FR-18 rows and the D-142 note.
+> - **§3:** the three added vocabularies, their paragraph, and the `busy` sentence.
+> - **§4:** the "Settled by" notes on G1–G5.
+>
+> `docs/ai-provider.md`: all 15 hunks.
+> - **§1:** the four names added to the `base.py` block; `GenerationAttempt.max_statements`; the failure contract for `embed` and `health`; the observer's callers; the paragraph on FR-13 and `input_type`.
+> - **§2:** `get_ai_service()`.
+> - **§3:** the client paragraph; the `FLMService` and `build_client` blocks; the `max_retries=0` paragraph; the port paragraph.
+> - **§4:** rules 4, 5 and 7; the "two separate indexes" paragraph; the table of four per-model values.
+> - **§5:** step 3; the opening of "What decoding refuses"; "Ceilings and sampling".
+> - **§5b:** the retry-policy sentence (a word diff shows nothing else in that paragraph changed), and "all on the prompt before D-139".
+> - **§5c:** the 60-second bound.
+> - **§5d:** the limits and tolerances bullets; the Objective 04 paragraph and its dated paragraph.
+> - **§7.**
+>
+> **Form:**
+> - A script compared every table row in both files with its header row: no row has the wrong number of cells. Every code fence is closed.
+> - No link in the repository points at the renamed §1 heading. `git grep` for `schema-v1.md#` and for the old heading text finds only the D-142 note.
+> - No test reads either document's prose:
+>   - `apps/ai/tests/test_flm_base_url_default.py` reads `CLAUDE.md`, `.env.example`, `config/settings.py` and `scripts/check_flm.py`.
+>   - `apps/api/tests/test_request_body_bound.py:713-716` reads `docs/*.md` only for lines that start Waitress, and neither document has one.
+>
+> **Records against the diff:** every finding recorded as applied (19 for the schema, 22 plus the port fact for ai-provider) landed as described. The reasons for the items left alone still hold:
+> - AI F8: `config/settings.py:473` now defaults to 8625.
+> - AI F16: `CLAUDE.md:106-108` now carries `input_type` and `on_attempt`.
+> - AI F23: `apps/ai/testing.py:157` still lacks `on_attempt`.
+> - AI F25: `apps/ai/flm.py:5` and `apps/ai/anthropic.py:129-134` and `:214-215` are still stale.
+> - Schema F20: left as unsure.
+>
+> **Not verified, as the brief said:** the FR-17 and FR-18 names (they come from the proposal), and FastFlowLM's own port behaviour. I checked only that the port wording agrees with `CLAUDE.md:166-167` and `README.md:132-138`, and it does.
+>
+> **Findings**
+>
+> 1. **Major (misleading).** `docs/schema-v1.md:232`, `MeetingSummaries.started_at`.
+>    - **New text:** "when the current attempt began, set when the run is requested and again as each attempt starts: a `Processing` row whose attempt began more than `SUMMARY_STALE_AFTER_SECONDS` ago is an orphan".
+>    - **What the code does:** `started_at` is written in three places only:
+>      - when the run is requested (`apps/meetings/summaries.py:311-316`);
+>      - once when `run_summary` begins (`summaries.py:357`);
+>      - when `retry_summary` claims a queued row (`summaries.py:611`).
+>    - It is never reset between the up to `MAXIMUM_SUMMARY_ATTEMPTS` (3, `apps/core/constants.py:247`) provider calls of one run.
+>    - `SUMMARY_STALE_AFTER_SECONDS = 3 * 600 + 600` depends on that. Its comment reads "Three attempts of the slowest call … plus … a margin" (`constants.py:1203-1207`).
+>    - **Why it misleads:** the same document uses "attempt" to mean one provider call ("unreachable after `MAXIMUM_SUMMARY_ATTEMPTS`", `schema-v1.md:729`). Read that way, the cell says the clock restarts on every call. Someone who resized the stale bound on that reading would reclaim runs that are still live.
+>    - **Why it is not false:** the code comment at `summaries.py:348` calls a run's start "the attempt", which is where the wording came from.
+>    - **Correction:** replace "and again as each attempt starts" with "and again when the run, or a queued retry of it, starts, never between its `MAXIMUM_SUMMARY_ATTEMPTS` calls", and replace "whose attempt began" with "whose run began".
+>
+> 2. **Minor (incomplete).** `docs/schema-v1.md:122-123`, the "Checked for" column.
+>    - **`manage_tags`:** the new text reads "FR-10's tag list (D-119 finding 5), an Administrator's new value (D-128) and, since D-129, the department list".
+>      - It leaves out retiring a tag. `DELETE /api/tags/{id}` is `[IsAuthenticated, CanManageTags]` (`apps/api/views.py:2880-2890`).
+>      - That route is what D-119 finding 5 was about: "no operation deactivates or deletes a Tag" (`docs/decisions.md:10187`), met by `GET /api/tags` and `DELETE /api/tags/{id}` (`:10389`).
+>      - **Correction:** "FR-10's tag list and the retiring of a tag (`GET` and `DELETE /api/tags`, D-119 finding 5), …".
+>    - **`release_account_locks`:** the new text reads "FR-03's release of a lock (D-130)".
+>      - It also decides whether `GET /api/users` shows each account's lock (`views.py:1206-1215`).
+>      - **Correction:** add "and the lock state in the user list".
+>    - **`contribute_content`:** optionally, note that it also sets `can_edit` on a meeting's detail (`views.py:2133`).
+>
+> 3. **Minor (misleading implication).** `docs/schema-v1.md:702-704`.
+>    - **New text:** "the values the upload and meeting routes accept for `visible_to_roles`, a column the database does not itself constrain (D-11, D-29)".
+>    - **The problem:** this is true, but the contrast suggests the vocabulary columns are constrained by the database. None is:
+>      - `vocabulary_field` gives Django `choices` only (`apps/core/models.py:32-36`).
+>      - The only `CheckConstraint` in the models is on `knowledge_gap_items` (`apps/retrieval/models.py:244`).
+>    - **What actually sets `visible_to_roles` apart:** its model field has no choices at all (`apps/documents/models.py:87-89` and `:136-138`; `apps/meetings/models.py:45-47`). The serializers are the only check (`apps/api/serializers.py:445-455` and `837-852`).
+>    - **Correction:** "a column whose model field has no choices, so the serializers are its only check (D-11, D-29)".
+>
+> 4. **Minor (imprecise).** `docs/ai-provider.md:418-420`, rule 4.
+>    - **New text:** "The first `migrate` sizes both vector columns, the chunks' (`documents` migration 0002) and FR-19's gap entries' (`retrieval` migration 0004)".
+>    - **What happens:** each column is sized by the `migrate` that first applies its own migration (`apps/documents/migrations/0002_content_chunks.py:30`; `apps/retrieval/migrations/0004_fr19_knowledge_gaps.py:48`).
+>    - On a database set up before FR-19, that was a later `migrate`. `apps/ai/checks.py:30-31` handles exactly that case ("one from before FR-19"), and it is the gap column D-131 found left at 768.
+>    - **Correction:** "Each vector column is sized when its migration first runs, the chunks' (…) and FR-19's gap entries' (…), and nothing resizes them afterwards".
+>
+> 5. **Minor (imprecise).** `docs/ai-provider.md:1017`, §7.
+>    - **New text:** "Every measurement up to 10 November 2026 ran this way."
+>    - D-120, D-121 and D-122 are each dated 2026-11-10 (`docs/decisions.md:10683`, `10755`, `10811`), and they were measured on `anthropic` that day.
+>    - "before 10 November 2026" is exact. `CLAUDE.md` §4 uses the same words ("every measurement up to then ran on it"), so change both or neither.
+>
+> 6. **Minor (imprecise).** `docs/ai-provider.md:317-318`.
+>    - **New text:** "`build_client`, in `apps/ai/_openai_compat.py`, is where every client of the `openai` package is made".
+>    - `apps/ai/testing.py:288-299` (`scripted_openai_client`, the test double for D-118's route tests) builds `openai.OpenAI(...)` itself, also with `max_retries=0`.
+>    - The next sentence states the right scope ("every client a provider builds").
+>    - **Correction:** "every client of the `openai` package that a provider uses".
+>
+> 7. **Minor (dating).** `docs/schema-v1.md:11-12`.
+>    - **New text:** "since `documents 0008` created `DocumentAnalysis` on 8 November 2026".
+>    - Git first records `0008_fr10_document_analysis.py`, together with §1's `DocumentAnalysis` entry, in `fb9e18a` on 9 November 2026 at 17:31 +1100.
+>    - 8 November is D-105's date (`decisions.md:7468`). The document's own §2 note (`schema-v1.md:633`) and `apps/core/tests/test_schema.py:161-162` use that date too.
+>    - No change is needed if the project dates by decision. Otherwise "with D-105, on 8 November 2026" is exact.
+>
+> **Tried to refute and could not**
+>
+> `docs/schema-v1.md`:
+> - **The Types paragraph is exact.**
+>   - 16 columns are `varchar(255)`, 19 vocabulary columns are `varchar(32)`, 13 are `text`, and 6 have lengths of their own.
+>   - Every integer field is a `Positive*` field, and every `JSONField` is `jsonb`.
+>   - Evidence: `apps/core/models.py:17-18`; `accounts/models.py:30-31`, `45`, `103-118`, `163-168`; `documents/models.py:62-88`, `111-143`, `161-162`, `243`, `263-266`, `376-438`; `meetings/models.py:35-46`, `91-124`, `158-168`; `retrieval/models.py:34`, `93-115`, `161`, `199-206`.
+> - **All 28 foreign-key rows match.**
+>   - Each row states the `on_delete` the models have, and CI's `makemigrations --check` (`.github/workflows/ci.yml:56`) keeps the migrations equal to the models.
+>   - No foreign key has an `ON DELETE` clause in the DDL: "the on_delete rule is Django's and has no DDL" (`retrieval/migrations/0003_answercitation_chunk_set_null.py:20-21`), on Django 5.2.17.
+> - **Django's six own tables.** `INSTALLED_APPS` (`config/settings.py:65-79`) has no admin and no authtoken. No project code touches `auth_permission` or `auth_group` (D-14).
+> - **Email stored and looked up in lower case:** `accounts/models.py:75`, `86-88`, `129-133`; `api/serializers.py:185`, `219`, `285`; `views.py:698`.
+> - **Unique columns and the composite key:** `role_name` and `permission_name` are unique (`accounts/migrations/0001_initial.py:24`, `35`); the composite primary key is at `:44`.
+> - **Seeds and holders:** `accounts` 0003:14-17, 0004:24-27, 0005:21-24, 0006:23-26, 0007:23-26, 0008:23-26, 0010:22-25 and 0011:32-35. The checks, apart from the omissions in finding 2, are in `views.py` at 1202, 1246, 1330, 1449, 1934, 2076, 2104, 2286, 2345, 2469, 2859, 2890, 2937, 2972, 3358, 3404, 3438, 3462, 3477 and 3509, and through `require_contribute_content` (`:1596`).
+> - **A NULL `rejected_count` means only path A, or a row written before `retrieval 0002`.**
+>   - `pipeline.py:495-505` writes None only on path A.
+>   - A provider outage writes no row (`query_log.py:140`).
+>   - Keyword search writes only `SearchLog` (`search.py:622-626`).
+>   - 0002 adds the column nullable, with no backfill (`retrieval/migrations/0002:43-46`).
+> - **`Tags.grown` on confirming a proposal of any dimension:** `documents/classification.py:1170-1218` and `1254-1290`.
+> - **The per-model tag threshold:** `documents/classification.py:842-851` and `870-877`.
+> - **`input_truncated`, including the one-section case:** `ai/classification.py:556-582`, `584-620`, `1214-1222`.
+> - **`busy`:** `meetings/summary_runner.py:45-84`, `summaries.py:564-573`.
+> - **G1:** `documents/deletion.py:76-91` and `meetings/deletion.py:69-79` delete chunks and tag links in one transaction.
+> - **G4:** `settings.py:163-164`, `views.py:794`, `constants.py:1000`. D-07 to D-11 are all dated 2026-09-12.
+> - **None of FR-07, FR-17 or FR-18 is built:** no model or migration has an onboarding table, a `mode` column or an MFA field. `Conversation` is at `retrieval/models.py:29-38`.
+>
+> `docs/ai-provider.md`:
+> - **The `embed` contract.**
+>   - Retries and errors: `_openai_compat.py:39-62`, `_status.py:31-35`, and the missing-key check before any call at `anthropic.py:74-83`.
+>   - Callers: the retrying callers are `ingestion/embedding.py:117-124` and `query_embedding.py:79-92`. The only other `embed` calls are the two one-shot dimension probes (`checks.py:109`, `reindex.py:149`).
+>   - Timeout: the installed openai 3.13.0 defaults to `Timeout(600, connect=5.0)`, and no embedding call passes a timeout.
+>   - Empty input raises `ValueError`: `anthropic.py:105-106`, `136-137`; `flm.py:83-88`; `summarisation.py:489-490`.
+> - **`max_retries=0` on every client a provider builds:** `_openai_compat.py:19`, `anthropic.py:80-82` and `87-88`, `transcription.py:87-89`. Claude has been called through the `anthropic` SDK since `ad88daa` (12 September). The openai SDK's own default is 2 retries.
+> - **The verbatim blocks** match `ai/__init__.py:14-24`, `flm.py:49-54` and `_openai_compat.py:15-19`.
+> - **The observer's callers:** `scripts/citation_harness.py:613`, plus three corpus copies (`…/2026-11-10/haiku/…:753`, `…/voyage-frozen/…:739`, `…/pre-measurement-asks/…:771`).
+> - **FR-13:** `prompting.py:280-310`; D-42 is dated Stage 4 item 9.
+> - **The port:** `6d36036` (22 September 2026) moved FLM out of the Hyper-V range.
+> - **Rule 5:**
+>   - The check ids, the two tags, and the probe skipped on ai.W001 are all at `checks.py:67-214`.
+>   - `reindex` keeps the default system checks (`reindex.py:68`).
+>   - pytest-django 4.14 runs no system checks.
+>   - `docs/alpha-deployment.md:273` runs `manage.py check` before Waitress.
+> - **Rule 7:** `prefixes.py:32-41` and `67-70`.
+> - **The per-model table:** `constants.py:928`, `939`, `949`, `1098`, `1110`, `1129`, `1138`; `gaps.py:364-380`.
+> - **Step 3's order, and that no repair edits inside a JSON string:** `schema.py:440-450`, `summarisation.py:205-212`, `classification.py:305-313`.
+> - **Ceilings and sampling:** `generation.py:77-78`, `flm.py:124-131`, `anthropic.py:57-61` and `181-189`.
+> - **§5b:** a refused call is re-raised at once (`ai/classification.py:1027`).
+> - **§5c:** a segment over 60 seconds is refused before the call (`audio.py:117` and `135`; `views.py:2382` comes before 2417).
+> - **§5d's limits:** `summarisation.py:82-94`, `233-319` and `423-456`.
+> - **Objective 04's figures** (10 of 10 summaries ready first time, 48 of 50, 3 of 51, 2 of 47, and a reference written by the team) are in `corpus/objective-04/runs/2026-11-15/README.md`, `runs/2026-11-13/README.md:3-21`, and `decisions.md:11857` and `11906`. The old heading was written on 12 November (`a02797c`).
+> - **§7:** D-04 (`decisions.md:246-250`); D-113 (`:9634`, `:9664`); D-114 (`:9675`).
+
+**Left for Benjamin.** Each applier's record above ends with what it left for him. Beyond those:
+
+- **`docker-compose.yml` line 1** says "all three developers". The team is two. It is a comment in
+  a configuration file, and was not edited.
+- **`docs/stage-4-open-items.md`** shows items open that have since closed. It is a dated record
+  of Stage 4's close, so it was not rewritten.
+- **`CLAUDE.md` section 2** keeps M6's two instructions as the gate's record (finding 11 above).
+  If "Remove the stale lines" was meant to reach them, they are two short paragraphs to delete.
+- **The README's command for `FLM_SERVE_PORT`** was not run on the development laptop, where the
+  variable is already set at that level.

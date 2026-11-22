@@ -2,15 +2,54 @@
 
 Compiled from the table definitions in `Project_8-proposal_complete_V4.5.docx`, which
 state them per functional requirement rather than in one place. This file is the
-authoritative source for migration v1. Where the proposal is silent or inconsistent,
-that is marked explicitly in §4 rather than resolved silently.
+authoritative source for the schema: the tables of migration v1, written for the M6 scope,
+and every table and column a migration has added since. Where the proposal is silent or
+inconsistent, that is marked explicitly in §4 rather than resolved silently.
+
+> **22 November 2026 (D-142).** Until this date this paragraph called the file the authoritative
+> source for migration v1, and §1 was headed "Tables in migration v1 (M6 scope)", although §1 has
+> held tables added after v1, for requirements outside M6, since `documents 0008` created
+> `DocumentAnalysis` (D-105, 8 November 2026). The file keeps its name, so every reference to
+> `docs/schema-v1.md` still holds.
 
 Conventions: UUID primary keys throughout. Status fields use fixed vocabularies, not
 free text. All timestamps are timezone-aware.
 
+**Types.** A column whose type reads "text" is one of the following in the database.
+It is `varchar(255)` (`NAME_MAX_LENGTH`, in `apps/core/models.py`) for a name, a title or a
+department (`Users.name`, `permission_name`, `tag_name`, `Departments.name`, the three `title`
+columns, `Documents.department`, `machine_department`), for a model name (`embedding_model` on
+`ContentChunks` and `KnowledgeGaps`, `model` on `MeetingSummaries` and `DocumentAnalysis`,
+`summary_model`), and for `owner_name` and `due_text`. It is `varchar(32)`
+(`VOCABULARY_MAX_LENGTH`) for every column that holds one of §3's vocabularies, and for each
+element of the three `visible_to_roles` columns, which are `varchar(32)[]`. It is Postgres `text`,
+with no limit, for `extracted_text`, `chunk_text`, `transcript_text`, `summary_text`, `question`,
+`answer_text`, `query_text`, `statement_text`, `KnowledgeGaps.subject`, `DocumentAnalysis.summary`,
+the two `description` columns (`Roles`, `ActionItems`) and `LoginAttempts.source_ip`. Six columns
+have lengths of their own: `Users.email` and `LoginAttempts.attempted_email` are `varchar(254)`,
+`Users.password_hash` is `varchar(128)`, `Documents.content_hash` `varchar(64)`,
+`Documents.file_path` `varchar(512)`, and `Users.picture` `varchar(100)`, Django's default for a
+file column. Every "integer" and "bigint" column is non-negative, by a check constraint, and
+"JSON" and "jsonb" are both `jsonb`.
+
+**Foreign keys.** Each foreign key's row says what deleting the row it points to does:
+**protect** refuses the delete while this row points to it, cascade delete removes this row with
+it, and **set NULL** keeps this row and clears the column. D-12 set the policy for migration v1:
+protect for a reference to `Users`, `Roles` or `Tags`, cascade for a row its parent owns, and set
+NULL for `QueryLog.conversation_id`. D-67 made `AnswerCitations.chunk_id` set NULL, and the
+references to a person that FR-16 and FR-19 added are set NULL too. Django applies each rule: no
+foreign key in the database carries an `ON DELETE` action (`retrieval 0003`, D-67).
+`ContentChunks` and `ContentTags` name their source with no foreign key at all, and the
+application deletes them with their source, in the same transaction (gap G1, D-07).
+
+**Django's own tables** are not defined here: `django_migrations`, `django_content_type`,
+`django_session`, which holds FR-04's sessions (D-10, gap G4), and `auth_permission`,
+`auth_group` and `auth_group_permissions`, which `django.contrib.auth` creates and no code of this
+project reads or writes (D-14).
+
 ---
 
-## 1. Tables in migration v1 (M6 scope)
+## 1. Tables: migration v1 (M6 scope) and every migration since
 
 ### Users — FR-01, FR-02, FR-05
 
@@ -18,9 +57,9 @@ free text. All timestamps are timezone-aware.
 |---|---|---|
 | `user_id` | UUID PK | |
 | `name` | text | required |
-| `email` | text | unique; 409 Conflict on duplicate registration |
+| `email` | text | unique case-insensitively (D-02): the address is stored in lower case and looked up in lower case at login, so a plain unique constraint on it is enough; 409 Conflict on duplicate registration |
 | `password_hash` | text | bcrypt; never returned in any response |
-| `role_id` | UUID FK → Roles | defaults to Employee on registration |
+| `role_id` | UUID FK → Roles | defaults to Employee on registration; **protect** on delete |
 | `created_at` | timestamp | |
 | `failed_attempts` | integer | default 0; incremented on failed login (FR-02) |
 | `locked_until` | timestamp, nullable | five consecutive failures → 15 minutes (FR-02), by default; since D-130 decisions 7 and 8 the running `.env` policy, which can only be tightened |
@@ -48,7 +87,7 @@ MUST, so the columns belong in v1 even though the full lockout interface is FR-0
 | Field | Type | Notes |
 |---|---|---|
 | `role_id` | UUID PK | |
-| `role_name` | text | "Employee", "Administrator" |
+| `role_name` | text, unique | "Employee", "Administrator": `ROLE_NAMES` (§3), both seeded by `accounts 0002` |
 | `description` | text | e.g. "Can curate and approve knowledge records" |
 
 Two roles only. Administrator generalises Employee.
@@ -58,16 +97,31 @@ Two roles only. Administrator generalises Employee.
 | Field | Type | Notes |
 |---|---|---|
 | `permission_id` | UUID PK | |
-| `permission_name` | text | e.g. `manage_documents` |
+| `permission_name` | text, unique | e.g. `manage_documents`; the codes the migrations seed are listed under RolePermissions, below |
 
 ### RolePermissions — FR-06, FR-11
 
 | Field | Type | Notes |
 |---|---|---|
-| `role_id` | UUID FK → Roles | composite PK with `permission_id` |
-| `permission_id` | UUID FK → Permissions | |
+| `role_id` | UUID FK → Roles | composite PK with `permission_id`; cascade delete with its role |
+| `permission_id` | UUID FK → Permissions | cascade delete with its permission |
 
 Permissions are held against roles, never against individual users.
+
+The codes the accounts migrations seed, and the roles that hold each through `RolePermissions`
+(D-14). Administrator holds every code Employee holds, which is what "Administrator generalises
+Employee" means here.
+
+| `permission_name` | Held by | Seeded by | Checked for |
+|---|---|---|---|
+| `manage_roles` | Administrator | `accounts 0003` | FR-05: the user list and a change of role |
+| `contribute_content` | Employee, Administrator | `accounts 0004` | adding or changing content (D-30): uploads and reprocessing (FR-08), meetings (FR-09), FR-10's classification and tag routes, FR-16's summary runs and action items, and recording transcription (D-123) |
+| `manage_documents` | Administrator | `accounts 0005` | FR-15's deletion (D-73) |
+| `manage_meetings` | Administrator | `accounts 0006` | deleting a meeting, which no FR names (D-99) |
+| `review_knowledge_gaps` | Administrator | `accounts 0007` | FR-19's routes and FR-14's knowledge-gap panel (D-107) |
+| `manage_tags` | Administrator | `accounts 0008` | FR-10's tag list and the retiring of a tag (`GET /api/tags` and `DELETE /api/tags/{id}`, D-119 finding 5), an Administrator's new value (D-128) and, since D-129, the department list |
+| `release_account_locks` | Administrator | `accounts 0010` | FR-03's release of a lock, and each account's lock state in the user list (D-130) |
+| `view_knowledge_map` | Employee, Administrator | `accounts 0011` | FR-20's knowledge map, both views (D-132, D-138) |
 
 ### Documents — FR-08, FR-11, FR-14, FR-15
 
@@ -76,8 +130,8 @@ Permissions are held against roles, never against individual users.
 | `doc_id` | UUID PK | |
 | `title` | text | required; 400 if empty |
 | `file_type` | text | "pdf", "docx", "xlsx", "txt" |
-| `uploaded_by` | UUID FK → Users | |
-| `status` | text | fixed vocabulary — see §3 |
+| `uploaded_by` | UUID FK → Users | **protect** on delete |
+| `status` | text | fixed vocabulary — see §3; default `Processing` (`DEFAULT_DOCUMENT_STATUS`) |
 | `uploaded_at` | timestamp | |
 | `department` | text | see gap G3 |
 | `visible_to_roles` | text[] | the FR-11 permission filter; set at upload, both roles when omitted — D-29 |
@@ -132,7 +186,7 @@ meeting; nothing relies on it being so.
 | `title` | text | required |
 | `meeting_date` | date | required; may not be in the future |
 | `transcript_text` | text (long) | must exceed minimum length |
-| `status` | text | fixed vocabulary — see §3 |
+| `status` | text | fixed vocabulary — see §3; default `Received` (`DEFAULT_MEETING_STATUS`) |
 | `created_at` | timestamp | |
 | `visible_to_roles` | text[] | the FR-11 permission filter, mirrors Documents — G6, D-16 |
 
@@ -141,8 +195,8 @@ meeting; nothing relies on it being so.
 | Field | Type | Notes |
 |---|---|---|
 | `attendee_id` | UUID PK | |
-| `meeting_id` | UUID FK → Meetings | |
-| `user_id` | UUID FK → Users | |
+| `meeting_id` | UUID FK → Meetings | cascade delete |
+| `user_id` | UUID FK → Users | **protect** on delete |
 
 A participation record, never an access rule (D-16). Since FR-16 it is also read to decide
 whose name an action item's owner means: an extracted item's owner is always one of the meeting's
@@ -174,7 +228,8 @@ flag).
 | `input_truncated`, `passages_sent`, `passages_total` | boolean, integer, integer | how much of the transcript one request carried (`SUMMARY_INPUT_TOKENS`, `SUMMARY_INPUT_CHARACTERS`) |
 | `action_items_extracted` | integer, nullable | how many items the run extracted; 0 is UC-04 A1's section recorded as empty |
 | `requested_by` | UUID FK → Users, nullable | who pressed Generate or Regenerate; null for the run ingestion starts; **set NULL** if the user is deleted |
-| `requested_at`, `started_at` | timestamp | `started_at` is when the current attempt began: a `Processing` row much older is an orphan |
+| `requested_at` | timestamp | when the run was requested |
+| `started_at` | timestamp, nullable | when the current run began, set when the run is requested and again when the run, or a queued retry of it, starts, never between a run's `MAXIMUM_SUMMARY_ATTEMPTS` provider calls: a `Processing` row whose run began more than `SUMMARY_STALE_AFTER_SECONDS` ago is an orphan, and a row with none is never treated as one. Until the review of 22 November 2026 (D-142) this row shared one line with `requested_at` and did not say nullable |
 | `queued_for_retry` | boolean | NFR-20's "flagged for automatic retry"; indexed |
 | `retry_runs` | integer | queued runs made so far, at most `MAXIMUM_SUMMARY_RETRY_RUNS`; a malformed failure is queued only while it is below `MAXIMUM_MALFORMED_RETRY_RUNS` |
 | `failure_reason` | text | fixed vocabulary — see §3; blank unless `Unavailable`; never shown to a user |
@@ -194,7 +249,7 @@ which it falls due".
 | Field | Type | Notes |
 |---|---|---|
 | `action_item_id` | UUID PK | |
-| `meeting_id` | UUID FK → Meetings | the item belongs to the meeting, so a person's additions and edits outlive a Regenerate |
+| `meeting_id` | UUID FK → Meetings | the item belongs to the meeting, so a person's additions and edits outlive a Regenerate; deleted with the meeting |
 | `summary_id` | UUID FK → MeetingSummaries, nullable | the run that extracted it; null for an item a person added; **set NULL** if that row goes |
 | `description` | text | |
 | `owner_id` | UUID FK → Users, nullable | **null is unassigned**: FR-16 stores an item without a confident match that way; **set NULL** if the user is deleted |
@@ -217,7 +272,7 @@ refused (D-125's third note).
 | Field | Type | Notes |
 |---|---|---|
 | `conversation_id` | UUID PK | |
-| `user_id` | UUID FK → Users | |
+| `user_id` | UUID FK → Users | **protect** on delete |
 | `title` | text | e.g. "Leave policy questions" |
 | `last_updated_at` | timestamp | |
 
@@ -226,8 +281,8 @@ refused (D-125's third note).
 | Field | Type | Notes |
 |---|---|---|
 | `query_id` | UUID PK | |
-| `user_id` | UUID FK → Users | |
-| `conversation_id` | UUID FK → Conversations, nullable | null for a one-off question |
+| `user_id` | UUID FK → Users | **protect** on delete |
+| `conversation_id` | UUID FK → Conversations, nullable | null for a one-off question; **set NULL** if the conversation is deleted, so its queries stay in the log as one-off records (D-12) |
 | `question` | text | |
 | `answer_text` | text, nullable | null where no answer was returned |
 | `retrieved_chunk_ids` | UUID[] | FR-12 traceability |
@@ -236,7 +291,7 @@ refused (D-125's third note).
 | `answered_at` | timestamp | |
 | `rejected_count` | integer, nullable | statements verification removed; null where generation was not called |
 
-`no_answer_reason` is the one field in this table the proposal does not name
+`no_answer_reason` is the first of the two fields in this table the proposal does not name
 explicitly, but FR-12 requires the two no-answer cases be "recorded separately", and
 this is how. Without it the platform cannot tell a threshold that is too high from
 retrieval that is returning irrelevant passages.
@@ -253,8 +308,11 @@ happened was one failure mode removed and the other grown. Only the split shows 
 It is populated on **every call that reached generation**, answered rows included: an
 answered row with `rejected_count` above zero is fabrication that has not yet cost
 anyone an answer, which is the earliest warning the system produces. **Null means
-generation was not called** — no-answer path A, and the keyword search path. It never
-means "path B did not occur" and it never means zero.
+generation was not called**, which is no-answer path A. The one exception is a row written
+before `retrieval 0002` added the column, which cannot say whether it was. It never means "path
+B did not occur" and it never means zero. Until 22 November 2026 (D-142) this paragraph also
+named the keyword search path, as D-55 does. That path writes `SearchLogs` and never a
+`QueryLog` row (D-41), so no row of this table comes from it.
 
 It stores a count and never the claimed identifier, which section 7.9's rejection log
 would also record. A fabricated identifier has no referent, so storing one invites a
@@ -270,7 +328,7 @@ identical reply exists to hide.
 | Field | Type | Notes |
 |---|---|---|
 | `search_id` | UUID PK | |
-| `user_id` | UUID FK → Users | |
+| `user_id` | UUID FK → Users | **protect** on delete |
 | `query_text` | text | |
 | `result_count` | integer | computed **after** permission filtering |
 | `searched_at` | timestamp | |
@@ -311,7 +369,7 @@ cascade deleted the row.
 | `tag_name` | text | unique within a dimension, case- and whitespace-normalised |
 | `dimension` | text | `Department`, `Project`, `Process`, `Topic` |
 | `active` | boolean | deactivated rather than deleted while content references it |
-| `grown` | boolean | **`documents 0010`; its meaning since `documents 0011`: not vocabulary.** A tag that is not grown is in every document's scheme, whatever its links; a grown tag is in only where every role in the audience reads a source carrying it (D-105's dated note of 10 November 2026, night: the security review). Set on a Topic a person's `POST /api/documents/{id}/tags` name form or confirmation of a proposed topic creates or reactivates (an active Topic either one reuses keeps its value, so vocabulary stays vocabulary); by `documents 0011` on every tag that then had links and no link on a source every role reads; and by `seed_objective02_tags.py`'s linked mode on the seeded values only restricted material carries. A value an Administrator adds through `POST /api/tags` (D-128) is not grown: it is vocabulary. A person's confirmation of a proposal, or their Topic name form, reactivates a retired tag only through a document every role can read (D-128's security review). For one day D-128 also had the classifier create and reactivate values; D-129 reversed it. Never unset |
+| `grown` | boolean | **`documents 0010`; its meaning since `documents 0011`: not vocabulary.** A tag that is not grown is in every document's scheme, whatever its links; a grown tag is in only where every role in the audience reads a source carrying it (D-105's dated note of 10 November 2026, night: the security review). Set on a Topic a person's `POST /api/documents/{id}/tags` name form creates or reactivates, and on the value a person's confirmation of a proposal creates or reactivates: a Topic, or a Project or Process value from a proposal a run made while D-128 was in force (an active tag either one reuses keeps its value, so vocabulary stays vocabulary); by `documents 0011` on every tag that then had links and no link on a source every role reads; and by `seed_objective02_tags.py`'s linked mode on the seeded values only restricted material carries. A value an Administrator adds through `POST /api/tags` (D-128) is not grown: it is vocabulary. A person's confirmation of a proposal, or their Topic name form, reactivates a retired tag only through a document every role can read (D-128's security review). For one day D-128 also had the classifier create and reactivate values; D-129 reversed it. Never unset. Until the review of 22 November 2026 (D-142) this cell named only the confirmation of a proposed Topic |
 
 ### Departments — FR-10 (D-129)
 
@@ -332,13 +390,13 @@ in use when it runs.
 | Field | Type | Notes |
 |---|---|---|
 | `content_tag_id` | UUID PK | |
-| `tag_id` | UUID FK → Tags | |
+| `tag_id` | UUID FK → Tags | **protect** on delete: a tag content references is deactivated instead (`Tags.active`) |
 | `source_type` | text | `document` or `meeting` |
 | `source_id` | UUID | |
 | `applied_by` | text | `ai` or `user` — provenance |
 | `confirmed` | boolean | a user-confirmed tag is not altered by reprocessing |
 | `confidence` | decimal(4,3), nullable | **v2** — the model's confidence for an AI-applied link, to three places; null for a link a person applied (FR-10, D-105; `documents 0008`) |
-| `provisional` | boolean | **v2** — an AI link whose confidence was below `CLASSIFICATION_CONFIDENCE_THRESHOLD`: held for confirmation and not a tag of the document until confirmed (FR-10, D-105; `documents 0008`) |
+| `provisional` | boolean | **v2** — an AI link whose confidence was below the classifying model's threshold, `CLASSIFICATION_CONFIDENCE_THRESHOLD` or, since D-122, the model's own value in `CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL` (`confidence_threshold`): held for confirmation and not a tag of the document until confirmed (FR-10, D-105; `documents 0008`). Until the review of 22 November 2026 (D-142) this cell named only `CLASSIFICATION_CONFIDENCE_THRESHOLD` |
 | `removed` | boolean | **v2** — a person removed this link, the machine's or a person's: kept, an AI link with its `confidence` and `provisional` as the machine set them, read by nothing, and neither re-linked nor altered by reprocessing (FR-10's correction clause; D-105's dated note of 10 November 2026, night; `documents 0009`). A person's link was deleted on removal until the requirements re-audit of that night |
 
 **Tags and ContentTags are in v1 even though FR-10 is NIT3004 work.** FR-15 is a
@@ -388,7 +446,7 @@ by nothing else.
 | `discarded_suggestions` | jsonb | suggestions that do not become a tag or a proposal, `[{"dimension", "value", "confidence"}]`; never shown; replaced by each run. The out-of-scheme Project and Process suggestions (Objective 05's clause 3), since D-128 a value that cannot be stored (U+0000 or a lone surrogate), recorded with U+FFFD so that the column accepts it (D-129), and since D-134 an out-of-scheme Topic longer than a tag name (255 characters once normalised), recorded as written |
 | `rejected_tags` | jsonb | **`documents 0013_rejected_tags`, D-128 (the audit of 13 November):** proposals a person rejected on this document, `[{"dimension", "value", "confidence"}]`, one entry per dimension and value. The confidence is the machine's, kept beside the person's decision. Later runs neither propose, create nor link that value for this document, in any dimension, even after it enters the scheme. A person may still apply it. Never shown; never replaced by a run. A rejection made before 0013 was never recorded, so it is not honoured: existing rows start at `[]`, and none is guessed |
 | `model` | text | the chat model that produced the run |
-| `input_truncated` | boolean | the text was longer than `CLASSIFICATION_INPUT_TOKENS`, so the classifier read only its opening `CLASSIFICATION_INPUT_TOKENS` tokens to choose the type, the department and the tags (since D-139 the final request carries the section summaries beside that opening). The summary reads up to `MAXIMUM_SUMMARY_SECTIONS` sections, and `summary_truncated` says when text was left past them. Until D-139 the text was cut there before it was sent, and nothing past the opening was read |
+| `input_truncated` | boolean | the opening the classifier read to choose the type, the department and the tags was not the whole text: the text was longer than `CLASSIFICATION_INPUT_TOKENS`, or `CLASSIFICATION_INPUT_CHARACTERS` cut the opening (D-139, the closing security review's S1). Since D-139 a text of more than one section is classified by a final request that carries the section summaries beside that opening. The summary reads up to `MAXIMUM_SUMMARY_SECTIONS` sections, and `summary_truncated` says when text was left past them or cut from a section; a text of one section whose opening the character cap cut has no section summaries, so what the cap dropped is read by no request. Until D-139 the text was cut at `CLASSIFICATION_INPUT_TOKENS` before it was sent, and nothing past the opening was read. Until the review of 22 November 2026 (D-142) this cell named only the token cap |
 | `classified_at` | timestamp | set by each run, not `auto_now`: a confirmation edits the row without reclassifying it |
 | `summary` | text | **`documents 0016_document_summary`, D-139:** the machine's short summary of the document; `""` when it has none |
 | `key_points` | jsonb | **`documents 0016`, D-139:** the machine's key points, a list of strings in the reply's order; `[]` when it has none |
@@ -410,6 +468,8 @@ by nothing else.
 - **An outcome per assignment** — `applied`, `provisional`, `discarded` or `confirmed` — so the
   record states how the rule disposed of each suggestion rather than leaving it to be inferred
   from which columns are null.
+- **`model`, `input_truncated` and `classified_at`**, the provenance of the record (D-105): the
+  chat model that answered, whether its request carried the whole text, and when it ran.
 - **Two JSON lists, then three.**
   - **As first built (D-105),** a Topic outside the scheme "may be proposed only in the Topic
     dimension and requires user confirmation before it is created", so no `Tags` row could exist
@@ -424,6 +484,9 @@ by nothing else.
     proposal a person rejected, with the machine's confidence. Later runs skip that value for that
     document: FR-10's correction clause, "retained and is not overwritten by later reprocessing,
     and the machine assignment is retained alongside it".
+- **Whose department it is** (`department_applied_by`, `documents 0009`; D-119 finding 10).
+  FR-10's provenance clause tells a machine's value from a person's, and the outcome alone cannot
+  when the machine's suggestion equals the department a person typed.
 - **The summary and the key points, five columns** (`documents 0016_document_summary`; D-139,
   21 November 2026). FR-10's front-end clause: "Each document displays a short summary and a list
   of key points". No column held either until 0016: D-104's note of 10 November 2026 deferred a
@@ -537,8 +600,8 @@ address is never stored.
 | `success` | boolean, nullable | `false` on a lockout row (the attempt that locked the account failed); **null on a release row**, which is not an authentication attempt |
 | `attempted_at` | timestamp | |
 | `event` | text | `LOGIN_ATTEMPT_EVENTS` (§3): `lockout` or `release` |
-| `user_id` | UUID FK → Users | the account affected |
-| `released_by` | UUID FK → Users, nullable | the Administrator, on a release row; null on a lockout row |
+| `user_id` | UUID FK → Users | the account affected; **protect** on delete |
+| `released_by` | UUID FK → Users, nullable | the Administrator, on a release row; null on a lockout row; **protect** on delete |
 | `locked_until` | timestamp, nullable | the end of the lock this row set (lockout) or cleared (release) |
 
 **The last four columns are not in the proposal's field table,** which has the first five. FR-03's
@@ -561,6 +624,8 @@ release.
 | Table | Requirement | Tier |
 |---|---|---|
 | `MFARecoveryCodes`, `Users.mfa_enabled`, `Users.mfa_secret` | FR-07 | COULD |
+| `OnboardingTemplates`, `OnboardingItems`, `UserOnboardingProgress` | FR-17 | COULD |
+| `Conversations.mode` | FR-18 | COULD |
 
 Add these in migration v2 when their requirement is built. Do not create empty tables
 now for work that may be descoped.
@@ -588,6 +653,11 @@ now for work that may be descoped.
 > `documents 0016_document_summary` adds `summary`, `key_points`, `summary_truncated`,
 > `summary_model` and `summarised_at` (D-139, which reverses D-104's deferral). See the §1 entry.
 
+> **22 November 2026 (D-142).** FR-17's three tables and FR-18's `Conversations.mode` were never
+> listed here, though both requirements are COULD and unbuilt, as FR-07 is. None of them exists:
+> no migration creates an onboarding table, and `Conversations` has no `mode` column. As for
+> FR-07, this table names them and does not transcribe their fields.
+
 ---
 
 ## 3. Fixed vocabularies
@@ -601,6 +671,10 @@ CLASSIFICATION_DIMENSIONS = ("Department", "Project", "Process", "Topic")
 SOURCE_TYPES = ("document", "meeting")
 NO_ANSWER_REASONS = ("no_relevant_passage",     # nothing above RELEVANCE_THRESHOLD
                      "no_statement_verified")   # retrieved, but verification stripped all
+# Listed here since 22 November 2026 (D-142), though each backed a column before:
+ROLE_NAMES = ("Employee", "Administrator")
+TAG_APPLIED_BY_VALUES = ("ai", "user")
+ACCEPTED_FORMATS = frozenset({"pdf", "docx", "xlsx", "txt"})   # four since documents 0004 (D-15)
 # FR-10 (D-105), 8 November 2026:
 DOCUMENT_TYPES = ("Policy", "Procedure", "Report", "Meeting Paper")
 ASSIGNMENT_OUTCOMES = ("applied", "provisional", "discarded", "confirmed")
@@ -625,6 +699,14 @@ EVIDENCE_MAP_RELATIONSHIPS = ("cites",)
 These live in `apps/core/constants.py`. Status values are fixed rather than free text
 so a status can be filtered on and its meaning does not drift.
 
+`ROLE_NAMES` is `Roles.role_name`'s vocabulary, the two roles `accounts 0002` seeds, and the
+values the upload and meeting routes accept for `visible_to_roles`, a column whose model field has
+no choices, so the serializers are its only check (D-11, D-29). `TAG_APPLIED_BY_VALUES` is `ContentTags.applied_by`'s and,
+since `documents 0009`, `DocumentAnalysis.department_applied_by`'s (D-119 finding 10): the
+machine's, or a person's. `ACCEPTED_FORMATS` is `Documents.file_type`'s, the four formats of
+D-15; the column's choices are the set, sorted. Each backed its column before 22 November 2026,
+when it was added to the list above.
+
 `DOCUMENT_TYPES` is FR-10's fixed list: "the type must be selected from a fixed list rather
 than generated freely, so that filtering remains consistent". `ASSIGNMENT_OUTCOMES` is how the
 apply layer disposed of one assignment (`DocumentAnalysis.doc_type_outcome`,
@@ -647,7 +729,11 @@ Unavailable, for the operator and never for a user: the provider was unreachable
 `MAXIMUM_SUMMARY_ATTEMPTS`, it refused the request (D-118), two replies broke the schema, **no
 narrative sentence named a passage that was sent** (FR-12's no-answer path (b) for a summary,
 kept apart as invariant 7 keeps the two no-answer paths apart), the summary could not be
-embedded, the server stopped mid-run, or something unexpected was raised. `ACTION_ITEM_ORIGINS`
+embedded, the server stopped mid-run, something unexpected was raised, or, since the security
+review of 12 November 2026 (D-125's third note), the server had no room to start the run
+(**busy**: `MAXIMUM_SUMMARIES_IN_FLIGHT` runs already calling the provider and
+`MAXIMUM_SUMMARIES_WAITING` more waiting, or a thread the operating system refused), so the run
+never reached the provider and is queued for the hourly retry. `ACTION_ITEM_ORIGINS`
 is where an item came from: extracted by the model, or added by a person. `SOURCE_TYPES` did not
 gain a value for a summary: its passages are the meeting's (D-125, choice 1).
 
@@ -722,14 +808,23 @@ alternative — two nullable FK columns with a check constraint — keeps FK enf
 but does not match the ContentTags pattern, so one join path would differ from the
 other.
 
+**Settled by D-07** on 12 September 2026, as recommended. Deleting a document or a meeting deletes
+its chunks and tag links in the same transaction (`apps/documents/deletion.py`,
+`apps/meetings/deletion.py`).
+
 **G2 — `ContentChunks` has no embedding column in the proposal's tables**, despite
 FR-08 requiring that "the embedding model and dimension are recorded against every
 stored vector". The three columns above are the minimum that satisfies that clause.
 This is an omission in the document, not a design choice.
 
+**Settled by D-08** on 12 September 2026: the three columns, with an index on `embedding_model`
+(`content_chunks_model_idx`).
+
 **G3 — `Documents.department` vs `department_tag`.** FR-11 calls the column
 `department_tag`; FR-12 and FR-14 call it `department`. Pick one and use it
 everywhere. Recommendation: `department`, since two of the three sections use it.
+
+**Settled by D-09** on 12 September 2026: the column is `department`, everywhere.
 
 **G4 — No `Sessions` table is defined.** FR-04 lists `Sessions (Delete)` in its CRUD
 and requires server-side destruction on logout plus 60-minute inactivity expiry, but
@@ -739,12 +834,20 @@ logout, and an inactivity expiry from `SESSION_COOKIE_AGE` with
 `SESSION_SAVE_EVERY_REQUEST = True`. Record this as the decision; it satisfies the
 requirement without inventing a table the proposal never specified.
 
+**Settled by D-10** on 12 September 2026, as recommended: `config/settings.py` derives
+`SESSION_COOKIE_AGE` from `SESSION_INACTIVITY_MINUTES` and sets
+`SESSION_SAVE_EVERY_REQUEST = True`. Since D-137 (16 November 2026) a session started with
+"Remember me" expires after `REMEMBERED_SESSION_DAYS`, seven days, without use, instead of
+60 minutes.
+
 **G5 — `visible_to_roles` as `text[]` is the proposal's shape**, holding role names
 rather than role IDs. That denormalises the role name into every document row and
 breaks if a role is renamed. Recommendation: keep the proposal's shape for v1 since
 FR-11 is written against it and two roles will never be renamed in this project, but
 note the limitation rather than presenting it as a design strength if asked at the
 demonstration.
+
+**Settled by D-11** on 12 September 2026, as recommended.
 
 **G6 — Meetings has no permission filter** although FR-11 must scope meeting chunks.
 Resolved by D-16: `Meetings.visible_to_roles` mirrors Documents; attendance is not an
