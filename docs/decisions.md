@@ -6955,6 +6955,17 @@ it into item 7; or record it and fix it after step 10.
   - The "Could not sign out" notice stays on screen after the user signs back in.
   - A sign-in whose follow-up `/me` fails leaves the user on the form with no message.
 
+**Dated note, 22 November 2026: the confirmation is shown on an alpha.** It was shown on the
+Anthropic alpha, at `e92b801`, in the walk of 19 November (`docs/stage-5-anthropic-alpha-walk.md`).
+On 22 November the user shared a screenshot of the alpha's sign-in page, signed out, reading
+"Logged out" and "You've been logged out.".
+- "The alpha keeps the defect until it is redeployed" held for the FLM alpha at `8598d19`, which
+  was never redeployed.
+- The Anthropic alpha has had the fix since it was built: it ran `6e1efd1` from 13 November, and
+  `e92b801` from 18 November (D-131's dated note of 22 November).
+- The closing audit's finding that the confirmation "has never been shown on any alpha" (D-140)
+  is answered here. Its three open gaps above are unchanged.
+
 ## D-98 · The D-35 recording is accepted as partial; no demonstration submission is required
 
 **Status:** Settled by the user · **Date:** 2026-11-07 · **Concerns:** D-35, D-40, step 7's
@@ -15713,6 +15724,50 @@ record is `corpus/demo/screening-2026-11-15-anthropic/`.
   - the threads the walk does not ask;
   - the alpha after a redeploy from `main`. That changes the generation parser (#106, #107) and not
     retrieval, and it does not touch the database.
+
+**Dated note, 22 November 2026: the alpha was redeployed to `e92b801` on 18 November, and walked on
+19 November.** The closing audit (D-140) found no repository record of the redeploy, and asked
+for one: "the commit, the migration, and FR-20's step 11". The redeploy was made at the user's
+request, for the final demonstration video, by `docs/alpha-deployment.md`'s "Redeploying".
+
+- **A backup first:** `pg_dump -Fc` to
+  `C:\kmp-demo\2026-11-18\kmp_alpha_20261113-before-redeploy.dump`, 386,829 bytes, sha256
+  `064fe0286dc30d9557ab7a7200637a1096b3fea36b4cb20459cd6262cd9c7b39`. The database was then at
+  `accounts` 0008 and `documents` 0012.
+- **The commit:** the worktree moved, detached and clean, from `6e1efd1` to `e92b801`, #119's
+  merge.
+- **The dependencies:** `uv pip sync` installed one package, Pillow 13.0.0 (D-137).
+- **The migration:** first the database's name was checked as `kmp_alpha_20261113`. Then `migrate`
+  applied, in order:
+  - `accounts.0009_login_attempts`, `0010_seed_release_account_locks`,
+    `0011_seed_view_knowledge_map` and `0012_user_picture`;
+  - `documents.0012_proposed_tags`, `0013_rejected_tags`, `0014_merge_fr16_and_d128` and
+    `0015_departments`.
+- **`check --deploy`:** exactly `security.W004`, `W008`, `W012` and `W016`, with no `ai.W001`.
+- **The front end:** `npm ci`, then `npm run build`, which wrote `index-F0-aJ1rM.js` and
+  `index-DKha8VbL.css`.
+- **The start:** Waitress logged "Serving on http://127.0.0.1:8000" at 10:32:16, and the five smoke
+  checks passed. The deployment record's line of 10:32:36 reads: commit `e92b801`, `dirty=False`,
+  Waitress 3.0.2, 24 threads, `DEBUG=False`.
+- **FR-20's step 11:** nobody could sign in yet, because the Administrator's password had not been
+  set (this entry). So the check was made in the database, reading only, rather than through
+  `/api/roles`.
+  - Both roles hold `view_knowledge_map`.
+  - The Administrator also holds `release_account_locks`, `review_knowledge_gaps` and `manage_tags`.
+- **The database afterwards:** 3 users, 23 documents, 5 meetings, no answered question, 1 open gap
+  entry and 6 departments. These are the six that 0015 was expected to seed.
+- **`serve-alpha.ps1`** was brought in line with step 6: it now connects before naming the
+  database, and runs `manage.py check` before Waitress. The old copy is kept beside it as
+  `serve-alpha.ps1.before-2026-11-18`. Neither file is in the repository.
+- **19 November, 09:53:** the 18 November server had stopped with the terminal tab it ran in.
+  - The user stopped a development server on port 8000.
+  - The alpha was restarted on the same build, in its own PowerShell window.
+  - The smoke checks passed again, and the deployment record has a line for the restart.
+- **The walk, 19 November:** recorded in `docs/stage-5-anthropic-alpha-walk.md`. It answers the
+  15 November note's first "Not covered" item, and D-140's finding that no walk on this alpha is
+  recorded.
+- **Not covered:** `825d69f`, with FR-10's document summaries and their migration (D-139), is not
+  deployed.
 
 ## D-132 · FR-20's knowledge map: one read-only route behind `view_knowledge_map`, scoped before it is capped, a hand-built diagram and a table equivalent
 

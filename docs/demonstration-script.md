@@ -118,6 +118,20 @@
 > - FR-20's walk gains steps 8 to 12, the view of claims and the passages they cite;
 > - **those steps are written from the build's tests and its contract and have not been
 >   walked on the alpha,** as steps 1 to 7 have not.
+>
+> **Amended 22 November 2026,** after the alpha was redeployed and this script was walked on it.
+> The changes:
+>
+> - **The alpha has run `e92b801` since 18 November,** not `6e1efd1` (D-131's dated note of
+>   22 November). That build has FR-03, D-129's department threshold, FR-20's two views and
+>   D-137's account screens. The notes above that say "None of this is on either alpha", that the
+>   alpha "must first be redeployed", or that steps "have not been walked on the alpha" describe it
+>   before 18 November.
+> - **This script was walked on the Anthropic alpha on 19 November,** and the walk was recorded
+>   (`docs/stage-5-anthropic-alpha-walk.md`). FR-04's logged-out confirmation was shown (D-97's
+>   dated note of 22 November).
+> - **The walk's opening note, FR-04 step 1, FR-08 step 1 and FR-15 step 5 now say so.** The
+>   closing audit named the last two (D-140).
 
 Stage 5 item 9. This walks all twelve MUST-HAVE requirements, in the gate's order, on the
 deployed alpha (`docs/alpha-deployment.md`, D-64, D-88, D-131). It is also item 8's live
@@ -235,9 +249,11 @@ Each step names the clause it shows. Where the interface words a message, the me
 "Expected" is one of two things:
 
 - **for a question,** what the 15 November screen showed on a copy of this alpha's database;
-- **for a screen,** what the alpha's code at `6e1efd1` shows, read from the code, its tests and the
-  screen's route replies. FR-04's notice, FR-09's summary panels, FR-14's gap panel and FR-15's
-  Classification section are among these. Nobody has walked this alpha yet, so check each one.
+- **for a screen,** what the alpha's code shows, read from the code, its tests and the screen's
+  route replies. It was written for `6e1efd1`, and the alpha has run `e92b801` since 18 November.
+  FR-04's notice, FR-09's summary panels, FR-14's gap panel and FR-15's Classification section are
+  among these. They were walked on this alpha on 19 November, and recorded on screen
+  (`docs/stage-5-anthropic-alpha-walk.md`). Check each one again after a redeploy.
 
 ### FR-01 · Registration (window B)
 
@@ -360,9 +376,10 @@ Use a throwaway account registered through FR-01, with a password used nowhere e
 1. **Log out** from the navigation.
    - **Expected:** the sign-in page, with the notice "Logged out" and "You’ve been logged out."
      (D-97).
-   - **The fix is in the alpha's build, `6e1efd1`,** and the front-end suite tests it
-     (`authNotices.test.jsx`, `logout.test.jsx`). Nobody has walked it on this alpha yet, so check
-     that it appears, and say so if it does not. The FLM alpha at `8598d19` does not show it
+   - **The fix is in the alpha's build:** `6e1efd1` until 18 November, and `e92b801` since. The
+     front-end suite tests it (`authNotices.test.jsx`, `logout.test.jsx`). **It was shown on this
+     alpha in the walk of 19 November** (`docs/stage-5-anthropic-alpha-walk.md`, and D-97's dated
+     note of 22 November). The FLM alpha at `8598d19` does not show it
      (`docs/stage-5-item-8-walk.md`, 3 November notes).
 2. **Press Back, or open `http://127.0.0.1:8000/dashboard` directly.**
    - **Expected:** sent back to sign-in, because the session is gone on the server, not only in the
@@ -436,9 +453,13 @@ Use a throwaway account registered through FR-01, with a password used nowhere e
      D21's page does (FR-15 step 5).
    - **The department typed here stays** (D-105's note of 10 November). FR-10 fills only a blank
      one. A suggestion that is not one of the known departments is discarded. A known one below
-     0.72, or a known one that differs, is held for a person to accept. A matching one at or above
-     0.72 is shown as the person's. On the 15 November screen's upload, FR-10 suggested
-     `Operations` at 0.7, and it was held.
+     the department threshold, or a known one that differs, is held for a person to accept. A
+     matching one at or above it is shown as the person's.
+     - **That threshold is 0.30 on `claude-haiku-5-5`** since D-129 (#102), which the alpha has run
+       since 18 November.
+     - The 15 November screen ran on `6e1efd1`, before D-129. There FR-10 suggested `Operations`
+       at 0.7, and the suggestion was held below the old 0.72. On `e92b801` the same suggestion is
+       shown as the person's.
 2. **Choose `I01_annual_report_2026.pdf`.**
    - **Expected: 415.** A PDF's name over a PNG's bytes, refused by the file's signature.
 3. **Choose `B01_duplicate_of_D03_renamed.pdf`.**
@@ -667,9 +688,10 @@ every question below was screened with D21, T06 and T06's summary in place.
      "Not classified yet." with Classify now.
    - **The Employee is offered FR-10's Confirm and Edit controls here.** Confirming a held tag
      makes it a tag in the facets and filters, which is why this step comes after steps 2 to 4.
-   - **On a build with #102** (D-129), a department has a threshold of its own, 0.30. A
-     matching suggestion at 0.7 then reads "Given by a person. The AI’s suggestion matched it,
-     70% confidence." The alpha has not been redeployed with it.
+   - **On a build with #102** (D-129), which the alpha has run since 18 November, a department has
+     a threshold of its own, 0.30. A matching suggestion at 0.7 then reads "Given by a person. The
+     AI’s suggestion matched it, 70% confidence.", not the screen's "Awaiting your
+     confirmation".
 6. **Optional, and only now, after every question: window A deletes D21** (D-73).
    - **Expected:** it is gone from both windows' lists.
    - This is the walk's only delete, and nothing is asked after it.
