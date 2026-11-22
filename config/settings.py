@@ -467,7 +467,10 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 AI_PROVIDER = env.str("AI_PROVIDER", default="anthropic")
 
 # FastFlowLM on the local NPU: the offline alternative, AI_PROVIDER=flm, pinned to v0.9.39 (D-83).
-FLM_BASE_URL = env.str("FLM_BASE_URL", default="http://127.0.0.1:52625/v1")
+# The port is 8625, as .env.example, CLAUDE.md section 4 and scripts/check_flm.py have it. It read
+# 52625 here, FLM's own default, until 22 November 2026: the port moved out of a range Windows
+# reserves for Hyper-V in 6d36036, and this default was left behind (D-142).
+FLM_BASE_URL = env.str("FLM_BASE_URL", default="http://127.0.0.1:8625/v1")
 FLM_API_KEY = env.str("FLM_API_KEY", default="flm")  # placeholder, not a credential
 FLM_CHAT_MODEL = env.str("FLM_CHAT_MODEL", default="gemma3:4b")
 FLM_EMBED_MODEL = env.str("FLM_EMBED_MODEL", default="embed-gemma")
