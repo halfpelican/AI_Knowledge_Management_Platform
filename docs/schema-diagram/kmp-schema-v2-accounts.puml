@@ -1,0 +1,114 @@
+@startuml kmp-schema-v2-accounts
+skinparam dpi 200
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+hide empty members
+skinparam linetype ortho
+skinparam ranksep 65
+skinparam nodesep 60
+skinparam roundCorner 8
+skinparam defaultFontName Carlito
+skinparam defaultFontSize 13
+skinparam defaultFontColor #201E1D
+skinparam ArrowColor #676464
+skinparam ArrowThickness 1.2
+skinparam TitleFontSize 20
+skinparam TitleFontStyle bold
+skinparam LegendBackgroundColor #F8F4F4
+skinparam LegendBorderColor #C9C9C9
+skinparam NoteBackgroundColor #FFFBEA
+skinparam NoteBorderColor #C9C9C9
+skinparam NoteFontSize 12
+skinparam package {
+  BorderColor #9B9797
+  FontSize 15
+  FontStyle bold
+}
+skinparam entity {
+  BackgroundColor #FFFFFF
+  BorderColor #676464
+  FontStyle bold
+  FontSize 14
+  AttributeFontSize 12
+}
+skinparam stereotypeCBackgroundColor #E9F8FF
+skinparam stereotypeCBorderColor #0088B0
+<style>
+classDiagram {
+  .added {
+    BackgroundColor #F2FBF7
+    LineColor #067647
+    LineThickness 1.6
+  }
+}
+</style>
+
+title Schema v2 (Area 1 of 4) — Accounts: 5 tables, 5 foreign keys
+
+package "Accounts · FR-01 to FR-06, D-137" as accounts #E9F8FF {
+  entity "roles" as roles {
+    * role_id : uuid <<PK>>
+    --
+    * role_name : varchar <<unique>>
+  }
+
+  entity "permissions" as permissions {
+    * permission_id : uuid <<PK>>
+    --
+    * permission_name : varchar <<unique>>
+  }
+
+  entity "role_permissions" as role_permissions {
+    * role_id : uuid <<PK, FK>>
+    * permission_id : uuid <<PK, FK>>
+  }
+
+  entity "users" as users {
+    * user_id : uuid <<PK>>
+    --
+    * email : varchar <<unique>>
+    * role_id : uuid <<FK>>
+    * failed_attempts : int
+    locked_until : timestamp
+    * picture : varchar
+  }
+
+  entity "login_attempts" as login_attempts <<added>> {
+    * attempt_id : uuid <<PK>>
+    --
+    * user_id : uuid <<FK>>
+    released_by : uuid <<FK>>
+    * event : varchar
+    locked_until : timestamp
+  }
+}
+
+roles ||--o{ users : "role_id"
+roles ||--o{ role_permissions : "role_id"
+permissions ||--o{ role_permissions : "permission_id"
+users ||--o{ login_attempts : "user_id"
+users |o--o{ login_attempts : "released_by"
+
+note bottom of login_attempts
+  **Lockout and release log (FR-03, D-130)**
+  One row per lockout or Admin release only;
+  ordinary sign-ins write no row.
+  Sessions use Django's django_session (FR-04).
+  Deferred: mfa_recovery_codes (FR-07).
+end note
+
+note top of permissions
+  **Role-based access (FR-05, FR-06)**
+  Admin only: manage_roles, manage_documents,
+  manage_meetings, review_knowledge_gaps,
+  manage_tags, release_account_locks.
+  Both roles: contribute_content, view_knowledge_map.
+  Checked on the server for every request.
+end note
+
+legend bottom left
+  ● required (NOT NULL)    <<PK>> primary key    <<FK>> foreign key    <<added>> table added since 5 Nov
+  Solid line: foreign key.  Crow's foot: many.  Bar: exactly one.  Circle: optional.
+  Keys and design-bearing columns only; full column list in docs/schema-v1.md.
+endlegend
+@enduml

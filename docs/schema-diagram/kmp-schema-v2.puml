@@ -1,0 +1,326 @@
+@startuml kmp-schema-v2
+skinparam dpi 130
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+hide empty members
+skinparam linetype ortho
+skinparam ranksep 50
+skinparam nodesep 40
+skinparam roundCorner 8
+skinparam defaultFontName Carlito
+skinparam defaultFontSize 13
+skinparam defaultFontColor #201E1D
+skinparam ArrowColor #676464
+skinparam ArrowThickness 1.2
+skinparam TitleFontSize 22
+skinparam TitleFontStyle bold
+skinparam LegendBackgroundColor #F8F4F4
+skinparam LegendBorderColor #C9C9C9
+skinparam NoteBackgroundColor #FFFBEA
+skinparam NoteBorderColor #C9C9C9
+skinparam NoteFontSize 12
+skinparam package {
+  BorderColor #9B9797
+  FontSize 15
+  FontStyle bold
+}
+skinparam entity {
+  BackgroundColor #FFFFFF
+  BorderColor #676464
+  FontStyle bold
+  FontSize 14
+  AttributeFontSize 12
+}
+skinparam stereotypeCBackgroundColor #E9F8FF
+skinparam stereotypeCBorderColor #0088B0
+<style>
+classDiagram {
+  .added {
+    BackgroundColor #F2FBF7
+    LineColor #067647
+    LineThickness 1.6
+  }
+}
+</style>
+
+title Schema v2: 23 tables and 28 foreign keys in PostgreSQL 16 with pgvector
+
+package "Accounts · FR-01 to FR-06, D-137" as accounts #E9F8FF {
+  entity "roles" as roles {
+    * role_id : uuid <<PK>>
+    --
+    * role_name : varchar <<unique>>
+  }
+
+  entity "permissions" as permissions {
+    * permission_id : uuid <<PK>>
+    --
+    * permission_name : varchar <<unique>>
+  }
+
+  entity "role_permissions" as role_permissions {
+    * role_id : uuid <<PK, FK>>
+    * permission_id : uuid <<PK, FK>>
+  }
+
+  entity "users" as users {
+    * user_id : uuid <<PK>>
+    --
+    * email : varchar <<unique>>
+    * role_id : uuid <<FK>>
+    * failed_attempts : int
+    locked_until : timestamp
+    * picture : varchar
+  }
+
+  entity "login_attempts" as login_attempts <<added>> {
+    * attempt_id : uuid <<PK>>
+    --
+    * user_id : uuid <<FK>>
+    released_by : uuid <<FK>>
+    * event : varchar
+    locked_until : timestamp
+  }
+}
+
+package "Documents · FR-08, FR-10, FR-11, FR-15" as documents_pkg #F3F2F2 {
+  entity "documents" as documents {
+    * doc_id : uuid <<PK>>
+    --
+    * uploaded_by : uuid <<FK>>
+    content_hash : varchar <<unique>>
+    * status : varchar
+    * department : varchar
+    * visible_to_roles : text[]
+  }
+
+  entity "extracted_content" as extracted_content {
+    * content_id : uuid <<PK>>
+    --
+    * doc_id : uuid <<FK>>
+    * extracted_text : text
+  }
+
+  entity "document_analysis" as document_analysis <<added>> {
+    * analysis_id : uuid <<PK>>
+    --
+    * doc_id : uuid <<FK, unique>>
+    doc_type : varchar
+    machine_doc_type : varchar
+    * machine_department : varchar
+    * user_edited : bool
+    * proposed_topics : jsonb
+    * rejected_tags : jsonb
+    * summary : text
+    * key_points : jsonb
+  }
+
+  entity "content_chunks" as content_chunks {
+    * chunk_id : uuid <<PK>>
+    --
+    * source_type : varchar
+    * source_id : uuid
+    * embedding : vector(dim)
+    * embedding_model : varchar
+    * embedding_dimension : int
+    * visible_to_roles : text[]
+    * ai_generated : bool
+  }
+
+  entity "tags" as tags {
+    * tag_id : uuid <<PK>>
+    --
+    * tag_name : varchar
+    * dimension : varchar
+    * active : bool
+    * grown : bool
+  }
+
+  entity "content_tags" as content_tags {
+    * content_tag_id : uuid <<PK>>
+    --
+    * tag_id : uuid <<FK>>
+    * source_type : varchar
+    * source_id : uuid
+    * applied_by : varchar
+    * confirmed : bool
+    confidence : decimal(4,3)
+    * provisional : bool
+    * removed : bool
+  }
+
+  entity "departments" as departments <<added>> {
+    * department_id : uuid <<PK>>
+    --
+    * name : varchar <<unique>>
+    * active : bool
+    * grown : bool
+  }
+}
+
+package "Meetings · FR-09, FR-11, FR-16" as meetings_pkg #EEF6EE {
+  entity "meetings" as meetings {
+    * meeting_id : uuid <<PK>>
+    --
+    * status : varchar
+    * visible_to_roles : text[]
+  }
+
+  entity "meeting_attendees" as meeting_attendees {
+    * attendee_id : uuid <<PK>>
+    --
+    * meeting_id : uuid <<FK>>
+    * user_id : uuid <<FK>>
+  }
+
+  entity "meeting_summaries" as meeting_summaries <<added>> {
+    * summary_id : uuid <<PK>>
+    --
+    * meeting_id : uuid <<FK>>
+    requested_by : uuid <<FK>>
+    * run_number : int
+    * status : varchar
+    * model : varchar
+    * queued_for_retry : bool
+  }
+
+  entity "action_items" as action_items <<added>> {
+    * action_item_id : uuid <<PK>>
+    --
+    * meeting_id : uuid <<FK>>
+    summary_id : uuid <<FK>>
+    owner_id : uuid <<FK>>
+    created_by : uuid <<FK>>
+    updated_by : uuid <<FK>>
+    * origin : varchar
+    * edited : bool
+  }
+}
+
+package "Retrieval · FR-12 to FR-14, FR-19" as retrieval_pkg #FCEEF1 {
+  entity "conversations" as conversations {
+    * conversation_id : uuid <<PK>>
+    --
+    * user_id : uuid <<FK>>
+  }
+
+  entity "query_log" as query_log {
+    * query_id : uuid <<PK>>
+    --
+    * user_id : uuid <<FK>>
+    conversation_id : uuid <<FK>>
+    * retrieved_chunk_ids : uuid[]
+    * answered : bool
+    no_answer_reason : varchar
+    rejected_count : int
+  }
+
+  entity "answer_citations" as answer_citations {
+    * citation_id : uuid <<PK>>
+    --
+    * query_id : uuid <<FK>>
+    chunk_id : uuid <<FK>>
+    * chunk_uuid : uuid
+  }
+
+  entity "search_logs" as search_logs {
+    * search_id : uuid <<PK>>
+    --
+    * user_id : uuid <<FK>>
+    * result_count : int
+  }
+
+  entity "knowledge_gaps" as knowledge_gaps <<added>> {
+    * gap_id : uuid <<PK>>
+    --
+    * occurrence_count : int
+    * status : varchar
+    embedding : vector(dim)
+    * embedding_model : varchar
+  }
+
+  entity "knowledge_gap_items" as knowledge_gap_items <<added>> {
+    * gap_item_id : uuid <<PK>>
+    --
+    * gap_id : uuid <<FK>>
+    query_id : uuid <<FK, unique>>
+    search_id : uuid <<FK, unique>>
+  }
+
+  entity "knowledge_gap_cycles" as knowledge_gap_cycles <<added>> {
+    * cycle_id : uuid <<PK>>
+    --
+    triggered_by : uuid <<FK>>
+  }
+}
+
+' Accounts (5 FKs)
+roles ||--o{ users : "role_id"
+roles ||--o{ role_permissions : "role_id"
+permissions ||--o{ role_permissions : "permission_id"
+users ||--o{ login_attempts : "user_id"
+users |o--o{ login_attempts : "released_by"
+
+' Documents (4 FKs + 4 polymorphic links)
+users ||--o{ documents : "uploaded_by"
+documents ||--o{ extracted_content : "doc_id"
+documents ||--o| document_analysis : "doc_id"
+tags ||--o{ content_tags : "tag_id"
+documents ||..o{ content_chunks
+meetings ||..o{ content_chunks
+documents ||..o{ content_tags
+meetings ||..o{ content_tags
+
+' Meetings (9 FKs)
+meetings ||--o{ meeting_attendees : "meeting_id"
+users ||-[norank]-o{ meeting_attendees : "user_id"
+meetings ||--o{ meeting_summaries : "meeting_id"
+users |o-[norank]-o{ meeting_summaries : "requested_by"
+meetings ||--o{ action_items : "meeting_id"
+meeting_summaries |o--o{ action_items : "summary_id"
+users |o-[norank]-o{ action_items : "owner_id"
+users |o-[norank]-o{ action_items : "created_by"
+users |o-[norank]-o{ action_items : "updated_by"
+
+' Retrieval (10 FKs)
+users ||-[norank]-o{ conversations : "user_id"
+users ||-[norank]-o{ query_log : "user_id"
+conversations |o--o{ query_log : "conversation_id"
+users ||-[norank]-o{ search_logs : "user_id"
+query_log ||--o{ answer_citations : "query_id"
+content_chunks |o--o{ answer_citations : "chunk_id"
+knowledge_gaps ||--o{ knowledge_gap_items : "gap_id"
+query_log |o--o| knowledge_gap_items : "query_id"
+search_logs |o--o| knowledge_gap_items : "search_id"
+users |o-[norank]-o{ knowledge_gap_cycles : "triggered_by"
+
+' Entity-level 2x2 grid placement: Accounts + Documents on top, Retrieval + Meetings below
+login_attempts -[hidden]down- conversations
+document_analysis -[hidden]down- meetings
+extracted_content -[hidden]down- departments
+
+note top of permissions
+  **Role-based access (FR-05, FR-06)**
+  8 seeded permissions across 2 roles.
+  Deferred: mfa_recovery_codes (FR-07).
+end note
+
+note bottom of content_chunks
+  **Scope before ranking (FR-11, FR-16, R10)**
+  visible_to_roles cascades from the source (D-47).
+  vector(dim): 1024 (voyage-4) or 768 (embed-gemma).
+  ai_generated = true marks meeting-summary chunks.
+end note
+
+note bottom of knowledge_gap_items
+  **Knowledge-gap log (FR-19, D-107 to D-109)**
+  CHECK requires exactly one of query_id or search_id.
+  query_log and search_logs are never mutated.
+end note
+
+legend bottom left
+  ● required (NOT NULL)    <<PK>> primary key    <<FK>> foreign key    <<added>> table added since 5 Nov
+  Solid line: foreign key.  Dashed line: linked by source_type and source_id, not a foreign key.
+  Crow's foot: many.  Bar: exactly one.  Circle: optional.  Keys and design-bearing columns only; full column list in docs/schema-v1.md.
+endlegend
+@enduml
