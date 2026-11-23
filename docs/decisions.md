@@ -9722,6 +9722,20 @@ On the `anthropic` provider, generation and embedding run as API calls (D-113), 
 
 **Where it applies:** D-64 (a dated note) and `CLAUDE.md` §4's `anthropic` bullet.
 
+**Dated note, 23 November 2026: M8 is due on 25 November 2026, not 27 November.** Benjamin's
+words of 23 November: "The presentation will be on the 25th November, last day of the unit". Asked
+whether M8, the final deployment, is also due on the 25th and not the 27th, he answered "Yes, the
+25th".
+
+- **Corrected in place, with its date:** `CLAUDE.md` section 2's note of 22 November, which had
+  taken 27 November from this entry.
+- **Left as written, and corrected by this note:** the decision's sentence above; D-64's "What it
+  does not cover"; and D-142, which describes and quotes `CLAUDE.md`'s note as it then read.
+- **Outside the repository:** the Final Presentation's deck has given 25 November since the same
+  day. The Technical Implementation document, version 2.1, had already been submitted. Its
+  section 7 says M8 is due on 27 November, and it is not changed.
+- **What the date does not change:** the decision itself, and the choices this entry leaves open.
+
 ## D-115 · Sonnet 5.5 is the `anthropic` provider's default generation model, as the configuration under test
 
 **Status:** Settled by the user (the model); provisional (the call parameters) · **Date:** 2026-11-10 ·

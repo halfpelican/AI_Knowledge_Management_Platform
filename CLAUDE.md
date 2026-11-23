@@ -41,9 +41,10 @@ assistant, documentation).
 
 > **Amended 22 November 2026 (D-142).** This section was headed "The only deadline that
 > matters right now". M6 has passed, so the section is now the record of the gate and of
-> the twelve it was built to. The next date is M8, the final deployment, on 27 November
-> 2026 (D-114). The section's two instructions, to build to the table and to cut depth
-> before a requirement, were M6's rule and are kept as written.
+> the twelve it was built to. The next date is M8, the final deployment, on 25 November
+> 2026, the last day of the unit (D-114's dated note of 23 November 2026; until then this
+> note said 27 November). The section's two instructions, to build to the table and to
+> cut depth before a requirement, were M6's rule and are kept as written.
 
 **M6 — Sunday 1 November 2026 — mandatory gate.** All **twelve** MUST-HAVE
 requirements demonstrable end-to-end on a deployed alpha build.
