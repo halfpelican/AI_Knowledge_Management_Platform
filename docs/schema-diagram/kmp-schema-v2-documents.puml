@@ -1,0 +1,170 @@
+@startuml kmp-schema-v2-documents
+skinparam dpi 200
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+hide empty members
+skinparam linetype ortho
+skinparam ranksep 78
+skinparam nodesep 52
+skinparam roundCorner 8
+skinparam defaultFontName Carlito
+skinparam defaultFontSize 13
+skinparam defaultFontColor #201E1D
+skinparam ArrowColor #676464
+skinparam ArrowThickness 1.2
+skinparam TitleFontSize 20
+skinparam TitleFontStyle bold
+skinparam LegendBackgroundColor #F8F4F4
+skinparam LegendBorderColor #C9C9C9
+skinparam NoteBackgroundColor #FFFBEA
+skinparam NoteBorderColor #C9C9C9
+skinparam NoteFontSize 12
+skinparam package {
+  BorderColor #9B9797
+  FontSize 15
+  FontStyle bold
+}
+skinparam entity {
+  BackgroundColor #FFFFFF
+  BorderColor #676464
+  FontStyle bold
+  FontSize 14
+  AttributeFontSize 12
+}
+skinparam stereotypeCBackgroundColor #E9F8FF
+skinparam stereotypeCBorderColor #0088B0
+<style>
+classDiagram {
+  .added {
+    BackgroundColor #F2FBF7
+    LineColor #067647
+    LineThickness 1.6
+  }
+  .ref {
+    BackgroundColor #FAFAFA
+    LineColor #9B9797
+    LineStyle 4-4
+  }
+}
+</style>
+
+title Schema v2 (Area 2 of 4) — Documents: 7 tables, 4 foreign keys, 4 polymorphic links
+
+entity "users" as users <<ref>> {
+  * user_id : uuid <<PK>>
+}
+
+entity "meetings" as meetings <<ref>> {
+  * meeting_id : uuid <<PK>>
+}
+
+package "Documents · FR-08, FR-10, FR-11, FR-15" as documents_pkg #F3F2F2 {
+  entity "documents" as documents {
+    * doc_id : uuid <<PK>>
+    --
+    * uploaded_by : uuid <<FK>>
+    content_hash : varchar <<unique>>
+    * status : varchar
+    * department : varchar
+    * visible_to_roles : text[]
+  }
+
+  entity "extracted_content" as extracted_content {
+    * content_id : uuid <<PK>>
+    --
+    * doc_id : uuid <<FK>>
+    * extracted_text : text
+  }
+
+  entity "document_analysis" as document_analysis <<added>> {
+    * analysis_id : uuid <<PK>>
+    --
+    * doc_id : uuid <<FK, unique>>
+    doc_type : varchar
+    machine_doc_type : varchar
+    * machine_department : varchar
+    * user_edited : bool
+    * proposed_topics : jsonb
+    * rejected_tags : jsonb
+    * summary : text
+    * key_points : jsonb
+  }
+
+  entity "content_chunks" as content_chunks {
+    * chunk_id : uuid <<PK>>
+    --
+    * source_type : varchar
+    * source_id : uuid
+    * embedding : vector(dim)
+    * embedding_model : varchar
+    * embedding_dimension : int
+    * visible_to_roles : text[]
+    * ai_generated : bool
+  }
+
+  entity "tags" as tags {
+    * tag_id : uuid <<PK>>
+    --
+    * tag_name : varchar
+    * dimension : varchar
+    * active : bool
+    * grown : bool
+  }
+
+  entity "content_tags" as content_tags {
+    * content_tag_id : uuid <<PK>>
+    --
+    * tag_id : uuid <<FK>>
+    * source_type : varchar
+    * source_id : uuid
+    * applied_by : varchar
+    * confirmed : bool
+    confidence : decimal(4,3)
+    * provisional : bool
+    * removed : bool
+  }
+
+  entity "departments" as departments <<added>> {
+    * department_id : uuid <<PK>>
+    --
+    * name : varchar <<unique>>
+    * active : bool
+    * grown : bool
+  }
+}
+
+users ||--o{ documents : "uploaded_by"
+documents ||--o{ extracted_content : "doc_id"
+documents ||--o| document_analysis : "doc_id"
+tags ||--o{ content_tags : "tag_id"
+
+documents ||..o{ content_chunks
+meetings ||..o{ content_chunks
+documents ||..o{ content_tags
+meetings ||..o{ content_tags
+
+' Keep meetings ref top-left, users ref top-center, and departments on the top row right of documents
+meetings -[hidden]right- users
+documents -[hidden]right- departments
+
+note bottom of content_chunks
+  **Scope before ranking (FR-11, FR-16, R10)**
+  visible_to_roles cascades from the source (D-47)
+  and is filtered before similarity is computed.
+  vector(dim): 1024 (voyage-4, default) or 768 (embed-gemma, D-131).
+  ai_generated = true marks meeting-summary chunks.
+end note
+
+note top of departments
+  **Department scheme (FR-10, D-129)**
+  No FK from documents: documents.department stays
+  free text (D-72). Unique on LOWER(name); grown
+  hides values found only on restricted documents.
+end note
+
+legend bottom left
+  ● required (NOT NULL)    <<PK>> primary key    <<FK>> foreign key    <<added>> table added since 5 Nov    <<ref>> table in another area
+  Solid line: foreign key.  Dashed line: linked by source_type and source_id, not a foreign key.
+  Crow's foot: many.  Bar: exactly one.  Circle: optional.  Keys and design-bearing columns only; full column list in docs/schema-v1.md.
+endlegend
+@enduml

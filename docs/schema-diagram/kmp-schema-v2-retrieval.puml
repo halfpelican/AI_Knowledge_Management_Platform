@@ -1,0 +1,149 @@
+@startuml kmp-schema-v2-retrieval
+skinparam dpi 200
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+hide empty members
+skinparam linetype ortho
+skinparam ranksep 65
+skinparam nodesep 55
+skinparam roundCorner 8
+skinparam defaultFontName Carlito
+skinparam defaultFontSize 13
+skinparam defaultFontColor #201E1D
+skinparam ArrowColor #676464
+skinparam ArrowThickness 1.2
+skinparam TitleFontSize 20
+skinparam TitleFontStyle bold
+skinparam LegendBackgroundColor #F8F4F4
+skinparam LegendBorderColor #C9C9C9
+skinparam NoteBackgroundColor #FFFBEA
+skinparam NoteBorderColor #C9C9C9
+skinparam NoteFontSize 12
+skinparam package {
+  BorderColor #9B9797
+  FontSize 15
+  FontStyle bold
+}
+skinparam entity {
+  BackgroundColor #FFFFFF
+  BorderColor #676464
+  FontStyle bold
+  FontSize 14
+  AttributeFontSize 12
+}
+skinparam stereotypeCBackgroundColor #E9F8FF
+skinparam stereotypeCBorderColor #0088B0
+<style>
+classDiagram {
+  .added {
+    BackgroundColor #F2FBF7
+    LineColor #067647
+    LineThickness 1.6
+  }
+  .ref {
+    BackgroundColor #FAFAFA
+    LineColor #9B9797
+    LineStyle 4-4
+  }
+}
+</style>
+
+title Schema v2 (Area 4 of 4) — Retrieval: 7 tables, 10 foreign keys
+
+entity "users" as users <<ref>> {
+  * user_id : uuid <<PK>>
+}
+
+entity "content_chunks" as content_chunks <<ref>> {
+  * chunk_id : uuid <<PK>>
+}
+
+package "Retrieval · FR-12 to FR-14, FR-19" as retrieval_pkg #FCEEF1 {
+  entity "conversations" as conversations {
+    * conversation_id : uuid <<PK>>
+    --
+    * user_id : uuid <<FK>>
+  }
+
+  entity "query_log" as query_log {
+    * query_id : uuid <<PK>>
+    --
+    * user_id : uuid <<FK>>
+    conversation_id : uuid <<FK>>
+    * retrieved_chunk_ids : uuid[]
+    * answered : bool
+    no_answer_reason : varchar
+    rejected_count : int
+  }
+
+  entity "answer_citations" as answer_citations {
+    * citation_id : uuid <<PK>>
+    --
+    * query_id : uuid <<FK>>
+    chunk_id : uuid <<FK>>
+    * chunk_uuid : uuid
+  }
+
+  entity "search_logs" as search_logs {
+    * search_id : uuid <<PK>>
+    --
+    * user_id : uuid <<FK>>
+    * result_count : int
+  }
+
+  entity "knowledge_gaps" as knowledge_gaps <<added>> {
+    * gap_id : uuid <<PK>>
+    --
+    * occurrence_count : int
+    * status : varchar
+    embedding : vector(dim)
+    * embedding_model : varchar
+  }
+
+  entity "knowledge_gap_items" as knowledge_gap_items <<added>> {
+    * gap_item_id : uuid <<PK>>
+    --
+    * gap_id : uuid <<FK>>
+    query_id : uuid <<FK, unique>>
+    search_id : uuid <<FK, unique>>
+  }
+
+  entity "knowledge_gap_cycles" as knowledge_gap_cycles <<added>> {
+    * cycle_id : uuid <<PK>>
+    --
+    triggered_by : uuid <<FK>>
+  }
+}
+
+users ||--o{ conversations : "user_id"
+users ||--o{ query_log : "user_id"
+conversations |o--o{ query_log : "conversation_id"
+users ||--o{ search_logs : "user_id"
+query_log ||--o{ answer_citations : "query_id"
+content_chunks |o--o{ answer_citations : "chunk_id"
+knowledge_gaps ||--o{ knowledge_gap_items : "gap_id"
+query_log |o--o| knowledge_gap_items : "query_id"
+search_logs |o--o| knowledge_gap_items : "search_id"
+users |o--o{ knowledge_gap_cycles : "triggered_by"
+
+note bottom of answer_citations
+  **Verified citations (FR-12, D-67)**
+  Each row cites a chunk the model was given.
+  chunk_id is SET NULL if the source is deleted;
+  chunk_uuid keeps the identifier (no passage text).
+end note
+
+note bottom of knowledge_gap_items
+  **Knowledge-gap log (FR-19, D-107 to D-109)**
+  CHECK requires exactly one of query_id or search_id
+  (both PROTECT, 1:1). query_log and search_logs are
+  read-only; no asker, role or excluded count is stored.
+  knowledge_gaps.embedding stores the member-vector mean.
+end note
+
+legend bottom left
+  ● required (NOT NULL)    <<PK>> primary key    <<FK>> foreign key    <<added>> table added since 5 Nov    <<ref>> table in another area
+  Solid line: foreign key.  Crow's foot: many.  Bar: exactly one.  Circle: optional.
+  Keys and design-bearing columns only; full column list in docs/schema-v1.md.
+endlegend
+@enduml
